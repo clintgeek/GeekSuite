@@ -145,6 +145,17 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
   const [age, setAge] = useState(initialProfile.age ? String(initialProfile.age) : '');
   const [gender, setGender] = useState(initialProfile.gender || '');
   const [rate, setRate] = useState(1);
+  // The goal weight (UX review 2026-11, B1). Weight's "Set your goal" and
+  // "Change goal" land here in Simple, and this form never asked for one: she
+  // saved a calorie target and came back to "No weight goal yet". It is saved
+  // with the plan (nutrition_goal.target_weight), which the Weight page reads.
+  // A goal she has already reached (at or above today's weight) isn't offered.
+  const [aim, setAim] = useState(() => {
+    const t = Number(targetWeight);
+    if (!(t > 0)) return '';
+    if (plausibleWeight(initialProfile.weight) && t >= Number(initialProfile.weight)) return '';
+    return String(Math.round(t * 10) / 10);
+  });
   const [showWorking, setShowWorking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -155,13 +166,16 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
   const ask = (field) => editing || !known[field];
   const allKnown = known.weight && known.height && known.age && known.gender;
 
-  const ready = plausibleWeight(weight) && parseHeightToInches(height) !== null && plausibleAge(age) && Boolean(gender);
+  const aimTyped = String(aim).trim() !== '';
+  const aimOk = !aimTyped || (plausibleWeight(aim) && (!plausibleWeight(weight) || Number(aim) < Number(weight)));
+  const aimTarget = !maintain && aimTyped && aimOk ? aim : '';
+  const ready = aimOk && plausibleWeight(weight) && parseHeightToInches(height) !== null && plausibleAge(age) && Boolean(gender);
   const plan = useMemo(() => {
     if (!ready) return null;
     const next = buildCaloriePlan({
       profile: { age, weight, height, gender, activityLevel: 'sedentary' },
       goal: {
-        targetWeight: maintain || !targetWeight ? '' : targetWeight,
+        targetWeight: aimTarget,
         weightChangeRate: maintain ? 0 : rate,
         planType: 'standard',
       },
@@ -169,7 +183,7 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
       scanBmr,
     });
     return next.heightError || !(next.dailyCalories > 0) ? null : next;
-  }, [ready, age, weight, height, gender, maintain, targetWeight, rate, usableLeanMassLb, scanBmr]);
+  }, [ready, age, weight, height, gender, maintain, aimTarget, rate, usableLeanMassLb, scanBmr]);
 
   const weightNote = weightBasis === 'average' ? 'your 7-day average' : weightBasis === 'latest' ? 'your last weigh-in' : null;
 
@@ -201,7 +215,10 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
   const outcome = (() => {
     if (!plan) return null;
     if (maintain || plan.weightChangeRate === 0) return 'That should keep your weight about where it is.';
-    return `That should lose about ${lbWords(plan.weightChangeRate)} lb a week.`;
+    const lose = `That should lose about ${lbWords(plan.weightChangeRate)} lb a week.`;
+    if (!Number.isFinite(plan.targetWeight) || !(plan.timeline > 0)) return lose;
+    const weeks = plan.timeline === 1 ? '1 week' : `${plan.timeline} weeks`;
+    return `${lose} About ${weeks} to ${Math.round(plan.targetWeight * 10) / 10} lb.`;
   })();
 
   return (
@@ -271,6 +288,20 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
             </Box>
           )}
         </Box>
+      )}
+
+      {!maintain && (
+        <TextField
+          label="What weight are you aiming for? (lb)"
+          type="number"
+          value={aim}
+          onChange={(e) => touch(setAim)(e.target.value)}
+          error={!aimOk}
+          helperText={!aimOk
+            ? 'Pick a weight below your weight now.'
+            : 'Your goal weight. Leave it empty if you don’t have one.'}
+          inputProps={{ inputMode: 'decimal', 'data-testid': 'quick-goal-weight' }}
+        />
       )}
 
       {!maintain && (

@@ -110,6 +110,28 @@ describe('Quick target — Simple', () => {
     expect(Number.isNaN(ng.timeline_weeks)).toBe(false);
   });
 
+  it('B1: asks for a goal weight and saves it with the plan, where the Weight page reads it', async () => {
+    setup();
+    const aim = await screen.findByLabelText(/What weight are you aiming for/i);
+    expect(aim).toHaveValue(null);
+    fireEvent.change(aim, { target: { value: '160' } });
+    expect((await screen.findByTestId('quick-result')).textContent).toMatch(/About \d+ weeks to 160 lb\./);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalledTimes(1));
+    const ng = settingsService.updateSettings.mock.calls[0][0].nutrition_goal;
+    expect(ng).toMatchObject({ target_weight: 160, goal_weight_lbs: 160, start_weight: 180.4 });
+  });
+
+  it('B1: prefills the goal she has, and will not take one above her weight now', async () => {
+    setup({ nutrition_goal: { enabled: true, target_weight: 165, daily_calorie_target: 1500 } });
+    const aim = await screen.findByLabelText(/What weight are you aiming for/i);
+    expect(aim).toHaveValue(165);
+    fireEvent.change(aim, { target: { value: '190' } });
+    expect(await screen.findByText('Pick a weight below your weight now.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
   it('keeps the BMR/TDEE card behind "How this was worked out"', async () => {
     setup();
     await screen.findByTestId('quick-result');
