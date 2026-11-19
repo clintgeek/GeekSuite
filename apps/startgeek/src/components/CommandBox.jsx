@@ -713,7 +713,15 @@ const CommandBox = ({ onOpenSettings }) => {
       </div>
 
       {phone && focused && !value && status === 'in' && (
-        <div role="group" aria-label="Command shortcuts" className="mt-2 flex flex-wrap gap-2">
+        // Laid over the content, not in its flow: when a tap elsewhere blurs
+        // the box, a row in the flow would vanish between touch-down and
+        // touch-up and shift the page, so the tap missed what it aimed at
+        // (a task's tick, for one).
+        <div
+          role="group"
+          aria-label="Command shortcuts"
+          className="absolute left-0 right-0 top-full mt-2 z-30 flex flex-wrap gap-2 pointer-events-none"
+        >
           {PREFIXES.map((p) => (
             <button
               key={p.insert}
@@ -726,7 +734,7 @@ const CommandBox = ({ onOpenSettings }) => {
                 setValue(p.insert)
                 inputRef.current?.focus()
               }}
-              className="min-h-[44px] px-3.5 rounded-full border border-hair-strong bg-panel font-mono text-[13px] text-ink-2 hover:text-ink"
+              className="pointer-events-auto min-h-[44px] px-3.5 rounded-full border border-hair-strong bg-[rgba(12,15,21,0.94)] font-mono text-[13px] text-ink-2 hover:text-ink"
             >
               {p.label}
             </button>
