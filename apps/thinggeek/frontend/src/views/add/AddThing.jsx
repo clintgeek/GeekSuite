@@ -33,7 +33,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, CircularProgress, Portal, TextField, ToggleButton, ToggleButtonGroup, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { CloseRounded as RemoveIcon, ExpandMore as MoreIcon, FolderOpenOutlined as FileIcon, PhotoCameraOutlined as CameraIcon } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useToast } from '@geeksuite/ui';
+import { useGeekToastClearance, useToast } from '@geeksuite/ui';
 import WherePicker from '../../components/WherePicker';
 import RoleChips from '../../components/RoleChips';
 import TagInput from '../../components/TagInput';
@@ -241,6 +241,11 @@ export default function AddThing() {
   const { enqueue } = useUploads();
   const keyboard = useKeyboardInset();
   const nameRef = useRef(null);
+  // The phone's Save bar is portalled (mounts a render late): track the node, and keep
+  // toasts ("… added. Next one.") above it, so a fast second Save never lands on a toast.
+  const [barEl, setBarEl] = useState(null);
+  const barRef = useMemo(() => ({ current: barEl }), [barEl]);
+  useGeekToastClearance(barRef, isPhone && Boolean(barEl));
 
   const fromHere = location.state?.parentId ?? null;
   const [photo, setPhoto] = useState(null);
@@ -300,6 +305,7 @@ export default function AddThing() {
 
   const bar = (
     <Box
+      ref={setBarEl}
       data-testid="add-save-bar"
       sx={
         isPhone

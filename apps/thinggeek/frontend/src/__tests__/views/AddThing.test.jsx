@@ -6,7 +6,7 @@ import AddThing, { LAST_PLACE_KEY, orderTypes } from '../../views/add/AddThing';
 import { UploadsProvider } from '../../hooks/useUploads';
 import { CREATE_THING } from '../../graphql/mutations';
 import { GET_THING, GET_THINGS, GET_THING_FACETS, GET_THING_TREE, GET_THING_TYPES } from '../../graphql/queries';
-import { renderWithProviders } from '../testUtils';
+import { mockViewport, renderWithProviders } from '../testUtils';
 import { NODES, TYPES, makeThing } from '../fixtures';
 
 const many = (m) => ({ ...m, maxUsageCount: 20 });
@@ -146,6 +146,32 @@ describe('add a thing, on one screen', () => {
     expect(await screen.findByText('Landed on t-new1')).toBeInTheDocument();
     expect(createResults[1]).toHaveBeenCalledTimes(1);
   });
+
+  it('on a phone, the "added. Next one." toast rides above the Save bar, never over it', async () => {
+    const restore = mockViewport(390);
+    const original = Element.prototype.getBoundingClientRect;
+    // The bar: 76px tall at the foot of the window.
+    Element.prototype.getBoundingClientRect = function rect() {
+      if (this.getAttribute?.('data-testid') === 'add-save-bar') {
+        return { top: window.innerHeight - 76, bottom: window.innerHeight, height: 76, left: 0, right: 390, width: 390, x: 0, y: window.innerHeight - 76 };
+      }
+      return original.call(this);
+    };
+    try {
+      const { createResults } = setup({ creates: [{ name: 'Jumper cables', typeId: 'ty-tool', parentId: null }] });
+      await pickType('Tool');
+      fireEvent.change(nameBox(), { target: { value: 'Jumper cables' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save & add another' }));
+      await waitFor(() => expect(createResults[0]).toHaveBeenCalledTimes(1));
+      expect(await screen.findByText(/Jumper cables added/)).toBeInTheDocument();
+      const stack = document.querySelector('[data-geek-toasts]');
+      // 76px of bar plus the provider's 8px gap.
+      expect(window.getComputedStyle(stack).bottom).toBe('84px');
+    } finally {
+      Element.prototype.getBoundingClientRect = original;
+      restore();
+    }
+  }, 30000);
 
   it('"Add here" arrives with where it is already chosen', async () => {
     const { createResults } = setup({ entry: { pathname: '/add', state: { parentId: 'n-van' } }, creates: [{ name: 'Wendy', typeId: 'ty-boat', parentId: 'n-van' }] });
