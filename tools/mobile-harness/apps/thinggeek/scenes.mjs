@@ -233,19 +233,17 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
-    // Trashing a container says what happens to what's inside.
+    // Trashing is reversible, so it acts at once (no dialog): back to where you
+    // were, with a toast that says what happens to what's inside, and Undo.
     name: '05i-trash-container',
     goto: '/thing/th13',
     wait: 1800,
     async setup(page, h) {
       if (!(await click(page, h, page.getByRole('button', { name: 'More actions' }), 700))) return false;
-      if (!(await click(page, h, page.getByText('Move to Trash', { exact: true }), 700))) return false;
-      if (!(await page.getByTestId('trash-contents-note').count())) throw new Error('no contents note');
+      if (!(await click(page, h, page.getByText('Move to Trash', { exact: true }), 900))) return false;
+      if (!(await page.getByRole('button', { name: 'Undo' }).count())) throw new Error('no Undo toast');
     },
-    teardown: async (page, h) => {
-      await h.esc();
-      await h.esc();
-    },
+    teardown: (page, h) => h.esc(),
   },
   {
     // The lens: an accessory of the camera, wherever each is kept.

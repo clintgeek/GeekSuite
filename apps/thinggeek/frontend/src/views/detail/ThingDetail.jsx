@@ -36,10 +36,10 @@ import { useScrollRoot } from '../../components/AppMain';
 import { useTitleWhenScrolledPast } from '../../components/pageTitle';
 import { goBack } from '../../utils/goBack';
 import { labelsPath } from '../../utils/labelUrl';
+import { thingPath } from '../../components/navConfig';
 import EditThingDialog from '../edit/EditThingDialog';
 import ActionBar, { ACTION_BAR_PX } from './ActionBar';
 import AddFileSheet from './AddFileSheet';
-import ConfirmTrashDialog from './ConfirmTrashDialog';
 import ContainsSection from './ContainsSection';
 import { isParentKind, kindOf, showsContents } from '../../utils/where';
 import DatesSection from './DatesSection';
@@ -150,11 +150,11 @@ export default function ThingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { notify } = useToast();
+  const { notify, dismiss } = useToast();
   const vocab = useVocabulary();
-  const { trashThing } = useThingActions();
+  const { trashThing, restoreThing } = useThingActions();
   const uploads = useUploads(id);
-  const [panel, setPanel] = useState(null); // edit | photo | document | more | trash | move
+  const [panel, setPanel] = useState(null); // edit | photo | document | more | move
   const [panelArg, setPanelArg] = useState(null);
   const cameraRef = useRef(null);
   const cameraRole = useRef('overview');
@@ -191,6 +191,41 @@ export default function ThingDetail() {
     else if (key === 'receipt') openPanel('document', 'receipt');
     else if (key === 'serial') openPanel('edit', 'details');
     else if (key === 'value') openPanel('edit', 'value');
+  };
+
+  // The Trash keeps it for trashDays, so this is reversible (suite rule): act at
+  // once, leave the page, and offer Undo, which restores it and comes back here.
+  const moveToTrash = async () => {
+    const { id: thingId, name } = thing;
+    const inside = thing.contentsCount ?? 0;
+    try {
+      await trashThing(thingId);
+    } catch (err) {
+      notify(err?.message || `Couldn't move ${name} to the Trash.`, { tone: 'error' });
+      return;
+    }
+    let toastId = null;
+    const undo = async () => {
+      dismiss(toastId);
+      try {
+        await restoreThing(thingId);
+        notify(`${name} is back.`, { tone: 'success' });
+        navigate(thingPath(thingId));
+      } catch (err) {
+        notify(err?.message || `Couldn't bring ${name} back. It's in the Trash.`, { tone: 'error' });
+      }
+    };
+    const stays = inside ? ` ${inside === 1 ? 'The 1 thing inside stays put' : `The ${inside} things inside stay put`}.` : '';
+    toastId = notify(`${name} is in the Trash for ${vocab.trashDays} days.${stays}`, {
+      tone: 'success',
+      duration: 8000,
+      action: (
+        <Button color="inherit" size="small" onClick={undo} sx={{ fontWeight: 800, minHeight: 44, minWidth: 44 }}>
+          Undo
+        </Button>
+      ),
+    });
+    close();
   };
 
   let content;
@@ -279,25 +314,7 @@ export default function ThingDetail() {
             onEdit={() => openPanel('edit')}
             onPrintLabel={() => navigate(labelsPath(thing.id))}
             onReport={() => navigate('/insurance')}
-            onTrash={() => openPanel('trash')}
-          />
-          <ConfirmTrashDialog
-            open={panel === 'trash'}
-            onClose={closePanel}
-            title={thing.name}
-            trashDays={vocab.trashDays}
-            contentsCount={thing.contentsCount ?? 0}
-            parentName={thing.path?.length ? thing.path[thing.path.length - 1].name : null}
-            onConfirm={async () => {
-              try {
-                await trashThing(thing.id);
-                closePanel();
-                notify(`${thing.name} is in the Trash for ${vocab.trashDays} days.`, { tone: 'success' });
-                close();
-              } catch (err) {
-                notify(err?.message || `Couldn't move ${thing.name} to the Trash.`, { tone: 'error' });
-              }
-            }}
+            onTrash={moveToTrash}
           />
         </>
       ) : null}

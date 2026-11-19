@@ -7,6 +7,7 @@ import ReadinessPanel from '../../views/detail/ReadinessPanel';
 import TopBar from '../../components/TopBar';
 import { mockViewport, renderWithProviders } from '../testUtils';
 import { GET_THING } from '../../graphql/queries';
+import { DELETE_THING, RESTORE_THING } from '../../graphql/mutations';
 import { crumbs, date, makeRifle, makeThing, typeRef } from '../fixtures';
 
 const body = (thing, props = {}) => <ThingDetailBody thing={thing} onPanel={() => {}} onFix={() => {}} uploads={[]} onRetry={() => {}} {...props} />;
@@ -186,6 +187,42 @@ describe('the ⋯ More sheet, mounted for real', () => {
     fireEvent.click(screen.getByText('Print label', { exact: true }));
     expect(await screen.findByText('At /labels?ids=th1')).toBeInTheDocument();
   });
+});
+
+describe('Move to Trash: reversible, so it acts at once and offers Undo', () => {
+  function LocationProbe() {
+    const location = useLocation();
+    return <p>At {location.pathname}</p>;
+  }
+
+  it('no confirmation; the toast says so and Undo restores it and comes back to it', async () => {
+    const thing = makeThing({ id: 'th1', name: 'Wendy', contentsCount: 2, contents: [] });
+    const trashed = vi.fn(() => ({ data: { deleteThing: { __typename: 'DeleteResponse', success: true, message: null } } }));
+    const restored = vi.fn(() => ({ data: { restoreThing: thing } }));
+    const mocks = [
+      { request: { query: GET_THING, variables: { id: 'th1' } }, result: { data: { thing } }, maxUsageCount: 10 },
+      { request: { query: DELETE_THING, variables: { id: 'th1' } }, result: trashed },
+      { request: { query: RESTORE_THING, variables: { id: 'th1' } }, result: restored },
+    ];
+    renderWithProviders(
+      <Routes>
+        <Route path="/thing/:id" element={<ThingDetail />} />
+        <Route path="/" element={<LocationProbe />} />
+      </Routes>,
+      { initialEntries: ['/thing/th1'], mocks }
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByText('Move to Trash', { exact: true }));
+    await waitFor(() => expect(trashed).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog', { name: /Move to Trash\?/ })).toBeNull();
+    expect(await screen.findByText('At /')).toBeInTheDocument();
+    expect(screen.getByText(/Wendy is in the Trash for \d+ days\. The 2 things inside stay put\./)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(restored).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Wendy is back.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Wendy' })).toBeInTheDocument();
+  }, 30000);
 });
 
 describe('claim readiness', () => {
