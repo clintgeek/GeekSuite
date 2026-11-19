@@ -20,6 +20,8 @@
  *   secondaryAction          — Cancel; the ✕ replaces it below `sm` unless
  *                              `keepSecondaryOnMobile`
  *   maxWidth, fullWidth      — window-mode sizing
+ *   mode                     — GeekDialog's mode; `"window"` keeps a short
+ *                              confirmation a centred window on the phone
  *   contentSx                — sx overrides on the body
  *   children                 — the form
  */
@@ -40,6 +42,7 @@ const LedgerDialog = ({
   contentSx,
   headerSx,
   disableClose = false,
+  mode,
   children,
   ...rest
 }) => {
@@ -64,6 +67,7 @@ const LedgerDialog = ({
       open={open}
       onClose={onClose}
       disableClose={disableClose}
+      mode={mode}
       title={title}
       maxWidth={maxWidth}
       fullWidth={fullWidth}

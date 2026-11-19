@@ -10,6 +10,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
+import { useConfirmDelete } from "../components/primitives/ConfirmDelete";
 import LedgerDialog from "../components/primitives/LedgerDialog";
 import { GeekSlashHint, slashFocusProps, useToast } from "@geeksuite/ui";
 import { displayCalendarDate, utcDateString } from "@geeksuite/utils";
@@ -103,6 +104,7 @@ const BirdsPage = () => {
   const { data: pairingsData } = useQuery(GET_PAIRINGS);
 
   const allBirds = birdsData?.birds || [];
+  const [confirmDelete, confirmDialog] = useConfirmDelete();
   const locations = locData?.flockLocations || [];
   const allGroups = groupsData?.flockGroups || [];
   const allMemberships = membershipsData?.groupMemberships || [];
@@ -236,11 +238,18 @@ const BirdsPage = () => {
   };
 
   const handleDelete = (id) => {
-    if (!window.confirm("Delete this bird?")) return;
-    deleteEntity({ variables: { type: "bird", id } });
-    setExpandedBirdId(null);
-    setEditingBird(null);
-    setEditDialogOpen(false);
+    const bird = allBirds.find((b) => b.id === id);
+    const who = bird ? (bird.name ? `${bird.name} (${bird.tagId})` : bird.tagId) : "This bird";
+    confirmDelete({
+      title: "Delete this bird?",
+      body: `${who} will be removed from your flock records.`,
+      onConfirm: async () => {
+        await deleteEntity({ variables: { type: "bird", id } });
+        setExpandedBirdId(null);
+        setEditingBird(null);
+        setEditDialogOpen(false);
+      },
+    });
   };
 
   /** Phone Edit: load the row into the same edit form the accordion uses. */
@@ -803,6 +812,7 @@ const BirdsPage = () => {
           </Grid>
         </Box>
       </LedgerDialog>
+      {confirmDialog}
     </Container>
   );
 };

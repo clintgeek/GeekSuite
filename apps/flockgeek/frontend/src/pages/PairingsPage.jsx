@@ -6,6 +6,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
+import { useConfirmDelete } from "../components/primitives/ConfirmDelete";
 import LedgerDialog from "../components/primitives/LedgerDialog";
 import { GeekSlashHint, slashFocusProps, useToast } from "@geeksuite/ui";
 import { GET_PAIRINGS } from "../graphql/queries";
@@ -28,6 +29,7 @@ const PairingsPage = () => {
   const [addFormData, setAddFormData] = useState(emptyForm);
 
   const { data, loading, error, refetch } = useQuery(GET_PAIRINGS);
+  const [confirmDelete, confirmDialog] = useConfirmDelete();
 
   const refetchList = ['GetPairings'];
 
@@ -78,8 +80,12 @@ const PairingsPage = () => {
   const handleSort = (col) => { setSortOrder(sortBy === col && sortOrder === "asc" ? "desc" : "asc"); setSortBy(col); setPage(0); };
 
   const handleDelete = (id) => {
-    if (!window.confirm("Delete this pairing?")) return;
-    deleteEntity({ variables: { type: "pairing", id } });
+    const pairing = (data?.pairings || []).find((p) => p.id === id);
+    confirmDelete({
+      title: "Delete this pairing?",
+      body: `${pairing?.name || "This pairing"} will be removed. The birds stay in your flock.`,
+      onConfirm: () => deleteEntity({ variables: { type: "pairing", id } }),
+    });
   };
 
   const handleEdit = (pairing) => {
@@ -232,6 +238,7 @@ const PairingsPage = () => {
         </Box>
       </LedgerDialog>
 
+      {confirmDialog}
     </Container>
   );
 };

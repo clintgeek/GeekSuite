@@ -8,6 +8,7 @@ import {
 } from "@mui/material";
 import { GeekEmptyState, GeekErrorState, GeekSlashHint, slashFocusProps, useToast } from "@geeksuite/ui";
 import LedgerDialog from "../components/primitives/LedgerDialog";
+import { useConfirmDelete } from "../components/primitives/ConfirmDelete";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -35,6 +36,7 @@ const LocationsPage = () => {
   const { data: birdsData } = useQuery(GET_BIRDS);
 
   const allLocations = locData?.flockLocations || [];
+  const [confirmDelete, confirmDialog] = useConfirmDelete();
   const allBirds = birdsData?.birds || [];
 
   const refetchList = ['GetFlockLocations'];
@@ -75,8 +77,12 @@ const LocationsPage = () => {
 
   const handleDelete = (id, e) => {
     e?.stopPropagation();
-    if (!window.confirm("Delete this location?")) return;
-    deleteEntity({ variables: { type: "location", id } });
+    const location = allLocations.find((l) => l.id === id);
+    confirmDelete({
+      title: "Delete this location?",
+      body: `${location?.name || "This location"} will be removed. Birds and harvests recorded there keep their records.`,
+      onConfirm: () => deleteEntity({ variables: { type: "location", id } }),
+    });
   };
 
   const handleEdit = (location, e) => {
@@ -261,6 +267,7 @@ const LocationsPage = () => {
         </Box>
       </LedgerDialog>
 
+      {confirmDialog}
     </Container>
   );
 };

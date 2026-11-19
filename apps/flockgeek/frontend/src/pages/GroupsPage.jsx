@@ -9,6 +9,7 @@ import {
 } from "@mui/material";
 import { GeekEmptyState, GeekErrorState, GeekSlashHint, slashFocusProps, useToast } from "@geeksuite/ui";
 import LedgerDialog from "../components/primitives/LedgerDialog";
+import { useConfirmDelete } from "../components/primitives/ConfirmDelete";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -52,6 +53,7 @@ const GroupsPage = () => {
   const { data: membershipsData } = useQuery(GET_GROUP_MEMBERSHIPS, { variables: { activeOnly: true } });
 
   const allGroups = groupsData?.flockGroups || [];
+  const [confirmDelete, confirmDialog] = useConfirmDelete();
   const allMemberships = membershipsData?.groupMemberships || [];
 
   const refetchList = ['GetFlockGroups'];
@@ -90,8 +92,12 @@ const GroupsPage = () => {
 
   const handleDelete = (id, e) => {
     e?.stopPropagation();
-    if (!window.confirm("Delete this group?")) return;
-    deleteEntity({ variables: { type: "group", id } });
+    const group = allGroups.find((g) => g.id === id);
+    confirmDelete({
+      title: "Delete this group?",
+      body: `${group?.name || "This group"} will be removed. The birds in it stay in your flock.`,
+      onConfirm: () => deleteEntity({ variables: { type: "group", id } }),
+    });
   };
 
   const handleEdit = (group, e) => {
@@ -212,7 +218,7 @@ const GroupsPage = () => {
                     }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 600, gridColumn: { xs: '1 / -1', md: 'auto' } }}>{group.name}</Typography>
                       <Chip label={getPurposeLabel(group.purpose)} color={getPurposeColor(group.purpose)} size="small" sx={{ justifySelf: 'start' }} />
-                      <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: { xs: 'left', md: 'right' }, justifySelf: { xs: 'end', md: 'stretch' }, gridColumn: { xs: '2', md: 'auto' } }}>{members.length} birds</Typography>
+                      <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: { xs: 'left', md: 'right' }, justifySelf: { xs: 'end', md: 'stretch' }, gridColumn: { xs: '2', md: 'auto' } }}>{members.length} bird{members.length !== 1 ? 's' : ''}</Typography>
                       <Chip label={active ? "Active" : "Inactive"} color={active ? "success" : "default"} size="small" variant="outlined" sx={{ justifySelf: 'start' }} />
                     </Box>
                   </AccordionSummary>
@@ -291,6 +297,7 @@ const GroupsPage = () => {
         </Box>
       </LedgerDialog>
 
+      {confirmDialog}
     </Container>
   );
 };

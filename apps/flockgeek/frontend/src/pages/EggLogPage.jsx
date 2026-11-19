@@ -12,6 +12,7 @@ import QuickHarvestEntry from "../components/QuickHarvestEntry";
 import QuickHarvestSheet from "../components/QuickHarvestSheet";
 import { HARVEST_FAB_CLEARANCE } from "../utils/harvestDefaults";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
+import { useConfirmDelete } from "../components/primitives/ConfirmDelete";
 import LedgerDialog from "../components/primitives/LedgerDialog";
 import { useToast } from "@geeksuite/ui";
 import { GET_EGG_PRODUCTIONS, GET_LOCATIONS } from "../graphql/queries";
@@ -37,6 +38,7 @@ const EggLogPage = () => {
   const { data: locData } = useQuery(GET_LOCATIONS);
 
   const allEggs = eggsData?.eggProductions || [];
+  const [confirmDelete, confirmDialog] = useConfirmDelete();
   const locations = locData?.flockLocations || [];
 
   const refetchList = ['GetEggProductions'];
@@ -77,8 +79,15 @@ const EggLogPage = () => {
   const handleSort = (col) => { setSortOrder(sortBy === col && sortOrder === "asc" ? "desc" : "asc"); setSortBy(col); setPage(0); };
 
   const handleDelete = (id) => {
-    if (!window.confirm("Delete this egg production record?")) return;
-    deleteEntity({ variables: { type: "eggproduction", id } });
+    const record = allEggs.find((e) => e.id === id);
+    const what = record
+      ? `The harvest of ${record.eggsCount} egg${record.eggsCount !== 1 ? "s" : ""} on ${displayCalendarDate(record.date)}`
+      : "This harvest";
+    confirmDelete({
+      title: "Delete this harvest?",
+      body: `${what} will be removed from the egg log.`,
+      onConfirm: () => deleteEntity({ variables: { type: "eggproduction", id } }),
+    });
   };
 
   const handleEdit = (record) => {
@@ -278,6 +287,7 @@ const EggLogPage = () => {
         </Box>
       </LedgerDialog>
 
+      {confirmDialog}
     </Container>
   );
 };

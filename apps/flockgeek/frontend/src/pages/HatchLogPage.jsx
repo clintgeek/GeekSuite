@@ -6,6 +6,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
+import { useConfirmDelete } from "../components/primitives/ConfirmDelete";
 import LedgerDialog from "../components/primitives/LedgerDialog";
 import { useToast } from "@geeksuite/ui";
 import { GET_HATCH_EVENTS } from "../graphql/queries";
@@ -26,6 +27,7 @@ const HatchLogPage = () => {
   const [addFormData, setAddFormData] = useState({ setDate: "", hatchDate: "", eggsSet: "", eggsFertile: "", chicksHatched: "", pullets: "", cockerels: "", notes: "" });
 
   const { data, loading, error, refetch } = useQuery(GET_HATCH_EVENTS);
+  const [confirmDelete, confirmDialog] = useConfirmDelete();
 
   const refetchList = ['GetHatchEvents'];
 
@@ -72,8 +74,14 @@ const HatchLogPage = () => {
   const handleSort = (col) => { setSortOrder(sortBy === col && sortOrder === "asc" ? "desc" : "asc"); setSortBy(col); setPage(0); };
 
   const handleDeleteEvent = (id) => {
-    if (!window.confirm("Delete this hatch event?")) return;
-    deleteEntity({ variables: { type: "hatch_event", id } });
+    const event = (data?.hatchEvents || []).find((h) => h.id === id);
+    confirmDelete({
+      title: "Delete this hatch?",
+      body: event?.setDate
+        ? `The hatch set on ${displayCalendarDate(event.setDate)} will be removed, with its counts.`
+        : "This hatch will be removed, with its counts.",
+      onConfirm: () => deleteEntity({ variables: { type: "hatch_event", id } }),
+    });
   };
 
   const handleEditEvent = (event) => {
@@ -293,6 +301,7 @@ const HatchLogPage = () => {
         </Box>
       </LedgerDialog>
 
+      {confirmDialog}
     </Container>
   );
 };
