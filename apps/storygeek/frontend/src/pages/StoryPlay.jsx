@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Box, Typography, Button, CircularProgress, IconButton, Tooltip, LinearProgress,
+  Box, Typography, Button, CircularProgress, IconButton, Tooltip,
   Menu, MenuItem, ListItemIcon, ListItemText, ButtonBase,
   alpha, useTheme, useMediaQuery,
 } from '@mui/material';
@@ -669,6 +669,9 @@ function StoryPlay() {
   const handleEpub = async () => {
     if (!storyId) return;
     setExporting(true);
+    // On a phone the only other sign of an EPUB run is a disabled tool, and
+    // it can take a minute (UX review #9): say so, then say when it lands.
+    notify('Binding the EPUB — this can take a minute.', { tone: 'info' });
     try {
       const res = await api.post(`/export/stories/${storyId}/epub`, null, {
         responseType: 'blob',
@@ -679,6 +682,7 @@ function StoryPlay() {
       a.href = url; a.download = `${(story.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_')}.epub`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+      notify('The EPUB is ready — downloading.', { tone: 'success' });
     } catch (e) {
       // A blob responseType means the error body is a Blob, so the
       // shared interceptor can't read the envelope — unwrap it here.
@@ -1000,7 +1004,15 @@ function StoryPlay() {
         }
         bodySx={{ overflowY: 'auto' }}
       >
-        {exporting && <LinearProgress sx={{ mb: 2 }} />}
+        {/* Bookify can take as long as a turn: the candle, a clock and
+            what to expect, not a bare indeterminate bar (UX review #9). */}
+        {exporting && !exportData && (
+          <WritingIndicator
+            label="Binding the tale"
+            usualLine="Bookify rewrites the whole tale as prose. A long tale can take a minute or two."
+            longLine="Taking longer than usual — still binding."
+          />
+        )}
         {!exporting && exportError && (
           <GeekErrorState
             compact

@@ -407,3 +407,41 @@ describe('StoryPlay phone tools', () => {
     expect(screen.getByRole('menuitem', { name: /download epub/i })).toBeInTheDocument();
   });
 });
+
+// UX review 2026-11-18, StoryGeek #9: exports run long with almost no
+// feedback — Bookify had a bare bar, EPUB nothing at all on a phone.
+describe('StoryPlay export feedback', () => {
+  const originalCreate = URL.createObjectURL;
+  const originalRevoke = URL.revokeObjectURL;
+  afterEach(() => {
+    URL.createObjectURL = originalCreate;
+    URL.revokeObjectURL = originalRevoke;
+  });
+
+  it('Bookify shows the candle, a clock and what to expect while it binds', async () => {
+    api.post.mockImplementation(() => new Promise(() => {}));
+    renderStoryPlay();
+    await screen.findByPlaceholderText('What do you do?');
+    await openBookify();
+
+    expect(await screen.findByText('Binding the tale')).toBeInTheDocument();
+    expect(screen.getByText(/a long tale can take a minute or two/i)).toBeInTheDocument();
+    expect(screen.getByTestId('writing-elapsed')).toHaveTextContent('0:00');
+  });
+
+  it('EPUB says it has started and says when the download begins', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:epub');
+    URL.revokeObjectURL = vi.fn();
+    let finish;
+    api.post.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    renderStoryPlay();
+    await screen.findByPlaceholderText('What do you do?');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export the tale' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /download epub/i }));
+
+    expect(await screen.findByText(/binding the epub — this can take a minute/i)).toBeInTheDocument();
+    finish({ data: new Blob(['epub']) });
+    expect(await screen.findByText(/the epub is ready — downloading/i)).toBeInTheDocument();
+  });
+});

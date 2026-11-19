@@ -51,13 +51,19 @@ export const LONG_WAIT = 'Taking longer than usual — still writing. You can le
  * `label`/`detail` reword it for a turn this screen is waiting out rather
  * than writing — the player's own resent turn, or another device's. The
  * usual-wait line follows either way, and changes once, at two minutes, to
- * say the turn is running long.
+ * say the turn is running long. `usualLine`/`longLine` reword those for a
+ * wait that is not a turn (Bookify binding the tale).
  */
-export default function WritingIndicator({ label = 'The Game Master is writing', detail = null }) {
+export default function WritingIndicator({
+  label = 'The Game Master is writing',
+  detail = null,
+  usualLine = USUAL_WAIT,
+  longLine = LONG_WAIT,
+}) {
   const theme = useTheme();
   const c = theme.palette.candle;
   const elapsed = useElapsedSeconds(true);
-  const expectation = elapsed >= LONG_WAIT_SECONDS ? LONG_WAIT : USUAL_WAIT;
+  const expectation = elapsed >= LONG_WAIT_SECONDS ? longLine : usualLine;
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3, mt: 0.5 }}>
       <Candle size={40} flame={c.mode === 'dark' ? c.accent : '#c98a2e'} wax={c.mode === 'dark' ? '#efe3c8' : '#fffaf0'} />
