@@ -171,11 +171,13 @@ export const formatLimit = (value) => {
  * ids are also what `?tab=` maps onto — see `TAB_SECTIONS`.
  */
 export const SECTIONS = [
-  { id: 'needs-attention', label: 'Needs attention' },
-  { id: 'usage', label: 'Usage and cost' },
-  { id: 'apps-keys', label: 'Apps and keys' },
-  { id: 'catalog', label: 'Catalog' },
-  { id: 'try-it', label: 'Try it' },
+  // `short` is the phone label in the sticky nav: five long labels wrapped to
+  // two rows there and held 17% of the screen.
+  { id: 'needs-attention', label: 'Needs attention', short: 'Attention' },
+  { id: 'usage', label: 'Usage and cost', short: 'Usage' },
+  { id: 'apps-keys', label: 'Apps and keys', short: 'Apps & keys' },
+  { id: 'catalog', label: 'Catalog', short: 'Catalog' },
+  { id: 'try-it', label: 'Try it', short: 'Try it' },
 ];
 
 /**

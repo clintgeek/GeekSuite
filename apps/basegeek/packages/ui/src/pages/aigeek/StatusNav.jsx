@@ -13,9 +13,14 @@
  * carry `scrollMarginTop` so they do not land under the shell's sticky bar.
  *
  * The Needs attention entry carries the count, because the count is the one
- * number worth seeing before you have scrolled anywhere.
+ * number worth seeing before you have scrolled anywhere. It is a Dymo tag
+ * after the word, not a badge over it (the badge sat on the "n").
+ *
+ * On the phone it is one row that scrolls sideways inside itself, with short
+ * labels; it never wraps to a second sticky row.
  */
-import { Badge, Box, Button } from '@mui/material';
+import { Box, Button } from '@mui/material';
+import { Dymo } from '../../signalbox/Labels';
 import { SECTIONS } from './format';
 
 export default function StatusNav({ attentionCount = 0, hasWarning = false, onJump }) {
@@ -28,12 +33,12 @@ export default function StatusNav({ attentionCount = 0, hasWarning = false, onJu
         top: 0,
         zIndex: 2,
         display: 'flex',
-        // The attention badge is pushed 6px outward (below), so a 4px gap let
-        // it land on top of the next item's label — visible as "Needs
-        // attention ③Usage and cost". The gap has to clear the offset.
-        // 4px suite unit: 16px clears the badge's 6px outward offset.
-        gap: 4,
-        flexWrap: 'wrap',
+        gap: { xs: 0.5, sm: 2 },
+        flexWrap: 'nowrap',
+        overflowX: 'auto',
+        overscrollBehaviorX: 'contain',
+        scrollbarWidth: 'none',
+        '&::-webkit-scrollbar': { display: 'none' },
         py: 1,
         mb: 2,
         // The page scrolls under this, so it needs its own ground rather than
@@ -45,26 +50,22 @@ export default function StatusNav({ attentionCount = 0, hasWarning = false, onJu
     >
       {SECTIONS.map(section => {
         const isAttention = section.id === 'needs-attention';
-        const label = (
-          <Badge
-            color={hasWarning ? 'warning' : 'info'}
-            badgeContent={isAttention ? attentionCount : 0}
-            // A zero badge is noise on a page whose good state is zero.
-            invisible={!isAttention || attentionCount === 0}
-            sx={{ '& .MuiBadge-badge': { fontSize: 12, right: -6 } }}
-          >
-            {section.label}
-          </Badge>
-        );
-
+        // A zero count is noise on a page whose good state is zero.
+        const showCount = isAttention && attentionCount > 0;
         return (
           <Button
             key={section.id}
             size="small"
             onClick={() => onJump(section.id)}
-            sx={{ minHeight: 44, fontSize: 12, px: 1.5 }}
+            sx={{ minHeight: 44, fontSize: 12, px: 1.5, flexShrink: 0, whiteSpace: 'nowrap', gap: 0.75 }}
           >
-            {label}
+            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{section.label}</Box>
+            <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>{section.short || section.label}</Box>
+            {showCount && (
+              <Dymo tone={hasWarning ? 'red' : 'black'} tilt={false} caps={false} data-testid="attention-count">
+                {attentionCount}
+              </Dymo>
+            )}
           </Button>
         );
       })}
