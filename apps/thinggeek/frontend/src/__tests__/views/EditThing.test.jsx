@@ -206,3 +206,40 @@ describe('saving while an upload is still running (finding 1)', () => {
     expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled(); // never went to "Saving…"
   });
 });
+
+describe('Edit works like Add', () => {
+  const mount = (onClose) =>
+    renderWithProviders(
+      <UploadsProvider upload={() => new Promise(() => {})}>
+        <EditThingDialog open onClose={onClose} thing={wendyWithEverything()} />
+      </UploadsProvider>,
+      { mocks: [] }
+    );
+
+  it('Save and Cancel are in the bar at the foot, not the header', () => {
+    mount(() => {});
+    const bar = screen.getByTestId('edit-save-bar');
+    expect(within(bar).getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Save' })).toHaveLength(1);
+  });
+
+  it('untouched, Cancel just closes', () => {
+    const onClose = vi.fn();
+    mount(onClose);
+    fireEvent.click(within(screen.getByTestId('edit-save-bar')).getByRole('button', { name: 'Cancel' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Discard changes?')).toBeNull();
+  });
+
+  it('changed, Cancel asks first instead of closing; Discard goes', async () => {
+    const onClose = vi.fn();
+    mount(onClose);
+    fireEvent.change(screen.getByRole('textbox', { name: /Name/ }), { target: { value: 'Wendy II' } });
+    fireEvent.click(within(screen.getByTestId('edit-save-bar')).getByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByText('Discard changes?')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  }, 90000);
+});

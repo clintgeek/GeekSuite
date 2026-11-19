@@ -8,11 +8,19 @@
  * one-tap fixes on the thing's page ("Record the serial") land here.
  *
  * `thingToForm` / `formToInput` are the whole mapping, pure and exported.
+ *
+ * Works like Add (2026-11-18): the kraft floor with cream fields, the livery
+ * band under the header, and Save in a black bar at the foot (in reach of the
+ * thumb on a phone, at the bottom of the dialog on a desktop) — not in the
+ * header's top-right corner. A changed form asks before it goes (the shared
+ * useUnsavedGuard: ✕, Cancel, Escape, Android Back, reload).
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, InputAdornment, MenuItem, TextField, Typography } from '@mui/material';
 import { useApolloClient } from '@apollo/client';
-import { GeekDialog, useToast } from '@geeksuite/ui';
+import { GeekDialog, useToast, useUnsavedGuard } from '@geeksuite/ui';
+import ChromeTheme from '../../components/Chrome';
+import { CHROME, LIVERY, LIVERY_SHEET_HEADER_SX, dustImage } from '../../theme/theme';
 import WherePicker from '../../components/WherePicker';
 import TagInput from '../../components/TagInput';
 import TypeIcon from '../../components/TypeIcon';
@@ -187,9 +195,13 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
   // 'done' items stay listed until the thing has been re-read with them.
   const uploading = uploads.some((u) => u.status !== 'failed');
 
+  // What the form was opened with, to tell an edit from a look.
+  const baselineRef = useRef(null);
   useEffect(() => {
     if (open) {
-      setForm(thingToForm(thing));
+      const seeded = thingToForm(thing);
+      setForm(seeded);
+      baselineRef.current = JSON.stringify(seeded);
       seededRef.current = thing;
       setShowErrors(false);
     }
@@ -226,6 +238,10 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
     const keep = new Set((type.fields ?? []).map((f) => f.key));
     return (thing.fields ?? []).filter((f) => hasValue(f.value) && !keep.has(f.key)).map((f) => f.label);
   }, [type, thing, form.typeId]);
+
+  const dirty = open && baselineRef.current !== null && JSON.stringify(form) !== baselineRef.current;
+  // Down while saving, so a successful save closes without asking.
+  const guard = useUnsavedGuard({ dirty, enabled: open && !busy, onDiscard: onClose });
 
   const save = async () => {
     if (Object.keys(errors).length) {
@@ -264,20 +280,13 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
   return (
     <GeekDialog
       open={open}
-      onClose={onClose}
+      onClose={guard.requestClose}
       title={`Edit ${thing?.name ?? 'thing'}`}
       maxWidth="md"
-      primaryAction={
-        <Button variant="contained" onClick={save} disabled={busy}>
-          {busy ? 'Saving…' : 'Save'}
-        </Button>
-      }
-      secondaryAction={
-        <Button onClick={onClose} sx={{ color: 'text.secondary' }}>
-          Cancel
-        </Button>
-      }
-      bodySx={{ pt: 2.5 }}
+      sx={{ bgcolor: 'background.desk', backgroundImage: (t) => dustImage(t.palette.mode) }}
+      headerSx={{ ...LIVERY_SHEET_HEADER_SX, bgcolor: 'background.desk' }}
+      titleSx={LIVERY_SHEET_HEADER_SX}
+      bodySx={{ pt: 2.5, pb: 0, px: { xs: 2, sm: 3 } }}
     >
       <Box ref={bodyRef} data-testid="edit-form">
         <Group id="basics" title="Basics">
@@ -357,6 +366,42 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
           <TextField label="Notes" value={form.notes} onChange={(e) => set('notes')(e.target.value)} multiline minRows={4} fullWidth inputProps={{ maxLength: 10000 }} />
         </Group>
       </Box>
+      {/* Add's Save bar: black, the orange stripe along its top, pinned to the foot of the scrolling body. */}
+      <ChromeTheme>
+        <Box
+          data-testid="edit-save-bar"
+          sx={{
+            position: 'sticky',
+            bottom: 0,
+            zIndex: 2,
+            mx: { xs: -2, sm: -3 },
+            mt: 1,
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+            gap: 1,
+            px: 2,
+            pt: '14px',
+            pb: 'calc(10px + env(safe-area-inset-bottom))',
+            bgcolor: CHROME.bar,
+            backgroundImage: `linear-gradient(180deg, ${LIVERY.orange} 0 4px, transparent 4px)`,
+          }}
+        >
+          <Button variant="outlined" onClick={guard.requestClose} sx={{ minHeight: 48, color: CHROME.text, borderColor: CHROME.text, fontWeight: 700 }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="hero"
+            disableElevation
+            onClick={save}
+            disabled={busy}
+            sx={{ minHeight: 48, fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'hero.contrastText' }}
+          >
+            {busy ? 'Saving…' : 'Save'}
+          </Button>
+        </Box>
+      </ChromeTheme>
+      {guard.prompt}
     </GeekDialog>
   );
 }
