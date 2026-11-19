@@ -22,7 +22,7 @@ vi.mock('@geeksuite/ui', () => ({
   useReducedMotion: () => true,
 }));
 
-const { PenProvider, usePen, REFRESH_AFTER_MS } = await import('../../context/PenContext.jsx');
+const { PenProvider, usePen, REFRESH_AFTER_MS, STALE_LIST_NOTE } = await import('../../context/PenContext.jsx');
 
 function mount(overrides = {}) {
   fake.tasks = [];
@@ -63,6 +63,24 @@ describe('a failed load is not "Nothing due today" (1.12)', () => {
     await act(async () => { await ref.current.refresh(); });
     expect(ref.current.loaded).toBe(true);
     expect(ref.current.loadError).toBeNull();
+  });
+
+  it('with nothing on screen, a failed load raises no toast: the page says it (review 2026-11-18 #10)', async () => {
+    mount({ fetchTasks: vi.fn(() => Promise.resolve({ status: 'error', error: new Error('Service unavailable') })) });
+    await flush();
+    expect(toasts).toEqual([]);
+  });
+
+  it('with a list on screen, a failed re-read says so once, in plain words, not on every poll', async () => {
+    const fetchTasks = vi.fn()
+      .mockResolvedValueOnce({ status: 'ok' })
+      .mockResolvedValue({ status: 'error', error: new Error('Service unavailable') });
+    const { ref } = mount({ fetchTasks, tasks: [{ id: 't1', content: 'Water the plants', status: 'pending' }] });
+    await flush();
+    await act(async () => { await ref.current.refresh(); });
+    await act(async () => { await ref.current.refresh(); });
+    expect(toasts.map((t) => t.message)).toEqual([STALE_LIST_NOTE]);
+    expect(toasts[0].tone).toBeUndefined();
   });
 
   it('TaskContext errors are said as a toast, once', async () => {

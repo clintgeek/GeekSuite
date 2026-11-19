@@ -472,9 +472,12 @@ export const scenes = [
       await page.waitForTimeout(1500);
       const drawnEmpty = await page.getByText(/nothing due today/i).count();
       const hasRetry = await page.getByRole('button', { name: 'Retry' }).count();
-      if (drawnEmpty || !hasRetry) {
+      // Said once, in plain words: no second toast in the server's words (review 2026-11-18 #10).
+      const serverWords = await page.getByText(/service unavailable/i).count();
+      if (drawnEmpty || !hasRetry || serverWords) {
         await page.unroute('**/graphql'); // the runner skips teardown after a throw
-        throw new Error(drawnEmpty ? 'a failed load was drawn as "Nothing due today"' : 'no Retry on a failed load');
+        throw new Error(drawnEmpty ? 'a failed load was drawn as "Nothing due today"'
+          : !hasRetry ? 'no Retry on a failed load' : 'a failed load was toasted in the server’s words too');
       }
     },
     async teardown(page) { await page.unroute('**/graphql'); },

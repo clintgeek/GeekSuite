@@ -216,3 +216,16 @@ describe('TaskContext.deleteTask reports its outcome', () => {
     expect(screen.queryByTestId('row-t1')).not.toBeInTheDocument();
   });
 });
+
+describe('TaskContext.fetchTasks — a failed read is said once (UX review 2026-11-18 #10)', () => {
+  it('returns the failure for the page to say, and puts nothing on `error` (which would be toasted too)', async () => {
+    query.mockRejectedValue(new Error('Service unavailable'));
+    renderProvider();
+    let result;
+    await act(async () => {
+      result = await api.fetchTasks('year');
+    });
+    expect(result.status).toBe('error');
+    expect(api.error).toBeNull();
+  });
+});

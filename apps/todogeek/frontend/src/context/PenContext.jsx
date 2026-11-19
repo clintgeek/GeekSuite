@@ -65,6 +65,8 @@ export const POLL_VISIBLE_MS = 5 * 60 * 1000;
 const ONLINE_THROTTLE_MS = 5 * 1000;
 /** A read dropped because writes kept overlapping it is tried again after this. */
 const STALE_RETRY_MS = 1500;
+/** A re-read failed with a list on screen: the list stays, this says it may be behind. */
+export const STALE_LIST_NOTE = 'Couldn’t reach your list. What you see may be out of date.';
 
 /** A network failure or timeout, as opposed to the server saying no. */
 const isTransient = (err) => {
@@ -97,6 +99,12 @@ export function PenProvider({ children }) {
 
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const loadErrorRef = useRef(null);
+  const corpusRef = useRef([]);
+  // Read through a ref: `refresh` keys the sign-in effect, so it must not
+  // change identity when the toast API does.
+  const notifyRef = useRef(notify);
+  notifyRef.current = notify;
   const [pendingTagDismissed, setPendingTagDismissed] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [hidden, setHidden] = useState(() => new Set());
@@ -122,12 +130,21 @@ export function PenProvider({ children }) {
     const status = result?.status ?? 'ok';
     if (status === 'ok') {
       setNow(new Date());
+      loadErrorRef.current = null;
       setLoadError(null);
       setLoaded(true);
       return true;
     }
     if (status === 'error') {
-      setLoadError({ message: "Couldn't reach your list.", error: result.error ?? null });
+      // Said once, in plain words. With nothing on screen the page says it
+      // (PenLoadError, with Retry). With a list on screen the page keeps it,
+      // so a quiet toast says it may be behind — once per outage, not on
+      // every poll. Never the server's own words (review 2026-11-18 #10).
+      const already = loadErrorRef.current;
+      const shown = { message: "Couldn't reach your list.", error: result.error ?? null };
+      loadErrorRef.current = shown;
+      setLoadError(shown);
+      if (!already && corpusRef.current.length > 0) notifyRef.current(STALE_LIST_NOTE);
       return false;
     }
     if (status === 'stale') {
@@ -227,6 +244,7 @@ export function PenProvider({ children }) {
     const list = Array.isArray(tasks) ? tasks : [];
     return hidden.size ? list.filter((t) => !hidden.has(taskId(t))) : list;
   }, [tasks, hidden]);
+  corpusRef.current = corpus;
 
   const visible = useMemo(() => filterByTag(corpus, tagFilter), [corpus, tagFilter]);
 

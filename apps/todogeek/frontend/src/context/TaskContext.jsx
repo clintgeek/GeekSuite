@@ -526,12 +526,15 @@ const TaskProvider = ({ children }) => {
     } catch (err) {
       if (mine !== fetchSeq.current) return { status: 'superseded' };
       console.error('Error fetching tasks:', err);
-      handleApiError(err, 'Failed to fetch tasks');
+      // A failed READ is not put on `error` (which PenContext turns into a
+      // toast): the page says it once, in plain words, from the returned
+      // status ("Couldn't reach your list." · Retry). Toasting the server's own
+      // words as well said one fact twice (UX review 2026-11-18 #10).
       return { status: 'error', error: err };
     } finally {
       if (mine === fetchSeq.current) setLoading(LoadingState.IDLE);
     }
-  }, [handleApiError, runQuery, writesSettled, commit]);
+  }, [runQuery, writesSettled, commit]);
 
   /* ---------- writes ---------- */
 
