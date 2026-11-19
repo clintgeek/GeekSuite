@@ -14,7 +14,7 @@ const AppDock = () => {
     >
       {/* Scrolls with snap instead of squeezing icons when the row can't
           fit at the viewport width (e.g. six-plus apps at 390px). */}
-      <div className="glass flex items-end gap-0.5 px-2.5 py-2 rounded-2xl pointer-events-auto max-w-full overflow-x-auto snap-x snap-mandatory">
+      <div className="glass dock-glass flex items-end gap-0.5 px-2.5 py-2 rounded-2xl pointer-events-auto max-w-full overflow-x-auto snap-x snap-mandatory">
         {PRIMARY_APPS.map((app) => (
           <DockItem key={app.id} icon={app.icon} label={app.label} url={app.url} />
         ))}

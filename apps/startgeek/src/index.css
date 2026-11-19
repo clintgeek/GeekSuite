@@ -308,6 +308,12 @@
 .pt-safe-top { padding-top: calc(1rem + env(safe-area-inset-top)); }
 .pb-safe-sheet { padding-bottom: calc(2rem + env(safe-area-inset-bottom)); }
 .dock-safe-bottom { bottom: calc(18px + env(safe-area-inset-bottom)); }
+/* On a phone the content scrolls under the dock; at the shared glass's 0.7
+   the task text showed through behind the labels (design review #7). The
+   dock alone goes near-opaque there. */
+@media (max-width: 639px) {
+  .dock-glass { background: rgba(12, 15, 21, 0.94); }
+}
 .toast-safe-bottom { bottom: calc(6rem + env(safe-area-inset-bottom)); }
 
 /* The Ask card + result list is one bounded, scrolling block above the
