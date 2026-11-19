@@ -9,14 +9,17 @@
  * server's configuration lives in the deployment's environment and the
  * runbook; this page holds only the switches the console actually has:
  *
- *   - Night turn: the suite-wide theme (the `geek_theme` cookie and your
- *     stored preference, via @geeksuite/user).
+ *   - The suite theme is NOT a switch here (2026-11-18 review: four switches
+ *     for one setting). Account › Preferences is its one home, with System as
+ *     a choice; the top bar's sun/moon and Lever 3 stay as quick throws. This
+ *     panel says which turn is on and links there.
  *   - Sound: the box bell and lever clunk. Off by default.
  *   - Night Watch: the dashboard's idle screensaver, and how long it waits.
  *
  * The last two are this browser's (consolePrefs, localStorage).
  */
 import { Box, Button, FormControl, FormControlLabel, InputLabel, MenuItem, Select, Switch, Typography } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 import { useThemeMode } from '@geeksuite/user';
 import Panel from '../signalbox/Panel';
 import { Dymo } from '../signalbox/Labels';
@@ -42,7 +45,7 @@ function SwitchRow({ label, help, checked, onChange, children }) {
 }
 
 export default function Settings() {
-  const { theme: mode, toggleTheme } = useThemeMode();
+  const { theme: mode } = useThemeMode();
   const prefs = useConsolePrefs();
 
   return (
@@ -52,14 +55,17 @@ export default function Settings() {
         title="Panel switches"
         caption="Thrown here, they take effect at once. There is no Save button because there is nothing to save."
       >
-        <SwitchRow
-          label="Night turn"
-          help={mode === 'dark'
-            ? 'The panel is dark. Off switches to the day turn. This follows you across the whole suite.'
-            : 'The panel is light. On switches to the night turn. This follows you across the whole suite.'}
-          checked={mode === 'dark'}
-          onChange={() => toggleTheme()}
-        />
+        <Box sx={{ py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Typography sx={{ fontWeight: 700, fontSize: '0.9rem' }}>
+            Theme: {mode === 'dark' ? 'night turn (dark)' : 'day turn (light)'}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, mb: 1 }}>
+            The theme follows you across the whole suite, so it lives with your account, where it can also follow your device.
+          </Typography>
+          <Button component={RouterLink} to="/account#account-preferences" variant="outlined" size="small" sx={{ minHeight: 44 }}>
+            Change it in Your account
+          </Button>
+        </Box>
         <SwitchRow
           label="Box bell and lever sound"
           help="A bell for the lamp test, a clunk when a lever is thrown. Off unless you turn it on; this browser only."

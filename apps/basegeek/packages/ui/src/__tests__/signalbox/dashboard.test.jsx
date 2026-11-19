@@ -229,6 +229,12 @@ describe('the console switches', () => {
     expect(getConsolePrefs()).toMatchObject({ sound: true, nightWatch: false });
   });
 
+  it('names the theme in effect and sends you to Account to change it — no second theme switch', () => {
+    renderWithProviders(<Settings />);
+    expect(screen.queryByRole('checkbox', { name: 'Night turn' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Change it in Your account' })).toHaveAttribute('href', '/account#account-preferences');
+  });
+
   it('no longer offers the fake server form', () => {
     renderWithProviders(<Settings />);
     expect(screen.queryByLabelText(/JWT Secret/i)).not.toBeInTheDocument();

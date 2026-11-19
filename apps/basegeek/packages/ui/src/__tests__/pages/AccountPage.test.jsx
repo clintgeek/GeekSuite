@@ -77,14 +77,15 @@ describe('AccountPage', () => {
     expect(rows[localeIndex + 1]).toBe('en-US');
   });
 
-  it('the avatar card shows the theme actually in effect', () => {
+  // 2026-11-18: the Theme summary row repeated the Theme select beside it as
+  // data. The select is the one place; it shows the theme in effect.
+  it('shows the theme in effect in the Theme select, not as a second summary row', () => {
     useUser.mockReturnValue(baseUserStore());
     const { container } = renderWithProviders(<AccountPage />);
 
     const rows = [...container.querySelectorAll('p')].map((el) => el.textContent);
-    const themeIndex = rows.indexOf('Theme');
-    expect(themeIndex).toBeGreaterThan(-1);
-    expect(rows[themeIndex + 1]).toBe('dark');
+    expect(rows).not.toContain('Theme');
+    expect(screen.getByRole('combobox', { name: 'Theme' })).toHaveTextContent('Dark');
   });
 
   it('shows the "No app-specific preferences yet" empty state when appPreferences is empty', () => {
@@ -174,10 +175,9 @@ describe('AccountPage', () => {
     await waitFor(() => expect(notify).toHaveBeenCalledWith('Bad timezone', { tone: 'error' }));
   });
 
-  it('reflects the stored theme preference and accent color in the avatar card', () => {
+  it('reflects the stored accent color', () => {
     useUser.mockReturnValue(baseUserStore());
     renderWithProviders(<AccountPage />);
-    expect(screen.getByText('dark')).toBeInTheDocument();
     // The swatch readout names the colour as well as its hex (2026-11-18).
     expect(screen.getByText('Amber · #e8a849')).toBeInTheDocument();
   });

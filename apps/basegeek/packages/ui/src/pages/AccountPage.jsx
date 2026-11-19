@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -148,6 +149,14 @@ export default function AccountPage() {
     if (storeError) notify(storeError, { tone: 'error' });
   }, [storeError, notify]);
 
+  // Settings links to /account#account-preferences (the theme's one home);
+  // a client-side route change does not scroll to a hash by itself.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!loaded || !hash) return;
+    document.getElementById(hash.slice(1))?.scrollIntoView?.({ block: 'start' });
+  }, [loaded, hash]);
+
   // Hydrate forms when store data arrives
   useEffect(() => {
     if (!loaded) return;
@@ -265,7 +274,6 @@ export default function AccountPage() {
               {shortDate(identity?.lastLogin) && (
                 <DetailRow label="Last login" value={shortDate(identity.lastLogin)} />
               )}
-              <DetailRow label="Theme" value={themeValue} />
               {/* `locale` lives on the profile, not on preferences — this row
                   read `prefsForm.locale`, which is never populated, so it
                   rendered blank for every user since the card shipped.
