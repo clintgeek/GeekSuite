@@ -12,6 +12,9 @@ import { netCarbs as calcNetCarbs } from '../../utils/ketoMath';
 import { formatServing } from '../../utils/units.js';
 import { fmt, grams } from '../../utils/plainWords.js';
 
+
+/** A row wide enough for a one-line name and a macro column (B4). */
+const WIDE_ROW = '@container (min-width: 800px)';
 /**
  * One food in the "exact food" list, as a row.
  *
@@ -181,6 +184,10 @@ const FoodResultRow = ({
     <Box
       data-testid="food-row"
       sx={{
+        // The wide layout follows the ROW's width, not the window's (UX review
+        // 2026-11, B4): inside the 600 px add dialog on a 1280 px screen the
+        // window said "wide" and names were cut to one word ("Breaded…").
+        containerType: 'inline-size',
         display: 'flex',
         alignItems: 'center',
         gap: 0.5,
@@ -229,11 +236,12 @@ const FoodResultRow = ({
                 lineHeight: 1.3,
                 overflow: 'hidden',
                 overflowWrap: 'anywhere',
-                // Two lines on a phone, where the end of the name is the part
-                // that matters; one is plenty on a wide screen.
+                // Two lines, where the end of the name is the part that
+                // matters; one only when the row itself is wide.
                 display: '-webkit-box',
                 WebkitBoxOrient: 'vertical',
-                WebkitLineClamp: { xs: 2, lg: 1 },
+                WebkitLineClamp: 2,
+                [WIDE_ROW]: { WebkitLineClamp: 1 },
                 whiteSpace: 'normal'
               }}
             >
@@ -260,7 +268,7 @@ const FoodResultRow = ({
             )}
             {/* Tablet and narrow desktop: the macros, rather than a column. */}
             {!pending && macros && (
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline', lg: 'none' } }}>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' }, [WIDE_ROW]: { display: 'none' } }}>
                 {hasSubtitle ? ' · ' : ''}{macros}
               </Box>
             )}
@@ -272,7 +280,7 @@ const FoodResultRow = ({
             {fmt(calories)} cal
           </Typography>
           {!isMeal && (
-            <Box component="span" sx={{ display: { xs: 'none', lg: 'flex' }, gap: 1 }}>
+            <Box component="span" sx={{ display: 'none', [WIDE_ROW]: { display: 'flex' }, gap: 1 }}>
               <Typography component="span" sx={{ fontSize: '0.8125rem', color: muted, whiteSpace: 'nowrap' }}>{macros}</Typography>
             </Box>
           )}
