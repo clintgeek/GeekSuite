@@ -35,7 +35,13 @@ export const TODAY = {
     blockedCount: 0,
   },
   reading: [{ id: 'bk1', title: 'Lock In', authors: ['John Scalzi'], readingProgress: 42, pageCount: 336, coverPath: null }],
-  fitness: { caloriesConsumed: 1450, calorieGoal: 2100, streak: 6, meals: [] },
+  // The names the gateway's GlanceFitness type uses (calories, mealsLogged,
+  // loginStreak). Until 2026-11-18 this sent caloriesConsumed/streak/meals,
+  // which nothing reads, so the populated panel was never audited.
+  fitness: {
+    calories: 1450, calorieGoal: 2100, mealsLogged: 2, loginStreak: 6,
+    lastActivity: { activityName: 'Morning walk', activityType: 'walking', startTimeLocal: '2026-09-05T07:10:00', calories: 180, duration: 2400 },
+  },
 };
 
 export const WEEK = [

@@ -102,7 +102,7 @@ const TaskRow = ({ task, late = false, today, aside = null }) => {
             </span>
           ))}
         {lateTag && (
-          <span className="ml-1.5 align-[1px] font-mono text-[12px] tracking-[0.06em] uppercase px-1.5 py-px rounded border border-[rgba(240,113,120,0.4)] text-critical">
+          <span className="ml-1.5 align-[1px] inline-block whitespace-nowrap font-mono text-[12px] tracking-[0.06em] uppercase px-1.5 py-px rounded border border-[rgba(240,113,120,0.4)] text-critical">
             {lateTag}
           </span>
         )}
