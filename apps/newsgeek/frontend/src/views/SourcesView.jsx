@@ -14,13 +14,16 @@
  * don't read directly; "Check" opens the Add sheet on that domain.
  *
  * The **+** opens the Add sheet for every signed-in reader. The summary line
- * and the status filter stay; the filter narrows every section.
+ * and the status filter stay; the filter narrows every section, and so does
+ * "Find a source" (by name or homepage, as you type — UX review 2026-11-18,
+ * finding 4). A row says its status once: not "Active" (the normal case), not
+ * a status its feed line already shows, and no "On/Off" beside the switch.
  */
 import React, { useMemo, useState } from 'react';
 import { Box, Button, Chip, CircularProgress, Link, Typography } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useApolloClient, useMutation, useQuery } from '@apollo/client';
-import { useToast } from '@geeksuite/ui';
+import { GeekSearchField, useToast } from '@geeksuite/ui';
 import { Link as RouterLink } from 'react-router-dom';
 import Column from '../components/Column';
 import HealthIndicator from '../components/HealthIndicator';
@@ -34,7 +37,7 @@ import { GET_NEWS_SOURCES, GET_NEWS_SUGGESTED_SOURCES } from '../graphql/queries
 import { useViewer } from '../hooks/useViewer';
 import { GOTHIC, flagSx, visuallyHiddenSx } from '../theme/theme';
 import { GROUPS, groupFor, suggestionLine } from '../utils/addSource';
-import { hostOf, matchesFilter, sourceSummary } from '../utils/sources';
+import { hostOf, matchesFilter, matchesName, rowStatus, sourceSummary } from '../utils/sources';
 import { SECTION_LABEL, SOURCE_STATUSES, STATUS_LABEL, labelFor } from '../utils/vocab';
 import AddSourceSheet from './AddSourceSheet';
 import SourceFormDialog from './SourceFormDialog';
@@ -89,16 +92,15 @@ function SourceRow({ source, onToggle }) {
           <InkSwitch
             checked={source.onForMe}
             onChange={(on) => onToggle(source, on)}
-            label={source.onForMe ? 'On' : 'Off'}
+            label=""
             ariaLabel={`${source.name} in your paper`}
-            sx={{ flexShrink: 0 }}
-            labelSx={{ minWidth: '2.5em', textAlign: 'right' }}
+            sx={{ flexShrink: 0, gap: 0 }}
           />
         )}
       </Box>
       <Typography sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', color: 'text.secondary', mb: 1 }}>
         {[
-          labelFor(STATUS_LABEL, source.status),
+          rowStatus(source) ? labelFor(STATUS_LABEL, rowStatus(source)) : null,
           source.sections.map((s) => labelFor(SECTION_LABEL, s)).join(', '),
           `${source.articlesLast7d} this week`,
           source.addedByMe ? 'added by you' : null,
@@ -169,6 +171,8 @@ export default function SourcesView() {
   const client = useApolloClient();
   const { notify } = useToast();
   const [filter, setFilter] = useState('all');
+  const [query, setQuery] = useState('');
+  const finding = query.trim() !== '';
   // { initialUrl, autoRun, key } while the Add sheet is open.
   const [sheet, setSheet] = useState(null);
   const [byHand, setByHand] = useState(false);
@@ -178,8 +182,8 @@ export default function SourcesView() {
   const [setSourceOn] = useMutation(SET_NEWS_SOURCE_ON);
   const sources = useMemo(() => data?.newsSources ?? [], [data]);
   const shown = useMemo(
-    () => sources.filter((s) => matchesFilter(s, filter)).sort((a, b) => a.name.localeCompare(b.name)),
-    [sources, filter]
+    () => sources.filter((s) => matchesFilter(s, filter) && matchesName(s, query)).sort((a, b) => a.name.localeCompare(b.name)),
+    [sources, filter, query]
   );
   const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.id, sources.filter((s) => matchesFilter(s, f.id)).length])), [sources]);
   const grouped = useMemo(() => {
@@ -221,6 +225,18 @@ export default function SourcesView() {
         </Button>
       </Box>
 
+      <GeekSearchField
+        label="Find a source"
+        placeholder="Find a source"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        fullWidth
+        size="small"
+        slashFocus={20}
+        inputProps={{ 'data-testid': 'find-source', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false }}
+        sx={{ mt: 4 }}
+      />
+
       <Box role="group" aria-label="Filter by status" sx={{ display: 'flex', gap: 2, overflowX: 'auto', py: 3, mx: { xs: -4, sm: 0 }, px: { xs: 4, sm: 0 } }}>
         {FILTERS.filter((f) => f.id === 'all' || counts[f.id]).map((f) => {
           const selected = filter === f.id;
@@ -257,9 +273,9 @@ export default function SourcesView() {
           </Button>
         </Box>
       ) : null}
-      {data && !shown.length && (filter !== 'all' || !sources.length) ? (
-        <Typography sx={{ py: 10, textAlign: 'center', fontStyle: 'italic', color: 'text.secondary' }}>
-          {sources.length ? 'No sources match this filter.' : 'No sources yet.'}
+      {data && !shown.length && (filter !== 'all' || finding || !sources.length) ? (
+        <Typography data-testid="sources-none" sx={{ py: 10, textAlign: 'center', fontStyle: 'italic', color: 'text.secondary' }}>
+          {!sources.length ? 'No sources yet.' : finding ? `No source called “${query.trim()}”.` : 'No sources match this filter.'}
         </Typography>
       ) : null}
 
@@ -267,7 +283,7 @@ export default function SourcesView() {
         ? GROUPS.map((g) => {
             const rows = grouped[g.id];
             // Under a filter, or for Retired, an empty section is left out.
-            if (!rows.length && (filter !== 'all' || !g.empty || !sources.length)) return null;
+            if (!rows.length && (filter !== 'all' || finding || !g.empty || !sources.length)) return null;
             return (
               <Box component="section" key={g.id} aria-labelledby={`sources-${g.id}`} data-testid={`group-${g.id}`}>
                 <SectionHead id={`sources-${g.id}`} count={rows.length}>

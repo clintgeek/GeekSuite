@@ -78,3 +78,27 @@ export function matchesFilter(source, filter) {
   if (filter === 'attention') return source.status === 'broken' || ['failing', 'broken', 'stale'].includes(worstHealth(source.feeds));
   return source.status === filter;
 }
+
+const fold = (s) => String(s ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+/**
+ * Sources → "Find a source" (UX review 2026-11-18, finding 4): the name or
+ * the homepage's host contains what was typed, ignoring case and accents.
+ * An empty query matches everything.
+ */
+export function matchesName(source, query) {
+  const q = fold(query);
+  if (!q) return true;
+  return fold(source.name).includes(q) || fold(hostOf(source.homepage)).includes(q);
+}
+
+/**
+ * The status word a Sources row prints, or null: one status per row. "Active"
+ * is the normal case and goes unsaid, and a status a feed line already shows
+ * ("Broken" beside a broken feed) is not said twice.
+ */
+export function rowStatus(source) {
+  if (!source?.status || source.status === 'active') return null;
+  if ((source.feeds ?? []).some((f) => f.health === source.status)) return null;
+  return source.status;
+}

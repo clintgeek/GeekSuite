@@ -62,6 +62,30 @@ describe('Sources', () => {
   });
 });
 
+describe('Sources at 88 (UX review 2026-11-18, finding 4)', () => {
+  beforeEach(() => {
+    renderWithProviders(<SourcesView />, { mocks: [viewerMock(false), { request: { query: GET_NEWS_SOURCES }, result: { data: { newsSources: SOURCES } } }, suggestedMock()] });
+  });
+
+  it('"Find a source" narrows every section as you type, by name, ignoring case', async () => {
+    await screen.findByText('Alpha Daily');
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Find a source' }), 'charl');
+    expect(screen.getAllByTestId('source-row').map((r) => within(r).getByRole('heading').textContent)).toEqual(['Charlie Record']);
+    await userEvent.clear(screen.getByRole('searchbox', { name: 'Find a source' }));
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Find a source' }), 'zulu');
+    expect(screen.queryAllByTestId('source-row')).toHaveLength(0);
+    expect(screen.getByTestId('sources-none')).toHaveTextContent('No source called “zulu”.');
+  });
+
+  it('a row says its status once: not "Active", not "Broken" beside a broken feed, no On/Off text', async () => {
+    await screen.findByText('Alpha Daily');
+    expect(rowFor('Alpha Daily')).not.toHaveTextContent(/Active/);
+    expect(within(rowFor('Charlie Record')).getAllByText(/Broken/)).toHaveLength(1);
+    expect(rowFor('Echo Retired')).toHaveTextContent(/Retired/);
+    expect(within(rowFor('Alpha Daily')).queryByText(/^(On|Off)$/)).toBeNull();
+  });
+});
+
 describe('Sources sections, switches and suggestions', () => {
   const MIXED = [
     source('m1', { name: 'Mine Default', defaultOn: true, onForMe: true }),
