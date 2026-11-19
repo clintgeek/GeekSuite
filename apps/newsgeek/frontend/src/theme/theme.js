@@ -77,6 +77,20 @@ export const flagSx = {
   lineHeight: 1.4,
 };
 
+/** Read by screen readers, never painted: a page's h1 when the top bar already prints its name. */
+export const visuallyHiddenSx = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  p: 0,
+  m: '-1px',
+  border: 0,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+};
+
 /** The desktop sidebar panel (GeekShell navSx and GeekSidebar sx): newsprint with a hairline edge. */
 export const SIDEBAR_SX = {
   bgcolor: 'background.default',
@@ -139,7 +153,25 @@ function buildOverrides(mode) {
       MuiChip: {
         styleOverrides: { root: { fontFamily: GOTHIC, borderRadius: 2 } },
       },
-      MuiOutlinedInput: { styleOverrides: { root: { backgroundColor: g.stock, borderRadius: 2 } } },
+      // Square fields (UX review 2026-11-18, finding 8). The shared theme sets
+      // the radius on MuiTextField's `& .MuiOutlinedInput-root` (two classes),
+      // which beat this one-class OutlinedInput root, so a TextField or select
+      // field drew the suite's rounded control. Square both; the notched
+      // outline inherits the root's radius.
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: { backgroundColor: g.stock, borderRadius: 2 },
+          notchedOutline: { borderRadius: 2 },
+        },
+      },
+      MuiTextField: { styleOverrides: { root: { '& .MuiOutlinedInput-root': { borderRadius: 2 } } } },
+      // Menus (the ⋯ on a story, select lists) are a slip of stock laid on the
+      // page: square, a hairline edge, no drop shadow.
+      MuiMenu: {
+        styleOverrides: {
+          paper: { borderRadius: 2, boxShadow: 'none', border: `1px solid ${g.hairline}`, backgroundColor: g.stock },
+        },
+      },
       MuiListItemButton: {
         styleOverrides: {
           root: { '&.Mui-selected': { color: g.ink, backgroundColor: g.shade } },

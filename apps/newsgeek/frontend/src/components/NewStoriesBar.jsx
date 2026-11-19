@@ -2,7 +2,8 @@
  * "↑ 3 new stories": the paper was refreshed while the reader was down the
  * page (usePaperRefresh), so instead of reordering under their thumb this
  * bar waits at the top of the view, sticky. Tapping it goes up and prints
- * the new edition. Ink on newsprint, inverted — a stop-press slip.
+ * the new edition. Ink on newsprint, inverted — a stop-press slip: square
+ * (2px), a hairline of newsprint inside its edge instead of a drop shadow.
  */
 import React from 'react';
 import { Box, ButtonBase } from '@mui/material';
@@ -25,13 +26,13 @@ export default function NewStoriesBar({ count, onShow }) {
           mt: 2,
           minHeight: 44,
           px: 5,
-          borderRadius: '22px',
+          borderRadius: '2px',
           bgcolor: 'text.primary',
           color: 'background.default',
           fontFamily: GOTHIC,
           fontSize: '0.875rem',
           fontWeight: 700,
-          boxShadow: 3,
+          boxShadow: (t) => `inset 0 0 0 1px ${t.palette.background.default}, 0 0 0 1px ${t.palette.text.primary}`,
           '&:focus-visible': { outline: '2px solid', outlineColor: 'text.primary', outlineOffset: 2 },
         }}
       >
