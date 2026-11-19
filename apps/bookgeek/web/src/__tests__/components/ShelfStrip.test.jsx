@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ShelfStrip from '../../components/ShelfStrip';
 import { SHELVES, SHELF_SUMMARY } from '../fixtures';
@@ -64,5 +64,23 @@ describe('ShelfStrip', () => {
   it('lights no chip when several shelves are picked in the sheet', () => {
     renderWithProviders(<ShelfStrip shelves={SHELVES} shelfSummary={SHELF_SUMMARY} value={null} onChange={vi.fn()} />);
     expect(screen.getAllByRole('tab').every((t) => t.getAttribute('aria-selected') === 'false')).toBe(true);
+  });
+
+  it('hints that more shelves lie past the edge, and stops once you reach the end (review 2026-11-18 #10)', () => {
+    renderWithProviders(
+      <ShelfStrip shelves={SHELVES} shelfSummary={SHELF_SUMMARY} value="all" onChange={vi.fn()} />
+    );
+    const strip = screen.getByRole('tablist', { name: 'Shelves' });
+    Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 390 });
+    Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 800 });
+    strip.scrollLeft = 0;
+    fireEvent.scroll(strip);
+    expect(strip).toHaveAttribute('data-more-right', 'true');
+    expect(strip).toHaveAttribute('data-more-left', 'false');
+
+    strip.scrollLeft = 410;
+    fireEvent.scroll(strip);
+    expect(strip).toHaveAttribute('data-more-right', 'false');
+    expect(strip).toHaveAttribute('data-more-left', 'true');
   });
 });

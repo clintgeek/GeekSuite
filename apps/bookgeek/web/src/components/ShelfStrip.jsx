@@ -15,8 +15,13 @@
  * green board with cream serif lettering; the shelf you're on is the one
  * painted sticker yellow. The visible board is decorative; the ButtonBase
  * around it is the 44px tab.
+ *
+ * More shelves than fit (review 2026-11-18 #10): five of nine fit a phone and
+ * the fifth used to end flush at the edge, so nothing said the row scrolls.
+ * The edge with more shelves beyond it now fades out, so the last tab that
+ * fits reads as running on past the screen.
  */
-import React from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, ButtonBase } from "@mui/material";
 import { SERIF_FONT, SIGN_YELLOW } from "../theme/theme";
 import { shelfCount } from "./navConfig";
@@ -32,11 +37,41 @@ export default function ShelfStrip({
     ...shelves.filter((s) => s.id !== "all"),
   ];
 
+  const stripRef = useRef(null);
+  const [more, setMore] = useState({ left: false, right: false });
+  const measure = useCallback(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const left = el.scrollLeft > 1;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    setMore((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+  }, []);
+  useEffect(() => {
+    measure();
+    const el = stripRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure, entries.length]);
+
+  const FADE = 40;
+  const mask = more.left || more.right
+    ? `linear-gradient(to right, ${more.left ? `transparent 0, #000 ${FADE}px` : "#000 0"}, ${more.right ? `#000 calc(100% - ${FADE}px), transparent 100%` : "#000 100%"})`
+    : "none";
+
   return (
     <Box
+      ref={stripRef}
       role="tablist"
       aria-label="Shelves"
+      onScroll={measure}
+      data-more-left={more.left ? "true" : "false"}
+      data-more-right={more.right ? "true" : "false"}
       sx={{
+        // The edge with more beyond it fades out.
+        maskImage: mask,
+        WebkitMaskImage: mask,
         display: { xs: "flex", md: "none" },
         gap: 1,
         px: 2,
