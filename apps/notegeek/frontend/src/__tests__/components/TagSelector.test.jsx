@@ -78,6 +78,29 @@ describe('TagSelector', () => {
     });
 });
 
+describe('TagSelector — no clear-all button (review 2026-11-18 #5)', () => {
+    beforeEach(() => {
+        useTagStore.getState().tags = TAGS;
+    });
+
+    it('offers no one-click "Clear" that empties every tag', () => {
+        renderWithProviders(<TagSelector selectedTags={['work', 'house']} onChange={vi.fn()} />);
+        const input = screen.getByRole('combobox', { name: 'Tags' });
+        fireEvent.focus(input);
+        expect(screen.queryByRole('button', { name: /clear/i })).toBeNull();
+        expect(document.querySelector('.MuiAutocomplete-clearIndicator')).toBeNull();
+    });
+
+    it('each tag can still be removed on its own', () => {
+        const onChange = vi.fn();
+        renderWithProviders(<TagSelector selectedTags={['work', 'house']} onChange={onChange} />);
+        const chips = document.querySelectorAll('.MuiChip-deleteIcon');
+        expect(chips).toHaveLength(2);
+        fireEvent.click(chips[0]);
+        expect(onChange).toHaveBeenLastCalledWith(['house']);
+    });
+});
+
 describe('TagSelector — a typed tag is not lost on blur (review 1.21)', () => {
     beforeEach(() => {
         useTagStore.getState().tags = TAGS;

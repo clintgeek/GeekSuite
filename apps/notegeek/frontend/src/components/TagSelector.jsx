@@ -60,6 +60,10 @@ function TagSelector({ selectedTags, onChange, disabled = false }) {
       filterOptions={(options, state) => filterTagOptions(options, state.inputValue)}
       disabled={disabled}
       freeSolo
+      // No clear-all ×: MUI's default shows one on hover/focus with no
+      // visible label, and one click emptied every tag (autosave then stored
+      // it). Each chip keeps its own × (review 2026-11-18, #5).
+      disableClearable
       filterSelectedOptions
       selectOnFocus
       clearOnBlur
