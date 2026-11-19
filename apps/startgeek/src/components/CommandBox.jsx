@@ -6,11 +6,10 @@ import { gql, UnauthorizedError } from '../lib/graphql'
 import { failureMessage, isAuthFailure } from '../lib/commandFailure'
 import { ENGINES } from '../lib/engines'
 import { detectMode } from '../lib/commandMode'
-import parseTaskInput from '../lib/parseTaskInput'
+import { parseTaskInput } from '@geeksuite/task-grammar'
 import { shouldDraft, draftToSyntax } from '../lib/captureDraft'
 import {
   CREATE_TASK,
-  BLOCK_TASK,
   CREATE_NOTE,
   GLANCE_SEARCH,
   GLANCE_ASK,
@@ -26,6 +25,8 @@ import { slashFocusAction } from '../lib/slashFocus'
 import {
   captureAttemptFor,
   createBusyGuard,
+  describeCapture,
+  draftFields,
   partialCaptureMessage,
   runTaskCapture,
 } from '../lib/capture'
@@ -89,6 +90,7 @@ const CommandBox = ({ onOpenSettings }) => {
   const { refetch } = useGlance()
   const { settings } = useSettings()
   const askEnabled = !!settings.ask
+  const hour12 = settings.clock !== '24'
 
   const [value, setValue] = useState('')
   const [engineIndex, setEngineIndex] = useState(getInitialEngineIndex)
@@ -305,7 +307,6 @@ const CommandBox = ({ onOpenSettings }) => {
       await runTaskCapture(fields, attempt, {
         createTask: async (variables) => (await gql(CREATE_TASK, variables)).createTask,
         createNote: (text) => handleCreateNote(text),
-        blockTask: (id, reason) => gql(BLOCK_TASK, { id, reason }),
       })
       attemptRef.current = null
     },
@@ -379,8 +380,9 @@ const CommandBox = ({ onOpenSettings }) => {
             })
             captureDone('Note saved')
           } else {
-            await createTaskFromFields(draft.draft, `draft:${JSON.stringify(draft.draft)}`)
-            captureDone('Task added')
+            const fields = draftFields(draft.draft)
+            await createTaskFromFields(fields, `draft:${JSON.stringify(draft.draft)}`)
+            captureDone(describeCapture(fields, { hour12 }))
           }
         } catch (err) {
           reportFailure(err, draft.kind === 'note' ? "Couldn't save the note" : "Couldn't add the task")
@@ -422,8 +424,9 @@ const CommandBox = ({ onOpenSettings }) => {
           await handleCreateNote(q)
           captureDone('Note saved')
         } else {
-          await createTaskFromFields(parseTaskInput(q), `task:${q}`)
-          captureDone('Task added')
+          const fields = parseTaskInput(q)
+          await createTaskFromFields(fields, `task:${q}`)
+          captureDone(describeCapture(fields, { hour12 }))
         }
       } catch (err) {
         reportFailure(err, mode === 'note' ? "Couldn't save the note" : "Couldn't add the task")
@@ -525,6 +528,7 @@ const CommandBox = ({ onOpenSettings }) => {
     ask,
     askEnabled,
     draft,
+    hour12,
   ])
 
   // Every Enter (and the draft's Create) goes through the guard: while one is

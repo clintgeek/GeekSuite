@@ -100,8 +100,9 @@ state to wire the ramp against.
 - `serve` for static production
 - ESLint 8 with its own `.eslintrc.cjs`
 - pnpm workspace member since 2026-11-13 (was a standalone npm app with its
-  own `package-lock.json`). One workspace dependency, `@geeksuite/backdrop`,
-  shared with basegeek's login. Dockerfile and CI install from the workspace.
+  own `package-lock.json`). Workspace dependencies: `@geeksuite/backdrop`
+  (shared with basegeek's login) and `@geeksuite/task-grammar` (2026-11-18, TodoGeek's
+  task grammar; pure ESM, no build step). Dockerfile and CI install from the workspace.
 
 ## File Map
 
@@ -147,8 +148,13 @@ src/
     commandFailure.js     — isAuthFailure / failureMessage: what a failed capture says
     csrfHeal.js           — shouldHealCsrf / triggerCsrfReloadOnce (+ .test.js)
     captureDraft.js       — When a `>`/`<` line is worth a model call, and the draft round trip
-    queries.js, basegeek.js, engines.js, commandMode.js, parseTaskInput.js
+    capture.js            — One capture, written once; createTask input via @geeksuite/task-grammar
+    queries.js, basegeek.js, engines.js, commandMode.js
 ```
+
+`> task` reads TodoGeek's own grammar from the shared `@geeksuite/task-grammar`
+package (since 2026-11-18; StartGeek's old copy did not know plain-word dates
+or `(private)`), so a line means the same thing in both places.
 
 ## a11y pass (2026-09-05, TODO_ORDER Q51)
 

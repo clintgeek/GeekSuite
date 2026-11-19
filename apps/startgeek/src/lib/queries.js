@@ -154,6 +154,9 @@ export const CREATE_TASK = `
     $note: String
     $recurrenceRule: String
     $clientId: String
+    $private: Boolean
+    $hasDueTime: Boolean
+    $timeZone: String
   ) {
     createTask(
       content: $content
@@ -164,22 +167,15 @@ export const CREATE_TASK = `
       note: $note
       recurrenceRule: $recurrenceRule
       clientId: $clientId
+      private: $private
+      hasDueTime: $hasDueTime
+      timeZone: $timeZone
     ) {
       id
       content
       status
       dueDate
       tags
-    }
-  }
-`
-
-export const BLOCK_TASK = `
-  mutation BlockTask($id: ID!, $reason: String) {
-    blockTask(id: $id, reason: $reason) {
-      id
-      status
-      blockedReason
     }
   }
 `

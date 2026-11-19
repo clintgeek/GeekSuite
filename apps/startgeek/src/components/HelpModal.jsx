@@ -121,16 +121,17 @@ const HelpModal = ({ open, onClose }) => {
               <span className="font-mono text-white/90">&gt;</span> Task → TodoGeek
             </h3>
             <p className="text-sm text-white/70 leading-relaxed">
-              <code className="font-mono text-white/90">&gt; Call the vet #flock /tomorrow !high</code>
+              <code className="font-mono text-white/90">&gt; Call Dana tomorrow 2pm #work !high</code>
             </p>
             <ul className="mt-2 text-sm text-white/60 space-y-0.5">
               <li><span className="font-mono text-white/80">#tag</span> tag</li>
               <li><span className="font-mono text-white/80">!high</span> priority (high · medium · low)</li>
-              <li><span className="font-mono text-white/80">/today</span> /tomorrow /mon … /2026-09-10</li>
+              <li><span className="font-mono text-white/80">tomorrow 2pm</span> friday · /2026-09-10 · plain words or /dates</li>
+              <li><span className="font-mono text-white/80">(private)</span> hidden on a desktop until you show it</li>
               <li><span className="font-mono text-white/80">(daily)</span> recurrence</li>
               <li><span className="font-mono text-white/80">^note</span> task note</li>
               <li><span className="font-mono text-white/80">$^note</span> also creates a NoteGeek note</li>
-              <li><span className="font-mono text-white/80">~blocked reason</span> park the task</li>
+              <li><span className="font-mono text-white/80">~blocked reason</span> tags it #blocked, reason in the note</li>
               <li><span className="font-mono text-white/80">@</span> at the start marks an event</li>
             </ul>
             <p className="mt-2 text-sm text-white/60 leading-relaxed">

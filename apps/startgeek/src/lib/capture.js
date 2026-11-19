@@ -3,7 +3,7 @@
 // Two ways the command box used to file the same line twice:
 //   1. Double Enter (or the phone's Go key tapped twice) on a slow gateway —
 //      nothing stopped a second `createTask` while the first was in flight.
-//   2. A line with a follow-up step (`>> note` link or `!blocked`) whose
+//   2. A line with a follow-up step (a `$^note` for NoteGeek) whose
 //      follow-up failed: the task existed, the text stayed in the box, and
 //      Enter again created a second task.
 //
@@ -17,6 +17,8 @@
 //
 // Notes have no idempotency key on the gateway (createNote takes none), so
 // a note capture is protected by the busy guard only.
+
+import { toCreateInput } from '@geeksuite/task-grammar'
 
 /** A fresh id for one capture. */
 export function newClientId() {
@@ -32,41 +34,97 @@ export function newClientId() {
  */
 export function captureAttemptFor(previous, key, makeId = newClientId) {
   if (previous && previous.key === key) return previous
-  return { key, clientId: makeId(), taskId: null, noteDone: false, blockDone: false }
+  return { key, clientId: makeId(), taskId: null, noteDone: false }
 }
 
 /**
- * The `createTask` variables for parsed fields. With no usable due date it
- * defaults to today at 9 am local, as TodoGeek's quick-add does.
+ * The `createTask` variables for parsed fields, through the shared grammar's
+ * own mapping (`toCreateInput` in `@geeksuite/task-grammar`), so a line typed
+ * here becomes exactly the task the same line typed into TodoGeek becomes:
+ *
+ * - no date → today, date-only; a date without a time → date-only; a typed
+ *   time → the instant, with `hasDueTime` said out loud (contract C2);
+ * - `(private)` → `private: true` (until 2026-11-18 StartGeek's own copy of
+ *   the grammar did not read it, and a private task arrived unmasked);
+ * - `~blocked` → a `#blocked` tag with the reason in the note, as TodoGeek
+ *   files it (the parked state has no screen there any more);
+ * - `$^note` is not part of the task: `runTaskCapture` sends it to NoteGeek.
  */
 export function taskVariables(fields, clientId, now = new Date()) {
-  let dueDate = fields.dueDate ? new Date(fields.dueDate) : null
-  if (!dueDate || Number.isNaN(dueDate.getTime())) {
-    dueDate = new Date(now.getTime())
-    dueDate.setHours(9, 0, 0, 0)
-  }
+  const { input } = toCreateInput(
+    { ...fields, content: fields.content || '' },
+    { today: now, explicit: true },
+  )
+  return { ...(input || { content: '', signifier: '*' }), clientId }
+}
+
+/**
+ * A model draft (`glanceDraft`) as the fields the grammar would have read.
+ * Its `dueDate` is always a local date-time ("YYYY-MM-DDTHH:MM:SS"), so a
+ * dated draft is a timed one, as it was before the shared mapping.
+ */
+export function draftFields(draft) {
+  if (!draft) return {}
   return {
-    content: fields.content || '',
-    signifier: fields.signifier || '*',
-    priority: fields.priority || null,
-    tags: fields.tags?.length ? fields.tags : null,
-    dueDate: dueDate.toISOString(),
-    note: fields.note || null,
-    recurrenceRule: fields.recurrenceRule || null,
-    clientId,
+    content: draft.content || '',
+    signifier: draft.signifier || '*',
+    priority: draft.priority || undefined,
+    tags: draft.tags?.length ? draft.tags : undefined,
+    dueDate: draft.dueDate ? new Date(draft.dueDate) : undefined,
+    hasTime: Boolean(draft.dueDate),
   }
+}
+
+/**
+ * The words the capture toast uses for what was understood:
+ * "Added for Thu 19 · 2pm · #work · private". `hour12` follows the clock
+ * setting.
+ */
+export function describeCapture(fields, { now = new Date(), hour12 = true } = {}) {
+  const parts = []
+  if (fields?.dueDate) {
+    const d = new Date(fields.dueDate)
+    if (!Number.isNaN(d.getTime())) {
+      const a = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const b = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+      const diff = Math.round((b - a) / 86400000)
+      parts.push(
+        diff === 0
+          ? 'today'
+          : diff === 1
+            ? 'tomorrow'
+            : `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${d.getDate()}`
+      )
+      if (fields.hasTime) parts.push(formatTime(d, hour12))
+    }
+  } else {
+    parts.push('today')
+  }
+  for (const tag of fields?.tags || []) parts.push(`#${tag}`)
+  if (fields?.blocked) parts.push('#blocked')
+  if (fields?.private) parts.push('private')
+  return `Added for ${parts.join(' · ')}`
+}
+
+/** 2pm, 2:30pm, or 14:00 / 14:30 on a 24-hour clock. */
+export function formatTime(date, hour12 = true) {
+  const h = date.getHours()
+  const m = date.getMinutes()
+  const mm = String(m).padStart(2, '0')
+  if (!hour12) return `${String(h).padStart(2, '0')}:${mm}`
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}${m ? `:${mm}` : ''}${h < 12 ? 'am' : 'pm'}`
 }
 
 /**
  * Run the steps of a task capture that have not run yet, recording each one
  * on `attempt` as it finishes. A failing step throws with `err.captureStep`
- * set to 'task' | 'note' | 'block'; everything before it stays recorded.
+ * set to 'task' | 'note'; everything before it stays recorded.
  *
  * @param {object} fields  parsed fields (parseTaskInput or a confirmed draft)
  * @param {object} attempt from captureAttemptFor — mutated
  * @param {{ createTask: (vars) => Promise<{id: string}>,
- *   createNote: (text: string) => Promise<unknown>,
- *   blockTask: (id: string, reason: string|null) => Promise<unknown> }} steps
+ *   createNote: (text: string) => Promise<unknown> }} steps
  */
 export async function runTaskCapture(fields, attempt, steps, now = new Date()) {
   const step = async (name, fn) => {
@@ -94,11 +152,6 @@ export async function runTaskCapture(fields, attempt, steps, now = new Date()) {
     attempt.noteDone = true
   }
 
-  if (fields.blocked && !attempt.blockDone) {
-    await step('block', () => steps.blockTask(attempt.taskId, fields.blockedReason || null))
-    attempt.blockDone = true
-  }
-
   return attempt
 }
 
@@ -112,7 +165,6 @@ export async function runTaskCapture(fields, attempt, steps, now = new Date()) {
 export function partialCaptureMessage(err, attempt) {
   if (!attempt?.taskId || err?.captureStep === 'task') return null
   if (err?.captureStep === 'note') return "Task added, but the NoteGeek note wasn't saved. Press Enter to try the note again."
-  if (err?.captureStep === 'block') return "Task added, but it wasn't marked blocked. Press Enter to try again."
   return null
 }
 

@@ -3,12 +3,15 @@ import assert from 'node:assert/strict'
 import {
   captureAttemptFor,
   createBusyGuard,
+  describeCapture,
+  draftFields,
+  formatTime,
   newClientId,
   partialCaptureMessage,
   runTaskCapture,
   taskVariables,
 } from './capture.js'
-import parseTaskInput from './parseTaskInput.js'
+import { parseTaskInput, toCreateInput } from '@geeksuite/task-grammar'
 
 /**
  * A fake gateway with TodoGeek's contract C1: one task per clientId. `fail`
@@ -16,7 +19,7 @@ import parseTaskInput from './parseTaskInput.js'
  */
 function fakeGateway({ fail = {} } = {}) {
   const tasks = new Map()
-  const calls = { createTask: 0, createNote: 0, blockTask: 0 }
+  const calls = { createTask: 0, createNote: 0 }
   const failures = { ...fail }
   const maybeFail = (name) => {
     if (failures[name]) {
@@ -41,11 +44,6 @@ function fakeGateway({ fail = {} } = {}) {
         calls.createNote += 1
         maybeFail('createNote')
         return { id: 'n1' }
-      },
-      async blockTask() {
-        calls.blockTask += 1
-        maybeFail('blockTask')
-        return { id: 't1' }
       },
     },
   }
@@ -102,16 +100,19 @@ test('a failed follow-up step: the retry resumes there and never re-creates the 
   assert.equal(gw.tasks.size, 1)
 })
 
-test('a failed block step is retried alone', async () => {
-  const gw = fakeGateway({ fail: { blockTask: true } })
+test('~blocked files a #blocked tag with the reason in the note, as TodoGeek does', async () => {
+  // Until 2026-11-18 StartGeek parked the task with a second blockTask call;
+  // TodoGeek's add box files it as a tag (the parked state has no screen).
+  const gw = fakeGateway()
   const line = 'renew passport ~blocked waiting on photos'
   const fields = parseTaskInput(line)
   assert.equal(fields.blocked, true)
   const attempt = captureAttemptFor(null, `task:${line}`)
-  await assert.rejects(runTaskCapture(fields, attempt, gw.steps))
   await runTaskCapture(fields, attempt, gw.steps)
+  const [task] = gw.tasks.values()
   assert.equal(gw.calls.createTask, 1)
-  assert.equal(gw.calls.blockTask, 2)
+  assert.deepEqual(task.tags, ['blocked'])
+  assert.equal(task.note, 'Blocked: waiting on photos')
 })
 
 test('partialCaptureMessage is null when the task itself failed', () => {
@@ -150,13 +151,74 @@ test('the busy guard reopens after a failure', async () => {
   assert.equal(guard.busy, false)
 })
 
-test('taskVariables defaults the due date to 9 am today and carries the clientId', () => {
+test('taskVariables: no date means today, date-only, as TodoGeek sends it', () => {
+  // Was "today at 9 am" (an instant) until 2026-11-18: a phantom 9:00 time
+  // TodoGeek's own add box stopped sending.
   const now = new Date(2026, 10, 16, 15, 30)
   const vars = taskVariables({ content: 'x' }, 'cid', now)
-  const due = new Date(vars.dueDate)
-  assert.equal(due.getHours(), 9)
-  assert.equal(due.getDate(), 16)
+  assert.equal(vars.dueDate, '2026-11-16')
+  assert.equal(vars.hasDueTime, false)
   assert.equal(vars.clientId, 'cid')
+})
+
+test('(private) is read and carried through to createTask', async () => {
+  const gw = fakeGateway()
+  const line = 'book the clinic (private)'
+  const fields = parseTaskInput(line)
+  await runTaskCapture(fields, captureAttemptFor(null, `task:${line}`), gw.steps)
+  const [task] = gw.tasks.values()
+  assert.equal(task.private, true)
+  assert.equal(task.content, 'book the clinic')
+  assert.doesNotMatch(task.content, /private/i)
+})
+
+test('an ordinary line never sends private', () => {
+  const vars = taskVariables(parseTaskInput('buy milk'), 'cid')
+  assert.equal('private' in vars, false)
+})
+
+test('"call Dana tomorrow 2pm" reads the same as in TodoGeek: tomorrow at 2 pm, words without the date', () => {
+  const now = new Date(2026, 10, 18, 9, 38)
+  const line = 'call Dana tomorrow 2pm #work'
+  const fields = parseTaskInput(line, { now })
+  const vars = taskVariables(fields, 'cid', now)
+  assert.equal(vars.content, 'call Dana')
+  assert.deepEqual(vars.tags, ['work'])
+  assert.equal(vars.hasDueTime, true)
+  const due = new Date(vars.dueDate)
+  assert.equal(due.getFullYear(), 2026)
+  assert.equal(due.getMonth(), 10)
+  assert.equal(due.getDate(), 19)
+  assert.equal(due.getHours(), 14)
+  assert.equal(due.getMinutes(), 0)
+  // And it is exactly TodoGeek's createTask input for the same line.
+  const { input } = toCreateInput(fields, { today: now, explicit: true })
+  assert.deepEqual({ ...vars, clientId: undefined }, { ...input, clientId: undefined })
+})
+
+test('a model draft keeps its time', () => {
+  const fields = draftFields({ content: 'dentist', dueDate: '2026-11-20T15:30:00', tags: ['health'], priority: 2 })
+  const vars = taskVariables(fields, 'cid', new Date(2026, 10, 18))
+  assert.equal(vars.hasDueTime, true)
+  assert.equal(new Date(vars.dueDate).getHours(), 15)
+  assert.equal(vars.priority, 2)
+  assert.deepEqual(vars.tags, ['health'])
+})
+
+test('describeCapture says what was understood, on the chosen clock', () => {
+  const now = new Date(2026, 10, 18, 9, 38)
+  const fields = parseTaskInput('call Dana tomorrow 2pm #work (private)', { now })
+  assert.equal(describeCapture(fields, { now }), 'Added for tomorrow · 2pm · #work · private')
+  assert.equal(describeCapture(fields, { now, hour12: false }), 'Added for tomorrow · 14:00 · #work · private')
+  assert.equal(describeCapture(parseTaskInput('buy milk', { now }), { now }), 'Added for today')
+  const friday = parseTaskInput('pay rent /2026-11-20', { now })
+  assert.equal(describeCapture(friday, { now }), 'Added for Fri 20')
+})
+
+test('formatTime', () => {
+  assert.equal(formatTime(new Date(2026, 0, 1, 0, 5)), '12:05am')
+  assert.equal(formatTime(new Date(2026, 0, 1, 12, 0)), '12pm')
+  assert.equal(formatTime(new Date(2026, 0, 1, 7, 0), false), '07:00')
 })
 
 test('newClientId is unique', () => {

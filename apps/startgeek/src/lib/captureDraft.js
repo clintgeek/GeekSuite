@@ -2,11 +2,11 @@
 // plainly not understood a `>` or `<` line, and what to do with a draft once
 // the model has sent one back.
 //
-// The parser stays first, always. `parseTaskInput` is a straight copy of
-// TodoGeek's and is kept byte-identical to it, so the "did that work?" reading
-// lives here instead of inside it.
+// The parser stays first, always. `parseTaskInput` is TodoGeek's own, from
+// the shared `@geeksuite/task-grammar` package, so the "did that work?"
+// reading lives here instead of inside it.
 
-import parseTaskInput from './parseTaskInput'
+import { parseTaskInput } from '@geeksuite/task-grammar'
 
 /** Below this, a line is too slight to be worth a model call. */
 export const MIN_DRAFT_WORDS = 3
