@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { libraryPath } from "../components/navConfig";
 import { readerKeyFor } from "../utils/readerPosition";
+import { useRateWithUndo } from "../hooks/useRateWithUndo";
 import { useBookDetail } from "../hooks/useBookDetail";
 import { useBookGeek } from "../hooks/useBookGeek";
 import BookDetailModal from "./BookDetailModal";
@@ -23,7 +24,8 @@ import ReaderModal from "./ReaderModal";
 function BookDetail({ bookId }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { basket, shelves, settings, user } = useBookGeek();
+  const { basket, shelves, settings, user, rateBook, profile } = useBookGeek();
+  const rateWithUndo = useRateWithUndo(rateBook);
   const closingRef = useRef(false);
 
   const close = useCallback(() => {
@@ -63,6 +65,8 @@ function BookDetail({ bookId }) {
         toggleBasket={basket.toggleBasket}
         shelves={shelves}
         metadataDraftEnabled={settings.libraryAssistantPref}
+        onRate={rateWithUndo}
+        kindleEmail={profile?.kindleEmail || null}
       />
       {reader.readerOpen ? (
         <ReaderModal

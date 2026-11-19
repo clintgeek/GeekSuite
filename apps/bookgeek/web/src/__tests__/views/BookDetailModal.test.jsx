@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import BookDetailModal from '../../views/BookDetailModal';
 import { BOOKS, SHELVES } from '../fixtures';
@@ -124,7 +124,7 @@ describe('BookDetailModal', () => {
     const props = baseProps({ selectedBook: manga });
     renderWithProviders(<BookDetailModal {...props} />);
     expect(screen.queryByRole('button', { name: 'Read' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'To Kindle' })).not.toBeInTheDocument();
     expect(screen.queryByText(/No EPUB yet/)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Download EPUB' }));
     expect(props.handleDownload).toHaveBeenCalledWith(manga, 'epub', { direct: true });
@@ -139,10 +139,10 @@ describe('BookDetailModal', () => {
     expect(screen.getByText(/No file yet/)).toBeInTheDocument();
   });
 
-  it('an ordinary book keeps Read and Send, and has no Download button', () => {
+  it('an ordinary book keeps Read and To Kindle, and has no Download button', () => {
     renderWithProviders(<BookDetailModal {...baseProps()} />);
     expect(screen.getByRole('button', { name: 'Read' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'To Kindle' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Download/ })).not.toBeInTheDocument();
   });
 
@@ -320,5 +320,53 @@ describe('BookDetailModal', () => {
     } finally {
       restore();
     }
+  });
+
+  it('rates the book from its own page: the hero\'s stars are the control (review 2026-11-18 #6)', () => {
+    const onRate = vi.fn();
+    renderWithProviders(<BookDetailModal {...baseProps({ onRate })} />);
+    const stars = screen.getByRole('slider', { name: 'Rate Lock In' });
+    expect(stars).toHaveAttribute('aria-valuenow', '4');
+    // The stars are no longer printed twice as text in the meta line.
+    expect(screen.queryByText('★★★★☆')).not.toBeInTheDocument();
+    expect(screen.getByTestId('detail-rating-meaning')).toHaveTextContent(/4/);
+    fireEvent.keyDown(stars, { key: '5' });
+    expect(onRate).toHaveBeenCalledWith(book, 5);
+  });
+
+  it('a book not yet read and not rated gets no stars to rate', () => {
+    const onRate = vi.fn();
+    const unread = { ...book, shelf: 'unread', rating: null };
+    renderWithProviders(<BookDetailModal {...baseProps({ onRate, selectedBook: unread })} />);
+    expect(screen.queryByRole('slider', { name: /^Rate/ })).not.toBeInTheDocument();
+  });
+
+  it('To Kindle asks first and names the address; only Send emails it (review 2026-11-18 #7)', async () => {
+    const user = userEvent.setup();
+    const handleSendToKindle = vi.fn();
+    renderWithProviders(
+      <BookDetailModal {...baseProps({ handleSendToKindle, kindleEmail: 'chef@kindle.com' })} />
+    );
+    await user.click(screen.getByRole('button', { name: 'To Kindle' }));
+    expect(handleSendToKindle).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog', { name: 'Send to your Kindle?' });
+    expect(within(dialog).getByText('chef@kindle.com')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(handleSendToKindle).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Send to your Kindle?' })).toBeNull());
+
+    await user.click(await screen.findByRole('button', { name: 'To Kindle' }));
+    const again = await screen.findByRole('dialog', { name: 'Send to your Kindle?' });
+    await user.click(within(again).getByRole('button', { name: 'Send' }));
+    expect(handleSendToKindle).toHaveBeenCalledWith(book);
+  });
+
+  it('with no Kindle address the confirm says so and cannot send', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<BookDetailModal {...baseProps({ kindleEmail: null })} />);
+    await user.click(screen.getByRole('button', { name: 'To Kindle' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Send to your Kindle?' });
+    expect(within(dialog).getByText(/no Kindle address/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Send' })).toBeDisabled();
   });
 });

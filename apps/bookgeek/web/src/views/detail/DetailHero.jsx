@@ -20,9 +20,12 @@ import BookCover from "../../components/BookCover";
 import PriceSticker from "../../components/PriceSticker";
 import ShelfPlank from "../../components/ShelfPlank";
 import ShelfTalker from "../../components/ShelfTalker";
+import StarRating from "../../components/StarRating";
+import { ratingLine } from "@geeksuite/collection";
+import { canRate } from "../../utils/rating";
 import { bookId, publishedYear, shelfColor, shelfLabel, starsFor } from "./bookFacts";
 
-export default function DetailHero({ book, shelves }) {
+export default function DetailHero({ book, shelves, onRate }) {
   const theme = useTheme();
   const id = bookId(book);
   const coverUrl = id ? getCoverUrl(book) || `${API_BASE}/books/${id}/cover` : null;
@@ -36,8 +39,14 @@ export default function DetailHero({ book, shelves }) {
   const progress = Number.isFinite(book.readingProgress) ? book.readingProgress : 0;
   const bookmarked = (progress > 0 && progress < 100) || (book.shelf === "reading" && progress < 100);
 
+  // Rate it right here (review 2026-11-18 #6): the star line is the control,
+  // on the same books the grid offers stars for (utils/rating.js). Otherwise
+  // the stars stay text in the meta line.
+  const rateHere = Boolean(onRate) && canRate(book);
+  const rated = typeof book.rating === "number" && book.rating > 0;
+
   const metaParts = [
-    stars ? { key: "rating", node: stars } : null,
+    stars && !rateHere ? { key: "rating", node: stars } : null,
     book.pageCount > 0 ? { key: "pages", node: `${book.pageCount} pp` } : null,
     year ? { key: "year", node: year } : null,
   ].filter(Boolean);
@@ -129,6 +138,27 @@ export default function DetailHero({ book, shelves }) {
               </React.Fragment>
             ))}
           </Typography>
+        ) : null}
+
+        {rateHere ? (
+          <Box sx={{ mt: 1.5, display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <Box sx={{ width: 220, maxWidth: "100%" }}>
+              <StarRating
+                value={book.rating}
+                label={book.title || "this book"}
+                variant="hero"
+                onChange={(n) => onRate(book, n)}
+              />
+            </Box>
+            <Typography
+              variant="caption"
+              component="p"
+              data-testid="detail-rating-meaning"
+              sx={{ color: "text.secondary", fontSize: 12 }}
+            >
+              {rated ? ratingLine(book.rating) : "Tap a star to rate it"}
+            </Typography>
+          </Box>
         ) : null}
       </Box>
     </Box>

@@ -29,11 +29,11 @@ import {
   FilterPanel,
   FiltersSheet,
   LibraryHeader,
-  ratingLabelFor,
   useInfiniteSentinel,
   useScrollMemory,
   useSectionOpen,
 } from "@geeksuite/collection";
+import { useRateWithUndo } from "../hooks/useRateWithUndo";
 import BargainBin from "../components/BargainBin";
 import BookCard from "../components/BookCard";
 import BookRow from "../components/BookRow";
@@ -177,32 +177,10 @@ export default function LibraryView({
    * toast is not confirmation — it is the undo. On a grid you also tap to open
    * books and scroll with your thumb, and a stray tap that quietly changed a
    * rating you had set years ago is the failure worth guarding. A failed save
-   * has already been rolled back in the cache; saying so is this view's job.
+   * has already been rolled back in the cache. (hooks/useRateWithUndo.jsx —
+   * the book's own page rates the same way.)
    */
-  const handleRate = async (book, rating) => {
-    if (!onRateBook) return;
-    const previous = typeof book.rating === "number" && book.rating > 0 ? book.rating : null;
-    const title = book.title || "this book";
-    const ok = await onRateBook(book, rating);
-    if (!ok) {
-      notify(`Couldn't save the rating for ${ title }.`, { tone: "error" });
-      return;
-    }
-    const label = ratingLabelFor(rating)?.label;
-    notify(`${ rating }★${ label ? ` ${ label }` : "" } · ${ title }`, {
-      tone: "success",
-      action: (
-        <Button
-          size="small"
-          color="inherit"
-          onClick={() => onRateBook({ ...book, rating }, previous)}
-          sx={{ textTransform: "none", fontWeight: 600 }}
-        >
-          Undo
-        </Button>
-      ),
-    });
-  };
+  const handleRate = useRateWithUndo(onRateBook);
 
   // Selection-bar action results (device basket): fire-and-forget
   // feedback on a bar that stays on screen regardless, so a toast rather than

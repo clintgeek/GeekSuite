@@ -109,9 +109,14 @@ export default function BookDetailModal({
   handleSaveEditForSelectedBook,
   handleSearchCoversForSelectedBook,
   handleSendToKindle,
+  // The reader's Kindle address (profile), named in the confirm before a send.
+  kindleEmail = null,
   handleUpdateProgress,
   handleUpdateShelf,
   handleSaveLastRead,
+  // Rate from the hero (review 2026-11-18 #6): `rateBook` wrapped with the
+  // grid's Undo toast. Absent → the stars stay text.
+  onRate,
   handleUploadBookFile,
   handleUploadCoverForSelectedBook,
   handleUploadFileChange,
@@ -152,6 +157,9 @@ export default function BookDetailModal({
   const [moreOpen, setMoreOpen] = useState(false);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  // An email cannot be unsent, so a send asks first (suite rule, review
+  // 2026-11-18 #7) and says where it is going.
+  const [kindleConfirmOpen, setKindleConfirmOpen] = useState(false);
   const { notify } = useToast();
 
   // Enrich is the suite's "long-running job" pattern (TODO_ORDER #15):
@@ -258,7 +266,7 @@ export default function BookDetailModal({
           }}
         >
           <Box sx={{ minWidth: 0 }}>
-            <DetailHero book={selectedBook} shelves={shelves} />
+            <DetailHero book={selectedBook} shelves={shelves} onRate={onRate} />
             <ProgressRow
               book={selectedBook}
               progressDraft={progressDraft}
@@ -396,11 +404,12 @@ export default function BookDetailModal({
                 <Button
                   variant="outlined"
                   disabled={sendToKindleLoading}
-                  onClick={() => handleSendToKindle(selectedBook)}
+                  aria-haspopup="dialog"
+                  onClick={() => setKindleConfirmOpen(true)}
                   sx={BAR_BUTTON_SX}
                 >
                   <SendIcon />
-                  {sendToKindleLoading ? "Sending…" : "Send"}
+                  {sendToKindleLoading ? "Sending…" : "To Kindle"}
                 </Button>
               </>
             )}
@@ -494,6 +503,43 @@ export default function BookDetailModal({
         metadataDraftProvenance={metadataDraftProvenance}
         handleDraftMetadata={handleDraftMetadata}
       />
+
+      <GeekDialog
+        open={kindleConfirmOpen}
+        onClose={() => setKindleConfirmOpen(false)}
+        title="Send to your Kindle?"
+        mode="window"
+        maxWidth="xs"
+        keepSecondaryOnMobile
+        primaryAction={
+          <Button
+            variant="contained"
+            color="primary"
+            disabled={!kindleEmail}
+            onClick={() => {
+              setKindleConfirmOpen(false);
+              handleSendToKindle(selectedBook);
+            }}
+          >
+            Send
+          </Button>
+        }
+        secondaryAction={<Button onClick={() => setKindleConfirmOpen(false)}>Cancel</Button>}
+      >
+        {kindleEmail ? (
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            “{selectedBook.title || "Untitled"}” will be emailed to{" "}
+            <Box component="strong" sx={{ color: "text.primary", wordBreak: "break-all" }}>
+              {kindleEmail}
+            </Box>
+            . An email can’t be taken back once it is sent.
+          </Typography>
+        ) : (
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            There is no Kindle address on your account yet. Add it in Settings, then send from here.
+          </Typography>
+        )}
+      </GeekDialog>
 
       <GeekDialog
         open={Boolean(deleteConfirmOpen)}

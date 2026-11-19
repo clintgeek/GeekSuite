@@ -37,6 +37,7 @@ export default function StarRating({
   label,
   // 'inline' — beside the shelf label on a card | 'row' — the list view's column
   // | 'cover' — on artwork, over a scrim (kept for any caller that wants it)
+  // | 'hero' — the book's own page: big stars, each a 44px target in a 220px strip
   variant = 'inline',
   sx,
 }) {
@@ -140,7 +141,7 @@ export default function StarRating({
           >
             <Icon
               sx={{
-                fontSize: onCover ? 22 : variant === 'row' ? 20 : 17,
+                fontSize: variant === 'hero' ? 30 : onCover ? 22 : variant === 'row' ? 20 : 17,
                 color: fill === 'empty' ? empty : filled,
                 filter: onCover ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' : 'none',
               }}
