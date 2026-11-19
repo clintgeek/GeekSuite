@@ -176,7 +176,8 @@ function Fascia({ user, status, now, causes, target, reduced }) {
                 className="line-causes"
                 sx={{ display: 'block', mt: 0.75, fontFamily: 'fontFamilyMono', fontSize: '0.75rem', color: '#d7dbe0', overflowWrap: 'anywhere' }}
               >
-                {causes.join(' · ')} ›
+                {/* No-break space before each dot: a wrapped line never starts on one. */}
+                {`${causes.join('\u00a0· ')}\u00a0›`}
               </Typography>
             )}
           </Box>
