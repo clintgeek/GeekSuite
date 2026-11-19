@@ -7,11 +7,14 @@
  * in the grid. (It used to sit on a blurred copy of its own cover — the
  * Midnight Reader flourish.) The ✎ "Edit cover" affordance lives in the More
  * sheet; nothing on the cover is tap-only-if-you-know.
+ *
+ * No close button here (2026-11-18): the sheet's own close, pinned while the
+ * hero scrolls away, is the only one. The phone used to draw both, one over
+ * the other, and a screen reader heard "Close" twice.
  */
 import React from "react";
-import { Box, IconButton, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-import { Close as CloseIcon } from "@mui/icons-material";
 import { API_BASE, getCoverUrl } from "../../utils/bookDisplay";
 import BookCover from "../../components/BookCover";
 import PriceSticker from "../../components/PriceSticker";
@@ -19,7 +22,7 @@ import ShelfPlank from "../../components/ShelfPlank";
 import ShelfTalker from "../../components/ShelfTalker";
 import { bookId, publishedYear, shelfColor, shelfLabel, starsFor } from "./bookFacts";
 
-export default function DetailHero({ book, shelves, onClose, showClose = false }) {
+export default function DetailHero({ book, shelves }) {
   const theme = useTheme();
   const id = bookId(book);
   const coverUrl = id ? getCoverUrl(book) || `${API_BASE}/books/${id}/cover` : null;
@@ -62,22 +65,6 @@ export default function DetailHero({ book, shelves, onClose, showClose = false }
           background: `radial-gradient(70% 60% at 50% 30%, ${alpha(theme.palette.progress.main, theme.palette.mode === "dark" ? 0.1 : 0.06)}, transparent 70%)`,
         }}
       />
-      {showClose ? (
-        <IconButton
-          onClick={onClose}
-          aria-label="Close"
-          sx={{
-            position: "absolute",
-            top: "calc(4px + env(safe-area-inset-top))",
-            right: 4,
-            color: "text.primary",
-            bgcolor: alpha(theme.palette.background.paper, 0.7),
-            "&:hover": { bgcolor: alpha(theme.palette.background.paper, 0.9) },
-          }}
-        >
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      ) : null}
 
       <Box sx={{ position: "relative" }}>
         <Box

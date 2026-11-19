@@ -3,7 +3,7 @@ import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import BookDetailModal from '../../views/BookDetailModal';
 import { BOOKS, SHELVES } from '../fixtures';
-import { renderWithProviders } from '../testUtils';
+import { mockMatchMediaMatches, renderWithProviders } from '../testUtils';
 
 const book = BOOKS[0]; // "Lock In" — reading, 42%, has an epub file, rated 4
 
@@ -305,5 +305,20 @@ describe('BookDetailModal', () => {
     expect(button).toHaveTextContent('Set date');
     await user.click(button);
     expect(setLastReadEditing).toHaveBeenCalledWith(true);
+  });
+
+  it('on a phone the sheet has one close button, not the hero\'s and the sheet\'s stacked (review 2026-11-18 #4)', () => {
+    const restore = mockMatchMediaMatches(true);
+    try {
+      const closeBookModal = vi.fn();
+      renderWithProviders(<BookDetailModal {...baseProps({ closeBookModal })} />);
+      const closes = screen.getAllByRole('button', { name: 'Close' });
+      expect(closes).toHaveLength(1);
+      expect(closes[0]).toHaveAttribute('data-geek-sheet', 'close');
+      fireEvent.click(closes[0]);
+      expect(closeBookModal).toHaveBeenCalled();
+    } finally {
+      restore();
+    }
   });
 });

@@ -23,7 +23,6 @@ import {
   Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-import useMediaQuery from "@mui/material/useMediaQuery";
 import {
   Download as DownloadIcon,
   MenuBook as ReadIcon,
@@ -56,6 +55,16 @@ const BAR_BUTTON_SX = {
   lineHeight: 1.2,
   textTransform: "none",
   "& .MuiSvgIcon-root": { fontSize: 16 },
+};
+
+/** The sheet's close as a little signboard (theme `palette.sign`). */
+const CLOSE_SIGN_SX = {
+  top: "calc(8px + env(safe-area-inset-top))",
+  bgcolor: "sign.board",
+  color: "sign.ink",
+  border: (t) => `1px solid ${t.palette.sign.edge}`,
+  boxShadow: "0 2px 4px rgba(20, 12, 4, 0.3)",
+  "&:hover": { bgcolor: "sign.edge" },
 };
 
 export default function BookDetailModal({
@@ -140,7 +149,6 @@ export default function BookDetailModal({
   uploadMessage,
 }) {
   const theme = useTheme();
-  const isPhone = useMediaQuery(theme.breakpoints.down("md"));
   const [moreOpen, setMoreOpen] = useState(false);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
@@ -218,7 +226,10 @@ export default function BookDetailModal({
         mode="auto"
         maxWidth="md"
        
-        headerSx={{ p: 0 }}
+        // The sheet's own close is the only one (the hero's is gone,
+        // 2026-11-18). It floats over the hero, so it wears the signboard:
+        // a small green board with cream lettering. UI, so never tilted.
+        headerSx={{ p: 0, minHeight: 0, zIndex: 3, "& [data-geek-sheet='close']": CLOSE_SIGN_SX }}
         bodySx={{ p: 0, display: "flex", flexDirection: "column" }}
         title={
           <Typography
@@ -247,12 +258,7 @@ export default function BookDetailModal({
           }}
         >
           <Box sx={{ minWidth: 0 }}>
-            <DetailHero
-              book={selectedBook}
-              shelves={shelves}
-              onClose={closeBookModal}
-              showClose={isPhone}
-            />
+            <DetailHero book={selectedBook} shelves={shelves} />
             <ProgressRow
               book={selectedBook}
               progressDraft={progressDraft}
