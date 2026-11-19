@@ -45,7 +45,12 @@ function Chip({ active, onClick, children, ...rest }) {
   );
 }
 
-export default function TagChips() {
+/**
+ * `end`: a control that sits at the right end of the row, outside its scroll
+ * (Today's phone "Reorder", which used to cost a 48px line of its own — UX
+ * review 2026-11-18 #1).
+ */
+export default function TagChips({ end = null }) {
   const { tagFilter, setTagFilter, corpus } = usePen();
   const { pinned, toggle } = usePinnedTags();
   const [picking, setPicking] = useState(false);
@@ -53,7 +58,7 @@ export default function TagChips() {
   // Compared in the suite tag standard: a `geekSuite` filter is the `geek-suite` pin.
   const isOn = (tag) => tagFilter && normalizeTag(tagFilter) === normalizeTag(tag);
 
-  return (
+  const row = (
     // One scrolling row on a phone (it wrapped to three lines and ate the
     // screen, 3.15); wrapped from `md`.
     <Box
@@ -63,8 +68,13 @@ export default function TagChips() {
         display: 'flex',
         flexWrap: { xs: 'nowrap', md: 'wrap' },
         overflowX: { xs: 'auto', md: 'visible' },
-        mx: { xs: -4, sm: -6, md: 0 },
-        px: { xs: 4, sm: 6, md: 0 },
+        // Bleeds to the screen's left edge; with an `end`, the row stops at it.
+        ml: { xs: -4, sm: -6, md: 0 },
+        mr: end ? 0 : { xs: -4, sm: -6, md: 0 },
+        pl: { xs: 4, sm: 6, md: 0 },
+        pr: end ? 2 : { xs: 4, sm: 6, md: 0 },
+        flex: end ? 1 : undefined,
+        minWidth: end ? 0 : undefined,
         gap: 2,
         alignItems: 'center',
         scrollbarWidth: 'none',
@@ -106,6 +116,13 @@ export default function TagChips() {
           ))}
         </Box>
       </GeekSheet>
+    </Box>
+  );
+  if (!end) return row;
+  return (
+    <Box data-chip-row sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      {row}
+      <Box sx={{ flexShrink: 0 }}>{end}</Box>
     </Box>
   );
 }

@@ -140,6 +140,7 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now, pendingT
   const kindGlyph = parsed && parsed.signifier && parsed.signifier !== '*' ? parsed.signifier : null;
 
   const preview = previewLine(parsed, clock);
+  const showPendingTag = Boolean(pendingTag) && !(parsed?.tags || []).includes(pendingTag);
 
   return (
     <Box>
@@ -269,20 +270,29 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now, pendingT
     </Box>
     {/* What it understood, in words (the underline is the other half). */}
     {/* Under a tag filter the new task gets the filter's tag (1.15); say so, and let it be taken off. */}
-    {pendingTag && !(parsed?.tags || []).includes(pendingTag) && (
-      <Box sx={{ pt: 1, display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.8125rem', color: p.grey }}>
+    {/* One line under the box, not two (UX review 2026-11-18 #1): the tag a
+        filter will add, as a 44px-tall target whose ink is a slim tag, with
+        what was understood beside it. Without a tag, the preview as before. */}
+    {showPendingTag ? (
+      <Box data-add-tag-line sx={{ display: 'flex', alignItems: 'center', columnGap: 2, minHeight: 44, fontSize: '0.8125rem', color: p.grey }}>
         <span>Will be tagged</span>
         <ButtonBase
           onClick={onDismissTag}
           data-pending-tag={pendingTag}
           aria-label={`Tagged #${pendingTag}. Remove`}
-          sx={{ minHeight: 44, px: 3, gap: 1, borderRadius: '22px', border: `1px solid ${p.ink}`, color: p.ink, fontWeight: 600, fontSize: '0.8125rem' }}
+          sx={{ minHeight: 44, px: 1, flexShrink: 0, borderRadius: '4px', color: p.ink, fontWeight: 600, fontSize: '0.8125rem', '&.Mui-focusVisible': { outline: `2px solid ${p.ink}`, outlineOffset: -2 } }}
         >
-          #{pendingTag}<span aria-hidden>×</span>
+          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 2, height: 26, borderRadius: '13px', border: `1px solid ${p.ink}` }}>
+            #{pendingTag}<span aria-hidden>×</span>
+          </Box>
         </ButtonBase>
+        {preview && (
+          <Box aria-hidden data-add-preview sx={{ minWidth: 0, flex: 1, lineHeight: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {preview}
+          </Box>
+        )}
       </Box>
-    )}
-    {preview && (
+    ) : preview && (
       <Box aria-hidden data-add-preview sx={{ pt: 1, pl: 1, fontSize: '0.8125rem', lineHeight: '16px', color: p.grey }}>
         {preview}
       </Box>

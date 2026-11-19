@@ -364,19 +364,22 @@ const TodayPage = () => {
   const list = (
     <PenPage dock={docked}>
       <DeskDate date={pen.now} toDo={counts.toDo} done={counts.done} loading={!pen.loaded || Boolean(pen.loadError && !pen.corpus?.length)} />
-      <Box sx={{ pb: isPhone && sortableCount > 1 ? 0 : 4 }}><TagChips /></Box>
-      {isPhone && sortableCount > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', pb: 1 }}>
-          <Button
-            onClick={() => setReorder((r) => !r)}
-            aria-pressed={reorder}
-            data-reorder-toggle
-            sx={{ minHeight: 44, px: 2, color: p.ink, fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: '3px' }}
-          >
-            {reorder ? 'Done reordering' : 'Reorder'}
-          </Button>
-        </Box>
-      )}
+      {/* Phone: "Reorder" sits at the end of the chip row, not on a 48px line
+          of its own (UX review 2026-11-18 #1: Today showed 2.5 rows). */}
+      <Box sx={{ pb: isPhone ? 3 : 4 }}>
+        <TagChips
+          end={isPhone && sortableCount > 1 ? (
+            <Button
+              onClick={() => setReorder((r) => !r)}
+              aria-pressed={reorder}
+              data-reorder-toggle
+              sx={{ minHeight: 44, px: 2, whiteSpace: 'nowrap', color: p.ink, fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: '3px' }}
+            >
+              {reorder ? 'Done reordering' : 'Reorder'}
+            </Button>
+          ) : null}
+        />
+      </Box>
 
       {/* Sticky on a desktop: the list scrolls under it, the box stays. */}
       {!docked && (

@@ -104,6 +104,15 @@ describe('phone: grips behind Reorder (3.16)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done reordering' }));
     expect(today.querySelector('[data-drag-handle]')).toBeNull();
   });
+  it('Reorder sits at the end of the tag chip row, not on a line of its own (review 2026-11-18 #1)', () => {
+    device('phone');
+    setPen([t('a'), t('b')]);
+    render(ui());
+    const toggle = screen.getByRole('button', { name: 'Reorder' });
+    const chipRow = toggle.closest('[data-chip-row]');
+    expect(chipRow).not.toBeNull();
+    expect(within(chipRow).getByRole('navigation', { name: 'Filter by tag' })).toBeInTheDocument();
+  });
   it('the add box is docked and stays when an editor is open', () => {
     device('phone');
     setPen([t('a')]);

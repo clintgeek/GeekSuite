@@ -96,3 +96,19 @@ describe('AddBox', () => {
     expect(box).toHaveValue('buy milk');
   });
 });
+
+describe('under a tag filter: one line under the box, not two (review 2026-11-18 #1)', () => {
+  it('the tag to be added and what was understood share a line; the tag stays a 44px target', () => {
+    const onDismissTag = vi.fn();
+    mount({ pendingTag: 'work', onDismissTag });
+    type('call Dana tomorrow');
+    const line = document.querySelector('[data-add-tag-line]');
+    expect(line).not.toBeNull();
+    expect(line.querySelector('[data-add-preview]')).not.toBeNull();
+    expect(document.querySelectorAll('[data-add-preview]')).toHaveLength(1);
+    const chip = screen.getByRole('button', { name: 'Tagged #work. Remove' });
+    expect(getComputedStyle(chip).minHeight).toBe('44px');
+    fireEvent.click(chip);
+    expect(onDismissTag).toHaveBeenCalled();
+  });
+});
