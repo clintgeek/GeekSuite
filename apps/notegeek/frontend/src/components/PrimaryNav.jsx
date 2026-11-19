@@ -39,8 +39,9 @@ export function navValueFor(pathname, { rail = false } = {}) {
     return 'tags';
   }
   if (pathname.startsWith('/notes') || pathname.startsWith('/tags/')) return 'notes';
-  // Archived is reached from the Notes page's Tags sheet on a phone; it belongs there.
-  if (pathname.startsWith('/archived')) return 'notes';
+  // Archived and Recently deleted are reached from the Notes page's Tags
+  // sheet on a phone; they belong there, not to Home (review 2026-11-18 #9).
+  if (pathname.startsWith('/archived') || pathname.startsWith('/deleted')) return 'notes';
   return 'home';
 }
 

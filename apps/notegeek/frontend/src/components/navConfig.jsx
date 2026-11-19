@@ -34,6 +34,8 @@ const extraTitles = {
   '/tags': 'Notes',
   '/search': 'Search',
   '/archived': 'Archived',
+  '/deleted': 'Recently deleted',
+  '/share': 'Shared',
   '/settings': 'Settings',
 };
 

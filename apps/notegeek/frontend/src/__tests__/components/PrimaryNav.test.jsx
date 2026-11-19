@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { hidesBottomBar, navValueFor } from '../../components/PrimaryNav';
+import { pageTitle } from '../../components/navConfig';
 
 /**
  * The rules MobileBottomNav carried before the tablet wave (2026-11-16) moved
@@ -24,6 +25,13 @@ describe('PrimaryNav rules', () => {
     expect(navValueFor('/tags/house')).toBe('notes');
     expect(navValueFor('/archived')).toBe('notes');
     expect(navValueFor('/settings')).toBe('home');
+  });
+
+  // Review 2026-11-18 #9: Recently deleted lit Home and was titled "NoteGeek".
+  it('Recently deleted belongs to Notes and is titled as itself; Share is "Shared"', () => {
+    expect(navValueFor('/deleted')).toBe('notes');
+    expect(pageTitle('/deleted')).toBe('Recently deleted');
+    expect(pageTitle('/share')).toBe('Shared');
   });
 
   it('the rail has a Tags item, so tag views, Archived and Recently deleted light it', () => {
