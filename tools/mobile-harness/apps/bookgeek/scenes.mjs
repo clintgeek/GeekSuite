@@ -3,7 +3,8 @@
 // Phase C2 (DOCS/BOOKGEEK_CLEANUP_PLAN.md: @geeksuite/collection, 06b–06j),
 // the tag vocabulary (DOCS/TAGS.md: 03b, 06k–06m), and Recently deleted
 // (S-D5: 06n–06p).
-import { json, graphqlRoute } from '../../lib/net.mjs';
+import { body, json, graphqlRoute } from '../../lib/net.mjs';
+import { sampleEpub } from './epub.mjs';
 import { OPS, WHAT_NEXT_PICKS, DRAFT_BOOK_METADATA } from './fixtures.mjs';
 
 // The covers/list switch: its own button at md+, a row in the ⋯ menu on a
@@ -23,6 +24,35 @@ async function chooseLayout(page, h, name) {
   }
   await h.settle(600);
   return true;
+}
+
+// The in-app reader (review 2026-11-18): "Lock In" opens the hand-built
+// EPUB from ./epub.mjs (three chapters and a nav document, so Contents and
+// the percentage are real epub.js output, not mocks).
+async function openReader(page, h) {
+  await page.route('**/api/books/*/download/epub', (r) => body(r, { contentType: 'application/epub+zip', body: sampleEpub() }));
+  const card = page.getByText('Lock In', { exact: true }).first();
+  if (!(await card.count())) return false;
+  await card.click();
+  await h.settle(1000);
+  await page.getByRole('button', { name: 'Read', exact: true }).click();
+  const reader = page.getByTestId('book-reader');
+  await reader.waitFor({ timeout: 8000 });
+  await page.frameLocator('[data-testid="book-reader"] iframe').locator('p').first().waitFor({ timeout: 10000 });
+  // Locations are generated after the first page: wait for the book's %.
+  await page.getByTestId('reader-position').filter({ hasText: '%' }).waitFor({ timeout: 10000 });
+  return true;
+}
+
+// The chrome hides itself 2.5s after you stop using it; keyboard focus inside
+// it holds it up. Tab into it so the shot and the probe see it.
+async function holdReaderChrome(page) {
+  for (let i = 0; i < 12; i += 1) {
+    await page.keyboard.press('Tab');
+    const inChrome = await page.evaluate(() => Boolean(document.activeElement?.closest('[data-reader-chrome]')));
+    if (inChrome) return true;
+  }
+  throw new Error('Tab never reached the reader controls');
 }
 
 const bootstrapWithLibraryAssistant = (r) => json(r, {
@@ -118,9 +148,9 @@ export const scenes = [
       await page.getByText('Delicious in Dungeon', { exact: true }).first().click();
       await h.settle(1000);
       // The book page leads with Download of the stored file; a comic has no
-      // Read and no Send.
+      // Read and no To Kindle.
       if (!(await page.getByRole('button', { name: 'Download CBZ', exact: true }).count())) throw new Error('a comic has no "Download CBZ" button');
-      for (const name of ['Read', 'Send']) {
+      for (const name of ['Read', 'To Kindle', 'Send']) {
         if (await page.getByRole('button', { name, exact: true }).count()) throw new Error(`a comic's page still offers ${name}`);
       }
       await page.route('**/api/books/*/download/*', (r) => r.fulfill({
@@ -539,6 +569,60 @@ export const scenes = [
       const draftBtn = page.getByRole('button', { name: /^draft description/i }).first();
       if (!(await draftBtn.count())) return false;
       await draftBtn.click();
+      await h.settle(900);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // The reader (review 2026-11-18 #1–#3): signboard bars, the book's
+    // percentage and chapter in the bottom bar, the shop's paper page.
+    name: '09-reader',
+    goto: '/',
+    async setup(page, h) {
+      if (!(await openReader(page, h))) return false;
+      const where = (await page.getByTestId('reader-position').innerText()).trim();
+      if (!/^\d+% · /.test(where)) throw new Error(`the reader's position reads "${where}"`);
+      await holdReaderChrome(page);
+      await h.settle(300);
+    },
+    teardown: async (page, h) => { await h.esc(); await h.esc(); },
+  },
+  {
+    // Contents, from the book's own nav document, over the reader.
+    name: '09b-reader-contents',
+    goto: '/',
+    async setup(page, h) {
+      if (!(await openReader(page, h))) return false;
+      await holdReaderChrome(page);
+      await page.getByRole('button', { name: 'Contents', exact: true }).click();
+      await h.settle(700);
+      if (!(await page.getByRole('button', { name: 'The Back Aisle', exact: true }).count())) throw new Error('Contents does not list the chapters');
+    },
+    teardown: async (page, h) => { await h.esc(); await h.esc(); await h.esc(); },
+  },
+  {
+    // Back closes the reader and leaves the book open (review #2): the book
+    // sheet is a route, and Back used to pop it along with the reader.
+    // Reopening returns to the same place (#1, kept on this device).
+    name: '09c-reader-back',
+    goto: '/',
+    async setup(page, h) {
+      if (!(await openReader(page, h))) return false;
+      const frame = page.frameLocator('[data-testid="book-reader"] iframe');
+      await page.keyboard.press('ArrowRight');
+      await h.settle(500);
+      const before = (await page.getByTestId('reader-position').innerText()).trim();
+      await page.goBack();
+      await h.settle(900);
+      if (await page.getByTestId('book-reader').count()) throw new Error('Back did not close the reader');
+      if (!/\/book\//.test(new URL(page.url()).pathname)) throw new Error(`Back left the book too: ${page.url()}`);
+      if (!(await page.getByRole('button', { name: 'More actions' }).count())) throw new Error('the book sheet closed with the reader');
+      await page.getByRole('button', { name: 'Read', exact: true }).click();
+      await frame.locator('p').first().waitFor({ timeout: 10000 });
+      await page.getByTestId('reader-position').filter({ hasText: '%' }).waitFor({ timeout: 10000 });
+      const after = (await page.getByTestId('reader-position').innerText()).trim();
+      if (after !== before) throw new Error(`reopened at "${after}", left at "${before}"`);
+      await page.goBack();
       await h.settle(900);
     },
     teardown: (page, h) => h.esc(),
