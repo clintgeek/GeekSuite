@@ -188,6 +188,19 @@ const ComposerBox = ({
               border: `2px solid ${theme.palette.primary.main}`,
               color: listening ? theme.palette.primary.contrastText : theme.palette.primary.main,
               bgcolor: listening ? theme.palette.primary.main : 'transparent',
+              // Listening is a filled basil disc with a contrast stop glyph,
+              // at a specificity no state style can wash out (UX review
+              // 2026-11, B8: the stop square was white on near-white).
+              ...(listening ? {
+                '&&': { bgcolor: theme.palette.primary.main, color: theme.palette.primary.contrastText },
+              } : {}),
+              // Off (no signal) looks off: a divider ring and a grey glyph,
+              // not the live basil ring (B8).
+              '&.Mui-disabled': {
+                borderColor: theme.palette.divider,
+                color: theme.palette.text.disabled,
+                bgcolor: 'transparent',
+              },
               '@media (hover: hover)': {
                 '&:hover': { bgcolor: listening ? theme.palette.primary.dark : `${theme.palette.primary.main}1a` },
               },
