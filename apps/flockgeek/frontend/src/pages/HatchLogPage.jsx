@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { displayCalendarDate, localDateString, utcDateString } from "@geeksuite/utils";
+import { localDateString, utcDateString } from "@geeksuite/utils";
 import { Container, Button, Box, TextField, Chip } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -11,6 +11,7 @@ import LedgerDialog from "../components/primitives/LedgerDialog";
 import { useToast } from "@geeksuite/ui";
 import { GET_HATCH_EVENTS } from "../graphql/queries";
 import { RECORD_HATCH_EVENT, UPDATE_HATCH_EVENT, DELETE_ENTITY } from "../graphql/mutations";
+import { formatDay } from "../utils/formatDate";
 
 const HatchLogPage = () => {
   const [page, setPage] = useState(0);
@@ -78,7 +79,7 @@ const HatchLogPage = () => {
     confirmDelete({
       title: "Delete this hatch?",
       body: event?.setDate
-        ? `The hatch set on ${displayCalendarDate(event.setDate)} will be removed, with its counts.`
+        ? `The hatch set on ${formatDay(event.setDate)} will be removed, with its counts.`
         : "This hatch will be removed, with its counts.",
       onConfirm: () => deleteEntity({ variables: { type: "hatch_event", id } }),
     });
@@ -167,7 +168,7 @@ const HatchLogPage = () => {
   const isHatched = (event) =>
     !!event.hatchDate && utcDateString(event.hatchDate) <= localDateString(new Date());
   const hatchSuccessRate = (event) => !event.eggsSet ? 0 : Math.round((event.chicksHatched / event.eggsSet) * 100);
-  const asDate = (value) => displayCalendarDate(value) || "-";
+  const asDate = (value) => formatDay(value) || "-";
 
   /**
    * Ten columns is the widest table in the suite; below `md` `ResponsiveTable`

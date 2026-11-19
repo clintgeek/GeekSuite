@@ -67,7 +67,7 @@ const HomePage = () => {
       <motion.div variants={fadeUp}>
         <Box sx={{ mb: 3, maxWidth: 520 }}>
           <Typography variant="overline" sx={{ color: "text.muted", mb: 1, display: "block" }}>
-            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+            {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
           </Typography>
           <Typography variant="h1" component="h1" sx={{ mb: 1.5, fontSize: { xs: "2rem", sm: "2.75rem" } }}>
             {getGreeting()}, {displayName}

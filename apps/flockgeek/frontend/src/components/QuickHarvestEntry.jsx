@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { displayCalendarDate, localDateString, startOfLocalDay } from "@geeksuite/utils";
+import { localDateString, startOfLocalDay } from "@geeksuite/utils";
 import {
   Paper,
   Box,
@@ -26,6 +26,7 @@ import { GET_EGG_PRODUCTIONS, GET_LAST_EGG_PRODUCTION } from "../graphql/queries
 import { RECORD_EGG_PRODUCTION } from "../graphql/mutations";
 import { rollingWindow } from "../hooks/useHomeData";
 import { readLastPen, rememberPen, usualCounts } from "../utils/harvestDefaults";
+import { formatDay } from "../utils/formatDate";
 
 /**
  * QuickHarvestEntry — the app's real "do" action.
@@ -178,7 +179,7 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
           {lastHarvest ? (
             <Chip
               size="small"
-              label={`Last harvest: ${ displayCalendarDate(lastHarvest.date) } (${ daysSinceLastHarvest } day${ daysSinceLastHarvest !== 1 ? "s" : "" } ago) — ${ lastHarvest.eggsCount } egg${ lastHarvest.eggsCount !== 1 ? "s" : "" }`}
+              label={`Last harvest: ${ formatDay(lastHarvest.date) } (${ daysSinceLastHarvest } day${ daysSinceLastHarvest !== 1 ? "s" : "" } ago) — ${ lastHarvest.eggsCount } egg${ lastHarvest.eggsCount !== 1 ? "s" : "" }`}
               sx={{ bgcolor: (theme) => alpha(theme.palette.success.main, 0.1), color: "text.primary" }}
             />
           ) : (

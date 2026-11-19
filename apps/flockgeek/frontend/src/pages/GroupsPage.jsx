@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { displayCalendarDate, localDateString, utcDateString } from "@geeksuite/utils";
+import { localDateString, utcDateString } from "@geeksuite/utils";
 import {
   Container, Paper, Button, Box, Typography, CircularProgress,
   TextField, MenuItem, Chip, FormControl, InputLabel, Select, Accordion,
@@ -16,6 +16,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { GET_FLOCK_GROUPS, GET_GROUP_MEMBERSHIPS } from "../graphql/queries";
 import { CREATE_FLOCK_GROUP, UPDATE_FLOCK_GROUP, DELETE_ENTITY } from "../graphql/mutations";
+import { formatDay } from "../utils/formatDate";
 
 const emptyForm = { name: "", purpose: "", type: "", startDate: "", endDate: "", description: "", notes: "" };
 const purposeOptions = ["layer_flock", "breeder_flock", "meat_flock", "brooder", "other"];
@@ -225,9 +226,9 @@ const GroupsPage = () => {
                   <AccordionDetails>
                     {group.description && <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{group.description}</Typography>}
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                      {group.startDate ? displayCalendarDate(group.startDate) : "No start"}
+                      {group.startDate ? formatDay(group.startDate) : "No start"}
                       {" → "}
-                      {group.endDate ? displayCalendarDate(group.endDate) : "Ongoing"}
+                      {group.endDate ? formatDay(group.endDate) : "Ongoing"}
                     </Typography>
                     {members.length === 0 ? (
                       <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>No birds in this group</Typography>

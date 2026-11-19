@@ -111,7 +111,9 @@ describe('RecentActivity — a calendar day is not an elapsed time', () => {
       },
     ]);
 
-    expect(screen.getByText('Sep 5')).toBeInTheDocument();
+    // One date format app-wide since the UX review of 2026-11-18 (FlockGeek
+    // 10): day before month, as the lists now print it.
+    expect(screen.getByText('5 Sep')).toBeInTheDocument();
     expect(screen.queryByText(/ago/)).not.toBeInTheDocument();
   });
 

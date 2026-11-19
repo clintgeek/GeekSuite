@@ -13,9 +13,10 @@ import ResponsiveTable from "../components/primitives/ResponsiveTable";
 import { useConfirmDelete } from "../components/primitives/ConfirmDelete";
 import LedgerDialog from "../components/primitives/LedgerDialog";
 import { GeekSlashHint, slashFocusProps, useToast } from "@geeksuite/ui";
-import { displayCalendarDate, utcDateString } from "@geeksuite/utils";
+import { utcDateString } from "@geeksuite/utils";
 import { GET_BIRDS, GET_LOCATIONS, GET_FLOCK_GROUPS, GET_GROUP_MEMBERSHIPS, GET_PAIRINGS } from "../graphql/queries";
 import { CREATE_BIRD, UPDATE_BIRD, DELETE_ENTITY } from "../graphql/mutations";
+import { formatDay } from "../utils/formatDate";
 
 const statusOptions = ["active", "meat run", "retired"];
 const sexOptions = ["pullet", "hen", "cockerel", "rooster", "unknown"];
@@ -281,7 +282,7 @@ const BirdsPage = () => {
 
   const setEF = (key, val) => setEditFormData(p => ({ ...p, [key]: val }));
 
-  const asDate = (value) => displayCalendarDate(value) || "-";
+  const asDate = (value) => formatDay(value) || "-";
   const titleCase = (value) => value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
   const originLabel = (value) => value ? value.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '-';
 

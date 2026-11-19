@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from '@apollo/client';
-import { displayCalendarDate, localDateString } from "@geeksuite/utils";
+import { localDateString } from "@geeksuite/utils";
 import {
   Container, Button, Box, Typography, TextField, MenuItem,
   FormControl, InputLabel, Select, IconButton
@@ -17,6 +17,7 @@ import LedgerDialog from "../components/primitives/LedgerDialog";
 import { useToast } from "@geeksuite/ui";
 import { GET_EGG_PRODUCTIONS, GET_LOCATIONS } from "../graphql/queries";
 import { RECORD_EGG_PRODUCTION, UPDATE_EGG_PRODUCTION, DELETE_ENTITY } from "../graphql/mutations";
+import { formatDay } from "../utils/formatDate";
 
 const emptyForm = { date: "", eggsCount: "", daysObserved: 1, locationId: "", notes: "" };
 
@@ -81,7 +82,7 @@ const EggLogPage = () => {
   const handleDelete = (id) => {
     const record = allEggs.find((e) => e.id === id);
     const what = record
-      ? `The harvest of ${record.eggsCount} egg${record.eggsCount !== 1 ? "s" : ""} on ${displayCalendarDate(record.date)}`
+      ? `The harvest of ${record.eggsCount} egg${record.eggsCount !== 1 ? "s" : ""} on ${formatDay(record.date)}`
       : "This harvest";
     confirmDelete({
       title: "Delete this harvest?",
@@ -127,7 +128,7 @@ const EggLogPage = () => {
 
   const getLocationName = (locId) => locations.find(l => l.id === locId)?.name ?? "-";
 
-  const asDate = (value) => displayCalendarDate(value) || "-";
+  const asDate = (value) => formatDay(value) || "-";
 
   /**
    * Below `md` each harvest is a card titled by its date; the two 20px icon

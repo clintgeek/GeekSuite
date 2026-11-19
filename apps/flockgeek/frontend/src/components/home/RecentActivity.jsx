@@ -5,7 +5,7 @@ import EggIcon from "@mui/icons-material/EggOutlined";
 import HatchIcon from "@mui/icons-material/TrackChangesOutlined";
 import BirdIcon from "@mui/icons-material/PetsOutlined";
 import { GeekEmptyState } from "@geeksuite/ui";
-import { displayCalendarDate } from "@geeksuite/utils";
+import { formatDay, formatInstantDay } from "../../utils/formatDate";
 
 const meta = {
   egg:   { icon: <EggIcon sx={{ fontSize: 16 }} />,   color: "#e8a735" },
@@ -43,12 +43,12 @@ const formatInstant = (dateStr) => {
   if (diffHr < 24) return `${diffHr}h ago`;
   const diffDay = Math.floor(diffHr / 24);
   if (diffDay < 7) return `${diffDay}d ago`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return formatInstantDay(d);
 };
 
 const formatTime = (dateStr, calendarDay = false) => {
   if (!dateStr) return "";
-  if (calendarDay) return displayCalendarDate(dateStr, "en-US", { month: "short", day: "numeric" });
+  if (calendarDay) return formatDay(dateStr);
   return formatInstant(dateStr);
 };
 
