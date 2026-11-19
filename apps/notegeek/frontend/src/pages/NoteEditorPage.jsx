@@ -44,7 +44,7 @@ import { saveStampState } from '../utils/saveStamp';
 import useOnline from '../hooks/useOnline';
 import useEditorChrome from '../store/editorChromeStore';
 import { toDate } from '../utils/dateUtils';
-import DeleteNoteDialog from '../components/DeleteNoteDialog';
+import { useDeleteNote } from '../hooks/useDeleteNote';
 import { onNoteCreated, onNoteUpdated } from '../graphql/cacheUpdates';
 import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
 import { applyInlineTags } from '../utils/inlineTags';
@@ -142,7 +142,7 @@ function NoteEditorPage({ editorKey } = {}) {
   const [saveError, setSaveError] = useState(null);
   const [saveEmpty, setSaveEmpty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const deleteNoteNow = useDeleteNote();
   const [savedNoteId, setSavedNoteId] = useState(() => (id && id !== 'new' && id !== 'undefined' ? id : null));
   const [dirty, setDirty] = useState(false);
   // C3: the server copy that refused our save, while the writer chooses.
@@ -1391,8 +1391,8 @@ function NoteEditorPage({ editorKey } = {}) {
    * The note is gone — discarded as a draft, or deleted from the database.
    * Stand the unmount flush down: without this it saved the draft the writer
    * had just discarded, or fired `updateNote` at a row that no longer exists.
-   * Navigation is the dialog's; this only changes what this page will do on
-   * its way out.
+   * Navigation is useDeleteNote's; this only changes what this page will do
+   * on its way out.
    */
   const handleDiscarded = useCallback(() => {
     discardedRef.current = true;
@@ -1628,7 +1628,9 @@ function NoteEditorPage({ editorKey } = {}) {
             actions={
               <NoteActions
                 onSave={handleSave}
-                onDelete={() => setIsDeleteDialogOpen(true)}
+                // At once, with Undo in the toast; no confirm (review
+                // 2026-11-18 #8). Only a saved note offers Delete.
+                onDelete={() => deleteNoteNow(savedNoteId, { onDeleted: handleDiscarded })}
                 onToggleEdit={() => setIsEditMode(!isEditMode)}
                 canDelete={!isNewNote || !!savedNoteId}
                 canToggleEdit={isMindMap && !isNewNote && !!savedNoteId}
@@ -1799,21 +1801,6 @@ function NoteEditorPage({ editorKey } = {}) {
         onKeepBoth={handleKeepBoth}
       />
 
-      <DeleteNoteDialog
-        open={isDeleteDialogOpen}
-        // Cancel means cancel. This used to navigate to /notes whenever the
-        // note was unsaved — so backing out of the confirm dialog left the
-        // page, and the unmount flush then saved the draft anyway.
-        onClose={() => setIsDeleteDialogOpen(false)}
-        onDiscarded={handleDiscarded}
-        noteId={savedNoteId}
-        noteTitle={title}
-        // `savedNoteId` alone: once autosave has created the note it is a real,
-        // deletable row, even though the URL is still /notes/new and
-        // `isNewNote` is still true. Keying on `isNewNote` too offered
-        // "Discard" for a note that was already on disk.
-        isUnsavedNote={!savedNoteId}
-      />
     </Box>
     </WikiLinkContext.Provider>
   );

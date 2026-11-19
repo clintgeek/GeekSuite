@@ -8,7 +8,6 @@ import { GET_NOTES_PAGE } from '../../graphql/queries';
 import ThemeModeProvider from '../../theme/ThemeModeProvider';
 
 // Component Imports
-import DeleteNoteDialog from '../../components/DeleteNoteDialog';
 import NoteTypeSelector from '../../components/NoteTypeSelector';
 import TagSelector from '../../components/TagSelector';
 import NoteHeader from '../../components/NoteHeader';
@@ -120,12 +119,6 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
 }));
 
 describe('Smoke Tests - Basic UI Components', () => {
-
-    describe('DeleteNoteDialog', () => {
-        it('should render without crashing', () => {
-            render(<DeleteNoteDialog opened={true} onClose={vi.fn()} onConfirm={vi.fn()} />, { wrapper: AllProviders });
-        });
-    });
 
     describe('NoteTypeSelector', () => {
         it('should render without crashing', () => {

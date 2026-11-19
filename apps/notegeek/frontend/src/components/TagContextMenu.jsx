@@ -194,7 +194,8 @@ function TagContextMenu({ anchorEl, open, onClose, tag }) {
             </GeekDialog>
 
             {/* A two-line confirm: the centered card at every width, like
-                DeleteNoteDialog — the full-screen rule is for forms. */}
+                "Delete forever" in Recently deleted — the full-screen rule
+                is for forms. */}
             <GeekDialog
                 open={Boolean(deleteFor)}
                 onClose={closeDialogs}

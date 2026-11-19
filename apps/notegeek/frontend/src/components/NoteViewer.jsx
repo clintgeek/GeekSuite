@@ -35,7 +35,7 @@ import { useNoteArchiveState } from '../hooks/useNoteArchiveState';
 import { useArchiveNotes } from '../hooks/useArchiveNotes';
 import FoldInSheet from './foldin/FoldInSheet';
 import { canFoldInto } from '../utils/foldIn';
-import DeleteNoteDialog from './DeleteNoteDialog';
+import { useDeleteNote } from '../hooks/useDeleteNote';
 import NotePrintView from './notes/NotePrintView';
 import NoteFooter from './notes/NoteFooter';
 import { useNoteLinks, markdownPluginsFor } from '../hooks/useNoteLinks';
@@ -49,7 +49,8 @@ import { sanitizeNoteHtml } from '../utils/sanitizeNoteHtml';
 
 function NoteViewer() {
     const theme = useTheme();
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    // Delete acts at once, with Undo in the toast (review 2026-11-18 #8).
+    const deleteNoteNow = useDeleteNote();
     // Fold-in (DOCS/CONTEXT.md §13). The apply and the undo both write the
     // note into Apollo's cache, so the viewer re-renders from it.
     const [foldInOpen, setFoldInOpen] = useState(false);
@@ -87,7 +88,7 @@ function NoteViewer() {
     };
 
     const handleDeleteClick = () => {
-        setDeleteDialogOpen(true);
+        deleteNoteNow(noteToView?.id || noteToView?._id || id);
     };
 
 
@@ -514,13 +515,6 @@ function NoteViewer() {
                     />
                 ) : null}
 
-                {/* Delete dialog */}
-                <DeleteNoteDialog
-                    open={deleteDialogOpen}
-                    onClose={() => setDeleteDialogOpen(false)}
-                    noteId={noteToView?.id || noteToView?._id}
-                    noteTitle={noteToView?.title}
-                />
             </Box>
         </Fade>
     );

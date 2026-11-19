@@ -52,6 +52,7 @@ vi.mock('../../components/notes/NoteTypeRouter', async () => {
 });
 
 import NoteEditorPage from '../../pages/NoteEditorPage';
+import useNoteStore from '../../store/noteStore';
 
 function renderEditor() {
   return render(
@@ -112,5 +113,27 @@ describe('the ⋯ menu', () => {
     renderEditor();
     await screen.findByRole('button', { name: 'More note actions' });
     expect(screen.queryByText(/^Archived /)).not.toBeInTheDocument();
+  });
+});
+
+// Review 2026-11-18 #8 (reverses D1): delete is undoable, so like Archive it
+// acts at once and offers Undo; no confirm dialog first.
+describe('Delete note in the ⋯ menu', () => {
+  it('deletes at once, with no dialog, and offers Undo', async () => {
+    const deleteNote = vi.fn().mockResolvedValue(true);
+    const real = useNoteStore.getState().deleteNote;
+    useNoteStore.setState({ deleteNote });
+    try {
+      renderEditor();
+      await openMenu();
+      const item = await screen.findByRole('menuitem', { name: 'Delete note' });
+      await act(async () => { item.click(); });
+      expect(deleteNote).toHaveBeenCalledWith('note-1');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(notify).toHaveBeenCalledWith('Note deleted', expect.objectContaining({ action: expect.anything() }));
+      expect(updateNote).not.toHaveBeenCalled();
+    } finally {
+      useNoteStore.setState({ deleteNote: real });
+    }
   });
 });

@@ -777,23 +777,6 @@ export const scenes = [
     },
   },
   {
-    // Delete confirm — GeekDialog mode="window". Delete lives in the editor's
-    // ⋯ menu since the Lab Notebook pass.
-    name: '04-delete-dialog',
-    goto: '/notes/n1/edit',
-    wait: 1200,
-    viewports: ['phone'],
-    async setup(page, h) {
-      const more = page.getByRole('button', { name: /more note actions/i }).first();
-      if (!(await more.count())) throw new Error('no "More note actions" button');
-      await more.click();
-      await h.settle(300);
-      await page.getByRole('menuitem', { name: /delete note/i }).first().click();
-      await h.settle(500);
-    },
-    teardown: (page, h) => h.esc(400),
-  },
-  {
     // The editor's ⋯ menu: Save now, Version history, Compose, Delete.
     name: '06-editor-menu',
     goto: '/notes/n1/edit',
@@ -2063,9 +2046,9 @@ export const scenes = [
     },
   },
   {
-    // Delete is undoable (1.19): the confirm (Cancel focused, so Enter never
-    // deletes), then home with the "Note deleted · Undo" toast. The note has
-    // left the lists; Undo sends restoreNote for it.
+    // Delete is undoable (1.19), so it acts at once with no confirm
+    // (review 2026-11-18 #8, reversing D1): home with the "Note deleted ·
+    // Undo" toast. The note has left the lists; Undo sends restoreNote for it.
     name: '21g-delete-undo-toast',
     async setup(page, h) {
       await bootstrapChef(page);
@@ -2084,12 +2067,6 @@ export const scenes = [
       await page.getByRole('button', { name: /more note actions/i }).first().click();
       await h.settle(300);
       await page.getByRole('menuitem', { name: /delete note/i }).first().click();
-      const dialog = page.getByRole('dialog', { name: 'Delete Note' });
-      await dialog.waitFor({ timeout: 5000 });
-      await h.settle(400);
-      const focused = await page.evaluate(() => document.activeElement?.textContent || '');
-      if (!/cancel/i.test(focused)) throw new Error(`"${focused}" is focused in the delete confirm, not Cancel`);
-      await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
       const undo = page.getByRole('button', { name: 'Undo' });
       await undo.waitFor({ timeout: 8000 });
       await h.settle(900);
@@ -2098,6 +2075,7 @@ export const scenes = [
       if (new URL(page.url()).pathname !== '/') throw new Error(`after a delete the page is ${new URL(page.url()).pathname}, not home`);
       if (await page.locator('[data-note-row]').filter({ hasText: 'Q3 roadmap notes' }).count()) throw new Error('the deleted note is still listed on home');
       if (!(await undo.isVisible())) throw new Error('the Undo toast is gone before the shot');
+      if (await page.getByRole('dialog').count()) throw new Error('delete asked first: a dialog is open');
     },
     teardown: async (page, h) => {
       await page.getByRole('button', { name: 'Undo' }).click();
