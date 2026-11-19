@@ -70,7 +70,7 @@ describe('SearchResults — best match', () => {
     // Best match comes before the rest in reading order.
     expect(best.compareDocumentPosition(also) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The count still counts everything.
-    expect(screen.getByText(/3 results · 1 similar/)).toBeInTheDocument();
+    expect(screen.getByText(/3 results · 1 close in meaning/)).toBeInTheDocument();
   });
 
   it('a keyword-matched best match shows the matched passage with the words marked', () => {

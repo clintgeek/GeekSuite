@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Stack, Typography, alpha, useTheme } from '@mui/material';
+import { Box, Stack, alpha, useTheme } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import LinkIcon from '@mui/icons-material/InsertLink';
 import TagIcon from '@mui/icons-material/LocalOfferOutlined';
@@ -152,15 +152,19 @@ function SuggestionStrip({
   if (!tagRows.length && !relatedRows.length) return null;
 
   const provenance = suggestions?.provenance;
+  // Which model ranked the links: a tooltip on the strip, not a caption
+  // (review 2026-11-18 #6 — a model id means nothing to a reader).
   const modelLine =
     provenance?.source === 'model' && provenance?.model
-      ? `related notes ranked by ${ provenance.model }`
+      ? `Related notes ranked by ${ provenance.model }`
       : null;
 
   return (
     <Box
       component="section"
       aria-label="Suggested tags and related notes"
+      title={modelLine || undefined}
+      data-suggest-model={modelLine ? provenance.model : undefined}
       sx={{
         mt: 1,
         px: 1.25,
@@ -201,14 +205,6 @@ function SuggestionStrip({
             ))}
           </Stack>
 
-          {modelLine && (
-            <Typography
-              variant="caption"
-              sx={{ display: 'block', mt: 0.75, color: 'text.secondary', fontSize: '0.75rem' }}
-            >
-              {modelLine}
-            </Typography>
-          )}
         </Box>
 
         <Box

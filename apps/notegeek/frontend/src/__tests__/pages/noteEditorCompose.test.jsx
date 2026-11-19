@@ -184,8 +184,9 @@ describe('composing a note', () => {
 
     expect(await screen.findByText(/stuck repeating itself/i)).toBeInTheDocument();
     expect(screen.getByText(/try again/i)).toBeInTheDocument();
-    // And the model that did it is named, which is the first thing anyone asks.
-    expect(screen.getByText('allam-2-7b')).toBeInTheDocument();
+    // And the model that did it is named, which is the first thing anyone
+    // asks: in the title's tooltip since review 2026-11-18 #6.
+    expect(document.querySelector('[data-compose-model]')).toHaveAttribute('title', 'Written by allam-2-7b');
     expect(updateNote).not.toHaveBeenCalled();
     expect(createNote).not.toHaveBeenCalled();
   });

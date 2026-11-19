@@ -221,7 +221,9 @@ describe('reading the page', () => {
     renderEditor();
     const box = await startTranscribe();
     expect(box).toHaveValue(TRANSCRIPT);
-    expect(screen.getByText('openai/gpt-4.1-mini')).toBeInTheDocument();
+    // Named in a tooltip, not as a chip, since review 2026-11-18 #6.
+    expect(document.querySelector('[data-transcribe-model]')).toHaveAttribute('title', 'Read by openai/gpt-4.1-mini');
+    expect(screen.queryByText('openai/gpt-4.1-mini')).toBeNull();
     fireEvent.change(box, { target: { value: 'call the roofer' } });
     expect(box).toHaveValue('call the roofer');
     // Nothing is written by reading.

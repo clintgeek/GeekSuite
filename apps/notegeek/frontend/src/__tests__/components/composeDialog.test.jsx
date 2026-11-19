@@ -45,15 +45,18 @@ describe('the result', () => {
     expect(screen.getByRole('table')).toBeInTheDocument();
   });
 
-  it('shows what it did', () => {
-    render(<ComposeDialog {...props()} />);
-    expect(screen.getByText(/12 fragments/i)).toBeInTheDocument();
-    expect(screen.getByText(/3 batches/i)).toBeInTheDocument();
+  // Review 2026-11-18 #6: plain words, and no model id on the screen.
+  it('speaks plain English: no "fragments", "batches", "one pass" or model id', () => {
+    render(<ComposeDialog {...props({ model: 'openai/gpt-4.1-mini' })} />);
+    expect(screen.queryByText(/fragments|batches|one pass/i)).toBeNull();
+    expect(screen.queryByText(/gpt-4\.1-mini/)).toBeNull();
+    // Still findable, unobtrusively: the title's tooltip.
+    expect(document.querySelector('[data-compose-model]')).toHaveAttribute('title', 'Written by openai/gpt-4.1-mini');
   });
 
-  it('says "one pass" for material small enough to see whole', () => {
-    render(<ComposeDialog {...props({ stats: stats({ strategy: 'single', chunks: 1 }) })} />);
-    expect(screen.getByText(/one pass/i)).toBeInTheDocument();
+  it('from several notes, says how many notes it composed', () => {
+    render(<ComposeDialog {...props({ sourceCount: 3, usedCount: 2, onReplace: undefined })} />);
+    expect(screen.getByText('From 2 notes')).toBeInTheDocument();
   });
 });
 
@@ -133,14 +136,18 @@ describe('no result means no way to commit one', () => {
  * than broken.
  */
 describe('attribution and completeness', () => {
-  it('names the model that wrote the document', () => {
+  // Since review 2026-11-18 #6 (owner's call): named in the title's
+  // tooltip, not as text on the screen.
+  it('names the model that wrote the document, in the title\'s tooltip', () => {
     render(<ComposeDialog {...props({ model: 'gemma4:31b' })} />);
-    expect(screen.getByText('gemma4:31b')).toBeInTheDocument();
+    expect(document.querySelector('[data-compose-model]')).toHaveAttribute('title', 'Written by gemma4:31b');
+    expect(screen.queryByText('gemma4:31b')).toBeNull();
   });
 
   it('says nothing about a model when none was reported', () => {
     render(<ComposeDialog {...props()} />);
     expect(screen.queryByText(/gemma|allam/i)).not.toBeInTheDocument();
+    expect(document.querySelector('[data-compose-model]')).toBeNull();
   });
 
   it('warns when the document stops mid-thought', () => {

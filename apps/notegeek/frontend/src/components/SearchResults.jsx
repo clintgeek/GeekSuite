@@ -206,7 +206,7 @@ function SearchResults() {
                     <Box sx={{ mb: 1.5, px: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="h6" sx={{ color: 'text.muted' }}>
                             {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
-                            {meaningCount > 0 ? ` · ${meaningCount} similar` : ''}
+                            {meaningCount > 0 ? ` · ${meaningCount} close in meaning` : ''}
                         </Typography>
                         {isSearching && (
                             <CircularProgress size={12} thickness={4} aria-label="Searching" sx={{ color: 'text.disabled' }} />

@@ -8,7 +8,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { createNoteTheme } from '../../../theme/createAppTheme';
-import TranscriptStatus from '../../../components/notes/TranscriptStatus';
+import TranscriptStatus, { transcriptStatusText } from '../../../components/notes/TranscriptStatus';
 
 const show = (view, props = {}) => render(<ThemeProvider theme={createNoteTheme('light')}><TranscriptStatus view={view} {...props} /></ThemeProvider>);
 
@@ -36,5 +36,15 @@ describe('TranscriptStatus', () => {
   it('warns when the page is too long to read well', () => {
     show({ status: 'searchable', autoEnabled: true, tooLong: true });
     expect(screen.getByRole('button', { name: /page too long to read well/ })).toBeInTheDocument();
+  });
+});
+
+// Review 2026-11-18 #6: no model id in the words; it is the detail's tooltip.
+describe('transcriptStatusText — plain words', () => {
+  it('says where the page went, not which model read it', () => {
+    const t = transcriptStatusText({ status: 'searchable', autoEnabled: true, model: 'openai/gpt-4.1-mini', source: 'auto' });
+    expect(t.tip).toMatch(/^Searchable by its handwriting · read via OpenRouter/);
+    expect(t.tip).not.toMatch(/gpt/);
+    expect(t.model).toBe('Read by openai/gpt-4.1-mini');
   });
 });

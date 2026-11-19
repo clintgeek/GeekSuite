@@ -102,7 +102,7 @@ function MeaningMark() {
                 fontStyle: 'italic',
             }}
         >
-            similar
+            by meaning
         </Typography>
     );
 }

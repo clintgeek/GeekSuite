@@ -48,13 +48,18 @@ export function transcriptStatusText(view) {
   if (view.status === 'searchable') {
     tip = view.edited || view.source === 'user'
       ? 'Searchable by its handwriting, with your corrections.'
-      : `Searchable by its handwriting · read by ${view.model || 'a vision model'} via OpenRouter${view.at ? ` · ${when(view.at)}` : ''}`;
+      // The model id is not on the screen (review 2026-11-18 #6); it is the
+      // detail's tooltip (`model` below). "via OpenRouter" stays: it says
+      // where the page went (spec §7).
+      : `Searchable by its handwriting · read via OpenRouter${view.at ? ` · ${when(view.at)}` : ''}`;
   } else if (view.status === 'retry') {
     tip = `${view.error || 'The last attempt did not finish.'} ${view.retryAt ? `It will try again after ${when(view.retryAt)}.` : 'It will try again.'}`;
   } else if (view.status === 'failed') {
     tip = `${view.error || 'This page could not be read.'} It will try again after the next change; Convert still works.`;
   }
-  return { label: entry.label, tip };
+  const model = view.status === 'searchable' && !(view.edited || view.source === 'user') && view.model
+    ? `Read by ${view.model}` : undefined;
+  return { label: entry.label, tip, model };
 }
 
 export default function TranscriptStatus({ view, onTranscribeNow = null }) {
@@ -118,7 +123,7 @@ export default function TranscriptStatus({ view, onTranscribeNow = null }) {
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
         slotProps={{ paper: { role: 'dialog', 'aria-labelledby': detailId, sx: { p: 3, maxWidth: 360 } } }}
       >
-        <Typography id={detailId} variant="body2" sx={{ mb: 2 }}>{text.tip}</Typography>
+        <Typography id={detailId} variant="body2" title={text.model} sx={{ mb: 2 }}>{text.tip}</Typography>
         {view.tooLong ? <Typography variant="body2" sx={{ mb: 2, color: 'warning.main' }}>{TOO_LONG_NOTE}</Typography> : null}
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           {canReadNow ? (

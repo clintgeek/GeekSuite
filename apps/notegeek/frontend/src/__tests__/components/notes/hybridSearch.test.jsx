@@ -26,13 +26,13 @@ const row = (extra = {}) => ({
 });
 
 describe('NoteRow — how a search hit matched', () => {
-  it('a meaning hit is marked "similar", shows why, and highlights nothing', () => {
+  it('a meaning hit is marked "by meaning", shows why, and highlights nothing', () => {
     const { container } = renderWithProviders(
       // "opener" IS in the title: substring highlighting would mark it, but a
       // meaning hit is not what the words found, so nothing is marked.
       <NoteRow note={row({ matchedBy: 'meaning', why: 'the remote battery is a CR2032' })} query="opener" />,
     );
-    expect(screen.getByText('similar')).toHaveAttribute('data-match', 'meaning');
+    expect(screen.getByText('by meaning')).toHaveAttribute('data-match', 'meaning');
     expect(screen.getByText('the remote battery is a CR2032')).toBeInTheDocument();
     expect(container.querySelectorAll('mark')).toHaveLength(0);
   });
@@ -46,7 +46,7 @@ describe('NoteRow — how a search hit matched', () => {
     const { container } = renderWithProviders(
       <NoteRow note={row({ matchedBy, why: 'ignored passage' })} query="opener" />,
     );
-    expect(screen.queryByText('similar')).not.toBeInTheDocument();
+    expect(screen.queryByText('by meaning')).not.toBeInTheDocument();
     expect(screen.queryByText('ignored passage')).not.toBeInTheDocument();
     expect(container.querySelectorAll('mark').length).toBeGreaterThanOrEqual(2);
   });
@@ -147,7 +147,7 @@ describe('SearchResults while a newer search is in flight', () => {
     store.state.isSearching = true;
     renderWithProviders(<SearchResults />, { route: '/search?q=garage' });
     expect(screen.getByText('Garage')).toBeInTheDocument();
-    expect(screen.getByText(/2 results · 1 similar/)).toBeInTheDocument();
+    expect(screen.getByText(/2 results · 1 close in meaning/)).toBeInTheDocument();
     expect(screen.getByLabelText('Searching')).toBeInTheDocument();
     expect(screen.queryByText('Searching…')).not.toBeInTheDocument();
   });

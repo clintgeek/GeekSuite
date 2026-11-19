@@ -3,7 +3,6 @@ import {
     Alert,
     Box,
     Button,
-    Chip,
     CircularProgress,
     Dialog,
     DialogActions,
@@ -90,14 +89,19 @@ export default function TranscribeDialog({
             <DialogTitle id={titleId} sx={{ pb: 1 }}>
                 {photo ? 'Photographed pages to text' : 'Handwriting to text'}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1, flexWrap: 'wrap' }}>
-                    <Typography variant="caption" component="p" sx={{ ...mono, color: 'text.secondary', letterSpacing: '0.04em' }}>
+                    {/* The model's id is a tooltip here, not a chip
+                        (review 2026-11-18 #6). */}
+                    <Typography
+                        variant="caption"
+                        component="p"
+                        title={reviewing && model ? `Read by ${model}` : undefined}
+                        data-transcribe-model={reviewing && model ? model : undefined}
+                        sx={{ ...mono, color: 'text.secondary', letterSpacing: '0.04em' }}
+                    >
                         {reviewing
                             ? `An approximation · check it against the ${strip && pages.length > 1 ? 'pages' : 'page'}`
                             : photo ? 'The photos are kept as a sketch note' : 'The sketch stays as it is'}
                     </Typography>
-                    {reviewing && model ? (
-                        <Chip size="small" variant="outlined" label={model} sx={mono} />
-                    ) : null}
                     {reviewing && reused ? (
                         <>
                             <Typography variant="caption" component="p" data-testid="transcript-reused" sx={{ ...mono, color: 'text.secondary' }}>

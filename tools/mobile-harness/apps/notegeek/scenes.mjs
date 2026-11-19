@@ -1324,7 +1324,7 @@ export const scenes = [
   {
     // Hybrid search (DOCS/CONTEXT.md §11): the note with the typed words
     // first, marked; then notes found by meaning, unmarked, each with a quiet
-    // "similar" and the passage that matched. Results update as you type.
+    // "by meaning" and the passage that matched. Results update as you type.
     name: '14h-search-hybrid',
     async setup(page, h) {
       await bootstrapChef(page);
@@ -1342,11 +1342,11 @@ export const scenes = [
       await h.settle(600);
       const box = page.getByPlaceholder(/search titles/i);
       await box.pressSequentially('fix the garage', { delay: 40 });
-      await page.getByText(/3 results · 2 similar/).waitFor({ timeout: 10000 });
+      await page.getByText(/3 results · 2 close in meaning/).waitFor({ timeout: 10000 });
       await h.settle(600);
       if (searches < 1) throw new Error('typing did not search');
       if (keywordOnly) throw new Error('a search did not ask for hybrid results');
-      if ((await page.locator('[data-match="meaning"]').count()) !== 2) throw new Error('meaning hits are not marked "similar"');
+      if ((await page.locator('[data-match="meaning"]').count()) !== 2) throw new Error('meaning hits are not marked "by meaning"');
       const meaningRow = page.locator('[data-note-row]').filter({ has: page.locator('[data-match="meaning"]') }).first();
       if (await meaningRow.locator('mark').count()) throw new Error('a meaning hit has highlighted words');
       if (!(await page.locator('[data-note-row]').first().locator('mark').count())) throw new Error('the keyword hit is not highlighted');
@@ -1387,7 +1387,7 @@ export const scenes = [
       await bootstrapChef(page);
       await graphqlRoute(page, { ...OPS, SearchNotes: { searchNotes: NEAR_TIE_RESULTS } });
       await page.goto(h.base + '/search?q=' + encodeURIComponent('how do I log into the server'), { waitUntil: 'networkidle' });
-      await page.getByText(/3 results · 1 similar/).waitFor({ timeout: 10000 });
+      await page.getByText(/3 results · 1 close in meaning/).waitFor({ timeout: 10000 });
       await h.settle(600);
       if (await page.locator('[data-search-best]').count()) throw new Error('a near-tie got a best-match block');
       if (await page.getByRole('heading', { name: /Also related|Best match/ }).count()) throw new Error('a near-tie got section headings');

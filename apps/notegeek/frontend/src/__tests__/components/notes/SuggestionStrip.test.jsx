@@ -112,18 +112,24 @@ describe('SuggestionStrip', () => {
     expect(screen.queryByRole('button', { name: /nginx layout/ })).not.toBeInTheDocument();
   });
 
-  it('says which model ranked the links, and only when one did', async () => {
+  // Review 2026-11-18 #6: the model id is a tooltip, never text on the strip.
+  it('names the model that ranked the links only in a tooltip, and only when one did', async () => {
     const { unmount } = renderWithProviders(<SuggestionStrip {...defaults} />, {
       mocks: [makeMock()],
     });
     await screen.findByRole('button', { name: /homelab/ });
     expect(screen.queryByText(/ranked by/)).not.toBeInTheDocument();
+    expect(document.querySelector('[data-suggest-model]')).toBeNull();
     unmount();
 
     renderWithProviders(<SuggestionStrip {...defaults} />, {
       mocks: [makeMock({ ...PROVENANCE_LOCAL, source: 'model', reason: null, model: 'llama-3.1-8b', provider: 'groq', callsToday: 1 })],
     });
-    expect(await screen.findByText('related notes ranked by llama-3.1-8b')).toBeInTheDocument();
+    await screen.findByRole('button', { name: /homelab/ });
+    await waitFor(() => expect(document.querySelector('[data-suggest-model]')).not.toBeNull());
+    const strip = screen.getByRole('region', { name: 'Suggested tags and related notes' });
+    expect(strip).toHaveAttribute('title', 'Related notes ranked by llama-3.1-8b');
+    expect(screen.queryByText(/llama-3\.1-8b/)).toBeNull();
   });
 
   it('dismissal is remembered for that note', async () => {

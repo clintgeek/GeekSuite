@@ -36,12 +36,13 @@ import { MARKDOWN_COMPONENTS, markdownOverflowSx } from '../notes/markdownCompon
  * has to know that BEFORE choosing what to do with it. `truncated` means the
  * document stops mid-thought, which is the same class of problem.
  *
- * The model's name is shown for a reason learned on 2026-09-22: a compose
+ * The model's name is kept for a reason learned on 2026-09-22: a compose
  * routed to a 7B row returned one sentence repeated thirty-eight times, and
- * nothing on screen said which model had produced it. The gateway refuses a
- * looping answer outright now, but "which model wrote this" is the first
- * question anyone asks about a disappointing result, and the answer belongs
- * next to the result.
+ * nothing on screen said which model had produced it. It is no longer a chip
+ * (review 2026-11-18 #6: Heather uses this app too, and a model id means
+ * nothing to a reader); it is the title's tooltip ("Written by ..."), where
+ * Chef can still find it when a result disappoints. The stats speak plain
+ * English: 'From 3 notes', not '12 fragments, one pass'.
  *
  * Compose from several notes (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U3, U5)
  * uses the same dialog, switched on by `sourceCount`: the status line counts
@@ -67,6 +68,9 @@ export default function ComposeDialog({
     // ── Compose from several notes ─────────────────────────────────────
     // How many notes went in; switches on the many-notes wording.
     sourceCount,
+    // How many of them the gateway actually composed (`sources.used`);
+    // the chip says "From N notes" with this, falling back to sourceCount.
+    usedCount,
     // "2 notes left out: Garden plan (locked), Sketch 4 (a sketch)".
     skippedSummary,
     // The new note is being written.
@@ -119,21 +123,13 @@ export default function ComposeDialog({
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-            <DialogTitle sx={{ pb: 1 }}>
+            <DialogTitle sx={{ pb: 1 }} title={model ? `Written by ${model}` : undefined} data-compose-model={model || undefined}>
                 Composed document
-                {stats ? (
+                {/* A partial failure is said once, in the warning below,
+                    before the document; not again as a chip up here. */}
+                {stats && many ? (
                     <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.5 }}>
-                        <Chip size="small" label={`${stats.fragments} fragments`} />
-                        <Chip
-                            size="small"
-                            label={stats.strategy === 'single' ? 'one pass' : `${stats.chunks} batches`}
-                        />
-                        {failed > 0 ? (
-                            <Chip size="small" color="warning" label={`${failed} batch${failed === 1 ? '' : 'es'} failed`} />
-                        ) : null}
-                        {model ? (
-                            <Chip size="small" variant="outlined" label={model} sx={{ fontFamily: '"Roboto Mono", monospace' }} />
-                        ) : null}
+                        <Chip size="small" label={`From ${usedCount ?? sourceCount} note${(usedCount ?? sourceCount) === 1 ? '' : 's'}`} />
                     </Stack>
                 ) : null}
             </DialogTitle>
@@ -163,10 +159,10 @@ export default function ComposeDialog({
                 {!loading && !error && failed > 0 ? (
                     <Alert severity="warning" sx={{ mb: 2 }}>
                         {many ? (
-                            <>Some material could not be read — check before relying on it. {failed} batch{failed === 1 ? '' : 'es'} of
+                            <>Some material could not be read — check before relying on it. {failed} part{failed === 1 ? '' : 's'} of
                             your notes {failed === 1 ? 'is' : 'are'} missing from this document. {untouched}</>
                         ) : (
-                            <>{failed} batch{failed === 1 ? '' : 'es'} of your material could not be read, so
+                            <>{failed} part{failed === 1 ? '' : 's'} of your material could not be read, so
                             {failed === 1 ? ' it is' : ' they are'} missing from this document. The original
                             note is untouched.</>
                         )}

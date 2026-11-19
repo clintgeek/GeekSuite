@@ -274,7 +274,16 @@ export default function FoldInSheet({
       open={open}
       onClose={close}
       title="Fold in new info"
-      description={note?.title ? `Into “${note.title}”` : undefined}
+      // The model's id is this line's tooltip, not a caption under the
+      // proposal (review 2026-11-18 #6).
+      description={note?.title ? (
+        <span
+          title={proposal?.provenance?.model ? `Proposed by ${proposal.provenance.model}` : undefined}
+          data-foldin-model={proposal?.provenance?.model || undefined}
+        >
+          {`Into “${note.title}”`}
+        </span>
+      ) : undefined}
       snap="full"
       maxWidth="md"
       initialFocus={stage === 'input' ? 'textarea' : undefined}
@@ -404,11 +413,6 @@ export default function FoldInSheet({
               <UnplacedCard items={proposal.unplaced} g={g} notify={notify} />
             ) : null}
 
-            {proposal?.provenance?.model ? (
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: MONO }}>
-                {proposal.provenance.model}
-              </Typography>
-            ) : null}
           </>
         )}
       </Box>

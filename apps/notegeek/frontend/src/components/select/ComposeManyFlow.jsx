@@ -47,7 +47,8 @@ export default function ComposeManyFlow({ notes, onClose, onDone }) {
         const result = data?.composeNotes;
         const reason = result?.provenance?.reason;
         const skipped = skipSummary(result?.sources?.skipped, byId);
-        const base = { loading: false, markdown: '', stats: result?.stats || null, model: result?.provenance?.model || null, skipped };
+        const used = Array.isArray(result?.sources?.used) ? result.sources.used.length : null;
+        const base = { loading: false, markdown: '', stats: result?.stats || null, model: result?.provenance?.model || null, skipped, used };
 
         if (reason === 'not_enough_sources') {
           setState({ ...base, error: 'Compose needs at least two notes it can read. Select more notes, or different ones.' });
@@ -134,6 +135,7 @@ export default function ComposeManyFlow({ notes, onClose, onDone }) {
       stats={state.stats}
       error={state.error}
       model={state.model}
+      usedCount={state.used ?? undefined}
       skippedSummary={state.skipped}
       saving={saving}
       discardLabel={state.error ? 'Back to selection' : 'Discard'}
