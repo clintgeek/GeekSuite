@@ -52,8 +52,51 @@ const tokenSx = {
   whiteSpace: 'nowrap',
 };
 
-/** The grammar helper: visual only (the same words are the field's description). */
-export function SearchHint({ sx }) {
+/** `type:boat` → `type:` — what a tap on the example puts in the field. */
+export const tokenPrefix = (token) => token.slice(0, token.indexOf(':') + 1);
+
+/**
+ * The grammar helper. Its words are the field's accessible description, so
+ * the helper itself stays out of the reading order (aria-hidden). With
+ * `onPick`, each example is a tap target that puts its prefix (`type:`) into
+ * the field — the colon is on the phone keyboard's symbol layer — without
+ * taking focus from it (mousedown is held, the buttons are tabIndex -1).
+ */
+export function SearchHint({ sx, onPick }) {
+  const token = (t) =>
+    onPick ? (
+      <Box
+        component="button"
+        type="button"
+        tabIndex={-1}
+        data-testid="search-token"
+        data-token={t}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => onPick(tokenPrefix(t))}
+        sx={{
+          ...tokenSx,
+          font: 'inherit',
+          fontFamily: MONO_FONT,
+          fontSize: '0.75rem',
+          display: 'inline-flex',
+          alignItems: 'center',
+          minHeight: 44,
+          px: 1,
+          py: 0,
+          mr: 0.5,
+          mb: 0.5,
+          cursor: 'pointer',
+          verticalAlign: 'middle',
+          '&:hover': { borderColor: 'text.primary' },
+        }}
+      >
+        {t}
+      </Box>
+    ) : (
+      <Box component="span" sx={tokenSx}>
+        {t}
+      </Box>
+    );
   return (
     <Box aria-hidden="true" data-testid="search-hint" sx={{ fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.9, ...sx }}>
       <Box component="span" sx={{ mr: 0.75, fontWeight: 600, color: 'text.primary' }}>
@@ -62,21 +105,18 @@ export function SearchHint({ sx }) {
       {/* A space after each token: a line-break opportunity, so a 320px phone wraps them. */}
       {SEARCH_EXAMPLE.map((t) => (
         <React.Fragment key={t}>
-          <Box component="span" sx={tokenSx}>
-            {t}
-          </Box>{' '}
+          {token(t)}{' '}
         </React.Fragment>
       ))}
       <Box component="span" sx={{ display: 'block' }}>
         Also {SEARCH_MORE.map((t, i) => (
           <React.Fragment key={t}>
-            {i ? ' · ' : ''}
-            <Box component="span" sx={tokenSx}>
-              {t}
-            </Box>
+            {i && !onPick ? ' · ' : ''}
+            {token(t)}
+            {onPick ? ' ' : ''}
           </React.Fragment>
         ))}
-        , or just type a name.
+        {onPick ? 'or just type a name.' : ', or just type a name.'}
       </Box>
     </Box>
   );
@@ -125,6 +165,23 @@ export default function TopBar({ user, onSignOut }) {
   const onChange = (value) => {
     setText(value);
     pushQuery(value);
+  };
+
+  // A tapped example: its prefix at the end of the field, caret after it, keyboard still up.
+  // Not pushed to the URL yet — `type:` alone would search for nothing.
+  const insertToken = (prefix) => {
+    const next = text && !/\s$/.test(text) ? `${text} ${prefix}` : `${text}${prefix}`;
+    setText(next);
+    requestAnimationFrame(() => {
+      const input = fieldRef.current;
+      if (!input) return;
+      input.focus();
+      try {
+        input.setSelectionRange(next.length, next.length);
+      } catch {
+        /* type=search may refuse a selection */
+      }
+    });
   };
 
   const clear = () => {
@@ -271,7 +328,7 @@ export default function TopBar({ user, onSignOut }) {
         modifiers={[{ name: 'offset', options: { offset: [0, 6] } }]}
       >
         <Paper sx={{ px: 1.5, py: 1, border: 1, borderColor: 'divider', bgcolor: 'background.paper', boxShadow: '0 8px 24px rgba(0,0,0,0.16)' }}>
-          <SearchHint />
+          <SearchHint onPick={insertToken} />
         </Paper>
       </Popper>
     </ChromeTheme>

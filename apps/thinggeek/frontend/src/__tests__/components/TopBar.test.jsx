@@ -35,6 +35,22 @@ describe('library search', () => {
     expect(box).toHaveAccessibleDescription(/type:boat tag:fishing in:garage missing:receipt/);
   });
 
+  it('the examples are tap targets: each puts its prefix in the field and keeps the focus there', async () => {
+    renderWithProviders(<TopBar user={{ username: 'chef' }} onSignOut={() => {}} />);
+    const box = screen.getByRole('searchbox', { name: 'Search your things' });
+    act(() => box.focus());
+    const hint = await screen.findByTestId('search-hint');
+    const typeToken = within(hint).getAllByTestId('search-token').find((b) => b.dataset.token === 'type:boat');
+    // Holding mousedown is what keeps the phone keyboard up.
+    expect(fireEvent.mouseDown(typeToken)).toBe(false);
+    fireEvent.click(typeToken);
+    expect(box).toHaveValue('type:');
+    fireEvent.change(box, { target: { value: 'type:boat' } });
+    const inToken = within(screen.getByTestId('search-hint')).getAllByTestId('search-token').find((b) => b.dataset.token === 'in:garage');
+    fireEvent.click(inToken);
+    expect(box).toHaveValue('type:boat in:');
+  });
+
   it('is not on other pages', () => {
     renderWithProviders(<TopBar user={{ username: 'chef' }} onSignOut={() => {}} />, { initialEntries: ['/places'] });
     expect(screen.queryByRole('searchbox')).toBeNull();
