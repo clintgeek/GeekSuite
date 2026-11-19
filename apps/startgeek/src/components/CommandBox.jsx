@@ -647,7 +647,7 @@ const CommandBox = ({ onOpenSettings }) => {
             change it), so its chip gives the box room; every other mode
             keeps its label, which says where the line will go. */}
         {!(phone && mode === 'web') && (
-          <span className="shrink-0 font-mono text-[12px] tracking-[0.06em] uppercase text-ink-2 px-2 sm:px-2.5 py-1.5 rounded-md border border-hair truncate max-w-[7rem] sm:max-w-[11rem]">
+          <span className="shrink-0 font-mono text-[12px] tracking-[0.06em] uppercase text-ink-2 px-2 sm:px-2.5 py-1.5 rounded-md border border-hair truncate max-w-[8.5rem] sm:max-w-[11rem]">
             {modeLabel}
           </span>
         )}

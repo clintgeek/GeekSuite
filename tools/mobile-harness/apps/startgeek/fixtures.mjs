@@ -65,10 +65,22 @@ const SETTINGS = {
   calendars: [],
 };
 
+// What `? milk` finds (scene 09).
+export const SEARCH_RESULTS = [
+  { id: 's1', app: 'todogeek', type: 'task', title: 'Buy milk and eggs', snippet: 'Due today #errands', url: 'https://todogeek.clintgeek.com/', updatedAt: '2026-09-05T08:00:00Z' },
+  { id: 's2', app: 'notegeek', type: 'note', title: 'Milk kefir starter', snippet: 'Feed the grains every 24 hours; keep the jar out of the sun.', url: 'https://notegeek.clintgeek.com/', updatedAt: '2026-09-02T18:30:00Z' },
+  { id: 's3', app: 'fitnessgeek', type: 'food', title: 'Whole milk, 1 cup', snippet: '149 kcal', url: 'https://fitnessgeek.clintgeek.com/', updatedAt: '2026-08-30T07:15:00Z' },
+];
+
 export const OPS = {
   GlanceToday: { glanceToday: TODAY },
-  GlanceSearch: { glanceSearch: [] },
+  GlanceSearch: (vars) => ({ glanceSearch: vars.query ? SEARCH_RESULTS : [] }),
   CalendarEvents: { calendarEvents: [] },
+  // The command box's capture and a ticked task (scenes 08–12).
+  CreateTask: (vars) => ({
+    createTask: { id: 'new-1', content: vars.content, status: 'pending', dueDate: vars.dueDate, tags: vars.tags || [] },
+  }),
+  UpdateTaskStatus: (vars) => ({ updateTaskStatus: { id: vars.id, status: vars.status } }),
 };
 
 export async function routes(ctx, { base, scheme, viewport } = {}) {
