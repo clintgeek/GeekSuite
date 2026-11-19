@@ -14,10 +14,11 @@
  * the Attic, which seals it before it touches the disk.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, ButtonBase, Slider, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
-import { CameraAltOutlined as CameraIcon, DeleteOutline as RemoveIcon, FolderOpenOutlined as FileIcon, PictureAsPdfOutlined as PdfIcon, RotateLeft, RotateRight } from '@mui/icons-material';
+import { Box, Button, Slider, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { DeleteOutline as RemoveIcon, PictureAsPdfOutlined as PdfIcon, RotateLeft, RotateRight } from '@mui/icons-material';
 import { GeekSheet } from '@geeksuite/ui';
 import { HERO_BUTTON_SX } from './AtticLock';
+import PhotoPair from '../../components/PhotoPair';
 
 export const CARD_ASPECT = 85.6 / 54;
 const OUT_WIDTH = 1600;
@@ -256,22 +257,7 @@ export function CaptureSlot({ label, value, onChange, card = true, testId }) {
           </Button>
         </Box>
       ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-          <ButtonBase
-            onClick={() => cameraRef.current?.click()}
-            sx={{ minHeight: 64, borderRadius: '6px', border: 1, borderColor: 'border', bgcolor: 'background.card', display: 'grid', placeItems: 'center', gap: 0.25, fontWeight: 700, fontSize: '0.875rem', color: 'text.primary', py: 1 }}
-          >
-            <CameraIcon aria-hidden="true" />
-            Take a photo
-          </ButtonBase>
-          <ButtonBase
-            onClick={() => fileRef.current?.click()}
-            sx={{ minHeight: 64, borderRadius: '6px', border: 1, borderColor: 'border', bgcolor: 'background.card', display: 'grid', placeItems: 'center', gap: 0.25, fontWeight: 700, fontSize: '0.875rem', color: 'text.primary', py: 1 }}
-          >
-            <FileIcon aria-hidden="true" />
-            Choose a file
-          </ButtonBase>
-        </Box>
+        <PhotoPair onCamera={() => cameraRef.current?.click()} onFile={() => fileRef.current?.click()} />
       )}
       <input
         ref={cameraRef}

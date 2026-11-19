@@ -31,7 +31,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, CircularProgress, Portal, TextField, ToggleButton, ToggleButtonGroup, Typography, useMediaQuery, useTheme } from '@mui/material';
-import { CloseRounded as RemoveIcon, ExpandMore as MoreIcon, FolderOpenOutlined as FileIcon, PhotoCameraOutlined as CameraIcon } from '@mui/icons-material';
+import { CloseRounded as RemoveIcon, ExpandMore as MoreIcon, PhotoCameraOutlined as CameraIcon } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useGeekToastClearance, useToast } from '@geeksuite/ui';
 import WherePicker from '../../components/WherePicker';
@@ -55,6 +55,7 @@ import { goBack } from '../../utils/goBack';
 import { visuallyHidden } from '../../utils/a11y';
 import AttributeField from '../edit/AttributeField';
 import { PHOTO_ACCEPT } from '../detail/AddFileSheet';
+import PhotoPair from '../../components/PhotoPair';
 
 const ADD_ROLES = ['overview', 'id-plate', 'receipt'];
 export const LAST_PLACE_KEY = 'thinggeek.lastPlace';
@@ -144,21 +145,7 @@ export function PhotoSlot({ photo, onPhoto, role, onRole }) {
                   sx={{ color: LIVERY.orange, fontFamily: STENCIL_FONT, fontSize: '0.75rem', letterSpacing: '0.14em', '&::before': { content: 'attr(data-caption)' } }}
                 />
                 <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>A photo is optional — the whole thing, in good light.</Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 1 }}>
-                  <Button
-                    variant="contained"
-                    color="hero"
-                    disableElevation
-                    startIcon={<CameraIcon />}
-                    onClick={() => cameraRef.current?.click()}
-                    sx={{ fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'hero.contrastText' }}
-                  >
-                    Take a photo
-                  </Button>
-                  <Button variant="outlined" startIcon={<FileIcon />} onClick={() => fileRef.current?.click()} sx={{ color: 'text.primary', borderColor: 'text.secondary' }}>
-                    Choose a file
-                  </Button>
-                </Box>
+                <PhotoPair onCamera={() => cameraRef.current?.click()} onFile={() => fileRef.current?.click()} sx={{ width: '100%', maxWidth: 360 }} />
               </Box>
             )}
             {photo ? (

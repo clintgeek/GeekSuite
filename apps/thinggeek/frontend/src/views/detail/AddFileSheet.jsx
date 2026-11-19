@@ -5,11 +5,11 @@
  * queue (hooks/useUploads.jsx), so closing this sheet never cancels it.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, Button, TextField, Typography } from '@mui/material';
-import { FolderOpenOutlined as FileIcon, PhotoCameraOutlined as CameraIcon } from '@mui/icons-material';
+import { TextField, Typography } from '@mui/material';
 import { GeekSheet } from '@geeksuite/ui';
 import RoleChips from '../../components/RoleChips';
 import { documentRoleLabel, photoRoleLabel } from '../../utils/vocab';
+import PhotoPair from '../../components/PhotoPair';
 
 export const PHOTO_ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,image/*';
 export const DOCUMENT_ACCEPT = 'application/pdf,image/jpeg,image/png,image/webp,text/plain';
@@ -52,16 +52,7 @@ export default function AddFileSheet({ open, kind = 'photo', initialRole, roles,
         inputProps={{ maxLength: 200 }}
         sx={{ mt: 2 }}
       />
-      <Box sx={{ display: 'grid', gridTemplateColumns: isPhoto ? '1fr 1fr' : '1fr', gap: 1, mt: 2, pb: 1 }}>
-        {isPhoto ? (
-          <Button variant="contained" startIcon={<CameraIcon />} onClick={() => cameraRef.current?.click()}>
-            Take a photo
-          </Button>
-        ) : null}
-        <Button variant={isPhoto ? 'outlined' : 'contained'} startIcon={<FileIcon />} onClick={() => fileRef.current?.click()} sx={isPhoto ? { color: 'text.primary' } : undefined}>
-          Choose a file
-        </Button>
-      </Box>
+      <PhotoPair onCamera={isPhoto ? () => cameraRef.current?.click() : undefined} onFile={() => fileRef.current?.click()} sx={{ mt: 2, pb: 1 }} />
       <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.5 }}>
         {isPhoto ? 'JPEG, PNG, WebP or HEIC, up to 25 MB.' : 'PDF, an image or a text file, up to 25 MB.'}
       </Typography>
