@@ -119,6 +119,76 @@ export const TALKER = {
   line: 'rgba(31, 42, 68, 0.12)',
 };
 
+/**
+ * The shared @geeksuite/collection pieces — toolbar pills, active filter
+ * chips, the filter groups' headings — painted as the store's aisle signs
+ * (review 2026-11-18 #5), so the library's bones stop showing through as
+ * stock Material. GameGeek inks the same pieces from its own CssBaseline;
+ * these selectors live only in BookGeek's stylesheet and key off the
+ * package's own data attributes. UI, so never tilted. Every sheet title
+ * stands on a short plank of shelf wood.
+ *
+ * `!important` because the package's own `sx` lands on the same element
+ * with equal specificity.
+ */
+function collectionSkin(mode) {
+  const sign = SIGN[mode];
+  const wood = WOOD[mode];
+  const boardEdge = `inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -2px 0 ${sign.edge}, 0 1px 2px rgba(20, 12, 4, 0.25)`;
+  const pill = '[data-testid="filters-button"], button[aria-haspopup="menu"][aria-label^="Sort:"]';
+  return {
+    // Filters · Sort: two aisle signs.
+    [pill]: {
+      backgroundColor: `${sign.board} !important`,
+      color: `${sign.ink} !important`,
+      border: `1px solid ${sign.edge} !important`,
+      borderRadius: '4px !important',
+      boxShadow: boardEdge,
+      '& .MuiSvgIcon-root': { color: sign.ink },
+      '&:hover': { backgroundColor: `${sign.edge} !important` },
+      '&.Mui-focusVisible': { outline: `2px solid ${sign.ink}`, outlineOffset: '-4px' },
+    },
+    // The sort's direction words ("Shortest first") and the filter count.
+    '[data-testid="filters-button"] > span:not(.MuiTouchRipple-root):not(.MuiButton-startIcon), button[aria-haspopup="menu"][aria-label^="Sort:"] > span:not(.MuiTouchRipple-root):not(.MuiButton-startIcon)': {
+      color: `${sign.inkSoft} !important`,
+    },
+    // Active filter chips: small green boards with cream lettering.
+    '[data-testid="active-chips"] > li > button > span:not(.MuiTouchRipple-root)': {
+      backgroundColor: `${sign.board} !important`,
+      borderColor: `${sign.edge} !important`,
+      borderRadius: '4px !important',
+      boxShadow: boardEdge,
+      '& > span': { color: `${sign.ink} !important` },
+      '& > span:first-of-type': { color: `${sign.inkSoft} !important` },
+      '& > svg': { color: `${sign.ink} !important` },
+    },
+    // Filter groups head their aisle in the sign's serif.
+    '[data-facet] > h3 button > span:first-of-type': {
+      fontFamily: SERIF_FONT,
+      fontWeight: 400,
+      fontSize: '1rem',
+      letterSpacing: '0.01em',
+    },
+    // The group's active count: the yellow sign of the aisle you're in.
+    '[data-facet] > h3 button > span:not(:first-of-type):not(.MuiTouchRipple-root)': {
+      color: `${SIGN_YELLOW.ink} !important`,
+      backgroundColor: `${SIGN_YELLOW.ground} !important`,
+      borderRadius: '3px !important',
+    },
+    // A sheet's title stands on a short plank.
+    '[data-geek-sheet="title"]::after': {
+      content: '""',
+      display: 'block',
+      width: 56,
+      height: 4,
+      marginTop: 6,
+      borderRadius: 1,
+      backgroundColor: wood.front,
+      boxShadow: `0 1px 0 ${wood.edge}`,
+    },
+  };
+}
+
 function buildBookOverrides(mode) {
   const isDark = mode === 'dark';
   const s = SURFACES[mode];
@@ -200,6 +270,7 @@ function buildBookOverrides(mode) {
               ? { backgroundImage: 'radial-gradient(90% 50% at 50% 0%, rgba(242, 167, 59, 0.07), transparent 70%)', backgroundAttachment: 'fixed' }
               : null),
           },
+          ...collectionSkin(mode),
         },
       },
       MuiCard: {
@@ -220,6 +291,15 @@ function buildBookOverrides(mode) {
       },
       MuiOutlinedInput: {
         styleOverrides: { root: { backgroundColor: s.surface } },
+      },
+      // The chosen row in a menu (the sort menu, the account menu): a green
+      // rule at its edge, like the shelf you're on in the sidebar.
+      MuiMenuItem: {
+        styleOverrides: {
+          root: {
+            '&.Mui-selected': { boxShadow: `inset 3px 0 0 ${accentFor(mode).main}`, fontWeight: 600 },
+          },
+        },
       },
     },
   };
