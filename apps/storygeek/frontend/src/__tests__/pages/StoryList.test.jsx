@@ -278,3 +278,17 @@ describe('StoryList — finished and under-way tales', () => {
     expect(within(fresh).getByText('The opening scene is still being set.')).toBeInTheDocument();
   });
 });
+
+// UX review 2026-11-18, StoryGeek bug: the hint promised an AI title, but a
+// blank title is saved as "Untitled Story".
+describe('StoryList — the New Tale title hint', () => {
+  it('says what a blank title becomes and promises no AI title', async () => {
+    renderStoryList();
+    await screen.findByText('The Fog-Bound Crossroads');
+    fireEvent.click(screen.getByRole('button', { name: /new tale/i }));
+    const dialog = await screen.findByRole('dialog');
+    const title = within(dialog).getByLabelText(/title/i);
+    expect(title).toHaveAttribute('placeholder', 'Left blank, it is “Untitled Story”');
+    expect(within(dialog).queryByPlaceholderText(/AI will suggest/i)).not.toBeInTheDocument();
+  });
+});

@@ -405,7 +405,9 @@ function StoryList() {
               <TextField
                 fullWidth label="Title (Optional)" value={startForm.title}
                 onChange={(e) => setStartForm(p => ({ ...p, title: e.target.value }))}
-                placeholder="The AI will suggest one"
+                // A blank title is saved as "Untitled Story" (handleStartStory);
+                // nothing suggests one, so the hint says what really happens.
+                placeholder="Left blank, it is “Untitled Story”"
               />
             </Grid>
             <Grid item xs={12} sm={6}>
