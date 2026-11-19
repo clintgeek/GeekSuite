@@ -362,7 +362,9 @@ const CalorieGoalWizard = () => {
   return (
     // No extra paper column on a phone (visual review C4): the page sits on
     // the cream with the app's own gutter, its cards straight on it.
-    <Box sx={{ maxWidth: 800, mx: 'auto', p: { xs: 0, sm: 3 } }}>
+    // The phone gutter the quick target and every other page keep (UX review
+    // 2026-11, A6): at xs: 0 the cards and "Step 4 of 4" ran to the screen edge.
+    <Box sx={{ maxWidth: 800, mx: 'auto', p: { xs: 2, sm: 3 } }}>
       {/* Header */}
       <Box sx={{ textAlign: 'center', mb: 4 }}>
         <FoodIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
