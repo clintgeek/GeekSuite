@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { linkTargetProps, readDisplay, PHONE_QUERY, STANDALONE_QUERY } from '../lib/linkTarget'
 
-/** `target`/`rel` for an app link, following the screen as it changes. */
-export function useLinkTarget() {
+/** `{ phone, standalone }`, following the screen as it changes. */
+export function useDisplay() {
   const [display, setDisplay] = useState(() => readDisplay())
 
   useEffect(() => {
@@ -13,5 +13,10 @@ export function useLinkTarget() {
     return () => lists.forEach((l) => l.removeEventListener?.('change', update))
   }, [])
 
-  return linkTargetProps(display)
+  return display
+}
+
+/** `target`/`rel` for an app link: new tab on desktop, same tab on a phone or installed. */
+export function useLinkTarget() {
+  return linkTargetProps(useDisplay())
 }

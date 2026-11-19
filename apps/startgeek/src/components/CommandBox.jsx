@@ -3,6 +3,7 @@ import { useSession } from '../hooks/useSession'
 import { useGlance } from '../hooks/useGlance'
 import { useSettings } from '../hooks/useSettings'
 import { useToast } from '../hooks/useToast'
+import { useDisplay } from '../hooks/useLinkTarget'
 import { gql, UnauthorizedError } from '../lib/graphql'
 import { failureMessage, isAuthFailure } from '../lib/commandFailure'
 import { ENGINES } from '../lib/engines'
@@ -32,6 +33,18 @@ import {
 } from '../lib/capture'
 
 const ENGINE_STORAGE_KEY = 'startgeek.engine'
+
+// On a phone the full placeholder is cut off after "> task", so the box
+// shows a shorter one and, while it has focus and is empty, a row of the
+// four prefixes that type the character for you (design review #8).
+const PHONE_PLACEHOLDER = 'Search · > task · < note'
+const DESKTOP_PLACEHOLDER = 'Search, or type  >  task,  <  note,  ?  suite search,  ??  ask'
+const PREFIXES = [
+  { insert: '> ', label: '> task', name: 'Start a task' },
+  { insert: '< ', label: '< note', name: 'Start a note' },
+  { insert: '? ', label: '? suite', name: 'Search the suite' },
+  { insert: '?? ', label: '?? ask', name: 'Ask the suite' },
+]
 const SUITE_DEBOUNCE_MS = 250
 
 const getInitialEngineIndex = () => {
@@ -104,6 +117,8 @@ const CommandBox = ({ onOpenSettings }) => {
   const [draft, setDraft] = useState(null)
   const [draftLoading, setDraftLoading] = useState(false)
   const [capturing, setCapturing] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const { phone } = useDisplay()
 
   const inputRef = useRef(null)
   const searchDebounceRef = useRef(null)
@@ -616,7 +631,9 @@ const CommandBox = ({ onOpenSettings }) => {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Search, or type  >  task,  <  note,  ?  suite search,  ??  ask"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder={phone ? PHONE_PLACEHOLDER : DESKTOP_PLACEHOLDER}
           className="flex-1 min-w-0 bg-transparent text-ink placeholder:text-ink-3 text-[17px] focus:outline-none"
           aria-label="Command box"
           aria-autocomplete={mode === 'suite' || mode === 'ask' ? 'list' : 'none'}
@@ -626,9 +643,14 @@ const CommandBox = ({ onOpenSettings }) => {
         {(searchLoading && mode === 'suite') || askLoading || draftLoading || capturing ? (
           <span className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse" aria-hidden="true" />
         ) : null}
-        <span className="shrink-0 font-mono text-[12px] tracking-[0.06em] uppercase text-ink-2 px-2.5 py-1.5 rounded-md border border-hair truncate max-w-[11rem]">
-          {modeLabel}
-        </span>
+        {/* On a phone the web engine is the least of it (there is no Tab to
+            change it), so its chip gives the box room; every other mode
+            keeps its label, which says where the line will go. */}
+        {!(phone && mode === 'web') && (
+          <span className="shrink-0 font-mono text-[12px] tracking-[0.06em] uppercase text-ink-2 px-2 sm:px-2.5 py-1.5 rounded-md border border-hair truncate max-w-[7rem] sm:max-w-[11rem]">
+            {modeLabel}
+          </span>
+        )}
         <HelpButton onClick={() => setHelpOpen(true)} />
 
         {mode === 'ask' ? (
@@ -695,6 +717,28 @@ const CommandBox = ({ onOpenSettings }) => {
           </>
         )}
       </div>
+
+      {phone && focused && !value && status === 'in' && (
+        <div role="group" aria-label="Command shortcuts" className="mt-2 flex flex-wrap gap-2">
+          {PREFIXES.map((p) => (
+            <button
+              key={p.insert}
+              type="button"
+              aria-label={`${p.label}: ${p.name}`}
+              // Keep the keyboard up: a tap here must not blur the box.
+              onPointerDown={(e) => e.preventDefault()}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setValue(p.insert)
+                inputRef.current?.focus()
+              }}
+              className="min-h-[44px] px-3.5 rounded-full border border-hair-strong bg-panel font-mono text-[13px] text-ink-2 hover:text-ink"
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
     </section>
