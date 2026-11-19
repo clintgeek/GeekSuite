@@ -1,16 +1,21 @@
 import { motion } from 'framer-motion'
+import { useLinkTarget } from '../hooks/useLinkTarget'
 
+// Each result is one link in a plain list item (axe nested-interactive:
+// the row used to be role="option" wrapping a button). The arrow keys still
+// move the highlight from the box and Enter opens it; the highlighted row
+// carries aria-current so a screen reader can tell which one that is.
 // `citations` and `inline` are only ever set in Ask mode; the `?` search
 // passes neither and renders exactly as it always has — its own absolutely
 // positioned dropdown, no citation rules.
 const SearchResults = ({
   results,
   selectedIndex,
-  onSelect,
   onHover,
   citations = [],
   inline = false,
 }) => {
+  const targetProps = useLinkTarget()
   if (!results || results.length === 0) return null
 
   const cited = new Set(citations)
@@ -39,16 +44,16 @@ const SearchResults = ({
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
       }}
-      role="listbox"
       aria-label="Suite search results"
     >
       {results.map((result, index) => (
-        <li key={result.id} role="option" aria-selected={index === selectedIndex}>
-          <button
-            type="button"
-            onClick={() => onSelect(result)}
+        <li key={result.id}>
+          <a
+            href={result.url}
+            {...targetProps}
+            aria-current={index === selectedIndex ? 'true' : undefined}
             onMouseEnter={() => onHover(index)}
-            className={`w-full text-left px-4 py-3 text-sm transition-colors border-l-2 ${
+            className={`block no-underline w-full text-left px-4 py-3 text-sm transition-colors border-l-2 ${
               cited.has(result.id) ? 'border-l-accent' : 'border-l-transparent'
             } ${
               index === selectedIndex
@@ -67,7 +72,7 @@ const SearchResults = ({
                 {result.snippet}
               </p>
             )}
-          </button>
+          </a>
         </li>
       ))}
     </motion.ul>

@@ -602,10 +602,6 @@ const CommandBox = ({ onOpenSettings }) => {
     setSelectedIndex(index)
   }
 
-  const handleSelectResult = (result) => {
-    openUrl(result.url)
-  }
-
   return (
     // Ask stacks a card above the result list, which is taller than the plain
     // `?` dropdown — it needs to clear the dock. `?` keeps its original z-20.
@@ -693,7 +689,6 @@ const CommandBox = ({ onOpenSettings }) => {
               inline
               results={results}
               selectedIndex={selectedIndex}
-              onSelect={handleSelectResult}
               onHover={handleHoverResult}
               citations={ask?.citations || []}
             />
@@ -711,7 +706,6 @@ const CommandBox = ({ onOpenSettings }) => {
             <SearchResults
               results={results}
               selectedIndex={selectedIndex}
-              onSelect={handleSelectResult}
               onHover={handleHoverResult}
             />
           </>
