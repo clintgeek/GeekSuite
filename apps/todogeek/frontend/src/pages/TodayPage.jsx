@@ -38,6 +38,8 @@ import { Reorder } from 'framer-motion';
 import { Box, Button, ButtonBase, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { ChevronRight } from 'lucide-react';
+import { Link as RouterLink } from 'react-router-dom';
+import { format } from 'date-fns';
 import { GeekContentColumn, GeekTwoPane, useGeekShell, useGeekToastClearance } from '@geeksuite/ui';
 import { usePen } from '../context/PenContext';
 import { penOf } from '../theme/pen';
@@ -45,15 +47,16 @@ import AddBox from '../components/pen/AddBox';
 import TagChips from '../components/pen/TagChips';
 import PenPage, { PenLoadError, PenLoading, usePenColumnWidth } from '../components/pen/PenPage';
 import usePenRows from '../components/pen/usePenRows';
-import { DeskDate, EmptyLine, SectionCaption } from '../components/pen/PenHeadings';
+import { DeskDate, SectionCaption } from '../components/pen/PenHeadings';
 import { srOnly } from '../components/pen/penMarks';
 import useKeyboardInset from '../hooks/useKeyboardInset';
 import useDailyOrder from '../hooks/useDailyOrder';
 import useTodoLayout from '../hooks/useTodoLayout';
 import { PRIVATE_LABEL } from '../context/PrivacyContext';
-import { dayKey, taskId, todaySections, withSettling } from '../utils/penViews';
+import { dayKey, taskId, todaySections, upcomingGroups, withSettling } from '../utils/penViews';
 import { applyKinds } from '../components/pen/penKinds';
 import { manualSections, moveIdBy, reorderSubset } from '../utils/manualOrder';
+import { dueDayStart } from '../utils/dueDate';
 
 function OverdueLine({ count, open, onToggle, onMoveAll, p }) {
   return (
@@ -83,6 +86,53 @@ function OverdueLine({ count, open, onToggle, onMoveAll, p }) {
       >
         Move all to today
       </ButtonBase>
+    </Box>
+  );
+}
+
+/**
+ * Nothing due today (UX review 2026-11-18 #11): not a dead end. One line in
+ * ink, then one in grey that says what is next — the next dated task, which
+ * opens Upcoming — or, with nothing ahead either, where to write one. Two
+ * lines, no illustration. A private task's words stay out of it.
+ */
+export function nextAhead(tasks, now) {
+  const { days, later } = upcomingGroups(tasks, now);
+  const group = days[0] || later[0];
+  const task = group?.tasks?.[0];
+  if (!task) return null;
+  const date = dueDayStart(task); // a date-only task is its calendar day, not UTC midnight
+  const day = days[0] ? format(date, 'EEE d') : format(date, 'EEE d MMM');
+  return { day, words: task.private === true ? PRIVATE_LABEL : task.content };
+}
+
+function TodayEmpty({ tagFilter, next, addBelow, p }) {
+  return (
+    <Box data-today-empty sx={{ py: 4, pl: 5, pr: 2 }}>
+      <Typography sx={{ fontSize: '1rem', fontWeight: 600, color: p.ink }}>
+        {tagFilter ? `Nothing tagged #${tagFilter} today.` : 'Nothing due today.'}
+      </Typography>
+      {next ? (
+        <ButtonBase
+          component={RouterLink}
+          to="/upcoming"
+          data-today-next
+          sx={{
+            display: 'inline-flex', alignItems: 'center', minHeight: 44, mt: -1, borderRadius: '4px',
+            fontSize: '0.9375rem', color: p.grey, textAlign: 'left',
+            '&:hover, &.Mui-focusVisible': { color: p.ink },
+            '&:active': { backgroundColor: p.fill },
+          }}
+        >
+          <span>
+            Next: {next.day} · <Box component="span" sx={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}>{next.words}</Box>
+          </span>
+        </ButtonBase>
+      ) : (
+        <Typography sx={{ fontSize: '0.9375rem', color: p.grey, mt: 1 }}>
+          {addBelow ? 'Type below to add one.' : 'Type in the box above to add one.'}
+        </Typography>
+      )}
     </Box>
   );
 }
@@ -356,7 +406,7 @@ const TodayPage = () => {
 
           <Box component="section" aria-label="Today">
             {sections.today.length > 0 ? sortableList('today') : (
-              <EmptyLine>{pen.tagFilter ? `Nothing tagged #${pen.tagFilter} today.` : 'Nothing due today.'}</EmptyLine>
+              <TodayEmpty tagFilter={pen.tagFilter} next={nextAhead(pen.visible, pen.now)} addBelow={docked} p={p} />
             )}
           </Box>
 

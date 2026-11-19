@@ -112,3 +112,29 @@ describe('phone: grips behind Reorder (3.16)', () => {
     expect(document.querySelector('[data-add-dock]')).not.toBeNull();
   });
 });
+
+describe('an empty Today is not a dead end (review 2026-11-18 #11)', () => {
+  it('names the next dated task and opens Upcoming', () => {
+    setPen([t('Draft the offsite agenda', { dueDate: '2026-10-31T00:00:00.000Z' })]);
+    render(ui());
+    expect(screen.getByText('Nothing due today.')).toBeInTheDocument();
+    const next = screen.getByRole('link', { name: /^Next: Sat 31 · Draft the offsite agenda$/ });
+    expect(next.getAttribute('href')).toBe('/upcoming');
+  });
+  it('keeps a private task’s words out of it', () => {
+    setPen([t('Call the lawyer', { dueDate: '2026-10-31T00:00:00.000Z', private: true })]);
+    render(ui());
+    expect(screen.getByRole('link', { name: /Next: Sat 31 · Private task/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Call the lawyer/)).toBeNull();
+  });
+  it('with nothing ahead, points at the add box: above it on a desktop, below on a phone', () => {
+    setPen([]);
+    const { unmount } = render(ui());
+    expect(screen.getByText('Type in the box above to add one.')).toBeInTheDocument();
+    unmount();
+    device('phone');
+    setPen([]);
+    render(ui());
+    expect(screen.getByText('Type below to add one.')).toBeInTheDocument();
+  });
+});
