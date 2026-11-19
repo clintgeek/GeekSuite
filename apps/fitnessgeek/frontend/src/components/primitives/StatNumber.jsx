@@ -73,6 +73,8 @@ const SIZE_MAP = {
  *  - Takes a `unit` prop that renders smaller + muted next to the number
  *  - Has size variants that match the app's typographic scale
  */
+const NUMERIC_TEXT = /^(?=.*\d)\s*-?(\d{1,3}(,\d{3})+|\d+)?(\.\d+)?\s*$/;
+
 const StatNumber = ({
   value,
   unit,
@@ -86,7 +88,11 @@ const StatNumber = ({
   ...rest
 }) => {
   const theme = useTheme();
-  const numericValue = typeof value === 'number' ? value : parseFloat(value);
+  // Only a string that IS a number counts as one: parseFloat read the Sleep
+  // tile's "6h 52m" as 6 and dropped the rest (UX review 2026-11).
+  const numericValue = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && NUMERIC_TEXT.test(value) ? Number(value.replace(/,/g, '')) : NaN;
   const isNumeric = Number.isFinite(numericValue);
 
   const animated = useCountUp(isNumeric ? numericValue : 0, 420, animate && isNumeric);
