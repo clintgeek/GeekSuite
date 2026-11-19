@@ -61,15 +61,16 @@ export const scenes = [
   { name: '01-home', goto: '/dashboard', wait: 1600 },
   { name: '02-log', goto: '/food-log', wait: 1600 },
   {
-    // The FAB opens the food dialog with the meal pre-picked from the clock.
-    // Phone only: desktop has no FAB (it used to skip there silently).
+    // The add sheet, opened from Breakfast's "+ Add". The Log page has no
+    // floating "Log food" button any more, in either mode (UX review 2026-11,
+    // A2/B6: the add box is on the page and the button covered "+ Add").
     name: '03-food-dialog',
     viewports: ['phone'],
     goto: '/food-log',
     wait: 1600,
     async setup(page, h) {
-      const fab = await must(page.getByRole('button', { name: /log food/i }).first(), 'the "Log food" FAB');
-      await fab.click();
+      const add = await must(page.getByRole('button', { name: /^add to breakfast$/i }).first(), 'Breakfast’s "+ Add"');
+      await add.click();
       await h.settle(900);
       await must(page.getByRole('dialog'), 'the add sheet');
     },

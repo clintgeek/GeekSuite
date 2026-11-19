@@ -6,7 +6,8 @@
  *        showing "today" follows today; a day picked on purpose stays put.
  *   Phase 1.6 — Simple hides the calorie gear ("Adjust today" could change
  *        her goal), the "Includes N extra for today's activity" line and the
- *        floating Log food button. Full is unchanged.
+ *        floating Log food button. (Full now hides the button too: UX review
+ *        2026-11, A2/B6.)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
@@ -126,10 +127,17 @@ describe('Phase 1.6: Simple keeps the Log page to the point', () => {
     expect(primaryAction).toHaveBeenCalledWith(expect.objectContaining({ hidden: true }));
   });
 
-  it('Full keeps all three', async () => {
+  it('Full keeps the gear and the activity line', async () => {
     renderPage({ simple: false });
     expect(await screen.findByTestId('activity-allowance')).toBeInTheDocument();
     expect(screen.getByLabelText('Change your daily target')).toBeInTheDocument();
-    expect(primaryAction).not.toHaveBeenCalledWith(expect.objectContaining({ hidden: true }));
+  });
+
+  it('A2/B6: Full hides the floating button too — the add box is on the page, and it covered "+ Add"', async () => {
+    renderPage({ simple: false });
+    await screen.findByTestId('activity-allowance');
+    expect(primaryAction).toHaveBeenCalled();
+    expect(primaryAction).not.toHaveBeenCalledWith(expect.objectContaining({ hidden: false }));
+    expect(primaryAction).toHaveBeenLastCalledWith(expect.objectContaining({ hidden: true }));
   });
 });

@@ -339,14 +339,16 @@ const FoodLog = () => {
     setShowAddDialog(true);
   };
 
-  // The page's one primary action, rendered by the shell in the thumb zone.
-  // Not in Simple (REVIEW_2026-10 Phase 1.6): the add box is already on the
-  // page, and the button sat over the Again chips.
+  // The shell's floating "Log food" button stays hidden on this page, in both
+  // modes. Simple first (REVIEW_2026-10 Phase 1.6): the add box is already on
+  // the page, and the button sat over the Again chips. Full too (UX review
+  // 2026-11, A2/B6): it was the third add control on one screen, and it
+  // covered "+ Add", a row's delete icon and "Same as yesterday's breakfast".
   useGeekPrimaryAction({
     label: 'Log food',
     icon: <AddIcon />,
     onClick: () => handleAddFood(mealTypeForNow()),
-    hidden: isSimple
+    hidden: true
   });
 
   const handleEditLog = (log) => {
