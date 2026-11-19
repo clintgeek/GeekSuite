@@ -690,3 +690,48 @@ existing doc home, not just history:
   (only `manga` seen), that the artwork route returns image bytes.
 - The Tankarr series id is not stored (needs a schema field); matching is by title.
 - Enrich on a Tankarr volume runs `ebook-meta` on the file (read-only, but it opens it).
+
+---
+
+## 13. Left from the UX review build (2026-11-19)
+
+From `SUITE_UX_REVIEW_2026-11.md`; the overnight build did the rest (work log, 2026-11-18 → 19).
+
+### Chef's decisions
+- **FlockGeek identity** — "Field Ledger" exists only in a theme comment; name it or pick another before any restyle. Is a bird known by name or by tag (which leads the row)?
+- **TodoGeek** — Phase 2 (make a task repeat after adding it; per-task reminders); may the add box appear outside Today; may the date numeral shrink on the phone (Today still shows ~3.5 rows); which states earn red; how Done is drawn.
+- **GameGeek** — is Couch co-op a status or a list; is per-game Progress used at all.
+- **StoryGeek** — which "new tale" form survives; which column gives way on desktop; may play hide the shell top bar on the phone.
+- **NoteGeek** — viewer versus editor (the one-surface bet); the word for a text note; pen palette; mind-map chrome.
+- **FitnessGeek** — Weight page restructure (today's reading is five screens down; "behind" said four times); three things called "Your goal"; Food log opening on the add box; Medications' two forms.
+- **ThingGeek** — may the Where level header and its murals shrink on the phone.
+- **BookGeek** — is "owned" worth a tick on every card; Unread versus Want to read wording.
+- **BaseGeek** — open registration on the sign-on page; role changes and password resets in UserGeek.
+- **StartGeek** — clock and weather fill the phone's first screen; which apps the launcher shows.
+
+### Needs the gateway (deploy the gateway first)
+- **NoteGeek list previews** run the heading into the body: `previewFor` in `apps/basegeek/packages/api/src/graphql/notegeek/noteDerived.js` should shape like the client's `previewText`, with a `DERIVED_VERSION` bump (rebuilds stored previews).
+- **FlockGeek delete → Undo** needs a `restoreFlockEntity` (clear `deletedAt`).
+- **NewsGeek** — a hidden-story count for Today under Free to read.
+
+### Shared-component candidates (raised by the builders; none built except the two noted)
+- **`GeekSheet` re-mounts its children when it crosses `md`** (sheet ↔ dialog), losing typing on a tablet rotation. GameGeek's notes were lifted out of the way; Playthroughs and every other sheet form still lose a draft. Highest value of this list.
+- `GeekSheet` close button sits below a short header and overlaps the body (NoteGeek worked around it per sheet).
+- `createGeekSuiteTheme` sets the text-field radius with a two-class selector, so an app override on `MuiOutlinedInput` loses (NewsGeek worked around it).
+- A visually-hidden helper: two builders wrote `width: 1` in `sx` (= 100%) in one night.
+- `GeekFab`: keep the label at `xs`, and let `useGeekPrimaryAction` pass one; reserve FAB clearance in the frame.
+- Short date formatter ("18 Nov" / "18 Nov 2024"), copied in FlockGeek and BaseGeek.
+- Undoable-action helper (NoteGeek, BookGeek, GameGeek each hand-roll Undo); a confirm-delete helper (FlockGeek).
+- Share-or-copy helper (NewsGeek); elapsed clock for long AI waits (StoryGeek); "this one or every one" save choice (TodoGeek); switch row with help text; page-title lending for `GeekTopBar` (ThingGeek); a save-bar footer slot for `GeekDialog`.
+- `LoginSplash`: let an app set the wordmark font and tagline colour. Login pages still have no harness scene (needs a signed-out fixture).
+- `StatNumber`'s `parseFloat` bug ("6h 52m" → "6") may exist in other apps' copies.
+- A non-MUI live-region toast (StartGeek has its own).
+
+### Smaller leftovers
+- StartGeek: Undo/Open on a successful capture needs a delete-task path; search results still open in a new tab on a phone.
+- FlockGeek: move the per-page "Add X" into the FAB; bird age on the row.
+- ThingGeek: Type editor still stock; warning lights as tap targets.
+- NoteGeek: model id is tooltip-only, so invisible on touch; a Settings details line if wanted.
+- GameGeek: the header comment in `frontend/src/utils/installDecision.js` is stale (the import no longer flags games); the "how did it end?" banner is legacy for games flagged before 2026-10-09.
+- BaseGeek: no show-password control on the login.
+

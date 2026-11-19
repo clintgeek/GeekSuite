@@ -544,3 +544,90 @@ Chef: "let's get these builds as tight as possible."
   FlockGeek's offline page is already styled; three harness fixtures are wrong
   (StartGeek wallpaper address, NewsGeek Today opens scrolled, BaseGeek scenes 09/10
   point at a route that no longer exists).
+
+## 2026-11-18 → 19 — Overnight build from the design and UX review (local, NOT pushed)
+
+Chef: "please fix as you suggest. lets also consider using shared components where
+appropriate… make decisions on my behalf and report in the morning." Eight builders,
+one per app group, each committing its own fixes (one commit per fix); the harness run
+by each builder afterwards and again by Sage at the end. 125 commits ahead of
+`origin/main` as of the morning. `git log a4d6694f..HEAD -- apps/<app>` lists an app's.
+
+**Decisions made for Chef (each revertable on its own):**
+- Suite rule for destructive actions: reversible acts at once and offers Undo; only
+  the irreversible asks, in a themed dialog. NoteGeek delete (`c2d407e9`, reverses D1)
+  and ThingGeek trash (`3f8c4a33`) lost their confirm; FlockGeek deletes cannot be
+  undone without a gateway restore, so they ask in a themed dialog (`86eb19ff`);
+  StoryGeek `/back` asks (`509a5521`); BookGeek "To Kindle" asks (`a05b439d`).
+- Identity headers: NewsGeek's nameplate is on Today only (`7e11f292`). TodoGeek's
+  date numeral, ThingGeek's murals and StartGeek's clock were NOT shrunk.
+- BookGeek reader position is remembered on the device only (`fcb79f8e`); no sync.
+- FitnessGeek: Full Home gets a compact "What did you eat?" pill (`a5f3d5c5`); Simple's
+  quick target asks for a goal weight (`f2cda0f9`).
+- StartGeek dock and module links are real links: new tab on desktop, same tab on a
+  phone or installed (`f90240c8`).
+- NoteGeek: model ids are tooltips only (`aaeceb01`). TodoGeek: the repeat dialog is
+  gone; Save becomes "Save this one" / "Save every one" (`e98615a5`).
+
+**What was built, by app** (the review's finding numbers are in each commit message):
+- **FitnessGeek (16):** Amount on an added food edits that entry; "Same as…" has an
+  Added state; goal weight in Simple; add pill on Full Home; no floating + over the Full
+  log; desktop add-sheet names; BP Save disabled until valid; BP heart tone; Sleep tile
+  ("6" → "6h 52m", also "1,484" → "1"); one Undo and one count in the add flow; the
+  goal she just set wins on Weight (`4e3efa5c`).
+- **NoteGeek (14):** no clear-all × on tags; one save-failed indicator; Compose counts
+  only what it composes; Recently deleted has its own title and works like Archived;
+  delete with Undo; Graphite alerts and switches; plain words in the AI features; meta
+  line folded into the Back row on a phone (body starts ~233 px down, was ~265).
+- **TodoGeek (10):** login page rewritten for TodoGeek in Red Pen; ripple off; swipe
+  label; desktop pane regressions; failed load said once; empty Today points
+  somewhere; editor is ruled paper with 44 px fields; Reorder in the chip row (Today
+  shows ~3.5 rows on the harness phone, was ~2.5).
+- **ThingGeek (13):** action bar really sticks and the top bar names the item; phone
+  order puts Claim readiness, Value, Documents first; trash with Undo; tappable search
+  examples; Attention's first due item ~36% down (was ~60%); status pips; Filters
+  sheet shows what is on; yard motif on sheets, empty Trash and errors; Edit matches
+  Add and has the unsaved guard; one photo/file control.
+- **BookGeek (9):** one close button; reader — Back closes only the reader, controls
+  stay while used, Contents, percentage + chapter, reopens where you left it,
+  bookstore look, readable by screen readers; rate from the book's page; "To Kindle"
+  asks; shelf-strip fade; aisle-sign pills; three reader harness scenes.
+- **GameGeek (8):** Add-a-game header; sticky bar clear of the close; your shelf, rating
+  and notes before Media on a phone; one word ("Shelf"); month casing; search Back on
+  the left; no server jargon; a half-typed note survives rotation (`3a4af61f`).
+- **NewsGeek (12):** whole card opens the story; compact dateline off Today; two-line
+  excerpts and chips on the publisher line; square fields and menus; Share / Copy
+  link; fresh open starts at the top; Settings saves itself; Find a source; Source
+  page gets In my paper and recent stories.
+- **StoryGeek (11):** the wait has a clock and "you can leave"; `/back` asks and says
+  what is lost; finished tales say so; labelled phone tools; Characters dead end
+  removed; export feedback; day rules in the transcript.
+- **FlockGeek (7):** three-tap egg log (remembers the pen, counts from recent days);
+  Home's Today line; worded FAB that covers nothing; themed delete dialogs; one date
+  format; desktop bird headers line up; `/dashboard` scaffold removed.
+- **BaseGeek (10):** login fields phone password managers can fill; "3 CAUTIONS" names
+  the causes and links to them; AIGeek nav on one row; provider key Save / Cancel;
+  compact Line on the phone; Account in Signal Box; one place for the theme.
+- **StartGeek (11):** `> task` uses the shared `@geeksuite/task-grammar` (so
+  `(private)` and natural dates work; the old copy is deleted); one live-region toast
+  with Undo on ticking a task; real links; wallpaper scrim floor for 4.5:1; opaque
+  dock on a phone; plain-word weather; command-box shortcuts on a phone.
+- **Shared (`packages/ui`, Sage):** an action toast lives 8 s, not 4 (`506af776`); the
+  login splash's smallest text is 12 px (`a5a7cfc1`).
+
+**Found by the harness on the builders' own work, and fixed:** StartGeek's shortcut
+row made the first tap below the command box miss; TodoGeek's new editor fields were
+36 px; NoteGeek and StoryGeek each wrote `width: 1` in `sx` for visually hidden text
+(that is 100%, and scrolled the page sideways); NoteGeek's Compose chip printed note
+ids; BookGeek's reader was invisible to screen readers and ran under its bars.
+
+**Harness:** new scenes for BookGeek's reader, StartGeek's command box, StoryGeek's
+`/back`, ThingGeek's empty Trash and load error, NewsGeek's top of Today; fixtures
+fixed for StartGeek (wallpaper, fitness field names), NewsGeek (Today opened
+scrolled) and BaseGeek (dead `/databases` scenes replaced).
+
+**One slip:** the FitnessGeek builder ran `git commit --amend` after HEAD had moved to
+another builder's commit and reworded it; it restored the original at once. History
+checked: intact.
+
+**Not built, on purpose** — see `SUITE_TODO.md` §13.
