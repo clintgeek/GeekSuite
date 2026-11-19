@@ -44,7 +44,19 @@ export function isAuthFailure(err) {
  */
 export function failureMessage(err, fallback) {
   const raw = typeof err?.message === 'string' ? err.message.trim() : ''
-  if (raw) return raw
   const spare = typeof fallback === 'string' ? fallback.trim() : ''
+  // A dropped connection or a gateway that answered with an error page
+  // (not JSON) is not a message for a person: "Failed to fetch",
+  // "Unexpected token '<'". Say it in plain words instead (2026-11-18).
+  if (raw && isConnectionFailure(err, raw)) {
+    return `${spare || 'That didn’t work'}. The suite didn’t answer; check your connection and try again.`
+  }
+  if (raw) return raw
   return spare || 'Something went wrong'
+}
+
+const CONNECTION_WORDS = /failed to fetch|networkerror|network request failed|load failed|unexpected token|is not valid json|unexpected end of json/i
+
+function isConnectionFailure(err, raw) {
+  return err instanceof SyntaxError || CONNECTION_WORDS.test(raw)
 }

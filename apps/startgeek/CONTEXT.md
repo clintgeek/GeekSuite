@@ -121,7 +121,8 @@ src/
     WeatherBlock.jsx      — Today's weather panel in the hero; click opens the modal
     WeatherModal.jsx      — Today's details + 7-day range bars; focus-trapped
     CommandBox.jsx        — Quick capture / search box
-    HelpButton.jsx, HelpModal.jsx, SearchResults.jsx, Toast.jsx
+    HelpButton.jsx, HelpModal.jsx, SearchResults.jsx
+    Toast.jsx             — One message at a time in a polite live region; 6 s, 8 s with Undo, failures until dismissed
     AnswerCard.jsx        — The `??` answer, above the result list
     CalendarModule.jsx    — ICS agenda feed, grouped by day, paged on scroll
     DraftPreview.jsx      — The model's draft as an offer: Create or Edit, nothing saved yet
@@ -136,6 +137,7 @@ src/
     SettingsContext.jsx   — localStorage-backed settings
     WeatherContext.jsx    — Local conditions + forecast (sunrise/sunset included)
     SessionContext.jsx    — Auth state
+    ToastContext.jsx      — notify() for the command box and ticked tasks (useToast)
     GlanceContext.jsx     — glanceToday data (tasks incl. upcoming, reading, fitness)
   hooks/
     useSettings.js, useTime.js, useWeather.js, useSession.js, useGlance.js
@@ -146,6 +148,7 @@ src/
     graphql.js            — Gateway client (CSRF header + heal), UnauthorizedError re-export
     errors.js             — UnauthorizedError (apart from graphql.js so node --test can import it)
     commandFailure.js     — isAuthFailure / failureMessage: what a failed capture says
+    feedback.js           — Toast lifetimes; tick a task with Undo (+ .test.js)
     csrfHeal.js           — shouldHealCsrf / triggerCsrfReloadOnce (+ .test.js)
     captureDraft.js       — When a `>`/`<` line is worth a model call, and the draft round trip
     capture.js            — One capture, written once; createTask input via @geeksuite/task-grammar

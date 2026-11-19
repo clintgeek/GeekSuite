@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useSession } from '../hooks/useSession'
 import { useGlance } from '../hooks/useGlance'
 import { useSettings } from '../hooks/useSettings'
+import { useToast } from '../hooks/useToast'
 import { gql, UnauthorizedError } from '../lib/graphql'
 import { failureMessage, isAuthFailure } from '../lib/commandFailure'
 import { ENGINES } from '../lib/engines'
@@ -20,7 +21,6 @@ import HelpModal from './HelpModal'
 import SearchResults from './SearchResults'
 import AnswerCard from './AnswerCard'
 import DraftPreview from './DraftPreview'
-import Toast from './Toast'
 import { slashFocusAction } from '../lib/slashFocus'
 import {
   captureAttemptFor,
@@ -89,6 +89,7 @@ const CommandBox = ({ onOpenSettings }) => {
   const { status, markOut } = useSession()
   const { refetch } = useGlance()
   const { settings } = useSettings()
+  const { notify } = useToast()
   const askEnabled = !!settings.ask
   const hour12 = settings.clock !== '24'
 
@@ -97,7 +98,6 @@ const CommandBox = ({ onOpenSettings }) => {
   const [results, setResults] = useState([])
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const [helpOpen, setHelpOpen] = useState(false)
-  const [toast, setToast] = useState(null)
   const [searchLoading, setSearchLoading] = useState(false)
   const [ask, setAsk] = useState(null)
   const [askLoading, setAskLoading] = useState(false)
@@ -336,21 +336,24 @@ const CommandBox = ({ onOpenSettings }) => {
       }
       // A task that was filed before a later step failed must say so, or
       // the person retypes it. Enter again finishes only the missing step.
-      setToast(partialCaptureMessage(err, attemptRef.current) || failureMessage(err, fallback))
+      notify({
+        tone: 'error',
+        message: partialCaptureMessage(err, attemptRef.current) || failureMessage(err, fallback),
+      })
     },
-    [markOut]
+    [markOut, notify]
   )
 
   const captureDone = useCallback(
     (message) => {
       setDraft(null)
       skipDraftRef.current = null
-      setToast(message)
+      notify(message)
       setValue('')
       inputRef.current?.focus()
       refetch()
     },
-    [refetch]
+    [refetch, notify]
   )
 
   const runEnter = useCallback(async () => {
@@ -506,6 +509,8 @@ const CommandBox = ({ onOpenSettings }) => {
         setSelectedIndex(list.length ? 0 : -1)
         if (list.length) {
           openUrl(list[0].url)
+        } else {
+          notify(`Nothing in the suite matches "${q}"`)
         }
       } catch (err) {
         reportFailure(err, "Couldn't search the suite")
@@ -529,6 +534,7 @@ const CommandBox = ({ onOpenSettings }) => {
     askEnabled,
     draft,
     hour12,
+    notify,
   ])
 
   // Every Enter (and the draft's Create) goes through the guard: while one is
@@ -691,7 +697,6 @@ const CommandBox = ({ onOpenSettings }) => {
       </div>
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <Toast message={toast} onClose={() => setToast(null)} />
     </section>
   )
 }

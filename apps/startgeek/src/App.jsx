@@ -3,6 +3,7 @@ import { SessionProvider } from './context/SessionContext'
 import { GlanceProvider } from './context/GlanceContext'
 import { WeatherProvider } from './context/WeatherContext'
 import { SettingsProvider } from './context/SettingsContext'
+import { ToastProvider } from './context/ToastContext'
 import { useSettings } from './hooks/useSettings'
 import BackgroundManager from './components/BackgroundManager'
 import DateTime from './components/DateTime'
@@ -103,7 +104,9 @@ function App() {
       <SessionProvider>
         <GlanceProvider>
           <WeatherProvider>
-            <Console />
+            <ToastProvider>
+              <Console />
+            </ToastProvider>
           </WeatherProvider>
         </GlanceProvider>
       </SessionProvider>

@@ -64,4 +64,16 @@ describe('failureMessage', () => {
       assert.ok(message.length > 0, `empty message for ${JSON.stringify(err)}`)
     }
   })
+
+  test('a dropped connection or an error page reads as plain words, not "Failed to fetch"', () => {
+    for (const err of [
+      new TypeError('Failed to fetch'),
+      new TypeError('NetworkError when attempting to fetch resource.'),
+      new TypeError('Load failed'),
+      new SyntaxError("Unexpected token '<', \"<html>\" is not valid JSON"),
+    ]) {
+      const message = failureMessage(err, "Couldn't add the task")
+      assert.match(message, /^Couldn't add the task\. The suite didn’t answer; check your connection and try again\.$/)
+    }
+  })
 })

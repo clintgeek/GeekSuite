@@ -1,7 +1,15 @@
+import { useState } from 'react'
 import { useGlance } from '../hooks/useGlance'
 import { useSession } from '../hooks/useSession'
-import { gql, UnauthorizedError } from '../lib/graphql'
+import { useToast } from '../hooks/useToast'
+import { gql } from '../lib/graphql'
+import { isAuthFailure } from '../lib/commandFailure'
+import { toggleTaskWithUndo } from '../lib/feedback'
 import { UPDATE_TASK_STATUS } from '../lib/queries'
+
+// How long a ticked row stays struck through before the list refetches and
+// it leaves: long enough to see which task it was.
+const LEAVE_MS = 700
 
 const DOT_COLOR = {
   '!': 'text-accent',
@@ -43,16 +51,24 @@ const daysLate = (task, today) => {
 const TaskRow = ({ task, late = false, today, aside = null }) => {
   const { refetch } = useGlance()
   const { markOut } = useSession()
+  const { notify } = useToast()
+  // Shown at once on tap (dot filled, words struck); undone if the save fails.
+  const [ticked, setTicked] = useState(null)
 
   const handleToggle = async () => {
-    const nextStatus = task.status === 'completed' ? 'pending' : 'completed'
-    try {
-      await gql(UPDATE_TASK_STATUS, { id: task.id, status: nextStatus })
-      refetch()
-    } catch (err) {
-      if (err instanceof UnauthorizedError) markOut()
-    }
+    if (ticked !== null) return
+    setTicked(task.status !== 'completed')
+    const saved = await toggleTaskWithUndo(task, {
+      setStatus: (id, status) => gql(UPDATE_TASK_STATUS, { id, status }),
+      notify,
+      refresh: () => setTimeout(refetch, LEAVE_MS),
+      onAuthFailure: markOut,
+      isAuthFailure,
+    })
+    if (!saved) setTicked(null)
   }
+
+  const done = ticked ?? task.status === 'completed'
 
   const color = dotColor(task, late)
   const isEvent = task.signifier === '@'
@@ -65,8 +81,8 @@ const TaskRow = ({ task, late = false, today, aside = null }) => {
       <button
         type="button"
         onClick={handleToggle}
-        className={`dot ${color} ${isEvent ? 'event' : ''} ${task.status === 'completed' ? 'on' : ''}`}
-        aria-label={task.status === 'completed' ? 'Mark task pending' : 'Mark task complete'}
+        className={`dot ${color} ${isEvent ? 'event' : ''} ${done ? 'on' : ''}`}
+        aria-label={`${done ? 'Mark pending' : 'Mark done'}: ${task.content}`}
       />
       <a
         href="https://todogeek.clintgeek.com/"
@@ -76,7 +92,7 @@ const TaskRow = ({ task, late = false, today, aside = null }) => {
           late ? 'text-ink-2 hover:text-ink' : 'text-ink hover:text-white'
         }`}
       >
-        <span className="break-words">{task.content}</span>
+        <span className={`break-words ${ticked ? 'line-through text-ink-2' : ''}`}>{task.content}</span>
         {priorityTag && <span className="ml-1.5 font-mono text-[12px] text-ink-3">{priorityTag}</span>}
         {task.tags?.length > 0 &&
           task.tags.map((tag) => (
