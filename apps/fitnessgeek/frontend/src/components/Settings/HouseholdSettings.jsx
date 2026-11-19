@@ -239,7 +239,7 @@ const HouseholdSettings = () => {
               bgcolor: 'primary.50',
               borderRadius: 2,
               border: '1px solid',
-              borderColor: 'primary.200'
+              borderColor: 'divider' // the theme's warm outline, not near-white in dark (A11)
             }}>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 Household code
