@@ -54,7 +54,14 @@ export function useReader(selectedBook, { readerId = null } = {}) {
   const [readerTheme, setReaderTheme] = useState(
     () => loadReaderPrefs().theme || (suiteThemeMode === "light" ? "light" : "dark")
   );
-  const readerContainerRef = useRef(null);
+  // A callback ref: the effect below runs when the container node exists,
+  // whenever the reader's (portalled) Dialog attaches it. `.current` is kept
+  // for callers that read it.
+  const [containerNode, setContainerNode] = useState(null);
+  const readerContainerRef = useCallback((node) => {
+    readerContainerRef.current = node;
+    setContainerNode(node);
+  }, []);
   const readerBookRef = useRef(null);
   const readerRenditionRef = useRef(null);
   const [readerToc, setReaderToc] = useState([]);
@@ -64,7 +71,7 @@ export function useReader(selectedBook, { readerId = null } = {}) {
   readerIdRef.current = readerId;
 
   useEffect(() => {
-    if (!readerOpen || !bookId || !readerContainerRef.current) {
+    if (!readerOpen || !bookId || !containerNode) {
       return undefined;
     }
 
@@ -101,7 +108,7 @@ export function useReader(selectedBook, { readerId = null } = {}) {
           }
         });
 
-        const rendition = book.renderTo(readerContainerRef.current, {
+        const rendition = book.renderTo(containerNode, {
           width: "100%",
           height: "100%",
         });
@@ -114,6 +121,16 @@ export function useReader(selectedBook, { readerId = null } = {}) {
 
         // Every page turn is remembered on this device, for this reader.
         if (typeof rendition.on === "function") {
+          // epub.js's iframe carries no title; a frame needs one (axe frame-title).
+          rendition.on("rendered", () => {
+            try {
+              containerNode.querySelectorAll("iframe").forEach((frame) => {
+                if (!frame.title) frame.title = `${selectedBook?.title || "Book"}, the page`;
+              });
+            } catch {
+              // ignore
+            }
+          });
           rendition.on("relocated", (location) => {
             const cfi = location?.start?.cfi;
             if (!cancelled && cfi) saveReaderPosition(readerIdRef.current, bookId, cfi);
@@ -202,11 +219,11 @@ export function useReader(selectedBook, { readerId = null } = {}) {
       }
       readerBookRef.current = null;
     };
-    // Re-opened only when the reader opens or the book changes — not on every
+    // Re-opened only when the reader opens, its container mounts, or the book changes — not on every
     // cache update of the same book, and not on a theme flip (the effect
     // below re-themes the live rendition).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readerOpen, bookId]);
+  }, [readerOpen, bookId, containerNode]);
 
   useEffect(() => {
     if (readerRenditionRef.current?.themes?.select) {

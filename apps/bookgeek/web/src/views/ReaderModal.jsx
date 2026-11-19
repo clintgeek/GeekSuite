@@ -390,20 +390,14 @@ export default function ReaderModal({
   const wood = WOOD[mode];
 
   return (
-    // `disablePortal`: the epub.js effect in hooks/useReader.js mounts
-    // synchronously on `readerOpen` with a one-shot guard —
-    // `if (!readerContainerRef.current) return;`, never retried. MUI's
-    // default Modal portal resolves its mount node one tick after the first
-    // commit, so the container ref is still null the instant that effect's
-    // dependencies fire and the load never starts. Rendering inline keeps the
-    // ref's DOM node — and thus the ref — attached in the very same commit.
-    // `zIndex` compensates for skipping the portal (which would otherwise
-    // place us after the book-detail dialog's own portalled backdrop in the
-    // DOM, and lose a z-index tie to it).
+    // Portalled like any modal, after the book sheet, so the reader is the
+    // top modal: inside the app root it sat under the sheet's aria-hidden
+    // and was invisible to screen readers (harness 2026-11-18). The epub.js
+    // effect waits for the container node itself (a callback ref in
+    // hooks/useReader.js), so the portal's one-tick delay no longer loses it.
     <Dialog
       fullScreen
       open
-      disablePortal
       onClose={handleClose}
       onKeyDown={handleKeyDown}
       aria-label={`Reading ${title}`}
@@ -432,7 +426,18 @@ export default function ReaderModal({
         }}
       >
         {/* epub.js mounts its iframe here — must fill the surface. */}
-        <Box ref={readerContainerRef} sx={{ position: "absolute", inset: 0 }} />
+        {/* Between the bars, so the bars never sit over the first and last
+            lines of a page. */}
+        <Box
+          ref={readerContainerRef}
+          sx={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: "calc(60px + env(safe-area-inset-top))",
+            bottom: "calc(40px + env(safe-area-inset-bottom))",
+          }}
+        />
 
         {/* Page-turn strips: the outer quarters. The middle is the book's. */}
         <ButtonBase

@@ -8,6 +8,7 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, renderHook, screen, waitFor } from "@testing-library/react";
 import ePub from "epubjs";
+import { Dialog } from "@mui/material";
 import ReaderModal, { AUTO_HIDE_MS } from "../../views/ReaderModal";
 import { useReader } from "../../hooks/useReader";
 import {
@@ -77,6 +78,22 @@ describe("the reader's Back", () => {
       window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
     });
     expect(setReaderOpen).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("the reader over the book sheet", () => {
+  it("is the top modal, not hidden from screen readers under the sheet (harness 2026-11-18)", async () => {
+    const toc = [{ id: "1", label: "One", href: "ch1.xhtml", depth: 0 }];
+    renderWithProviders(
+      <>
+        <Dialog open aria-label="Book">
+          <p>the book sheet</p>
+        </Dialog>
+        <ReaderModal {...props({ readerToc: toc })} />
+      </>
+    );
+    // No `hidden: true`: the reader's controls must be in the accessibility tree.
+    expect(await screen.findByRole("button", { name: "Contents" })).toBeInTheDocument();
   });
 });
 
@@ -187,8 +204,10 @@ describe("the place you stopped, on this device", () => {
   async function openReader(readerId) {
     const epubBook = { id: "b1", files: [{ format: "epub", path: "a.epub" }] };
     const hook = renderHook(() => useReader(epubBook, { readerId }));
-    hook.result.current.readerContainerRef.current = document.createElement("div");
     act(() => hook.result.current.setReaderOpen(true));
+    // The Dialog attaches its container after it opens (a portal): the load
+    // must wait for it rather than give up.
+    act(() => hook.result.current.readerContainerRef(document.createElement("div")));
     await waitFor(() => expect(hook.result.current.locationsReady).toBe(true));
     return hook;
   }
