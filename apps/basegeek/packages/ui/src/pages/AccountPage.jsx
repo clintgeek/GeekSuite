@@ -4,7 +4,6 @@ import {
   Typography,
   TextField,
   Button,
-  Avatar,
   CircularProgress,
   Select,
   MenuItem,
@@ -14,16 +13,11 @@ import {
   Chip,
   useTheme,
 } from '@mui/material';
-import {
-  Save as SaveIcon,
-  Check as CheckIcon,
-  Person as PersonIcon,
-  Tune as TuneIcon,
-  Palette as PaletteIcon,
-  Apps as AppsIcon,
-} from '@mui/icons-material';
+import { Check as CheckIcon } from '@mui/icons-material';
 import { useUser, useThemeMode } from '@geeksuite/user';
 import { GeekEmptyState, useToast } from '@geeksuite/ui';
+import Panel from '../signalbox/Panel';
+import { Dymo } from '../signalbox/Labels';
 
 // ─── Option constants ───
 
@@ -53,51 +47,65 @@ const ACCENT_COLORS = [
   { value: '#d4b06a', label: 'Gold' },
 ];
 
-// ─── Section card component ───
+/**
+ * Account is the suite profile, drawn as Signal Box panels like every other
+ * console page (2026-11-18 review: it was the one stock-Material screen).
+ * One save per panel, each named for what it saves: Accent colour and Global
+ * preferences used to be separate cards with separate Save buttons that both
+ * saved the same record.
+ */
 
-function SectionCard({ title, icon, children, action }) {
+/** "31 Dec 2024" — UserGeek's spelling of a date. */
+function shortDate(value) {
+  if (!value) return null;
+  const d = new Date(Number.isFinite(Number(value)) ? Number(value) : value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function initialsOf(name) {
+  const parts = String(name || '?').trim().split(/[\s._@-]+/).filter(Boolean);
+  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
+}
+
+/** The token from the Token board: brass for an admin, steel otherwise. */
+function Token({ name, admin }) {
   return (
-    <Box sx={{
-      p: 3,
-      borderRadius: '12px',
-      border: '1px solid',
-      borderColor: 'divider',
-      backgroundColor: 'background.paper',
-    }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {icon}
-          <Typography variant="overline" sx={{ color: 'text.secondary' }}>
-            {title}
-          </Typography>
-        </Box>
-        {action}
-      </Box>
-      {children}
+    <Box
+      aria-hidden="true"
+      sx={(theme) => ({
+        width: 72,
+        height: 72,
+        flexShrink: 0,
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: theme.typography.fontFamilyMono,
+        fontWeight: 700,
+        fontSize: '1.4rem',
+        color: admin ? theme.palette.box.plate.ink : '#ffffff',
+        background: admin ? theme.palette.accent.gradient : 'linear-gradient(180deg, #5d6670, #2b3037)',
+        border: `2px solid ${admin ? theme.palette.box.plate.edge : '#2b3037'}`,
+        boxShadow: 'inset 0 0 0 4px rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.4)',
+      })}
+    >
+      {initialsOf(name)}
     </Box>
   );
 }
 
-// ─── Save button sub-component ───
-
-// A successful save used to show its own auto-clearing "Saved" checkmark
-// here (`saved` + a 3s `setTimeout`); that state and its UI collapsed into
-// a single `notify(…, { tone: 'success' })` call at the call site (TODO_ORDER
-// #15) — the toast stack is the one place a transient confirmation lives now.
-function SaveButton({ saving, onClick, label = 'Save' }) {
+function SaveButton({ saving, onClick, label }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <Button
-        size="small"
-        variant="outlined"
-        onClick={onClick}
-        disabled={saving}
-        startIcon={saving ? <CircularProgress size={14} /> : <SaveIcon sx={{ fontSize: 14 }} />}
-        sx={{ fontSize: '0.75rem', py: 0.5, px: 1.5, minWidth: 0 }}
-      >
-        {saving ? '...' : label}
-      </Button>
-    </Box>
+    <Button
+      variant="contained"
+      onClick={onClick}
+      disabled={saving}
+      startIcon={saving ? <CircularProgress size={14} /> : null}
+      sx={{ minHeight: 44, fontSize: '0.8125rem' }}
+    >
+      {saving ? 'Saving…' : label}
+    </Button>
   );
 }
 
@@ -224,57 +232,38 @@ export default function AccountPage() {
   }
 
   const displayName = profileForm.displayName || identityForm.username || identityForm.email || '?';
-  const accentColor = prefsForm.accentColor || '#e8a849';
+  const isAdmin = identity?.role === 'admin';
 
   return (
     <Box>
-      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 4 }}>
-        Your profile and preferences across all GeekSuite applications
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+        Your profile and preferences across all GeekSuite applications.
       </Typography>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '260px 1fr' }, gap: 3 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '260px 1fr' }, gap: 3, alignItems: 'start' }}>
 
-        {/* ── Left column: avatar card ── */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <Box sx={{
-            p: 3,
-            borderRadius: '12px',
-            border: '1px solid',
-            borderColor: 'divider',
-            backgroundColor: 'background.paper',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 2,
-          }}>
-            <Avatar sx={{
-              width: 80,
-              height: 80,
-              bgcolor: accentColor,
-              color: theme.palette.accent.onBrightFill,
-              fontSize: '2rem',
-              fontWeight: 700,
-              fontFamily: '"B612", system-ui, sans-serif',
-            }}>
-              {displayName[0].toUpperCase()}
-            </Avatar>
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography sx={{ fontWeight: 600, fontSize: '1.05rem', color: 'text.primary' }}>
+        {/* ── Left column: the token ── */}
+        <Panel id="account-token" title="Token" headingComponent="h2" caption="Your sign-in for every app in the suite.">
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+            <Token name={displayName} admin={isAdmin} />
+            <Box sx={{ textAlign: 'center', minWidth: 0, maxWidth: '100%' }}>
+              <Typography sx={{ fontWeight: 600, fontSize: '1.05rem', color: 'text.primary', overflowWrap: 'anywhere' }}>
                 {profileForm.displayName || identityForm.username || 'No name set'}
               </Typography>
-              <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+              <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', overflowWrap: 'anywhere' }}>
                 {identityForm.email}
               </Typography>
             </Box>
+            {identity?.role && <Dymo tone={isAdmin ? 'red' : 'black'}>{identity.role}</Dymo>}
 
             <Divider flexItem />
 
             <Box sx={{ width: '100%' }}>
-              {identity?.createdAt && (
-                <DetailRow label="Member since" value={new Date(identity.createdAt).toLocaleDateString()} />
+              {shortDate(identity?.createdAt) && (
+                <DetailRow label="Member since" value={shortDate(identity.createdAt)} />
               )}
-              {identity?.lastLogin && (
-                <DetailRow label="Last login" value={new Date(identity.lastLogin).toLocaleDateString()} />
+              {shortDate(identity?.lastLogin) && (
+                <DetailRow label="Last login" value={shortDate(identity.lastLogin)} />
               )}
               <DetailRow label="Theme" value={themeValue} />
               {/* `locale` lives on the profile, not on preferences — this row
@@ -284,16 +273,16 @@ export default function AccountPage() {
               <DetailRow label="Locale" value={profileForm.locale} />
             </Box>
           </Box>
-        </Box>
+        </Panel>
 
-        {/* ── Right column: all sections ── */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* ── Right column: the panels ── */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
 
-          {/* IDENTITY + PROFILE */}
-          <SectionCard
-            title="Identity & Profile"
-            icon={<PersonIcon sx={{ fontSize: 16, color: 'text.disabled' }} />}
-            action={<SaveButton saving={profileSaving} onClick={saveProfile} />}
+          <Panel
+            id="account-profile"
+            number={1}
+            title="Identity and profile"
+            caption="Who you are to every app. Saved together."
           >
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               <TextField
@@ -303,6 +292,7 @@ export default function AccountPage() {
                 size="small"
                 fullWidth
                 placeholder="How should we greet you?"
+                inputProps={{ autoComplete: 'name' }}
               />
               <TextField
                 label="Username"
@@ -310,13 +300,16 @@ export default function AccountPage() {
                 onChange={handleIdentityChange('username')}
                 size="small"
                 fullWidth
+                inputProps={{ autoComplete: 'username', autoCapitalize: 'none', spellCheck: false }}
               />
               <TextField
                 label="Email"
+                type="email"
                 value={identityForm.email}
                 onChange={handleIdentityChange('email')}
                 size="small"
                 fullWidth
+                inputProps={{ autoComplete: 'email', autoCapitalize: 'none', spellCheck: false, inputMode: 'email' }}
               />
               <TextField
                 label="Bio"
@@ -345,15 +338,19 @@ export default function AccountPage() {
                 size="small"
                 fullWidth
                 placeholder="e.g. US"
+                inputProps={{ autoComplete: 'country' }}
               />
             </Box>
-          </SectionCard>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2.5 }}>
+              <SaveButton saving={profileSaving} onClick={saveProfile} label="Save profile" />
+            </Box>
+          </Panel>
 
-          {/* GLOBAL PREFERENCES */}
-          <SectionCard
-            title="Global Preferences"
-            icon={<TuneIcon sx={{ fontSize: 16, color: 'text.disabled' }} />}
-            action={<SaveButton saving={prefsSaving} onClick={savePreferences} />}
+          <Panel
+            id="account-preferences"
+            number={2}
+            title="Preferences"
+            caption="Formats and colour every app reads. Theme applies at once; the rest is saved with the button below."
           >
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
               <FormControl size="small" fullWidth>
@@ -393,56 +390,55 @@ export default function AccountPage() {
                 size="small"
                 fullWidth
                 placeholder="e.g. notegeek"
+                inputProps={{ autoCapitalize: 'none', spellCheck: false }}
               />
             </Box>
-          </SectionCard>
 
-          {/* ACCENT COLOR */}
-          <SectionCard
-            title="Accent Color"
-            icon={<PaletteIcon sx={{ fontSize: 16, color: 'text.disabled' }} />}
-            action={<SaveButton saving={prefsSaving} onClick={savePreferences} />}
-          >
-            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 1.5 }}>
-              {ACCENT_COLORS.map(c => (
-                <Box
-                  key={c.value}
-                  onClick={() => setPrefsForm(prev => ({ ...prev, accentColor: c.value }))}
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '10px',
-                    backgroundColor: c.value,
-                    cursor: 'pointer',
-                    border: prefsForm.accentColor === c.value
-                      ? `2.5px solid ${theme.palette.text.primary}`
-                      : '2.5px solid transparent',
-                    transition: 'all 150ms ease',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    '&:hover': { transform: 'scale(1.1)' },
-                  }}
-                >
-                  {prefsForm.accentColor === c.value && (
-                    <CheckIcon sx={{ fontSize: 18, color: theme.palette.accent.onBrightFill }} />
-                  )}
-                </Box>
-              ))}
+            <Dymo component="h3" sx={{ mt: 3, mb: 1.5 }}>Accent colour</Dymo>
+            <Box role="group" aria-label="Accent colour" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+              {ACCENT_COLORS.map(c => {
+                const selected = prefsForm.accentColor === c.value;
+                return (
+                  <Box
+                    key={c.value}
+                    component="button"
+                    type="button"
+                    aria-label={c.label}
+                    aria-pressed={selected}
+                    onClick={() => setPrefsForm(prev => ({ ...prev, accentColor: c.value }))}
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      p: 0,
+                      borderRadius: '6px',
+                      backgroundColor: c.value,
+                      cursor: 'pointer',
+                      border: selected ? `3px solid ${theme.palette.text.primary}` : `1px solid ${theme.palette.line.panel}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+                    }}
+                  >
+                    {selected && <CheckIcon sx={{ fontSize: 20, color: theme.palette.accent.onBrightFill }} />}
+                  </Box>
+                );
+              })}
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 12, height: 12, borderRadius: '3px', backgroundColor: prefsForm.accentColor }} />
-              <Typography sx={{ fontSize: '0.75rem', color: 'text.muted', fontFamily: '"B612 Mono", ui-monospace, monospace' }}>
-                {prefsForm.accentColor}
-              </Typography>
-            </Box>
-          </SectionCard>
+            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: 'fontFamilyMono' }}>
+              {(ACCENT_COLORS.find(c => c.value === prefsForm.accentColor)?.label || 'Custom')} · {prefsForm.accentColor}
+            </Typography>
 
-          {/* APP PREFERENCES */}
-          <SectionCard
-            title="App Preferences"
-            icon={<AppsIcon sx={{ fontSize: 16, color: 'text.disabled' }} />}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2.5 }}>
+              <SaveButton saving={prefsSaving} onClick={savePreferences} label="Save preferences" />
+            </Box>
+          </Panel>
+
+          <Panel
+            id="account-apps"
+            number={3}
+            title="App preferences"
+            caption="What each app has remembered for you. Change these inside the app."
           >
             {Object.keys(appPreferences || {}).length === 0 ? (
               <GeekEmptyState
@@ -456,18 +452,18 @@ export default function AccountPage() {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {Object.entries(appPreferences).map(([appName, prefs]) => (
                   <Box key={appName} sx={{
-                    p: 2,
-                    borderRadius: '8px',
+                    p: 1.5,
+                    borderRadius: 1,
                     border: '1px solid',
-                    borderColor: 'divider',
-                    backgroundColor: 'background.default',
+                    borderColor: 'line.panel',
+                    bgcolor: 'surfaces.elevated',
                   }}>
                     <Typography sx={{
-                      fontWeight: 600,
-                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      fontSize: '0.8125rem',
                       color: 'text.primary',
                       mb: 1,
-                      fontFamily: '"B612 Mono", ui-monospace, monospace',
+                      fontFamily: 'fontFamilyMono',
                     }}>
                       {appName}
                     </Typography>
@@ -478,7 +474,7 @@ export default function AccountPage() {
                           label={`${key}: ${val}`}
                           size="small"
                           variant="outlined"
-                          sx={{ fontSize: '0.75rem', fontFamily: '"B612 Mono", ui-monospace, monospace' }}
+                          sx={{ fontSize: '0.75rem', fontFamily: 'fontFamilyMono' }}
                         />
                       ))}
                     </Box>
@@ -486,7 +482,7 @@ export default function AccountPage() {
                 ))}
               </Box>
             )}
-          </SectionCard>
+          </Panel>
 
         </Box>
       </Box>
@@ -497,9 +493,9 @@ export default function AccountPage() {
 // ─── Detail row for the avatar card ───
 function DetailRow({ label, value }) {
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
-      <Typography sx={{ fontSize: '0.75rem', color: 'text.muted' }}>{label}</Typography>
-      <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: '"B612 Mono", ui-monospace, monospace' }}>
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, py: 0.5 }}>
+      <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{label}</Typography>
+      <Typography sx={{ fontSize: '0.75rem', color: 'text.primary', fontFamily: 'fontFamilyMono' }}>
         {value}
       </Typography>
     </Box>

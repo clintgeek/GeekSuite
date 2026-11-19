@@ -178,6 +178,45 @@ describe('AccountPage', () => {
     useUser.mockReturnValue(baseUserStore());
     renderWithProviders(<AccountPage />);
     expect(screen.getByText('dark')).toBeInTheDocument();
-    expect(screen.getByText('#e8a849')).toBeInTheDocument();
+    // The swatch readout names the colour as well as its hex (2026-11-18).
+    expect(screen.getByText('Amber · #e8a849')).toBeInTheDocument();
+  });
+
+  // 2026-11-18 review: three Save buttons, two of which saved the same
+  // record, on the one stock-Material screen. Now one save per panel, each
+  // named for what it saves.
+  it('has one save per panel, each saying what it saves', () => {
+    useUser.mockReturnValue(baseUserStore());
+    renderWithProviders(<AccountPage />);
+    const saves = screen.getAllByRole('button', { name: /save/i });
+    expect(saves.map((b) => b.textContent)).toEqual(['Save profile', 'Save preferences']);
+  });
+
+  it('the accent colour is chosen with real buttons and saved with the preferences', async () => {
+    const updatePreferences = vi.fn().mockResolvedValue({});
+    useUser.mockReturnValue(baseUserStore({ updatePreferences }));
+    renderWithProviders(<AccountPage />);
+    const user = userEvent.setup();
+    expect(screen.getByRole('button', { name: 'Amber' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'Teal' }));
+    expect(screen.getByRole('button', { name: 'Teal' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'Save preferences' }));
+    await waitFor(() => expect(updatePreferences).toHaveBeenCalledWith(expect.objectContaining({ accentColor: '#6db5c0' })));
+  });
+
+  it('writes dates the way UserGeek does', () => {
+    useUser.mockReturnValue(baseUserStore());
+    renderWithProviders(<AccountPage />);
+    // "31 Dec 2025" or "01 Jan 2026", depending on the runner's zone.
+    const row = screen.getByText('Member since').parentElement;
+    expect(row.textContent).toMatch(/Member since(31 Dec 2025|01 Jan 2026)$/);
+  });
+
+  it('draws its sections as Signal Box panels', () => {
+    useUser.mockReturnValue(baseUserStore());
+    renderWithProviders(<AccountPage />);
+    for (const name of ['Identity and profile', 'Preferences', 'App preferences']) {
+      expect(screen.getByRole('region', { name: new RegExp(name) })).toBeInTheDocument();
+    }
   });
 });
