@@ -6,7 +6,7 @@
 // or dialog re-opens it from its own `goto`, since the runner carries no
 // state between scenes.
 import { graphqlRoute } from '../../lib/net.mjs';
-import { OPS } from './fixtures.mjs';
+import { OPS, EGGS } from './fixtures.mjs';
 
 export const scenes = [
   { name: '01-home', goto: '/', wait: 1500 },
@@ -25,6 +25,23 @@ export const scenes = [
       if (!(await page.locator('[data-geek-load-error]').count())) throw new Error('a failed egg read raised no load error');
       if (!(await page.getByRole('button', { name: 'Retry' }).count())) throw new Error('the load error has no Retry');
       if (await page.getByText('Eggs / day').count()) throw new Error('the summary cards drew despite the failed read');
+    },
+    teardown: (page) => page.unroute('**/graphql'),
+  },
+
+  {
+    // Home's "Today" line when nothing is logged yet (UX review 2026-11-18,
+    // FlockGeek 2). Scene 01 covers the logged state: the fixture's first
+    // harvest is today.
+    name: '01c-home-today-not-logged',
+    async setup(page, h) {
+      await graphqlRoute(page, {
+        ...OPS,
+        GetEggProductions: { eggProductions: EGGS.slice(1) },
+      });
+      await page.goto(h.base + '/', { waitUntil: 'networkidle' });
+      await h.settle(1500);
+      if (!(await page.getByText('not logged yet').count())) throw new Error('Home did not say today is not logged yet');
     },
     teardown: (page) => page.unroute('**/graphql'),
   },
@@ -133,6 +150,23 @@ export const scenes = [
   { name: '10-pairings', goto: '/pairings', wait: 1400, viewports: ['phone'] },
   { name: '11-groups', goto: '/groups', wait: 1400, viewports: ['phone'] },
   { name: '12-locations', goto: '/locations', wait: 1400, viewports: ['phone'] },
+
+  {
+    // Deletes ask in the ledger's own dialog, never window.confirm (UX
+    // review 2026-11-18, FlockGeek 8).
+    name: '11b-groups-delete-dialog',
+    goto: '/groups',
+    wait: 1400,
+    viewports: ['phone'],
+    async setup(page, h) {
+      const del = page.getByRole('button', { name: /^delete main layer flock$/i }).first();
+      if (!(await del.count())) return false;
+      await del.click();
+      await h.settle(900);
+      if (!(await page.getByRole('dialog', { name: 'Delete this group?' }).count())) throw new Error('no themed delete dialog');
+    },
+    teardown: (page, h) => h.esc(),
+  },
 
   {
     name: '13-location-dialog',
