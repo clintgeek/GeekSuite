@@ -65,6 +65,7 @@ export function CheckSquare({ done, sx }) {
     <Box
       component="span"
       aria-hidden="true"
+      data-testid="check-square"
       sx={{ width: 20, height: 20, flexShrink: 0, border: '2px solid', borderColor: 'text.primary', borderRadius: '2px', display: 'grid', placeItems: 'center', fontSize: '0.875rem', fontWeight: 900, lineHeight: 1, color: 'text.primary', ...sx }}
     >
       {done ? '✓' : ''}

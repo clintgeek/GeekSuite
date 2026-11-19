@@ -25,8 +25,9 @@ import { ChevronRight as GoIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import { GeekErrorState } from '@geeksuite/ui';
 import PageHeader, { PageFrame } from '../components/PageHeader';
-import SectionHeading from '../components/SectionHeading';
-import OnboardingChecklist, { CheckSquare, DoneStamp } from '../components/OnboardingChecklist';
+import SectionHeading, { StripeMark } from '../components/SectionHeading';
+import OnboardingChecklist, { DoneStamp } from '../components/OnboardingChecklist';
+import StatusPip from '../components/StatusPip';
 import ThingPhoto from '../components/ThingPhoto';
 import { statusTone } from '../components/DueLine';
 import { coverSrc, thingWhereText } from '../components/thingDisplay';
@@ -241,7 +242,7 @@ function DueGroup({ id, title, things, empty, tone }) {
 }
 
 /** The record check: a printed form, one line per gap. */
-function RecordCheckList({ gaps }) {
+export function RecordCheckList({ gaps }) {
   return (
     <Box component="section" aria-labelledby="record-check-heading" sx={{ border: 1, borderColor: 'border', borderRadius: '3px', bgcolor: 'background.paper', overflow: 'hidden' }}>
       <Box sx={{ px: { xs: 1.5, md: 2 }, pt: 1.5, pb: 1, borderBottom: '3px solid', borderColor: 'rule.main' }}>
@@ -262,7 +263,8 @@ function RecordCheckList({ gaps }) {
                 data-done={none ? 'true' : 'false'}
                 sx={{ width: '100%', display: 'flex', alignItems: 'flex-start', gap: 1.5, px: { xs: 1.5, md: 2 }, py: 1.5, textAlign: 'left', justifyContent: 'flex-start', '&:hover': { bgcolor: 'action.hover' } }}
               >
-                <CheckSquare done={none} sx={{ mt: '2px' }} />
+                {/* Not a checkbox: a gap is a status (the stripe), and a closed one an orange check plate. */}
+                {none ? <StatusPip done sx={{ mt: '2px' }} /> : <StripeMark sx={{ mt: '5px' }} />}
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography sx={{ fontWeight: 700, fontSize: '0.9375rem', color: 'text.primary' }}>{g.title}</Typography>
                   <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.25, lineHeight: 1.5 }}>{none ? 'None — nicely done.' : g.text}</Typography>

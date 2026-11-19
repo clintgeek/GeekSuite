@@ -39,7 +39,7 @@ import { IdentifierText } from './detail/IdentifierValue';
 import { GET_REPORT_THINGS, GET_THING_INSURANCE_TOTALS } from '../graphql/queries';
 import { useFacetContext } from '../hooks/useThingMeta';
 import { CHROME, DISPLAY_FONT, STENCIL_FONT } from '../theme/theme';
-import { CheckSquare } from '../components/OnboardingChecklist';
+import StatusPip from '../components/StatusPip';
 import { visuallyHidden } from '../utils/a11y';
 import { makeModel } from '../utils/attributes';
 import { formatCalendarDate } from '../utils/dates';
@@ -108,11 +108,11 @@ function Field({ label, children, sx }) {
   );
 }
 
-/** A tick-box line on the form: "[✓] Photo 3 of 5 · have at least one". */
-function Stat({ label, value, sub, done }) {
+/** A status line on the form: a dial filled to "Photo 3 of 5", a check plate at 5 of 5. */
+export function Stat({ label, value, sub, done, fraction }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 0 }}>
-      <CheckSquare done={done} sx={{ mt: '2px' }} />
+      <StatusPip done={done} fraction={fraction} sx={{ mt: '2px' }} />
       <Box sx={{ minWidth: 0 }}>
         <Typography sx={{ fontSize: '0.875rem', fontWeight: 800, color: 'text.primary', lineHeight: 1.3 }}>
           {label}{' '}
@@ -334,9 +334,9 @@ export default function InsuranceView() {
           </Field>
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1.25 }}>
-          <Stat label="Photo" value={t ? of(t.withPhoto, t.count) : '…'} sub="have at least one" done={Boolean(t && t.count && t.withPhoto === t.count)} />
-          <Stat label="Receipt" value={t ? of(t.withReceipt, t.count) : '…'} sub="on file" done={Boolean(t && t.count && t.withReceipt === t.count)} />
-          <Stat label="Serial" value={t ? of(t.withSerial, t.count) : '…'} sub="recorded, where the type has one" done={Boolean(t && t.count && t.withSerial === t.count)} />
+          <Stat label="Photo" value={t ? of(t.withPhoto, t.count) : '…'} sub="have at least one" done={Boolean(t && t.count && t.withPhoto === t.count)} fraction={t?.count ? t.withPhoto / t.count : 0} />
+          <Stat label="Receipt" value={t ? of(t.withReceipt, t.count) : '…'} sub="on file" done={Boolean(t && t.count && t.withReceipt === t.count)} fraction={t?.count ? t.withReceipt / t.count : 0} />
+          <Stat label="Serial" value={t ? of(t.withSerial, t.count) : '…'} sub="recorded, where the type has one" done={Boolean(t && t.count && t.withSerial === t.count)} fraction={t?.count ? t.withSerial / t.count : 0} />
         </Box>
       </Box>
 
