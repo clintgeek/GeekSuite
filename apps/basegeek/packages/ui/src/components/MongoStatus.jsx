@@ -67,7 +67,7 @@ export default function MongoStatus() {
 
   return (
     <Box sx={{ display: 'grid', gap: 3 }}>
-      <Cabinet number={1} title="MongoDB" connected={status.isConnected} error={status.error}>
+      <Cabinet title="MongoDB" connected={status.isConnected} error={status.error}>
         {status.serverInfo && (
           <Readouts
             items={[

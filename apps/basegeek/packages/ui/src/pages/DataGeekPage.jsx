@@ -1,4 +1,5 @@
 import { Box, Tabs, Tab, Typography, CircularProgress } from '@mui/material';
+import { formatPostgresUptime } from '../utils/uptime';
 import Readouts from '../signalbox/Readouts';
 import { Dymo } from '../signalbox/Labels';
 import { Cabinet } from '../signalbox/Cabinet';
@@ -59,7 +60,7 @@ function RedisStatus() {
   }
 
   return (
-    <Cabinet number={2} title="Redis" connected={status.isConnected} error={status.error}>
+    <Cabinet title="Redis" connected={status.isConnected} error={status.error}>
       {status.isConnected && (
         <Readouts
           items={[
@@ -83,18 +84,6 @@ function formatSeconds(seconds) {
   const h = Math.floor((n % 86400) / 3600);
   const m = Math.floor((n % 3600) / 60);
   return `${d}d ${h}h ${m}m`;
-}
-
-function formatPostgresUptime(uptime) {
-  if (!uptime) return '';
-  if (typeof uptime === 'string') return uptime;
-  if (typeof uptime === 'object') {
-    // Try to join all values (e.g., { hours: 1, minutes: 2, seconds: 3 })
-    return Object.entries(uptime)
-      .map(([k, v]) => `${v} ${k}`)
-      .join(' ');
-  }
-  return String(uptime);
 }
 
 function PostgresStatus() {
@@ -147,7 +136,7 @@ function PostgresStatus() {
   }
 
   return (
-    <Cabinet number={3} title="Postgres" connected={status.isConnected} error={status.error}>
+    <Cabinet title="Postgres" connected={status.isConnected} error={status.error}>
       {status.isConnected && (
         <>
           <Readouts
@@ -218,7 +207,6 @@ function InfluxStatus() {
 
   return (
     <Cabinet
-      number={4}
       title="InfluxDB"
       connected={isConnected}
       stateWord={isConnected ? 'connected' : status.status === 'unreachable' ? 'unreachable' : 'disconnected'}
@@ -262,6 +250,11 @@ export default function DataGeekPage() {
         mb: 3,
         overflow: 'hidden',
         '& .MuiTab-root': { color: '#b0b6be', minHeight: 48 },
+        // Four short words fit a 390px phone once the tracking and padding
+        // come in; the fourth store used to hide behind a scroll arrow.
+        [theme.breakpoints.down('sm')]: {
+          '& .MuiTab-root': { minWidth: 0, px: 1.25, letterSpacing: '0.02em' },
+        },
         '& .MuiTab-root.Mui-selected': { color: theme.palette.box.plate.shine },
         '& .MuiTabs-scrollButtons': { color: '#ece6d6' },
       })}>
