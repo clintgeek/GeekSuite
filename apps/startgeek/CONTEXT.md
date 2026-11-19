@@ -80,12 +80,18 @@ The Photo-mode scrim's darkness follows the wallpaper's own luminance —
 (`crossOrigin="anonymous"`) to an offscreen canvas once per wallpaper change,
 averages its luma, and maps it through a clamped linear ramp
 (`scrimFactorForLuminance`: luminance 0 → 0.75x, 1 → 1.4x the fixed scrim
-alphas) into a `--scrim-alpha` CSS custom property on the backdrop root.
-`.wallpaper-scrim` in `index.css` consumes it via `calc()`. The wallpaper
+alphas). Since 2026-11-18 (`lib/scrim.js`, design review #1) a bright photo
+(luminance 0.5 → 0.75) also gets a floor of 0.64 under the top and middle
+stops, so `--ink-2` small text clears 4.5:1 even over white; the three alphas
+go to `--scrim-top/-mid/-bottom` on the backdrop root and `.wallpaper-scrim`
+reads them. Small text straight on the wallpaper (rail, date, weather line)
+carries the `.on-photo` halo and uses `--ink-2`, never `--ink-3`. The harness
+fixture serves a bright SVG through `/api/backdrops`, so every StartGeek scene
+is shot over the worst case. The wallpaper
 comes from basegeek, whose cors() allow-list includes start.clintgeek.com, so
 sampling works; if that ever stops answering CORS, the probe's `onload` never
 fires (or `getImageData` throws on a tainted canvas) and it's caught, falling
-back to `--scrim-alpha: 1` — the original fixed scrim, unchanged. The probe
+back to the original fixed scrim, unchanged. The probe
 is deliberately separate from the `<img>` that drives the visible wallpaper,
 so a CORS failure can never break the wallpaper itself. Void mode is
 untouched — the scrim div's opacity still goes straight to 0. No light theme
@@ -240,7 +246,7 @@ service worker and the container config. Lint stays at 0 warnings
 - The wallpaper sampling's failure path is sound — the probe is a second,
   independent `<img>` with `crossOrigin="anonymous"`, so a CORS refusal fires
   its `onerror` (or `getImageData` throws and is caught) and falls back to
-  `--scrim-alpha: 1`, never touching the visible wallpaper.
+  the original fixed scrim, never touching the visible wallpaper.
 - `sw.js`: auth endpoints network-only first, `/api/*` and `/graphql`
   network-only next, everything else stale-while-revalidate behind the
   `text/html` guard that refuses to store an SPA-fallback body under an asset

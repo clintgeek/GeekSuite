@@ -60,7 +60,7 @@ function Console() {
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="hit44 w-[30px] h-[30px] rounded-lg grid place-items-center text-ink-3 border border-transparent hover:text-ink hover:border-hair-strong hover:bg-panel transition-colors"
+            className="hit44 w-[30px] h-[30px] rounded-lg grid place-items-center text-ink-2 border border-transparent hover:text-ink hover:border-hair-strong hover:bg-panel transition-colors"
             aria-label="Blocks and backdrop"
             title="Blocks and backdrop  ( , )"
           >
@@ -74,8 +74,7 @@ function Console() {
             <DateTime />
             {/* A keyboard-shortcut row is dead weight on touch — hide it below 640px. */}
             <div
-              className="hidden sm:flex mt-1.5 flex-wrap gap-x-4 gap-y-1 font-mono text-[12px] tracking-wide text-ink-2 tnum"
-              style={{ textShadow: '0 1px 4px rgba(0,0,0,0.25)' }}
+              className="on-photo hidden sm:flex mt-1.5 flex-wrap gap-x-4 gap-y-1 font-mono text-[12px] tracking-wide text-ink-2 tnum"
             >
               <span><kbd className="px-1 border border-hair rounded">/</kbd> focus</span>
               <span><kbd className="px-1 border border-hair rounded">Tab</kbd> engine</span>

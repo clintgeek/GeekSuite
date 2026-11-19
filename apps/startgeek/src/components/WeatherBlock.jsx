@@ -3,7 +3,6 @@ import { useWeather } from '../hooks/useWeather'
 import { ANIMATION, REDUCED_MOTION } from '../constants'
 
 const SHADOW = { textShadow: '0 2px 30px rgba(0,0,0,0.35)' }
-const SHADOW_SM = { textShadow: '0 1px 4px rgba(0,0,0,0.25)' }
 
 // Today's weather set in the clock's type: a big thin temperature on the
 // same baseline, city and conditions in the date's voice, a mono stat line.
@@ -26,7 +25,7 @@ const WeatherBlock = ({ onOpen }) => {
   if (error || !w) {
     return (
       <div className="flex flex-col items-end justify-end text-right">
-        <span className="text-[17px] text-ink-3">Weather unavailable</span>
+        <span className="on-photo text-[17px] text-ink-2">Weather unavailable</span>
       </div>
     )
   }
@@ -56,16 +55,16 @@ const WeatherBlock = ({ onOpen }) => {
         {w.temperature}°
       </span>
 
-      <span className="text-[17px] text-ink-2" style={SHADOW_SM}>
+      <span className="on-photo text-[17px] text-ink-2">
         <span className="font-medium text-ink">{city}</span>
-        <span className="mx-2 text-ink-3">·</span>
+        <span className="mx-2 text-ink-2" aria-hidden="true">·</span>
         {w.description}
       </span>
 
       {stats.length > 0 && (
-        <span className="font-mono text-[12px] tracking-[0.06em] uppercase text-ink-2 tnum" style={SHADOW_SM}>
+        <span className="on-photo font-mono text-[12px] tracking-[0.06em] uppercase text-ink-2 tnum">
           {stats.join('   ')}
-          <span className="weather-details-link ml-3 text-ink-3 group-hover:text-accent transition-colors">Details</span>
+          <span className="weather-details-link ml-3 text-ink-2 group-hover:text-accent transition-colors">Details</span>
         </span>
       )}
     </motion.button>

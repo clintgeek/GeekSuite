@@ -2,20 +2,11 @@ import { useState, useEffect } from 'react'
 import { loadBackdrop } from '@geeksuite/backdrop'
 import { useSettings } from '../hooks/useSettings'
 import { BASEGEEK } from '../lib/basegeek'
+import { scrimStops } from '../lib/scrim'
 
-// Adaptive scrim ramp: linear, clamped. A luminance of 0 (black wallpaper)
-// maps to 0.75x the fixed scrim alphas below; 1 (white wallpaper) maps to
-// 1.4x. Values in between interpolate. These bounds were picked so a
-// mid-grey photo (luminance ~0.5) lands close to 1x — today's tuned-by-eye
-// default — while a bright sky photo darkens further and a night photo
-// lightens up rather than going muddy.
-const SCRIM_MIN = 0.75
-const SCRIM_MAX = 1.4
-const scrimFactorForLuminance = (luminance) => {
-  const t = Math.min(1, Math.max(0, luminance))
-  return SCRIM_MIN + t * (SCRIM_MAX - SCRIM_MIN)
-}
-
+// The scrim's three alphas come from the wallpaper's luminance
+// (lib/scrim.js): the 2026-09-05 ramp, plus a floor for bright photos so the
+// hero's small text clears 4.5:1 over white (design review 2026-11-18).
 // Downscale the wallpaper to a small offscreen canvas and average its luma
 // (Rec. 601 weights), normalized 0 (black) .. 1 (white). A cross-origin
 // image the host didn't answer with CORS headers taints the canvas and
@@ -47,7 +38,7 @@ const BackgroundManager = () => {
   const { settings } = useSettings()
   const photo = settings.backdrop === 'photo'
   const [bgUrl, setBgUrl] = useState(null)
-  const [scrimAlpha, setScrimAlpha] = useState(1)
+  const [scrim, setScrim] = useState(() => scrimStops(null))
 
   // One wallpaper per page load, from basegeek's backdrop service
   // (DOCS/BACKDROP_SERVICE_PLAN.md): a batch basegeek refreshes every 48 h
@@ -78,7 +69,7 @@ const BackgroundManager = () => {
   // itself fails (onerror) rather than the visible wallpaper; if the host
   // answers the request but the canvas still ends up tainted,
   // `sampleLuminance` catches that too. Either way this falls back to
-  // scrimAlpha = 1, today's fixed scrim.
+  // the original fixed scrim.
   useEffect(() => {
     if (!bgUrl) return
     let cancelled = false
@@ -87,11 +78,11 @@ const BackgroundManager = () => {
     probe.onload = () => {
       if (cancelled) return
       const luminance = sampleLuminance(probe)
-      setScrimAlpha(luminance == null ? 1 : scrimFactorForLuminance(luminance))
+      setScrim(scrimStops(luminance))
     }
     probe.onerror = () => {
       if (cancelled) return
-      setScrimAlpha(1)
+      setScrim(scrimStops(null))
     }
     probe.src = bgUrl
     return () => {
@@ -103,7 +94,7 @@ const BackgroundManager = () => {
     <div
       className="fixed inset-0 -z-10 pointer-events-none bg-ground"
       aria-hidden="true"
-      style={{ '--scrim-alpha': scrimAlpha }}
+      style={{ '--scrim-top': scrim.top, '--scrim-mid': scrim.mid, '--scrim-bottom': scrim.bottom }}
     >
       {/* Wallpaper. Scaled slightly so the blur never shows a hard edge. */}
       <div
@@ -120,7 +111,7 @@ const BackgroundManager = () => {
       />
 
       {/* Scrim over the photo: light at the top so the sky survives, heavier
-          toward the grid. Alpha ramp driven by --scrim-alpha; see
+          toward the grid. Alphas from --scrim-top/-mid/-bottom; see
           .wallpaper-scrim in index.css. */}
       <div
         className="wallpaper-scrim absolute inset-0"

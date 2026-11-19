@@ -208,18 +208,17 @@
   .seg > button:hover:not([aria-pressed="true"]) { color: var(--ink); }
 
   /* ---- Adaptive wallpaper scrim ----
-     --scrim-alpha is a unitless multiplier set by BackgroundManager from the
-     wallpaper's sampled luminance (0 black .. 1 white -> factor 0.75 .. 1.4,
-     see scrimFactorForLuminance). It defaults to 1, which reproduces the
-     original fixed alphas below exactly — so Void mode (no --scrim-alpha
-     ever set) and any sampling failure (cross-origin block, decode error)
-     both render identically to the pre-adaptive scrim. */
+     --scrim-top/-mid/-bottom are set by BackgroundManager from the
+     wallpaper's sampled luminance (lib/scrim.js: the 0.75x..1.4x ramp, plus
+     a floor for bright photos since 2026-11-18). The fallbacks are the
+     original fixed alphas, so Void mode and any sampling failure render
+     exactly as before. */
   .wallpaper-scrim {
     background: linear-gradient(
       180deg,
-      rgba(10, 13, 18, calc(0.30 * var(--scrim-alpha, 1))) 0%,
-      rgba(10, 13, 18, calc(0.34 * var(--scrim-alpha, 1))) 45%,
-      rgba(10, 13, 18, calc(0.62 * var(--scrim-alpha, 1))) 100%
+      rgba(10, 13, 18, var(--scrim-top, 0.30)) 0%,
+      rgba(10, 13, 18, var(--scrim-mid, 0.34)) 45%,
+      rgba(10, 13, 18, var(--scrim-bottom, 0.62)) 100%
     );
     transition: opacity 700ms var(--ease), background 700ms var(--ease);
   }
@@ -249,6 +248,13 @@
     width: 44px;
     height: 44px;
     transform: translate(-50%, -50%);
+  }
+
+  /* Small text that sits straight on the wallpaper (rail, date, weather
+     line): a close dark halo so it holds over a bright photo even where the
+     scrim alone would not (design review 2026-11-18). */
+  .on-photo {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6), 0 0 12px rgba(0, 0, 0, 0.45);
   }
 
   /* Dock label: always on below the icon, with a soft scrim so it reads

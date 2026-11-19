@@ -69,7 +69,23 @@ export async function routes(ctx, { base, scheme, viewport } = {}) {
   await sessionRoutes(ctx, USER);
   await graphqlRoute(ctx, OPS);
 
-  await ctx.route(/picsum\.photos/, (r) => svg(r, WALLPAPER));
+  // The wallpaper comes from basegeek's backdrop service since 2026-11-13
+  // (/api/backdrops, then the photo itself). Until 2026-11-18 this still
+  // stubbed picsum.photos, so no scene drew a wallpaper at all. Every scene
+  // now draws the bright, busy fixture: the worst case for the hero's text.
+  await ctx.route(/\/api\/backdrops(\?.*)?$/, (r) =>
+    json(r, {
+      photos: [
+        {
+          landscape: '/harness-backdrop/bright-landscape.svg',
+          portrait: '/harness-backdrop/bright-portrait.svg',
+          source: 'harness',
+          credit: null,
+        },
+      ],
+    })
+  );
+  await ctx.route(/\/harness-backdrop\/bright-(landscape|portrait)\.svg/, (r) => svg(r, WALLPAPER));
 
   // Real-shaped ipapi/open-meteo responses so the weather block and modal
   // actually render instead of "Weather unavailable".

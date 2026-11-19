@@ -41,10 +41,10 @@ const DateTime = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2, duration: 0.6 }}
-        className="text-[17px] text-ink-2"
+        className="on-photo text-[17px] text-ink-2"
       >
         <span className="font-medium text-ink">{weekday}</span>
-        <span className="mx-2 text-ink-3">·</span>
+        <span className="mx-2 text-ink-2" aria-hidden="true">·</span>
         {rest}
       </motion.p>
     </motion.div>
