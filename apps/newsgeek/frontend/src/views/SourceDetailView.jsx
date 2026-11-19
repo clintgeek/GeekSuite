@@ -11,6 +11,12 @@
  *   when a reader added it. A non-admin adder sees "Added by you".
  * Everyone else reads.
  *
+ * Under the head, the reader's own block in the Source sheet's order and
+ * layout (UX review 2026-11-18, finding 5): "In my paper" (newsSetSourceOn),
+ * "I subscribe", Priority, then "Recent stories" — the last five headlines
+ * and "More from this source →" (Everything filtered to it). The adder's and
+ * admins' tools follow under an "At the desk" flag.
+ *
  * Every reader gets "I subscribe" (plan "Source sheet"): their own flag,
  * newsSetSourceSubscribed. And "Priority on Today" (★ Favorite / Normal /
  * Less, newsSetSourcePriority): Favorites lead their section, Less sinks. A subscribed source stays in their paper when
@@ -43,17 +49,20 @@ import PriorityControl from '../components/PriorityControl';
 import TimeAgo from '../components/TimeAgo';
 import { resetArticleLists } from '../graphql/cachePolicies';
 import { CHECK_NEWS_SOURCE_NOW, SET_NEWS_SOURCE_DEFAULT_ON, SET_NEWS_SOURCE_STATUS, SET_NEWS_SOURCE_SUBSCRIBED } from '../graphql/mutations';
-import { SUBSCRIBE_HELP } from '../components/SourceSheet';
-import { GET_NEWS_SOURCE } from '../graphql/queries';
+import { SUBSCRIBE_HELP, SheetSwitch } from '../components/SourceSheet';
+import { SET_NEWS_SOURCE_ON } from '../graphql/mutations';
+import { GET_NEWS_ARTICLES, GET_NEWS_PREFS, GET_NEWS_SOURCE } from '../graphql/queries';
+import { linkTargetProps, openingPrefs, resolveStoryOpen } from '../utils/openUrl';
 import { useViewer } from '../hooks/useViewer';
-import { GOTHIC, flagSx } from '../theme/theme';
+import { GOTHIC, SERIF, flagSx } from '../theme/theme';
 import { hostOf } from '../utils/sources';
+import { relativeTime } from '../utils/dates';
 import { CONTENT_LABEL, PAYWALL_LABEL, SECTION_LABEL, SOURCE_STATUSES, STATUS_LABEL, labelFor } from '../utils/vocab';
 import SourceFormDialog from './SourceFormDialog';
 
-function SectionFlag({ children }) {
+function SectionFlag({ children, id }) {
   return (
-    <Typography component="h2" sx={{ ...flagSx, color: 'text.primary', borderTop: 2, borderColor: 'text.primary', pt: 2, mt: 8, mb: 3 }}>
+    <Typography id={id} component="h2" sx={{ ...flagSx, color: 'text.primary', borderTop: 2, borderColor: 'text.primary', pt: 2, mt: 8, mb: 3 }}>
       {children}
     </Typography>
   );
@@ -161,7 +170,7 @@ function SourceActions({ source, isAdmin }) {
   };
 
   return (
-    <Box data-testid="source-actions" sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center', mt: 5 }}>
+    <Box data-testid="source-actions" sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
       <Button variant="contained" disableElevation startIcon={<CheckIcon />} onClick={onCheck} disabled={checkState.loading}>
         {checkState.loading ? 'Queuing…' : 'Check now'}
       </Button>
@@ -196,13 +205,26 @@ function SourceActions({ source, isAdmin }) {
   );
 }
 
-/** The reader's own "I subscribe" (any reader, any source that isn't retired). */
-function SubscribeSwitch({ source }) {
+/** The reader's own switches, as in the Source sheet: In my paper, I subscribe. */
+function ReaderSwitches({ source }) {
   const { notify } = useToast();
   const client = useApolloClient();
-  const [setSubscribed, { loading }] = useMutation(SET_NEWS_SOURCE_SUBSCRIBED);
+  const [setOn, onState] = useMutation(SET_NEWS_SOURCE_ON);
+  const [setSubscribed, subState] = useMutation(SET_NEWS_SOURCE_SUBSCRIBED);
   const retired = source.status === 'retired';
-  const onChange = async (on) => {
+  const toggleOn = async (on) => {
+    try {
+      await setOn({
+        variables: { id: source.id, on },
+        optimisticResponse: { newsSetSourceOn: { __typename: 'NewsSource', id: source.id, onForMe: on, defaultOn: Boolean(source.defaultOn) } },
+      });
+      // Which sources a reader sees decides which stories the lists hold.
+      resetArticleLists(client.cache);
+    } catch {
+      notify(`Couldn’t turn ${source.name} ${on ? 'on' : 'off'}. Try again.`, { tone: 'error' });
+    }
+  };
+  const toggleSubscribed = async (on) => {
     try {
       await setSubscribed({
         variables: { id: source.id, on },
@@ -215,17 +237,88 @@ function SubscribeSwitch({ source }) {
     }
   };
   return (
-    <Box data-testid="detail-subscribe" sx={{ mt: 4 }}>
-      <InkSwitch
-        checked={source.subscribedByMe}
-        onChange={onChange}
-        disabled={loading || (retired && !source.subscribedByMe)}
-        label="I subscribe"
-        labelPlacement="end"
+    <Box data-testid="detail-subscribe" sx={{ borderTop: 1, borderColor: 'divider' }}>
+      <SheetSwitch
+        testId="detail-in-my-paper"
+        label="In my paper"
+        help={retired ? 'Retired: nobody’s paper polls it now.' : null}
+        checked={source.onForMe}
+        onChange={toggleOn}
+        disabled={retired || onState.loading}
       />
-      <Typography sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', color: source.paywalled ? 'text.primary' : 'text.secondary', fontWeight: source.paywalled ? 600 : 400 }}>
-        {SUBSCRIBE_HELP}
-      </Typography>
+      <SheetSwitch
+        testId="detail-i-subscribe"
+        label="I subscribe"
+        help={SUBSCRIBE_HELP}
+        helpStrong={source.paywalled}
+        checked={source.subscribedByMe}
+        onChange={toggleSubscribed}
+        disabled={(retired && !source.subscribedByMe) || subState.loading}
+      />
+    </Box>
+  );
+}
+
+export const RECENT_COUNT = 5;
+
+/**
+ * The last five headlines from this source, and "More from this source →".
+ * Fetched outside the cache: a five-story page would otherwise replace the
+ * longer `?source=` list Everything keeps in the same slot.
+ */
+function RecentStories({ source }) {
+  const prefsQ = useQuery(GET_NEWS_PREFS, { fetchPolicy: 'cache-first' });
+  const opening = openingPrefs(prefsQ.data?.newsPrefs);
+  const { data, loading } = useQuery(GET_NEWS_ARTICLES, { variables: { limit: RECENT_COUNT, sourceId: source.id }, fetchPolicy: 'no-cache' });
+  const items = (data?.newsArticles?.items ?? []).slice(0, RECENT_COUNT);
+  return (
+    <Box component="section" aria-labelledby="detail-recent" data-testid="detail-recent">
+      <SectionFlag id="detail-recent">Recent stories</SectionFlag>
+      {loading && !data ? <CircularProgress size={20} aria-label="Loading recent stories" sx={{ color: 'text.secondary' }} /> : null}
+      {data && !items.length ? <Typography sx={{ fontStyle: 'italic', color: 'text.secondary' }}>Nothing from {source.name} in your paper right now.</Typography> : null}
+      {items.length ? (
+        <Box component="ul" aria-label={`Recent stories from ${source.name}`} sx={{ listStyle: 'none', m: 0, p: 0 }}>
+          {items.map((a) => {
+            const opened = resolveStoryOpen(a, opening);
+            return (
+              <Box component="li" key={a.id} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                <Link
+                  href={opened.url}
+                  {...linkTargetProps(opening.openInNewTab)}
+                  underline="hover"
+                  sx={{
+                    display: 'block',
+                    minHeight: 44,
+                    py: 2,
+                    fontFamily: SERIF,
+                    fontSize: '1.0625rem',
+                    fontWeight: 600,
+                    lineHeight: 1.3,
+                    color: 'text.primary',
+                    '&:visited': { color: 'text.muted' },
+                    '&:focus-visible': { outline: '2px solid', outlineOffset: 2 },
+                  }}
+                >
+                  {a.title}
+                  <Box component="span" sx={{ display: 'block', mt: 0.5, fontFamily: GOTHIC, fontSize: '0.8125rem', fontWeight: 400, color: 'text.secondary' }}>
+                    {relativeTime(a.publishedAt)}
+                  </Box>
+                </Link>
+              </Box>
+            );
+          })}
+        </Box>
+      ) : null}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1 }}>
+        <Link
+          component={RouterLink}
+          to={`/everything?source=${encodeURIComponent(source.id)}`}
+          data-testid="detail-more-from"
+          sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, fontFamily: GOTHIC, fontSize: '0.875rem', fontWeight: 700, color: 'text.primary', textDecoration: 'underline', textUnderlineOffset: '0.25em' }}
+        >
+          More from this source →
+        </Link>
+      </Box>
     </Box>
   );
 }
@@ -301,10 +394,18 @@ export default function SourceDetailView() {
             {addedBy}
           </Typography>
         ) : null}
-        <SubscribeSwitch source={source} />
-        <DetailPriority source={source} />
-        {source.canEdit || isAdmin ? <SourceActions source={source} isAdmin={isAdmin} /> : null}
       </Box>
+
+      <ReaderSwitches source={source} />
+      <DetailPriority source={source} />
+      <RecentStories source={source} />
+
+      {source.canEdit || isAdmin ? (
+        <>
+          <SectionFlag>At the desk</SectionFlag>
+          <SourceActions source={source} isAdmin={isAdmin} />
+        </>
+      ) : null}
 
       <SectionFlag>Feeds</SectionFlag>
       {source.feeds.length ? source.feeds.map((f) => <FeedRecord key={f.id} feed={f} />) : <Typography sx={{ color: 'text.secondary' }}>No feeds.</Typography>}

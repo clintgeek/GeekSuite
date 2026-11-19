@@ -45,7 +45,8 @@ export const HIDE_HELP = 'Its stories leave your paper. Undo here or in Settings
 const rowLabelSx = { fontFamily: GOTHIC, fontSize: '1rem', fontWeight: 600, letterSpacing: 0, textTransform: 'none', whiteSpace: 'normal' };
 
 /** A full-width row: label left, switch right, an optional line of help under it. */
-function SheetSwitch({ label, help, helpStrong = false, checked, onChange, disabled, testId }) {
+/** A full-width switch row: label left, switch right, help under it (the sheet's and the Source page's). */
+export function SheetSwitch({ label, help, helpStrong = false, checked, onChange, disabled, testId }) {
   return (
     <Box data-testid={testId} sx={{ py: 1, borderBottom: 1, borderColor: 'divider' }}>
       <InkSwitch
