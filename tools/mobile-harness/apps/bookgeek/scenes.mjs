@@ -31,10 +31,12 @@ async function chooseLayout(page, h, name) {
 // the percentage are real epub.js output, not mocks).
 async function openReader(page, h) {
   await page.route('**/api/books/*/download/epub', (r) => body(r, { contentType: 'application/epub+zip', body: sampleEpub() }));
+  // A fresh tab on a loaded machine: wait for the library rather than skip.
   const card = page.getByText('Lock In', { exact: true }).first();
-  if (!(await card.count())) return false;
+  await card.waitFor({ timeout: 20000 });
   await card.click();
-  await h.settle(1000);
+  await page.getByRole('button', { name: 'Read', exact: true }).waitFor({ timeout: 15000 });
+  await h.settle(600);
   await page.getByRole('button', { name: 'Read', exact: true }).click();
   const reader = page.getByTestId('book-reader');
   await reader.waitFor({ timeout: 8000 });
@@ -577,6 +579,8 @@ export const scenes = [
     // The reader (review 2026-11-18 #1–#3): signboard bars, the book's
     // percentage and chapter in the bottom bar, the shop's paper page.
     name: '09-reader',
+    // A fresh tab: an earlier scene's sheet must not be over the library.
+    freshPage: true,
     goto: '/',
     async setup(page, h) {
       if (!(await openReader(page, h))) return false;
@@ -590,6 +594,8 @@ export const scenes = [
   {
     // Contents, from the book's own nav document, over the reader.
     name: '09b-reader-contents',
+    // A fresh tab: an earlier scene's sheet must not be over the library.
+    freshPage: true,
     goto: '/',
     async setup(page, h) {
       if (!(await openReader(page, h))) return false;
@@ -605,6 +611,8 @@ export const scenes = [
     // sheet is a route, and Back used to pop it along with the reader.
     // Reopening returns to the same place (#1, kept on this device).
     name: '09c-reader-back',
+    // A fresh tab: an earlier scene's sheet must not be over the library.
+    freshPage: true,
     goto: '/',
     async setup(page, h) {
       if (!(await openReader(page, h))) return false;
