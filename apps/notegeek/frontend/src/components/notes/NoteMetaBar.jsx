@@ -51,7 +51,7 @@ function NoteMetaBar({
   const hasMeta = Boolean(meta || status);
 
   return (
-    <Box sx={{ pt: compact ? '4px' : '16px', pb: compact ? '8px' : '12px', ...(compact ? null : { [PHONE_MEDIA]: { pt: 0, pb: '8px' } }) }}>
+    <Box sx={{ pt: compact ? '4px' : '16px', pb: compact ? '8px' : '12px', ...(compact ? null : { [PHONE_MEDIA]: { pt: '4px', pb: '8px' } }) }}>
       <Box
         data-note-head=""
         sx={{
