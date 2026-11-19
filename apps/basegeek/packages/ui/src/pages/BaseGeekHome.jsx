@@ -93,7 +93,7 @@ function clockText(date) {
  * this says which three, so the first screen never says "trouble" while
  * showing "all fine".
  */
-export function lineCauses({ stations = [], attention = [] } = {}) {
+function lineCauses({ stations = [], attention = [] } = {}) {
   const lamps = stations
     .filter((s) => s.state === LAMP.FAULT || s.state === LAMP.WARN)
     .map((s) => `${s.label} ${s.state === LAMP.FAULT ? 'down' : 'degraded'}`);

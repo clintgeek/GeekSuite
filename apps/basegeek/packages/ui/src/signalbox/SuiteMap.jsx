@@ -9,9 +9,17 @@
  * station answers and broken when it does not. A phone draws the same line
  * down the left edge, one station per row, so nothing scrolls sideways.
  *
+ * On a phone a healthy line is mostly repetition: nine ~90px cards that each
+ * say ONLINE (2026-11-18 review). So below `sm` the green and still-reading
+ * stations fold into a compact yard of lamp + nameboard (still links), under a
+ * one-line summary that carries the word; any station that is slow or offline
+ * keeps its full card, above the yard. "Show details" draws every card.
+ *
  * Below the line, the depot: the shared services everything runs on.
  */
-import { Box, Typography } from '@mui/material';
+import { useState } from 'react';
+import { Box, Button, Typography, useMediaQuery } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import Lamp, { StatusLamp } from './Lamp';
 import { Dymo, Enamel } from './Labels';
 import { LAMP, healthDetail, healthLamp, HEALTH_WORD } from './readings';
@@ -153,6 +161,56 @@ function Station({ app, reading, index, count }) {
   );
 }
 
+/** A healthy (or still-reading) station on the phone: lamp and nameboard. */
+function CompactStation({ app, reading }) {
+  const state = healthLamp(reading);
+  const word = HEALTH_WORD[state];
+  const detail = stationDetail(reading);
+  return (
+    <Box component="li" sx={{ listStyle: 'none', minWidth: 0 }}>
+      <Box
+        component="a"
+        href={app.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Open ${app.displayName} (${[word, detail].filter(Boolean).join(', ')})`}
+        sx={(theme) => ({
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          minHeight: 44,
+          minWidth: 0,
+          px: 1,
+          borderRadius: 1,
+          textDecoration: 'none',
+          color: 'inherit',
+          border: `1px solid ${theme.palette.line.panel}`,
+          bgcolor: theme.palette.surfaces.elevated,
+          '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+        })}
+      >
+        <Lamp state={state} size={12} />
+        <Enamel sx={{ fontSize: '0.75rem', px: 0.75, overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+          {app.displayName}
+        </Enamel>
+      </Box>
+    </Box>
+  );
+}
+
+/** "All 9 stations online" / "7 online · 2 need a look" / "Reading 3 stations…" */
+function lineSummary(states) {
+  const bad = states.filter((s) => s === LAMP.WARN || s === LAMP.FAULT).length;
+  const reading = states.filter((s) => s === LAMP.UNKNOWN).length;
+  const ok = states.length - bad - reading;
+  if (!bad && !reading) return `All ${ok} stations online`;
+  const parts = [];
+  if (ok) parts.push(`${ok} online`);
+  if (bad) parts.push(`${bad} ${bad === 1 ? 'needs' : 'need'} a look`);
+  if (reading) parts.push(`reading ${reading}`);
+  return parts.join(' · ');
+}
+
 /**
  * @param {object} props
  * @param {Array}  props.apps           registry rows, in line order
@@ -161,8 +219,32 @@ function Station({ app, reading, index, count }) {
  * @param {object} props.serviceStatus  service key → { online, latency, version }
  */
 export default function SuiteMap({ apps, health, services, serviceStatus }) {
+  const theme = useTheme();
+  const phone = useMediaQuery(theme.breakpoints.down('sm'));
+  const [showAll, setShowAll] = useState(false);
+  const states = apps.map((app) => healthLamp(health[app.name]));
+  const needsLook = (state) => state === LAMP.WARN || state === LAMP.FAULT;
+  const compact = phone && !showAll;
+  const fullStations = compact ? apps.filter((_, i) => needsLook(states[i])) : apps;
+  const yard = compact ? apps.filter((_, i) => !needsLook(states[i])) : [];
+
   return (
     <Box>
+      {phone && (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+          <Typography sx={{ fontFamily: 'fontFamilyMono', fontSize: '0.8125rem', color: 'text.primary' }}>
+            {lineSummary(states)}
+          </Typography>
+          <Button
+            size="small"
+            onClick={() => setShowAll((v) => !v)}
+            aria-expanded={showAll}
+            sx={{ minHeight: 44, fontSize: 12 }}
+          >
+            {showAll ? 'Compact view' : 'Show details'}
+          </Button>
+        </Box>
+      )}
       <Box
         component="ol"
         aria-label="The line: every suite app and its health"
@@ -206,9 +288,22 @@ export default function SuiteMap({ apps, health, services, serviceStatus }) {
           },
         })}
       >
-        {apps.map((app, index) => (
-          <Station key={app.name} app={app} reading={health[app.name]} index={index} count={apps.length} />
+        {fullStations.map((app, index) => (
+          <Station key={app.name} app={app} reading={health[app.name]} index={index} count={fullStations.length} />
         ))}
+        {yard.length > 0 && (
+          <Box component="li" sx={{ listStyle: 'none', pl: '48px', py: 0.75 }}>
+            <Box
+              component="ul"
+              aria-label="Stations on the line"
+              sx={{ m: 0, p: 0, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1 }}
+            >
+              {yard.map((app) => (
+                <CompactStation key={app.name} app={app} reading={health[app.name]} />
+              ))}
+            </Box>
+          </Box>
+        )}
       </Box>
 
       <Box
