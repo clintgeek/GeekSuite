@@ -41,6 +41,12 @@ describe('swipe reveal label', () => {
     expect(strip.querySelector('svg')).not.toBeNull();
   });
 
+  it('with room for the word but not the icon too, the word wins (the harness swipe, 110px)', () => {
+    const strip = hold(-110);
+    expect(strip.textContent).toBe('Tomorrow');
+    expect(strip.querySelector('svg')).toBeNull();
+  });
+
   it('once the strip has room, the whole word "Tomorrow" shows inside it', () => {
     const strip = hold(-140);
     expect(strip.textContent).toBe('Tomorrow');
@@ -49,6 +55,6 @@ describe('swipe reveal label', () => {
 
   it('the long swipe has room for "Pick a date" from its first pixel', () => {
     expect(revealFits('Pick a date', 160)).toBe(true);
-    expect(revealFits('Tomorrow', 100)).toBe(false);
+    expect(revealFits('Tomorrow', 90)).toBe(false);
   });
 });

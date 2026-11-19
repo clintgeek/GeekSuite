@@ -70,9 +70,16 @@ export function timePassed(task, when, now) {
  * the gap and the strip's 16px padding each side. Short of it, the icon alone.
  */
 export const REVEAL_CHAR_PX = 9;
-export const REVEAL_CHROME_PX = 20 + 8 + 32;
+export const REVEAL_PAD_PX = 24;            // the strip's 12px padding, each side
+export const REVEAL_ICON_PX = 20 + 8;       // the icon and its gap
 export function revealFits(label, dx) {
-  return Math.abs(dx) >= String(label || '').length * REVEAL_CHAR_PX + REVEAL_CHROME_PX;
+  return Math.abs(dx) >= String(label || '').length * REVEAL_CHAR_PX + REVEAL_PAD_PX;
+}
+/** Icon alone while the word does not fit, the word alone once it does, both once there is room. */
+export function revealParts(label, dx) {
+  const word = revealFits(label, dx);
+  const both = Math.abs(dx) >= String(label || '').length * REVEAL_CHAR_PX + REVEAL_PAD_PX + REVEAL_ICON_PX;
+  return { word, icon: !word || both };
 }
 const localDay = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
@@ -320,6 +327,7 @@ function PenRow({
     ? (isDone(task) ? 'Not done' : 'Done')
     : pending === 'pick' ? 'Pick a date' : 'Tomorrow';
   const RevealIcon = swipe.dx > 0 ? Check : pending === 'pick' ? CalendarDays : ArrowRight;
+  const parts = revealParts(revealLabel, swipe.dx);
   // A tick under the thumb when the swipe will take (Android; iOS has no vibrate).
   useEffect(() => {
     if (pending && typeof navigator !== 'undefined') navigator.vibrate?.(10);
@@ -353,12 +361,12 @@ function PenRow({
               overflow: 'hidden', whiteSpace: 'nowrap',
               display: 'flex', alignItems: 'center',
               justifyContent: reveal === 'left' ? 'flex-start' : 'flex-end',
-              gap: 2, px: 4, fontWeight: 700, fontSize: '0.9375rem',
+              gap: 2, px: 3, fontWeight: 700, fontSize: '0.9375rem',
             }}
           >
-            {reveal === 'right' && revealFits(revealLabel, swipe.dx) && revealLabel}
-            <RevealIcon size={20} strokeWidth={2} style={{ flexShrink: 0 }} />
-            {reveal === 'left' && revealFits(revealLabel, swipe.dx) && revealLabel}
+            {reveal === 'right' && parts.word && revealLabel}
+            {parts.icon && <RevealIcon size={20} strokeWidth={2} style={{ flexShrink: 0 }} />}
+            {reveal === 'left' && parts.word && revealLabel}
           </Box>
         </Box>
       )}

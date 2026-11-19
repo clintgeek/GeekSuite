@@ -211,12 +211,12 @@ function DetailPlaceholder({ p }) {
   );
 }
 
-/** Two panes: the open task, under a small heading, in the right pane. */
+/** Two panes: the open task, under a small heading ("Edit task", as the phone sheet says; "Task" doubled the field label), in the right pane. */
 function DetailPane({ children, p }) {
   return (
     <Box sx={{ px: 6, pt: 8, pb: 12, maxWidth: 640 }}>
       <Typography component="h2" sx={{ fontSize: '0.875rem', fontWeight: 700, letterSpacing: '0.02em', color: p.grey, pb: 3 }}>
-        Task
+        Edit task
       </Typography>
       {children}
     </Box>
