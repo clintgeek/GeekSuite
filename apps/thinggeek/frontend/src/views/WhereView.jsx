@@ -39,7 +39,7 @@ import {
   QrCode2Outlined as LabelIcon,
 } from '@mui/icons-material';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { GeekDialog, GeekErrorState, useToast } from '@geeksuite/ui';
+import { GeekDialog, useToast } from '@geeksuite/ui';
 import PageHeader, { PageFrame } from '../components/PageHeader';
 import ChromeTheme from '../components/Chrome';
 import LabelCrumbs from '../components/LabelCrumbs';
@@ -58,6 +58,7 @@ import { labelsPath } from '../utils/labelUrl';
 import { libraryLinkWith } from '../utils/libraryFilter';
 import { visuallyHidden } from '../utils/a11y';
 import { buildTree, bySiblingOrder, countsText, flattenTree, isParentKind, kindOf } from '../utils/where';
+import { YardErrorState } from '../components/YardStates';
 
 export const WHERE_LEDE = 'Every place is a unit in the yard: rooms, and the things that hold things.';
 
@@ -520,7 +521,7 @@ export default function WhereView() {
   const drilled = isPhone && at && byId.has(at);
   let body;
   if (error && !nodes.length) {
-    body = <GeekErrorState title="Where didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />;
+    body = <YardErrorState title="Where didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />;
   } else if (loading) {
     body = <Typography sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>Loading…</Typography>;
   } else if (!rows.length) {

@@ -18,7 +18,7 @@ import { Check as CheckIcon, VisibilityOffOutlined as HideIcon, VisibilityOutlin
 import { useApolloClient, useMutation, useQuery } from '@apollo/client';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useDebouncedValue } from '@geeksuite/collection';
-import { GeekErrorState, useToast } from '@geeksuite/ui';
+import { useToast } from '@geeksuite/ui';
 import SectionHeading from '../../components/SectionHeading';
 import TypeIcon from '../../components/TypeIcon';
 import { SEARCH_THINGS } from '../../graphql/queries';
@@ -30,6 +30,7 @@ import { AtticGate, HERO_BUTTON_SX } from './AtticLock';
 import { atticDocPath, panelSx } from './AtticParts';
 import { AtticTypeIcon, captureSlotsFor, sideLabelFor } from './atticIcons';
 import { CaptureSlot } from './CardCapture';
+import { YardErrorState } from '../../components/YardStates';
 
 /** A number field: masked by default (CSS, not type=password — no password manager offers to save a passport number). */
 export function SecretInput({ label, value, onChange, onFile, strict, id }) {
@@ -214,7 +215,7 @@ function DocumentForm({ existing }) {
   const onFile = new Map((existing?.identifiers ?? []).map((i) => [i.key, i.hasValue]));
   const slots = captureSlotsFor(type);
 
-  if (error && !data) return <GeekErrorState title="This didn't load" description="The server didn't answer." sx={{ py: 6 }} />;
+  if (error && !data) return <YardErrorState title="This didn't load" description="The server didn't answer." sx={{ py: 6 }} />;
   if (loading && !data) return <CircularProgress size={24} aria-label="Loading" />;
 
   const save = async (e) => {
@@ -378,7 +379,7 @@ function EditLoader() {
   const { data, loading, error } = useQuery(GET_ATTIC_DOCUMENT, { variables: { id }, fetchPolicy: 'network-only' });
   useLockOnError(error);
   if (loading && !data) return <CircularProgress size={24} aria-label="Loading" />;
-  if (error || !data?.atticDocument) return <GeekErrorState title="Not in the Attic" description="It may have been deleted." sx={{ py: 6 }} />;
+  if (error || !data?.atticDocument) return <YardErrorState title="Not in the Attic" description="It may have been deleted." sx={{ py: 6 }} />;
   return <DocumentForm existing={data.atticDocument} />;
 }
 

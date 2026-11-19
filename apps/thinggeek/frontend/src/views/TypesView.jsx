@@ -30,7 +30,7 @@ import {
 } from '@mui/material';
 import { Add as AddIcon, ArrowDownward as DownIcon, ArrowUpward as UpIcon, DeleteOutline as RemoveIcon, LockOutlined as LockIcon } from '@mui/icons-material';
 import { useApolloClient, useMutation } from '@apollo/client';
-import { GeekDialog, GeekErrorState, useToast } from '@geeksuite/ui';
+import { GeekDialog, useToast } from '@geeksuite/ui';
 import PageHeader, { PageFrame } from '../components/PageHeader';
 import TypeIcon from '../components/TypeIcon';
 import { DEFAULT_TYPE_ICON, TYPE_ICON_NAMES } from '../components/typeIcons';
@@ -42,6 +42,7 @@ import { move } from './edit/MediaEditor';
 import { fieldKindLabel } from '../utils/vocab';
 import { KIND_LABELS, THING_KINDS } from '../utils/where';
 import { DISPLAY_FONT, LIVERY, dustImage } from '../theme/theme';
+import { YardErrorState } from '../components/YardStates';
 
 const REFETCH = { refetchQueries: [{ query: GET_THING_TYPES }, 'GetThingTree'], awaitRefetchQueries: true };
 const UNIT_KINDS = new Set(['text', 'number']);
@@ -357,7 +358,7 @@ export default function TypesView() {
         }
       />
       {error && !types.length ? (
-        <GeekErrorState title="Types didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />
+        <YardErrorState title="Types didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />
       ) : loading ? (
         <Typography sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>Loading types…</Typography>
       ) : (

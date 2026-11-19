@@ -24,7 +24,7 @@ import {
 } from '@mui/icons-material';
 import { useMutation, useQuery } from '@apollo/client';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
-import { GeekErrorState, GeekSheet, useToast } from '@geeksuite/ui';
+import { GeekSheet, useToast } from '@geeksuite/ui';
 import SectionHeading from '../../components/SectionHeading';
 import TypeIcon from '../../components/TypeIcon';
 import { thingPath } from '../../components/navConfig';
@@ -37,6 +37,7 @@ import { AtticGate, HERO_BUTTON_SX } from './AtticLock';
 import { ExpiryLine, panelSx } from './AtticParts';
 import { AtticTypeIcon, captureSlotsFor, sideLabelFor } from './atticIcons';
 import { CaptureSlot } from './CardCapture';
+import { YardErrorState } from '../../components/YardStates';
 
 export const MASK = '••••••••';
 export const STRICT_HIDE_MS = 15000;
@@ -360,7 +361,7 @@ function DocumentLoader() {
       </Box>
     );
   }
-  if (error && !data) return <GeekErrorState title="This didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />;
+  if (error && !data) return <YardErrorState title="This didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />;
   if (!data?.atticDocument) {
     return (
       <Box sx={{ textAlign: 'center', py: 6 }}>

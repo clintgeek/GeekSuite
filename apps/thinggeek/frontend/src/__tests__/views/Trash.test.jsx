@@ -41,5 +41,19 @@ describe('trash', () => {
     await waitFor(() => expect(restored).toHaveBeenCalled());
     expect(await screen.findByText('Wendy is back in the library.')).toBeInTheDocument();
     expect(await screen.findByText('The Trash is empty')).toBeInTheDocument();
+    // The yard's empty: a unit with its door down, not a stock bin glyph.
+    expect(screen.getByTestId('closed-unit')).toBeInTheDocument();
+  });
+
+  it("a load failure is the yard's: a shut unit door, the shared copy and Try again", async () => {
+    const mocks = [
+      { request: { query: GET_THING_VOCABULARY }, result: { data: { thingVocabulary: vocab } }, maxUsageCount: 5 },
+      { request: { query: GET_TRASHED_THINGS }, error: new Error('offline') },
+    ];
+    renderWithProviders(<TrashView />, { mocks });
+    const state = await screen.findByTestId('yard-error');
+    expect(state).toHaveTextContent("The Trash didn't load");
+    expect(state.querySelector('[data-testid="closed-unit"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 });

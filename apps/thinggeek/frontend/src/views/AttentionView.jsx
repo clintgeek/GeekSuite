@@ -23,7 +23,7 @@ import React, { useMemo } from 'react';
 import { Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import { ChevronRight as GoIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
-import { GeekErrorState } from '@geeksuite/ui';
+
 import PageHeader, { PageFrame } from '../components/PageHeader';
 import SectionHeading, { StripeMark } from '../components/SectionHeading';
 import OnboardingChecklist, { DoneStamp } from '../components/OnboardingChecklist';
@@ -39,6 +39,7 @@ import { libraryLinkWith } from '../utils/libraryFilter';
 import { dateKindLabel } from '../utils/vocab';
 import { isLocation, isParentKind, kindOf } from '../utils/where';
 import { AtticAttention } from './attic/AtticAttention';
+import { YardErrorState } from '../components/YardStates';
 
 export const GAP_CARDS = [
   { key: 'id-plate', field: 'missingIdPlate', title: 'No ID-plate photo', text: 'The plate carries the model and serial — the photo an adjuster asks for first.' },
@@ -299,7 +300,7 @@ export default function AttentionView() {
   if (error && !attention) {
     return (
       <PageFrame>
-        <GeekErrorState title="Needs attention didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 8 }} />
+        <YardErrorState title="Needs attention didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 8 }} />
       </PageFrame>
     );
   }

@@ -23,8 +23,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress, LinearProgress, Skeleton, useMediaQuery, useTheme } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { GeekErrorState } from '@geeksuite/ui';
-import { FilterPanel, FiltersSheet, LibraryHeader, useInfiniteSentinel, useScrollMemory, useSectionOpen } from '@geeksuite/collection';
+
+import { FilterPanel, LibraryHeader, useInfiniteSentinel, useScrollMemory, useSectionOpen } from '@geeksuite/collection';
 import { useLibraryFilter, useThingFacets, useThingPages } from '../hooks/useLibrary';
 import { useFacetContext, useThingTree } from '../hooks/useThingMeta';
 import { useScrollRoot } from '../components/AppMain';
@@ -33,6 +33,7 @@ import ThingRow, { ListHeader } from '../components/ThingRow';
 import SaveLibraryView from '../components/SaveLibraryView';
 import { thingPath } from '../components/navConfig';
 import { DEFAULT_OPEN, SECTIONS, SECTIONS_OPEN_KEY, activeChips } from '../utils/facets';
+import ThingFiltersSheet from '../components/ThingFiltersSheet';
 import { dustImage } from '../theme/theme';
 import { SORTS, isNarrowed, stateToParams } from '../utils/libraryFilter';
 import { readPref, writePref } from '../utils/storage';
@@ -40,6 +41,7 @@ import { isNotMemberError, reportNotMember } from '../membership';
 import { rememberLibrarySearch } from '../utils/lastLibrary';
 import { bySiblingOrder, isParentKind, kindOf } from '../utils/where';
 import LibraryEmpty from './LibraryEmpty';
+import { YardErrorState } from '../components/YardStates';
 
 const VIEW_KEY = 'thinggeek.libraryView';
 const PANEL_KEY = 'thinggeek.filterPanel';
@@ -145,7 +147,7 @@ export default function LibraryView() {
   let body;
   if (error && !page) {
     body = (
-      <GeekErrorState
+      <YardErrorState
         title="The library didn't load"
         description="The server didn't answer. Your records are fine — this is a connection problem."
         onRetry={() => refetch()}
@@ -259,7 +261,7 @@ export default function LibraryView() {
       </Box>
 
       {!isDesktop ? (
-        <FiltersSheet
+        <ThingFiltersSheet
           open={sheetOpen}
           onClose={() => {
             setSheetOpen(false);
@@ -272,6 +274,7 @@ export default function LibraryView() {
           sectionsOpen={sectionsOpen}
           onToggleSection={toggleSection}
           total={total}
+          chips={chips}
         />
       ) : null}
 

@@ -30,7 +30,7 @@ import {
 } from '@mui/icons-material';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useApolloClient, useQuery } from '@apollo/client';
-import { GeekErrorState, useToast } from '@geeksuite/ui';
+import { useToast } from '@geeksuite/ui';
 import PageHeader, { PageFrame } from '../components/PageHeader';
 import ThingPhoto from '../components/ThingPhoto';
 import { coverSrc } from '../components/thingDisplay';
@@ -51,6 +51,7 @@ import { formatMoney, moneyAmount } from '../utils/money';
 import { whereLabel } from '../utils/where';
 import { hasValue } from '../utils/identifiers';
 import PrintReport from './PrintReport';
+import { YardErrorState } from '../components/YardStates';
 
 /**
  * The odometer: the total insured value on a reel of black drums with white
@@ -348,7 +349,7 @@ export default function InsuranceView() {
       </Box>
 
       {rows.error ? (
-        <GeekErrorState title="The report didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => navigate(0)} sx={{ py: 6 }} />
+        <YardErrorState title="The report didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => navigate(0)} sx={{ py: 6 }} />
       ) : rows.loading ? (
         <Box sx={{ py: 4 }} aria-busy="true">
           <LinearProgress variant={rows.total ? 'determinate' : 'indeterminate'} value={rows.total ? (rows.loaded / rows.total) * 100 : undefined} aria-label="Loading the report" sx={{ mb: 1.5, borderRadius: 1 }} />

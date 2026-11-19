@@ -14,7 +14,7 @@ import { Box, Button, ButtonBase, CircularProgress, IconButton, MenuItem, TextFi
 import { Add as AddIcon, DeleteOutline as RemoveIcon, EditOutlined as EditIcon, FingerprintOutlined as FingerprintIcon, PersonAddAlt1Outlined as PersonAddIcon } from '@mui/icons-material';
 import { useMutation, useQuery } from '@apollo/client';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
-import { GeekErrorState, GeekSheet, useToast } from '@geeksuite/ui';
+import { GeekSheet, useToast } from '@geeksuite/ui';
 import SectionHeading from '../../components/SectionHeading';
 import { CREATE_ATTIC_PERSON, DELETE_ATTIC_PERSON, GET_ATTIC_ACCESS_LOG, GET_ATTIC_HOME, UPDATE_ATTIC_PERSON } from '../../graphql/attic';
 import { useLockOnError, useVault } from '../../hooks/useVault';
@@ -22,6 +22,7 @@ import { calendarDateToUtcIso, utcIsoToInputValue } from '../../utils/dates';
 import AtticDoor from './AtticDoor';
 import { AtticGate, HERO_BUTTON_SX, PinField } from './AtticLock';
 import { DocList, accessSentence, accessWhen, panelSx } from './AtticParts';
+import { YardErrorState } from '../../components/YardStates';
 
 const RELATIONS = ['Self', 'Spouse', 'Partner', 'Child', 'Parent', 'Pet', 'Other'];
 
@@ -276,7 +277,7 @@ function AtticHome() {
   }, [by, docs, people, types]);
 
   if (error && !data) {
-    return <GeekErrorState title="The Attic didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />;
+    return <YardErrorState title="The Attic didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />;
   }
 
   return (

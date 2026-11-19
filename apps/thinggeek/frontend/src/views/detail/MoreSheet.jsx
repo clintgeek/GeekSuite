@@ -3,6 +3,7 @@ import React from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
 import { DeleteOutline as TrashIcon, EditOutlined as EditIcon, QrCode2Outlined as LabelIcon, ReceiptLongOutlined as ReportIcon } from '@mui/icons-material';
 import { GeekSheet } from '@geeksuite/ui';
+import { LIVERY_SHEET_HEADER_SX } from '../../theme/theme';
 
 function Row({ icon, label, hint, onClick, danger }) {
   return (
@@ -27,7 +28,7 @@ export default function MoreSheet({ open, onClose, title, onEdit, onPrintLabel, 
     fn();
   };
   return (
-    <GeekSheet open={open} onClose={onClose} title="More" description={title}>
+    <GeekSheet open={open} onClose={onClose} title="More" description={title} headerSx={LIVERY_SHEET_HEADER_SX}>
       <Box component="ul" sx={{ m: 0, p: 0, pb: 1 }}>
         <Row icon={<EditIcon />} label="Edit everything" hint="Fields, dates, value, accessories, photos and documents" onClick={pick(onEdit)} />
         {onPrintLabel ? <Row icon={<LabelIcon />} label="Print label" hint="A sticker with a QR code back to this thing" onClick={pick(onPrintLabel)} /> : null}

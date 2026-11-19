@@ -8,10 +8,10 @@
  */
 import React, { useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
-import { RestoreFromTrash as RestoreIcon, DeleteOutline as TrashIcon } from '@mui/icons-material';
+import { RestoreFromTrash as RestoreIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
-import { GeekErrorState, useToast } from '@geeksuite/ui';
+import { useToast } from '@geeksuite/ui';
 import PageHeader, { PageFrame } from '../components/PageHeader';
 import ThingPhoto from '../components/ThingPhoto';
 import { DISPLAY_FONT, dustImage } from '../theme/theme';
@@ -20,6 +20,7 @@ import { GET_TRASHED_THINGS } from '../graphql/queries';
 import { useThingActions } from '../hooks/useThingActions';
 import { useVocabulary } from '../hooks/useThingMeta';
 import { daysUntilPurge, relativeInstant } from '../utils/dates';
+import { ClosedUnit, YardErrorState } from '../components/YardStates';
 
 export function purgeText(days) {
   if (days <= 0) return 'Purged at the next clean-up';
@@ -51,13 +52,14 @@ export default function TrashView() {
 
   let body;
   if (error && !data) {
-    body = <GeekErrorState title="The Trash didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />;
+    body = <YardErrorState title="The Trash didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />;
   } else if (loading && !data) {
     body = <Typography sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>Loading…</Typography>;
   } else if (!things.length) {
     body = (
       <Box sx={{ textAlign: 'center', pt: 4, pb: 3, px: 2 }}>
-        <TrashIcon aria-hidden="true" sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} />
+        {/* An empty unit, door down: the yard's empty, not a stock bin glyph. */}
+        <ClosedUnit plate="EMPTY" sx={{ mb: 1.5 }} />
         <Typography sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.375rem', mb: 0.5 }}>The Trash is empty</Typography>
         <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>Things you move to the Trash wait here for {trashDays} days.</Typography>
       </Box>

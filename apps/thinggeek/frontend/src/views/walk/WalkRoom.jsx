@@ -50,7 +50,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, ButtonBase, Portal, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { PhotoCameraOutlined as CameraIcon } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { GeekDialog, GeekErrorState } from '@geeksuite/ui';
+import { GeekDialog } from '@geeksuite/ui';
 import ChromeTheme from '../../components/Chrome';
 import { MiniDoor } from '../../components/StorageUnit';
 import UnitTag from '../../components/UnitTag';
@@ -68,6 +68,7 @@ import { isParentKind, kindOf } from '../../utils/where';
 import { TypeChips } from '../add/AddThing';
 import AttributeField from '../edit/AttributeField';
 import { attributeErrorsFrom, buildAttributes, fieldList, missingRequired } from '../../utils/attributes';
+import { YardErrorState } from '../../components/YardStates';
 
 let seq = 0;
 
@@ -499,7 +500,7 @@ export default function WalkRoom() {
   if (treeError && !nodes.length) {
     return (
       <PageFrame>
-        <GeekErrorState title="Walk didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />
+        <YardErrorState title="Walk didn't load" description="The server didn't answer. Try again in a moment." onRetry={() => refetch()} sx={{ py: 6 }} />
       </PageFrame>
     );
   }

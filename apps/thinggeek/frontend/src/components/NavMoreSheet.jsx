@@ -18,6 +18,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { GeekSheet } from '@geeksuite/ui';
 import { SavedViews } from '@geeksuite/collection';
 import { useSavedViews } from '../hooks/useSavedViews';
+import { LIVERY_SHEET_HEADER_SX } from '../theme/theme';
 
 export const MORE_LINKS = [
   { id: 'types', label: 'Types', hint: 'What each kind of thing asks for', to: '/types', icon: <TypesIcon /> },
@@ -62,7 +63,7 @@ function LinkRow({ item, onPick }) {
 export default function NavMoreSheet({ open, onClose }) {
   const { views, activeView, hrefFor, remove } = useSavedViews();
   return (
-    <GeekSheet open={open} onClose={onClose} title="More" bodySx={{ pb: 'calc(16px + env(safe-area-inset-bottom))' }}>
+    <GeekSheet open={open} onClose={onClose} title="More" headerSx={LIVERY_SHEET_HEADER_SX} bodySx={{ pb: 'calc(16px + env(safe-area-inset-bottom))' }}>
       <Box component="ul" aria-label="More pages" data-testid="nav-more" sx={{ m: 0, p: 0 }}>
         {MORE_LINKS.map((item) => (
           <LinkRow key={item.id} item={item} onPick={onClose} />

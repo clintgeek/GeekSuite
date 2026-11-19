@@ -317,3 +317,16 @@ export function createThingTheme(mode = 'light', { chrome = false } = {}) {
 }
 
 export default createThingTheme;
+
+/**
+ * A sheet's header wearing the livery band along its foot, like the top bar
+ * (2026-11-18): pass as GeekSheet's `headerSx`, so an overlay keeps the yard
+ * on screen instead of reading as a stock sheet.
+ */
+export const LIVERY_SHEET_HEADER_SX = {
+  backgroundImage: liveryBand('bottom'),
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'left bottom',
+  backgroundSize: `100% ${LIVERY_BAND_PX}px`,
+  pb: `${LIVERY_BAND_PX + 6}px`,
+};
