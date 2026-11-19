@@ -34,6 +34,7 @@ import {
   foldInErrorMessage,
   opPreviewMarkdown,
   opVerb,
+  placeLabel,
   previewSegments,
   toOperationInput,
 } from '../../utils/foldIn';
@@ -437,7 +438,7 @@ function ChangeCard({ op, included, onToggle, insSx, delSx, g }) {
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, px: 1.5, pt: 1 }}>
         <Box sx={{ flex: 1, minWidth: 0, pt: '10px' }}>
           <Typography id={labelId} variant="subtitle2" sx={{ fontWeight: 600, color: g.ink, overflowWrap: 'anywhere' }}>
-            {op.location}
+            {placeLabel(op.location)}
           </Typography>
           <Typography variant="caption" sx={{ color: g.ink2, display: 'block' }}>
             {opVerb(op)}{op.why ? ` · ${op.why}` : ''}
@@ -446,7 +447,7 @@ function ChangeCard({ op, included, onToggle, insSx, delSx, g }) {
         <Checkbox
           checked={included}
           onChange={onToggle}
-          inputProps={{ 'aria-label': `Include: ${op.location}` }}
+          inputProps={{ 'aria-label': `Include: ${placeLabel(op.location)}` }}
           sx={{ width: 44, height: 44, flexShrink: 0 }}
         />
       </Box>

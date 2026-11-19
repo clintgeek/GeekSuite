@@ -525,7 +525,7 @@ export default function PhotoPagesPage({ prepare = preparePhotoPageSet, loadSnap
 
         <Box>
           <Typography variant="h6" component="p" sx={{ color: 'text.secondary', mb: 2 }}>
-            New page
+            New note
           </Typography>
           <Typography component="h1" sx={{ fontWeight: 700, fontSize: { xs: '1.75rem', sm: '2rem' }, letterSpacing: '-0.025em' }}>
             Photo of a page

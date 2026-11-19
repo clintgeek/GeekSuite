@@ -5,6 +5,7 @@ import {
   foldInputFromShare,
   foldTargetsFrom,
   opPreviewMarkdown,
+  placeLabel,
   previewSegments,
   toOperationInput,
 } from '../../utils/foldIn';
@@ -90,5 +91,15 @@ describe('small words', () => {
     expect(canFoldInto({ type: 'markdown' })).toBe(true);
     expect(canFoldInto({ type: 'text' })).toBe(false);
     expect(canFoldInto({ type: 'markdown', isLocked: true })).toBe(false);
+  });
+});
+
+// Review 2026-11-18, smaller findings: no raw Markdown in a card's place.
+describe('placeLabel', () => {
+  it('shows a heading by its words, in curly quotes', () => {
+    expect(placeLabel('In "## Widow spiders"')).toBe('In “Widow spiders”');
+    expect(placeLabel('New section after "# Spiders #"')).toBe('New section after “Spiders”');
+    expect(placeLabel('New section at the end')).toBe('New section at the end');
+    expect(placeLabel(null)).toBe('');
   });
 });

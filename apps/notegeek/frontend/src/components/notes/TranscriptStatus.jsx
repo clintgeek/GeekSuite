@@ -108,7 +108,9 @@ export default function TranscriptStatus({ view, onTranscribeNow = null }) {
           // 16px line: 40px, under the phone floor).
           position: 'relative',
           '&::after': { content: '""', position: 'absolute', left: -4, right: -4, top: '50%', height: 44, transform: 'translateY(-50%)' },
-          '&::before': { content: '"· "' },
+          // A no-break space: ButtonBase is a flex box, and a flex item's
+          // trailing plain space is dropped ("1d ago ·searchable").
+          '&::before': { content: '"·\\00a0"' },
           '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
         }}
       >

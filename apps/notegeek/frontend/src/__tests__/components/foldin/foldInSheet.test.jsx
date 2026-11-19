@@ -122,7 +122,7 @@ describe('FoldInSheet', () => {
     const list = await screen.findByRole('list', { name: 'Proposed changes' });
     const cards = [...list.querySelectorAll('[data-foldin-card]')];
     expect(cards.map((c) => c.getAttribute('data-foldin-card'))).toEqual(['replace_text', 'append_to_list']);
-    expect(within(cards[0]).getByText('In "## Widow spiders"')).toBeInTheDocument();
+    expect(within(cards[0]).getByText('In “Widow spiders”')).toBeInTheDocument();
     expect(cards[0].querySelector('del').textContent).toBe('orange hourglass');
     expect(cards[0].querySelector('ins').textContent).toBe('red hourglass');
     expect(within(cards[1]).getByText('Brown widow — spiky egg sacs')).toBeInTheDocument();
@@ -148,7 +148,7 @@ describe('FoldInSheet', () => {
     await screen.findByRole('list', { name: 'Proposed changes' });
     expect(screen.getByRole('button', { name: 'Apply 2 changes' })).toBeEnabled();
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Include: In "## Widow spiders"' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include: In “Widow spiders”' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply 1 change' }));
 
     await waitFor(() => expect(applyFn).toHaveBeenCalledTimes(1));

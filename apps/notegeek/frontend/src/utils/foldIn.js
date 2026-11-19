@@ -149,3 +149,14 @@ export function failedPreviewMessage(provenance) {
       return 'Fold-in is unavailable right now. Your note is unchanged and your text is still here.';
   }
 }
+
+/**
+ * Where a change lands, as the card says it. The gateway quotes the heading's
+ * raw Markdown (`In "## Widow spiders"`); the reader wants the heading's words
+ * in the same curly quotes the sheet's subtitle uses (`In “Widow spiders”`).
+ */
+export function placeLabel(location) {
+  return String(location || '')
+    .replace(/"\s*#{1,6}\s+([^"]*?)\s*#*\s*"/g, '“$1”')
+    .replace(/"([^"]*)"/g, '“$1”');
+}

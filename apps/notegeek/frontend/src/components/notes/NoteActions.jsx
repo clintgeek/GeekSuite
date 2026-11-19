@@ -44,7 +44,7 @@ const PRINT_SHORTCUT = isMac ? '⌘P' : 'Ctrl+P';
  *
  *   - `BackButton` — flushes a pending save and leaves (the page's handler).
  *   - the View/Edit toggle, for mind maps only — a mode, not an action.
- *   - the ⋯ menu: Save now, Print or save as PDF, Pin, Version history,
+ *   - the ⋯ menu: Print or save as PDF, Pin, Version history, Save now,
  *     Fold in new info (saved Markdown notes), Compose, Convert handwriting
  *     to text (sketches only), Delete.
  *
@@ -188,19 +188,6 @@ function NoteActions({
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 232, mt: '4px' } } }}
       >
-        {isEditMode && onSave && (
-          <MenuItem onClick={run(onSave)} sx={itemSx}>
-            <ListItemIcon><SaveOutlined fontSize="small" /></ListItemIcon>
-            <ListItemText>Save now</ListItemText>
-            <Typography
-              variant="caption"
-              aria-hidden
-              sx={{ ml: 2, color: 'text.secondary', display: { xs: 'none', md: 'inline' } }}
-            >
-              {SAVE_SHORTCUT}
-            </Typography>
-          </MenuItem>
-        )}
         {onPrint && (
           <MenuItem onClick={run(onPrint)} disabled={isPrinting} sx={itemSx}>
             <ListItemIcon><PrintOutlined fontSize="small" /></ListItemIcon>
@@ -226,6 +213,21 @@ function NoteActions({
           <MenuItem onClick={run(onHistory)} sx={itemSx}>
             <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
             <ListItemText>Version history</ListItemText>
+          </MenuItem>
+        )}
+        {/* Save now is an escape hatch in an app that autosaves, not the
+            first thing offered (review 2026-11-18). */}
+        {isEditMode && onSave && (
+          <MenuItem onClick={run(onSave)} sx={itemSx}>
+            <ListItemIcon><SaveOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText>Save now</ListItemText>
+            <Typography
+              variant="caption"
+              aria-hidden
+              sx={{ ml: 2, color: 'text.secondary', display: { xs: 'none', md: 'inline' } }}
+            >
+              {SAVE_SHORTCUT}
+            </Typography>
           </MenuItem>
         )}
         {onFoldIn && (
