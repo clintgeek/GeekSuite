@@ -22,6 +22,7 @@ export {
 } from './hooks';
 export { createGeekSuiteTheme, geekDesignTokens } from './createGeekSuiteTheme';
 export {
+  GEEK_TOAST_ACTION_DURATION,
   GEEK_TOAST_DURATION,
   GEEK_TOAST_MAX,
   GeekEmptyState,

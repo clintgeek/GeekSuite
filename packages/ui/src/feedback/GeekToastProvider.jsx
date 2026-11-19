@@ -48,6 +48,10 @@ import { GeekToastClearanceContext, GeekToastContext } from './toastContext.js';
 
 export const GEEK_TOAST_MAX = 3;
 export const GEEK_TOAST_DURATION = 4000;
+// A toast that carries an action (Undo) is the only way back from what it
+// reports, and four seconds is not long enough to read it and reach it with a
+// thumb. It gets twice as long unless the caller or the provider says otherwise.
+export const GEEK_TOAST_ACTION_DURATION = 8000;
 
 const TONES = new Set(['info', 'success', 'warning', 'error']);
 
@@ -86,6 +90,7 @@ export function GeekToastProvider({
   children,
   max = GEEK_TOAST_MAX,
   duration = GEEK_TOAST_DURATION,
+  actionDuration = duration === GEEK_TOAST_DURATION ? GEEK_TOAST_ACTION_DURATION : duration,
   // Escape hatch for a shell-less page that still wants centered toasts.
   anchorOrigin,
   sx,
@@ -145,7 +150,7 @@ export function GeekToastProvider({
 
       const id = ++nextId;
       const severity = TONES.has(tone) ? tone : 'info';
-      const life = ownDuration ?? duration;
+      const life = ownDuration ?? (action ? actionDuration : duration);
 
       setToasts((current) => {
         const next = [...current, { id, message, severity, action }];
@@ -167,7 +172,7 @@ export function GeekToastProvider({
 
       return id;
     },
-    [clearTimer, duration, max]
+    [actionDuration, clearTimer, duration, max]
   );
 
   // Unmounting mid-flight should not leave timers pointed at a dead setState.
