@@ -429,6 +429,27 @@ describe('StoryPlay export feedback', () => {
     expect(screen.getByTestId('writing-elapsed')).toHaveTextContent('0:00');
   });
 
+  // Review 2026-11-19: the Export button was `disabled` while an export ran,
+  // so the menu, closing, handed focus to a button that could not take it.
+  it('choosing an export leaves focus on the Export button, marked busy rather than disabled', async () => {
+    api.post.mockImplementation(() => new Promise(() => {}));
+    renderStoryPlay();
+    await screen.findByPlaceholderText('What do you do?');
+    const exportBtn = screen.getByRole('button', { name: 'Export the tale' });
+    exportBtn.focus();
+    fireEvent.click(exportBtn);
+    fireEvent.click(await screen.findByRole('menuitem', { name: /download epub/i }));
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(exportBtn).not.toBeDisabled();
+    expect(exportBtn).toHaveAttribute('aria-disabled', 'true');
+    await waitFor(() => expect(document.activeElement).toBe(exportBtn));
+    // Busy: a second press opens nothing and starts nothing.
+    fireEvent.click(exportBtn);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
   it('EPUB says it has started and says when the download begins', async () => {
     URL.createObjectURL = vi.fn(() => 'blob:epub');
     URL.revokeObjectURL = vi.fn();

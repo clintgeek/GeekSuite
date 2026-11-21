@@ -57,20 +57,28 @@ const eventToMessage = (event) => {
  * A play-surface tool below `xl`: the icon with its word under it, 44px tall,
  * so a thumb can tell Journal from Export without a tooltip touch never shows.
  */
-function LabelledTool({ label, icon, onClick, disabled = false, ...rest }) {
+/**
+ * `busy`: the tool is working (an export running). It stays focusable and is
+ * marked `aria-disabled` rather than `disabled`: a menu item that starts the
+ * work hands focus back to this button as the menu closes, and a truly
+ * disabled button cannot take it, so focus fell to the page.
+ */
+function LabelledTool({ label, icon, onClick, disabled = false, busy = false, ...rest }) {
   const theme = useTheme();
   const c = theme.palette.candle;
   return (
     <ButtonBase
-      onClick={onClick}
+      onClick={busy ? undefined : onClick}
       disabled={disabled}
+      aria-disabled={busy || undefined}
       {...rest}
       sx={{
         minWidth: 48, minHeight: 44, px: 0.75, borderRadius: '10px',
         display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.25,
         color: 'text.secondary',
         '& svg': { fontSize: 20 },
-        '&.Mui-disabled': { opacity: 0.6 },
+        '&.Mui-disabled, &[aria-disabled="true"]': { opacity: 0.6 },
+        '&[aria-disabled="true"]': { cursor: 'default' },
         '&.Mui-focusVisible': { outline: `2px solid ${c.accent}`, outlineOffset: 1 },
         '@media (hover: hover)': { '&:hover': { color: c.accent, backgroundColor: alpha(c.accent, 0.08) } },
       }}
@@ -391,7 +399,9 @@ function StoryPlay() {
   }, { enabled: Boolean(story) && !loading });
 
   const handleBookify = async () => {
-    if (!storyId) return;
+    // One export at a time: they share `exporting` (the Export tool is only
+    // aria-disabled while one runs, so it keeps focus).
+    if (!storyId || exporting) return;
     // Clear the last export first: without this the dialog shows the previous
     // story text under the new progress bar, with Copy/Share/Download live.
     setExporting(true); setExportError(''); setExportData(null); setExportOpen(true);
@@ -689,7 +699,9 @@ function StoryPlay() {
   );
 
   const handleEpub = async () => {
-    if (!storyId) return;
+    // One export at a time: they share `exporting` (the Export tool is only
+    // aria-disabled while one runs, so it keeps focus).
+    if (!storyId || exporting) return;
     setExporting(true);
     // On a phone the only other sign of an EPUB run is a disabled tool, and
     // it can take a minute (UX review #9): say so, then say when it lands.
@@ -766,7 +778,7 @@ function StoryPlay() {
             aria-controls={exportMenuAnchor ? 'sg-export-menu' : undefined}
             icon={exporting ? <CircularProgress size={20} aria-hidden="true" sx={{ color: 'inherit' }} /> : <ShareIcon />}
             onClick={(e) => setExportMenuAnchor(e.currentTarget)}
-            disabled={exporting}
+            busy={exporting}
           />
           <Menu
             id="sg-export-menu"
