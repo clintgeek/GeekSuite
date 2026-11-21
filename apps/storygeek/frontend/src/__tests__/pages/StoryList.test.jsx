@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, within, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter } from 'react-router-dom';
@@ -27,7 +27,7 @@ vi.mock('@geeksuite/ui', async (importOriginal) => {
   };
 });
 
-const { GeekToastProvider } = await import('@geeksuite/ui');
+const { GeekToastProvider, GEEK_TOAST_ACTION_DURATION } = await import('@geeksuite/ui');
 
 const storyFixtures = [
   {
@@ -70,6 +70,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.get.mockResolvedValue({ data: storyFixtures });
 });
+afterEach(() => { vi.useRealTimers(); delete globalThis.jest; });
 
 describe('StoryList', () => {
   it('registers the FAB with the "New Tale" label', async () => {
@@ -179,8 +180,17 @@ describe('StoryList', () => {
   // S-D5 (2026-11-16): a delete goes to Recently deleted for 30 days, and the
   // confirm says so — "lost to the void … permanently destroyed" was the
   // wording of the hard delete this replaced.
+  //
+  // The toast's life is a clock: on real timers, a loaded machine could let
+  // it run out between the toast appearing and the click (it did, 2026-11-17,
+  // when the life was 4 s). The clock is faked here and moved on by hand to
+  // the last millisecond of the life a toast with an action gets: Undo must
+  // still be there to press. Testing Library only drives fake timers when it
+  // sees a `jest` global, hence the two-line shim (vitest has none).
   it('says the tale can be restored for 30 days, and offers Undo after the delete', async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    globalThis.jest = { advanceTimersByTime: (ms) => vi.advanceTimersByTime(ms) };
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     api.delete.mockResolvedValue({});
     api.post.mockResolvedValue({ data: { message: 'Story restored' } });
     renderStoryList();
@@ -192,8 +202,12 @@ describe('StoryList', () => {
     expect(within(confirmDialog).getByText(/restored from there for 30 days/i)).toBeInTheDocument();
     expect(within(confirmDialog).queryByText(/permanently/i)).not.toBeInTheDocument();
 
+    // The toast is raised after this press, so until `pressed + life` it stands.
+    const pressed = Date.now();
     await user.click(within(confirmDialog).getByRole('button', { name: /^delete$/i }));
     const undo = await screen.findByRole('button', { name: /^undo$/i });
+    act(() => { vi.advanceTimersByTime(pressed + GEEK_TOAST_ACTION_DURATION - 1 - Date.now()); });
+    expect(undo).toBeInTheDocument();
     await user.click(undo);
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/stories/story-2/restore'));
   });
