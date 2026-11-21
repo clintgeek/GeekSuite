@@ -102,21 +102,3 @@ export function instantParts(value, now = new Date()) {
     relative: false,
   };
 }
-
-/** Minutes → "1h 30m", "45m", "2h". */
-export function formatMinutes(minutes) {
-  const m = Math.max(0, Math.round(Number(minutes) || 0));
-  const h = Math.floor(m / 60);
-  const r = m % 60;
-  if (!h) return `${r}m`;
-  return r ? `${h}h ${r}m` : `${h}h`;
-}
-
-/** Hours → "12.5 h" / "1 h" / "40 min". */
-export function formatHours(hours) {
-  const h = Number(hours) || 0;
-  if (h <= 0) return '';
-  if (h < 1) return `${Math.round(h * 60)} min`;
-  const rounded = h >= 100 ? Math.round(h) : Math.round(h * 10) / 10;
-  return `${rounded} h`;
-}

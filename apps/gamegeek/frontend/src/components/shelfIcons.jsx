@@ -14,7 +14,7 @@ import {
   PlayCircleOutline as PlayingIcon,
 } from '@mui/icons-material';
 
-export const SHELF_ICON_COMPONENTS = {
+const SHELF_ICON_COMPONENTS = {
   playing: PlayingIcon,
   backlog: BacklogIcon,
   finished: FinishedIcon,

@@ -23,11 +23,10 @@ import { canonicalSearch, savedViewSearch } from '../utils/libraryFilter';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { APP_NAME, LIBRARY_NAV_ID, activeNavId, isLibraryPath, shelfNavId } from './navConfig';
 import SavePointMark from './SavePointMark';
-import { SHELF_ICON_COMPONENTS, shelfIconFor } from './shelfIcons';
+import { shelfIconFor } from './shelfIcons';
 
-const SHELF_ICONS = Object.fromEntries(
-  Object.entries(SHELF_ICON_COMPONENTS).map(([id, icon]) => [id, React.createElement(icon)])
-);
+/** The drawer's icon for a shelf: built-in, custom, or none (shelfIcons.jsx). */
+const shelfIcon = (id) => React.createElement(shelfIconFor(id));
 
 /**
  * The wordmark as an arcade marquee: an ink sign with a magenta frame and a
@@ -83,7 +82,7 @@ export default function Sidebar({ user, shelves, stats, onSignOut }) {
   const shelfItems = shelves.map((shelf) => ({
     id: shelfNavId(shelf.id),
     label: shelf.label,
-    icon: SHELF_ICONS[shelf.id] ?? React.createElement(shelfIconFor(shelf.id)),
+    icon: shelfIcon(shelf.id),
     badge: shelfCount(stats, shelf.id),
     badgeProps,
     to: `/?shelf=${encodeURIComponent(shelf.id)}`,
@@ -93,7 +92,7 @@ export default function Sidebar({ user, shelves, stats, onSignOut }) {
     shelfItems.push({
       id: shelfNavId('unshelved'),
       label: 'Unshelved',
-      icon: SHELF_ICONS.unshelved,
+      icon: shelfIcon('unshelved'),
       badge: stats.unshelved,
       badgeProps,
       to: '/?shelf=unshelved',

@@ -19,6 +19,7 @@ import { gamePath, libraryPath } from '../../components/navConfig';
 import { candidateToForm, emptyForm, formToCreateInput } from './candidate';
 import GameForm from './GameForm';
 import SearchStep from './SearchStep';
+import { CLOSE_CLEARANCE } from '../detail/ActionBar';
 
 export default function AddGameDialog() {
   const navigate = useNavigate();
@@ -78,7 +79,7 @@ export default function AddGameDialog() {
       // The close sits in the header row beside the title, not on the search
       // field's border (review 2026-11-18 #1): the row is as tall as the 44px
       // close plus its 8px inset, and the title clears it on the right.
-      headerSx={{ minHeight: 60, alignItems: 'center', pr: 14 }}
+      headerSx={{ minHeight: 60, alignItems: 'center', pr: CLOSE_CLEARANCE }}
       bodySx={{ px: { xs: 2, md: 3 } }}
       dialogProps={{ PaperProps: { sx: { height: 'min(88vh, 900px)' } } }}
       actions={
