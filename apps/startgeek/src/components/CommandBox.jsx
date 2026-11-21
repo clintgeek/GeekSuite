@@ -147,12 +147,12 @@ const CommandBox = ({ onOpenSettings }) => {
   const handleEditDraft = useCallback(() => {
     if (!draft?.draft) return
     const prefix = draft.kind === 'note' ? '<' : '>'
-    const text = `${prefix} ${draftToSyntax(draft)}`
+    const text = `${prefix} ${draftToSyntax(draft, draft.kind === 'note' ? '' : query.trim())}`
     skipDraftRef.current = text.slice(1).trim()
     setDraft(null)
     setValue(text)
     inputRef.current?.focus()
-  }, [draft])
+  }, [draft, query])
 
   // Persist engine choice
   useEffect(() => {

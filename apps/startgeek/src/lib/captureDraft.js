@@ -148,11 +148,31 @@ function dateToSyntax(value) {
 }
 
 /**
+ * The tokens of the typed line the model never returns — `(private)`, a
+ * repeat, `~blocked` and its reason, `^note` / `$^note` — as the shorthand
+ * that reads back to the same fields. The trailing ones go last, `~blocked`
+ * before a note, which is the order the parser reads them in.
+ */
+export function typedTokens(line) {
+  if (!line) return ''
+  const p = parseTaskInput(line)
+  const parts = []
+  if (p.private) parts.push('(private)')
+  const freq = p.recurrenceRule?.match(/FREQ=(DAILY|WEEKLY|MONTHLY)/)?.[1]
+  if (freq) parts.push(`(${freq.toLowerCase()})`)
+  if (p.blocked) parts.push(p.blockedReason ? `~blocked ${p.blockedReason}` : '~blocked')
+  if (p.noteGeekNote) parts.push(`$^${p.noteGeekNote}`)
+  else if (p.note) parts.push(`^${p.note}`)
+  return parts.join(' ')
+}
+
+/**
  * Put a draft back into the box as the shorthand the parser understands, so
  * "Edit" hands control back to the deterministic path rather than to the model.
- * Round-trips: feeding this to `parseTaskInput` returns the same fields.
+ * Round-trips: feeding this to `parseTaskInput` returns the draft's fields,
+ * plus the typed line's own tokens (`typedTokens`) when `line` is given.
  */
-export function draftToSyntax({ kind, draft }) {
+export function draftToSyntax({ kind, draft }, line = '') {
   if (!draft) return ''
 
   if (kind === 'note') {
@@ -168,6 +188,7 @@ export function draftToSyntax({ kind, draft }) {
 
   const when = draft.dueDate ? dateToSyntax(draft.dueDate) : null
   if (when) parts.push(when)
+  parts.push(typedTokens(line))
 
   return parts.filter(Boolean).join(' ')
 }

@@ -13,6 +13,7 @@ import {
   taskVariables,
 } from './capture.js'
 import { parseTaskInput } from '@geeksuite/task-grammar'
+import { draftToSyntax } from './captureDraft.js'
 
 /**
  * A fake gateway with TodoGeek's contract C1: one task per clientId. `fail`
@@ -266,6 +267,26 @@ test('a drafted task keeps (private), ~blocked and the notes from the typed line
   for (const key of Object.keys(vars)) assert.ok(allowed.has(key), `unexpected createTask variable ${key}`)
   await runTaskCapture(fields, captureAttemptFor(null, `draft:${line}`), gw.steps)
   assert.equal([...gw.tasks.values()][0].private, true)
+})
+
+test('Edit on a draft puts the typed tokens back too, and the line reads back to them', () => {
+  const line = 'call the clinic about results this afternoon (private) (weekly) ~blocked waiting on the lab'
+  const draft = { kind: 'task', draft: { content: 'Call the clinic', dueDate: '2026-11-20T14:00:00', tags: ['health'], priority: 1, signifier: '*' } }
+  const edited = draftToSyntax(draft, line)
+  const back = parseTaskInput(edited)
+  assert.equal(back.content, 'Call the clinic')
+  assert.deepEqual(back.tags, ['health'])
+  assert.equal(back.priority, 1)
+  assert.equal(back.private, true)
+  assert.match(back.recurrenceRule, /FREQ=WEEKLY/)
+  assert.equal(back.blocked, true)
+  assert.equal(back.blockedReason, 'waiting on the lab')
+  assert.equal(back.hasTime, true)
+  assert.equal(back.dueDate.getHours(), 14)
+  const withNote = parseTaskInput(draftToSyntax(draft, 'ring the vet tomorrow afternoon $^ask about the drops'))
+  assert.equal(withNote.noteGeekNote, 'ask about the drops')
+  // A note draft carries nothing of the kind.
+  assert.equal(draftToSyntax({ kind: 'note', draft: { content: 'x', tags: [] } }, line), 'x')
 })
 
 test('a drafted repeat keeps its frequency, anchored on the drafted date; a $^note still goes to NoteGeek', async () => {
