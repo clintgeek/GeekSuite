@@ -55,10 +55,11 @@ const shorten = (text, max = 48) => {
  *   refresh: () => void,
  *   onAuthFailure: () => void,
  *   isAuthFailure: (err: unknown) => boolean,
+ *   onUndone?: () => void,  called once an Undo has been saved
  * }} deps
  * @returns {Promise<boolean>} true when the change was saved
  */
-export async function toggleTaskWithUndo(task, { setStatus, notify, refresh, onAuthFailure, isAuthFailure }) {
+export async function toggleTaskWithUndo(task, { setStatus, notify, refresh, onAuthFailure, isAuthFailure, onUndone }) {
   const previous = task.status === 'completed' ? 'completed' : 'pending'
   const next = previous === 'completed' ? 'pending' : 'completed'
   const name = shorten(task.content) || 'Task'
@@ -90,6 +91,9 @@ export async function toggleTaskWithUndo(task, { setStatus, notify, refresh, onA
           fail(err, 'undo')
           return
         }
+        // The row may still be on screen (Undo inside the leave delay): it
+        // must show the task as it now is, and its dot must work again.
+        onUndone?.()
         refresh()
         notify({ message: previous === 'completed' ? `Done again: ${name}` : `Back on the list: ${name}` })
       },

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useGlance } from '../hooks/useGlance'
 import { useSession } from '../hooks/useSession'
 import { useToast } from '../hooks/useToast'
@@ -57,6 +57,13 @@ const TaskRow = ({ task, late = false, today, aside = null }) => {
   // Shown at once on tap (dot filled, words struck); undone if the save fails.
   const [ticked, setTicked] = useState(null)
 
+  // The server's word replaces the optimistic one whenever it changes. Undo
+  // (below) covers the case where it does not: Undo inside the leave delay
+  // brings the same status back, and the row would stay struck with a dead dot.
+  useEffect(() => {
+    setTicked(null)
+  }, [task.status])
+
   const handleToggle = async () => {
     if (ticked !== null) return
     setTicked(task.status !== 'completed')
@@ -66,6 +73,7 @@ const TaskRow = ({ task, late = false, today, aside = null }) => {
       refresh: () => setTimeout(refetch, LEAVE_MS),
       onAuthFailure: markOut,
       isAuthFailure,
+      onUndone: () => setTicked(null),
     })
     if (!saved) setTicked(null)
   }

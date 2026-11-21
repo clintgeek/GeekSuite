@@ -91,10 +91,21 @@ test('a failed tick says so in plain words and stays on screen', async () => {
   assert.equal(h.refreshes, 0)
 })
 
+test('a saved Undo tells the row, so a row still on screen stops showing it ticked', async () => {
+  const h = harness()
+  let undone = 0
+  await toggleTaskWithUndo({ id: 't1', content: 'Buy milk', status: 'pending' }, { ...h.deps, onUndone: () => { undone += 1 } })
+  assert.equal(undone, 0)
+  await h.toasts[0].action.run()
+  assert.equal(undone, 1)
+})
+
 test('a failed Undo says so', async () => {
   const h = harness({ failOn: [2] })
-  await toggleTaskWithUndo({ id: 't1', content: 'Buy milk', status: 'pending' }, h.deps)
+  let undone = 0
+  await toggleTaskWithUndo({ id: 't1', content: 'Buy milk', status: 'pending' }, { ...h.deps, onUndone: () => { undone += 1 } })
   await h.toasts[0].action.run()
+  assert.equal(undone, 0)
   assert.equal(h.toasts[1].tone, 'error')
   assert.match(h.toasts[1].message, /Couldn't undo/)
 })
