@@ -46,7 +46,7 @@ import { useMutation } from '@apollo/client';
 import { addDays } from 'date-fns';
 import { localDateString } from '@geeksuite/utils';
 import { normalizeTag } from '@geeksuite/tags';
-import { useReducedMotion, useToast } from '@geeksuite/ui';
+import { GEEK_TOAST_ACTION_DURATION, useReducedMotion, useToast } from '@geeksuite/ui';
 import { useTaskContext } from './TaskContext.jsx';
 import { newClientId } from '../utils/clientId.js';
 import { useAuth } from './AuthContext';
@@ -55,7 +55,13 @@ import { CREATE_NOTE } from '../graphql/notegeekMutations';
 import { dueDateOn, filterByTag, isDone, taskId } from '../utils/penViews';
 import { hasDueTime as isTimed } from '../utils/dueDate';
 
-export const UNDO_MS = 6000;
+/**
+ * How long Undo is offered: the suite's life for a toast that carries an
+ * action, so TodoGeek's Undo is not shorter than every other app's. It is
+ * also when a deferred delete is sent, so it is passed to the toast
+ * explicitly — the two must stay in step.
+ */
+export const UNDO_MS = GEEK_TOAST_ACTION_DURATION;
 export const SETTLE_MS = 700;
 /** Return to the tab / window focus: re-read if the last read is older than this. */
 export const REFRESH_AFTER_MS = 30 * 1000;

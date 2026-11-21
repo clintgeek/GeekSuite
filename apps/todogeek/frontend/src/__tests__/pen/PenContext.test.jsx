@@ -18,7 +18,9 @@ vi.mock('@apollo/client', async () => {
   const actual = await vi.importActual('@apollo/client');
   return { ...actual, useMutation: () => [vi.fn(() => Promise.resolve({}))] };
 });
-vi.mock('@geeksuite/ui', () => ({
+vi.mock('@geeksuite/ui', async () => ({
+  // The real number: UNDO_MS is the suite's action-toast life.
+  GEEK_TOAST_ACTION_DURATION: (await vi.importActual('@geeksuite/ui')).GEEK_TOAST_ACTION_DURATION,
   useToast: () => ({
     notify: (message, opts) => { toasts.push({ message, ...opts }); return toasts.length; },
     dismiss: vi.fn(),
@@ -114,6 +116,20 @@ describe('deleting is deferred, so Undo loses nothing', () => {
     expect(ref.current.corpus).toHaveLength(1);
     await act(async () => { vi.advanceTimersByTime(UNDO_MS + 10); });
     expect(fake.deleteTask).not.toHaveBeenCalled();
+  });
+
+  // Review 2026-11-19: TodoGeek's Undo ran 6 s while the suite's action
+  // toasts run 8 s. The toast and the deferred delete both use the suite's.
+  it('the window is the suite’s action-toast life, for the toast and the delete alike', async () => {
+    const { GEEK_TOAST_ACTION_DURATION: life } = await vi.importActual('@geeksuite/ui');
+    vi.useFakeTimers();
+    const { ref } = mount();
+    act(() => ref.current.remove(task()));
+    expect(toasts.at(-1).duration).toBe(life);
+    await act(async () => { vi.advanceTimersByTime(life - 10); });
+    expect(fake.deleteTask).not.toHaveBeenCalled();
+    await act(async () => { vi.advanceTimersByTime(20); });
+    expect(fake.deleteTask).toHaveBeenCalledWith('t1', null);
   });
 
   it('sends the delete when the window closes', async () => {

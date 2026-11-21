@@ -14,7 +14,9 @@ vi.mock('@apollo/client', async () => {
   const actual = await vi.importActual('@apollo/client');
   return { ...actual, useMutation: () => [vi.fn(() => Promise.resolve({}))] };
 });
-vi.mock('@geeksuite/ui', () => ({
+vi.mock('@geeksuite/ui', async () => ({
+  // The real number: UNDO_MS is the suite's action-toast life.
+  GEEK_TOAST_ACTION_DURATION: (await vi.importActual('@geeksuite/ui')).GEEK_TOAST_ACTION_DURATION,
   useToast: () => ({
     notify: (message, opts) => { toasts.push({ message, ...opts }); return toasts.length; },
     dismiss: vi.fn(),
