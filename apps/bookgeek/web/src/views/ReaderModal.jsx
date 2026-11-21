@@ -30,7 +30,7 @@ import TocIcon from "@mui/icons-material/Toc";
 import { GeekSheet, useBackToClose } from "@geeksuite/ui";
 import { FONT_MAX, FONT_MIN, FONT_STEP, loadReaderPrefs, saveReaderPrefs } from "../utils/readerPrefs";
 import { readerPalette } from "../utils/readerPalette";
-import { chapterForHref } from "../utils/readerPosition";
+import { chapterEntryForHref } from "../utils/readerPosition";
 import { SERIF_FONT, WOOD } from "../theme/theme";
 
 const SWIPE_THRESHOLD = 48;
@@ -382,7 +382,8 @@ export default function ReaderModal({
     Array.isArray(selectedBook?.authors) && selectedBook.authors.length > 0
       ? selectedBook.authors.join(", ")
       : null;
-  const chapter = chapterForHref(readerToc, currentHref);
+  const chapterEntry = chapterEntryForHref(readerToc, currentHref);
+  const chapter = chapterEntry?.label || null;
   const showPct = progressAvailable && progressPct != null;
   const positionLabel = [showPct ? `${progressPct}%` : null, chapter].filter(Boolean).join(" · ");
 
@@ -629,7 +630,7 @@ export default function ReaderModal({
       >
         <Box component="ol" sx={{ listStyle: "none", m: 0, p: 0 }}>
           {readerToc.map((item) => {
-            const current = item.label === chapter;
+            const current = item === chapterEntry;
             return (
               <Box component="li" key={item.id}>
                 <ButtonBase

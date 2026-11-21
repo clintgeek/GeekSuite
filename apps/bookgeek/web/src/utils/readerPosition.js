@@ -156,21 +156,22 @@ const stripFragment = (href) => String(href || "").split("#")[0];
  * The chapter a spine href belongs to: the first flattened TOC entry whose
  * file is that href. Hrefs are compared without the fragment and by suffix,
  * since a nav document may write "Text/ch1.xhtml" where the spine says
- * "OEBPS/Text/ch1.xhtml" or the reverse.
+ * "OEBPS/Text/ch1.xhtml" or the reverse. Returns the entry itself, so two
+ * entries that share a label ("Chapter 1" in Part One and Part Two) stay
+ * apart.
  */
-export function chapterForHref(flatToc, href) {
+export function chapterEntryForHref(flatToc, href) {
   const target = stripFragment(href);
   if (!target || !Array.isArray(flatToc)) return null;
   const same = (a) => {
     const file = stripFragment(a);
     return Boolean(file) && (file === target || target.endsWith(`/${file}`) || file.endsWith(`/${target}`));
   };
-  let match = null;
-  for (const item of flatToc) {
-    if (same(item.href)) {
-      // The first entry for the file is the chapter; later ones are its sections.
-      if (!match) match = item;
-    }
-  }
-  return match ? match.label : null;
+  // The first entry for the file is the chapter; later ones are its sections.
+  return flatToc.find((item) => same(item.href)) || null;
+}
+
+/** The chapter's label for a spine href, or null (see chapterEntryForHref). */
+export function chapterForHref(flatToc, href) {
+  return chapterEntryForHref(flatToc, href)?.label ?? null;
 }

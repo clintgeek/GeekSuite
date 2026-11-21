@@ -244,6 +244,21 @@ describe("where you are in the book", () => {
     expect(rendition.prev).not.toHaveBeenCalled();
   });
 
+  it("two chapters with one name: only the one you are in is marked current (review 2026-11-19 #6)", async () => {
+    const parts = flattenToc([
+      { id: "p1", href: "p1.xhtml", label: "Part One", subitems: [{ id: "p1c1", href: "p1c1.xhtml", label: "Chapter 1" }] },
+      { id: "p2", href: "p2.xhtml", label: "Part Two", subitems: [{ id: "p2c1", href: "p2c1.xhtml", label: "Chapter 1" }] },
+    ]);
+    const rendition = fakeRendition();
+    renderWithProviders(<ReaderModal {...props({ readerRenditionRef: { current: rendition }, readerToc: parts })} />);
+    act(() => rendition.emit("relocated", { start: { cfi: CFI, href: "p2c1.xhtml" } }));
+    fireEvent.click(btn("Contents"));
+    const entries = await screen.findAllByRole("button", { name: "Chapter 1" });
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).not.toHaveAttribute("aria-current");
+    expect(entries[1]).toHaveAttribute("aria-current", "location");
+  });
+
   it("chapterForHref matches by file, whichever side carries the folder", () => {
     expect(chapterForHref(toc, "Text/ch2.xhtml")).toBe("The Desert");
     expect(chapterForHref(toc, "ch1.xhtml")).toBe("One");
