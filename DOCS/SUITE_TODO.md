@@ -28,16 +28,17 @@ Pull from here when planning the next pass; update as work lands or priorities s
   - aiGeek UsagePanel shows session-wide call counts against a per-user daily cap, and no `costUnknown` yet.
   - A provider may bill a request cancelled mid-flight; the per-call cap and OpenRouter's credit limit are the backstop.
   - ~~`goingOverFitnessGlance` DST case~~ fixed 2026-11-15 (counts in UTC days); `aiHardeningCancellation` was a load flake on 2026-11-15 and passes.
-- **GeekDay (2026-11-20)** — built locally, uncommitted, not deployed; see `WORK_LOG_2026-11.md` and `apps/geekday/DOCS/CONTEXT.md`. Left open:
-  - **Deploy (Chef's go-ahead):** push to `main` (builds the image, redeploys basegeek with the `geekday` app entries), create `apps/geekday/.env.production` on the box, make the GHCR package public, `docker compose up -d`, reload nginx.
-  - **Device session on the Lenovo:** pen latency, palm rejection, the pen double-click undo, real handwriting through circle-to-task, the wake lock, a finger swipe between days, whether the Fine line is too thin at an 800 px page.
-  - **Open a GeekDay page in NoteGeek** and edit it there, then reopen it in GeekDay. Same snapshot format, but never tried.
+- **GeekDay (deployed 2026-11-20; week spread, scrolling page and templates 2026-11-21)** — see `WORK_LOG_2026-11.md` and `apps/geekday/DOCS/CONTEXT.md`. Left open:
+  - **Chef's test of the 2026-11-21 build.** The details in `GEEKDAY_SPEC.md` §6 and `TEMPLATES_SPEC.md` are Sage's decisions, not yet confirmed: Monday-first weeks, the two-by-four spread, the six page templates, the eight note templates, a per-device default page for new days.
+  - **Device session on the Lenovo:** pen latency, palm rejection while writing and while scrolling (`PEN_NEAR_MS` in `ink/pageGestures.js` if the page twitches as the hand lands), the pen double-click undo, real handwriting through circle-to-task, the wake lock, swiping between days and weeks, dragging a task with pen and finger, whether the Fine line and the template rules are too faint.
+  - **Open a GeekDay page in NoteGeek** (with and without a template), edit it there, reopen it in GeekDay. Same snapshot format and meta key; never tried against live data.
   - Weekday abbreviations ("fri") are read in GeekDay only. Moving that into `@geeksuite/task-grammar` would give it to TodoGeek and NoteGeek, and changes their parsing: Chef's call.
   - A day page is not searchable by its words until NoteGeek has transcribed it (only while open in NoteGeek). GeekDay could run the same auto-transcribe; it costs readings from the shared cap of 40 a day.
   - A corrupt page snapshot opens as a blank page, and the next stroke would save over it. Wants a load-error state instead.
   - Two devices putting first ink on the same new day at the same moment make two notes (`createNote` has no idempotency key).
+  - Week page: no adding tasks; ink pictures are seven note fetches per week and do not show a page's template; no More menu.
   - The CI tablet shard is advisory and runs dark portrait + light landscape; GeekDay's scenes are portrait-only, so CI does not gate its light-portrait run. Run it locally before a UI push.
-
+  - NoteGeek templates: list thumbnails and the print copy do not show a sketch's template; on a phone a template's labels are about 9 px until zoomed in. User-made templates are out of scope so far.
 ---
 
 ## 2. Cross-Cutting Security

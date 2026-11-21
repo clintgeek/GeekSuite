@@ -637,7 +637,7 @@ checked: intact.
 
 **Not built, on purpose** — see `SUITE_TODO.md` §13.
 
-## 2026-11-20 — GeekDay: the pen-first daily page (BUILT LOCALLY, NOT DEPLOYED)
+## 2026-11-20 — GeekDay: the pen-first daily page (DEPLOYED 2026-11-20, late)
 
 A new app, `apps/geekday`: one day's TodoGeek tasks beside a handwriting page stored as a
 NoteGeek note. Spec `DOCS/GEEKDAY_SPEC.md` (Chef, signed off the same day); how it works is
@@ -707,3 +707,33 @@ Shared packages and the gateway were not touched.
 - **Deployed 2026-11-20 23:00 by another session's push** (the GeekDay commits, `88212ca6`),
   before the harness had finished: the 48c double Undo was live until `1916ff20` shipped.
 - **Not checked:** anything on a device (see SUITE_TODO §14).
+
+**Deployed the same night.** The first image build failed: the note store was in `src/data/`,
+which the repo's `data/` ignore rule kept out of git. Moved to `src/store/` and pushed again.
+nginx reloaded; `geekday.clintgeek.com` answers and basegeek accepts the new origin. Nothing
+signed-in was exercised (no session on the box).
+
+## 2026-11-21 — GeekDay: week spread, a page that scrolls, page templates; NoteGeek: templates
+
+Chef, before bed: the week spread "for sure", templates "in both notegeek and geekday", the
+ink side should "pan and scroll like notegeek does", "decide things for me and push when
+done". The details are Sage's decisions, written as such in `DOCS/GEEKDAY_SPEC.md` §6 and
+`DOCS/TEMPLATES_SPEC.md`. No gateway changes.
+
+- **GeekDay week spread** (`/week`): Monday to Sunday as a two-by-four planner spread, the
+  eighth cell "Not scheduled" (overdue and undated). Tick, move by drag or by menu with Undo,
+  ink pictures drawn from stroke points, tap a day to open it. Uses the existing `weeklyTasks`.
+- **GeekDay ink page scrolls**: at least three sheets tall, finger and wheel scroll, pinch
+  zooms to 3x, the pen writes. tldraw's camera stays locked and GeekDay applies the gestures
+  itself, so a palm beside the pen is not a pinch.
+- **Page templates** (`packages/ui/src/paper/`, shared): Schedule, Top three, Meeting,
+  Cornell, Dot grid, Grid. Stored in the sketch's document meta as `paperTemplate`. Chosen
+  from the ink toolbar in GeekDay (with a per-device default for new days) and from the
+  Paper menu in a NoteGeek sketch. Never part of the ink or of an export.
+- **NoteGeek note templates**: "From a template" in New: Meeting notes, One-to-one, Weekly
+  review, Project brief, Decision record, Troubleshooting log, Packing list, Recipe. Markdown
+  notes. Opening one and leaving creates no note and no draft.
+- **NoteGeek, one behaviour change**: a sketch that has a template and no remembered camera
+  opens on its sheet at full width. Sketches without a template are unchanged.
+- **Not checked**: anything on the Lenovo (pen and palm while scrolling, dragging a task with
+  a pen); a GeekDay page with a template opened in live NoteGeek.

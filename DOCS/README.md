@@ -23,7 +23,8 @@ by section — those stay here as design records and say so in their first lines
 | [SUITE_FORM_FACTOR_PLAN_2026-11.md](SUITE_FORM_FACTOR_PLAN_2026-11.md) | Phone, tablet and desktop quality for every app. See its own status table |
 | [NEWSGEEK_PLAN.md](NEWSGEEK_PLAN.md) | Live app. Open: story assignment (N1 phase 2) and N2 |
 | [THINGGEEK_PLAN.md](THINGGEEK_PLAN.md) | Live app. Open: Phase 2 (AI Ask, MCP tools, insurance PDF) |
-| [GEEKDAY_SPEC.md](GEEKDAY_SPEC.md) | Signed off 2026-11-20. Being built |
+| [GEEKDAY_SPEC.md](GEEKDAY_SPEC.md) | Live app, deployed 2026-11-20. §6 (week spread, scrolling page) built 2026-11-21; details are Sage's decisions awaiting Chef's test |
+| [TEMPLATES_SPEC.md](TEMPLATES_SPEC.md) | Page templates (NoteGeek sketches, GeekDay) and NoteGeek note templates. Built 2026-11-21; Sage's decisions awaiting Chef's test |
 | [GameGeekPlan.md](GameGeekPlan.md) | Live app. Open: phases G2–G6 |
 | [SUITE_HOUSEHOLDS_PLAN.md](SUITE_HOUSEHOLDS_PLAN.md) | Proposal, not started |
 | [REGISTRATION_GATE_PLAN.md](REGISTRATION_GATE_PLAN.md) | `closed` mode shipped and is the default. `invite` mode not built |

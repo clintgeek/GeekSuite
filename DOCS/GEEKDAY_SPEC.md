@@ -111,3 +111,63 @@ Chosen by Chef:
 | Docked mode idle time | 2 minutes |
 | Pen latency, transcription accuracy | No number in the spec; judged in a device session on the Lenovo |
 | Hostname, port, basegeek app list | Build locally. Sage picks a free port, assumes `geekday.clintgeek.com`, makes the in-repo registrations and lists the box-side steps (nginx, DNS). No push. |
+
+## 6. Additions, night of 2026-11-20: the week spread and page templates
+
+Provenance: Chef, 2026-11-20, after using the deployed page: *"i like the week
+spread. lets do that for sure. i also want to explore templates in both
+notegeek and geekday. make some useful ones in both. im going to bed. you
+finish up, decide things for me and push when done. ill test in the morning."*
+
+Chef stated the two features and delegated the details. Every requirement
+below is **Sage's decision under that instruction**, not Chef's wording, and
+is open to correction after the morning test. Templates for both apps are
+specified in `DOCS/TEMPLATES_SPEC.md`.
+
+### Week spread
+
+The idea Chef accepted, as proposed to him: *"Seven columns, each showing that
+day's task count and a thumbnail of its ink page. Drag a task from one day to
+another to reschedule it. Tap a day to open it."*
+
+W1. A week page shows the seven days of one week, Monday to Sunday, each with
+    its date, its open-task count, its tasks, and a small picture of that
+    day's ink page when it has one.
+W2. On the portrait tablet the days are laid out as a planner spread (two
+    columns, four rows), not seven narrow columns: at 800 px a seventh of the
+    width cannot hold a task's words. *(A change from the proposal's "seven
+    columns", for legibility.)*
+W3. The eighth cell lists tasks that are overdue or have no date, so they can
+    be given a day.
+W4. A task can be moved to another day by dragging it there, and also without
+    dragging (from a menu on the task), with Undo. Moving follows the day
+    page's rule: a timed task keeps its time, a date-only task stays date-only.
+W5. A task can be ticked from the week page.
+W6. Tapping a day's heading or its ink picture opens that day's page.
+W7. The user can go to the previous and next week by button, swipe and arrow
+    keys, and back to this week in one action. Today is marked.
+W8. The week page is reached from the day page in one tap, and returns to it.
+W9. A failed load is shown as an error with Retry, never as an empty week.
+W10. Harness scenes at tablet portrait, light and dark, a11y enforced: the
+    week with tasks, an empty week, a failed load, a move menu open.
+
+Unchanged from sections 3 and 4: no gateway changes, no calendar events, no
+offline, GeekDay never re-dates a task unless the user moves it.
+
+### A page that scrolls
+
+Provenance: Chef, 2026-11-20, a few minutes later: *"also maybe geekdays note
+side should pan and scroll like notegeek does."* The first build's fixed sheet
+was Sage's choice; this replaces it. Details are Sage's decisions.
+
+S1. The ink page is taller than the screen and scrolls: a finger drag (when
+    fingers do not draw), a two-finger drag and a mouse wheel move the page;
+    the pen writes. Ink below the first screen is reachable on any device.
+S2. Pinch zooms in on the page and a finger then pans it in both directions.
+    Zoomed all the way out, the page is exactly as wide as its pane; it never
+    shrinks below that or drifts sideways.
+S3. A day opens at the top of its page, zoomed out.
+S4. A sideways finger flick over the ink page still turns the day when the
+    page is zoomed out and fingers do not draw; when zoomed in it pans.
+S5. Strokes stay in page units: the same day looks the same on another screen
+    and in NoteGeek.
