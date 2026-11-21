@@ -1,5 +1,5 @@
 /** My notes (private working notes) and my review (the verdict). Saved on demand. */
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Box, Button, TextField } from '@mui/material';
 import { useToast } from '@geeksuite/ui';
 import { useSetGameState } from '../../hooks/useGameActions';
@@ -12,6 +12,17 @@ import Section from './Section';
  * that line used to throw a half-typed note away. Without a caller-held
  * draft it keeps its own.
  */
+const FIELDS = ['notes', 'review'];
+
+/** The draft's own edits only: a field typed back to what is saved is no edit. */
+function changedFields(draft, saved) {
+  const out = {};
+  for (const field of FIELDS) {
+    if (draft?.[field] !== undefined && draft[field] !== saved[field]) out[field] = draft[field];
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 export default function NotesSection({ game, draft: heldDraft, onDraft }) {
   const setState = useSetGameState();
   const { notify } = useToast();
@@ -21,19 +32,28 @@ export default function NotesSection({ game, draft: heldDraft, onDraft }) {
   const setDraft = lifted ? onDraft : setOwnDraft;
   const [busy, setBusy] = useState(false);
 
-  const savedNotes = game.me?.notes || '';
-  const savedReview = game.me?.review || '';
-  const notes = draft?.notes ?? savedNotes;
-  const review = draft?.review ?? savedReview;
-  const edit = (patch) => setDraft({ notes, review, ...patch });
+  const saved = { notes: game.me?.notes || '', review: game.me?.review || '' };
+  // The draft holds only the fields she changed; the rest read from the game,
+  // so a review saved elsewhere is not written back stale with her notes.
+  const edits = changedFields(draft, saved);
+  const notes = edits?.notes ?? saved.notes;
+  const review = edits?.review ?? saved.review;
+  const edit = (patch) => setDraft(changedFields({ ...edits, ...patch }, saved));
+  // What she has typed by the time a save comes back (she can keep typing).
+  const latest = useRef(edits);
+  latest.current = edits;
 
-  const dirty = notes !== savedNotes || review !== savedReview;
+  const dirty = Boolean(edits);
 
   const save = async () => {
+    if (!edits) return;
+    const sent = edits;
     setBusy(true);
     try {
-      await setState(game.id, { notes, review });
-      setDraft(null);
+      await setState(game.id, sent);
+      // Cleared only if nothing was typed while it saved; later typing stays.
+      const now = latest.current;
+      if (FIELDS.every((field) => now?.[field] === sent[field])) setDraft(null);
       notify('Saved.', { tone: 'success' });
     } catch {
       notify('Notes did not save.', { tone: 'error' });
