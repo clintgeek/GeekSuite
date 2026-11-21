@@ -18,7 +18,12 @@
 // Notes have no idempotency key on the gateway (createNote takes none), so
 // a note capture is protected by the busy guard only.
 
-import { toCreateInput } from '@geeksuite/task-grammar'
+import {
+  buildRecurrenceRule,
+  frequencyFromRecurrenceRule,
+  parseTaskInput,
+  toCreateInput,
+} from '@geeksuite/task-grammar'
 import { formatTime } from './time.js'
 
 export { formatTime }
@@ -65,16 +70,36 @@ export function taskVariables(fields, clientId, now = new Date()) {
  * A model draft (`glanceDraft`) as the fields the grammar would have read.
  * Its `dueDate` is always a local date-time ("YYYY-MM-DDTHH:MM:SS"), so a
  * dated draft is a timed one, as it was before the shared mapping.
+ *
+ * The model only returns content, date, priority, tags and signifier. The
+ * tokens the grammar reads with certainty — `(private)`, `~blocked` and its
+ * reason, `^note`, `$^note`, `(daily)` — come from the line the person typed
+ * (`line`), so a drafted task keeps them exactly as the direct path would
+ * (until 2026-11-20 a drafted `(private)` task arrived unmasked).
  */
-export function draftFields(draft) {
+export function draftFields(draft, line = '') {
   if (!draft) return {}
+  const typed = line ? parseTaskInput(line) : {}
+  const dueDate = draft.dueDate ? new Date(draft.dueDate) : undefined
+  // A repeat's RRULE anchors on its due date: re-anchor the typed frequency
+  // on the model's date, as the parser would have on a typed one.
+  let recurrenceRule = typed.recurrenceRule
+  if (recurrenceRule && dueDate && !Number.isNaN(dueDate.getTime())) {
+    recurrenceRule = buildRecurrenceRule(frequencyFromRecurrenceRule(recurrenceRule), dueDate) || recurrenceRule
+  }
   return {
     content: draft.content || '',
     signifier: draft.signifier || '*',
     priority: draft.priority || undefined,
     tags: draft.tags?.length ? draft.tags : undefined,
-    dueDate: draft.dueDate ? new Date(draft.dueDate) : undefined,
+    dueDate,
     hasTime: Boolean(draft.dueDate),
+    note: typed.note,
+    noteGeekNote: typed.noteGeekNote,
+    recurrenceRule,
+    blocked: typed.blocked,
+    blockedReason: typed.blockedReason,
+    private: typed.private,
   }
 }
 

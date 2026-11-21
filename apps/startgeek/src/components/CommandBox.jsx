@@ -398,7 +398,7 @@ const CommandBox = ({ onOpenSettings }) => {
             })
             captureDone('Note saved')
           } else {
-            const fields = draftFields(draft.draft)
+            const fields = draftFields(draft.draft, q)
             await createTaskFromFields(fields, `draft:${JSON.stringify(draft.draft)}`)
             captureDone(describeCapture(fields, { hour12 }))
           }

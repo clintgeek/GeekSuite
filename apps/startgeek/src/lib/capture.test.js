@@ -205,6 +205,41 @@ test('a model draft keeps its time', () => {
   assert.deepEqual(vars.tags, ['health'])
 })
 
+test('a drafted task keeps (private), ~blocked and the notes from the typed line', async () => {
+  // The model sees "this afternoon" the grammar cannot read, and drafts the
+  // line; its fields never carry the tokens the grammar reads with certainty.
+  const line = 'call the clinic about results this afternoon (private) ~blocked waiting on the lab'
+  const draft = { content: 'Call the clinic about results', dueDate: '2026-11-20T14:00:00', tags: [], signifier: '*' }
+  const gw = fakeGateway()
+  const fields = draftFields(draft, line)
+  const vars = taskVariables(fields, 'cid', new Date(2026, 10, 20, 9))
+  assert.equal(vars.private, true)
+  assert.deepEqual(vars.tags, ['blocked'])
+  assert.equal(vars.note, 'Blocked: waiting on the lab')
+  assert.equal(new Date(vars.dueDate).getHours(), 14)
+  // The same tag and note the direct path files for the same tokens.
+  const direct = taskVariables(parseTaskInput('call the clinic (private) ~blocked waiting on the lab'), 'cid')
+  assert.deepEqual(direct.tags, vars.tags)
+  assert.equal(direct.note, vars.note)
+  // Nothing the gateway's strict createTask schema does not declare.
+  const allowed = new Set(['content', 'signifier', 'priority', 'tags', 'dueDate', 'note', 'recurrenceRule', 'clientId', 'private', 'hasDueTime', 'timeZone'])
+  for (const key of Object.keys(vars)) assert.ok(allowed.has(key), `unexpected createTask variable ${key}`)
+  await runTaskCapture(fields, captureAttemptFor(null, `draft:${line}`), gw.steps)
+  assert.equal([...gw.tasks.values()][0].private, true)
+})
+
+test('a drafted repeat keeps its frequency, anchored on the drafted date; a $^note still goes to NoteGeek', async () => {
+  const line = 'water the plants every morning (daily) $^ferns like it damp'
+  const fields = draftFields({ content: 'Water the plants', dueDate: '2026-11-21T08:00:00', tags: [] }, line)
+  const vars = taskVariables(fields, 'cid', new Date(2026, 10, 20, 9))
+  assert.match(vars.recurrenceRule, /RRULE:FREQ=DAILY/)
+  const start = new Date(2026, 10, 21, 8).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+  assert.match(vars.recurrenceRule, new RegExp(`DTSTART:${start}`))
+  const gw = fakeGateway()
+  await runTaskCapture(fields, captureAttemptFor(null, `draft:${line}`), gw.steps)
+  assert.equal(gw.calls.createNote, 1)
+})
+
 test('describeCapture says what was understood, on the chosen clock', () => {
   const now = new Date(2026, 10, 18, 9, 38)
   const fields = parseTaskInput('call Dana tomorrow 2pm #work (private)', { now })
