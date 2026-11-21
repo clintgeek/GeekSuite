@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { BASE, blend, contrast, scrimStops } from './scrim.js'
+import { BASE, FLOOR_FROM, averageLuma, blend, contrast, sampleLuma, scrimStops } from './scrim.js'
 
 const SCRIM = [10, 13, 18]
 const INK = [0xe9, 0xed, 0xf2]
@@ -32,6 +32,31 @@ test('dark and mid photos keep the alphas they had', () => {
 test('an unknown luminance is the original fixed scrim', () => {
   assert.deepEqual(scrimStops(null), BASE)
   assert.deepEqual(scrimStops(Number.NaN), BASE)
+})
+
+test('a white sky over a dark landscape gets the floor where the hero text sits', () => {
+  // 32×32 sample: top 40% white, the rest near-black. The whole averages
+  // mid-grey, which on its own earns no floor.
+  const size = 32
+  const data = new Uint8ClampedArray(size * size * 4)
+  for (let row = 0; row < size; row += 1) {
+    const v = row < size * 0.4 ? 255 : 20
+    for (let col = 0; col < size; col += 1) data.set([v, v, v, 255], (row * size + col) * 4)
+  }
+  const { whole, top } = sampleLuma(data, size)
+  assert.ok(whole < FLOOR_FROM, `whole ${whole}`)
+  assert.equal(top, 1)
+  const s = scrimStops(whole, top)
+  const ground = blend(WHITE_PHOTO, SCRIM, s.top)
+  assert.ok(contrast(INK_2, ground) >= 4.5, `ink-2 over the sky: ${contrast(INK_2, ground).toFixed(2)}`)
+})
+
+test('averageLuma reads only the rows asked for', () => {
+  const data = new Uint8ClampedArray([255, 255, 255, 255, 0, 0, 0, 255])
+  assert.equal(averageLuma(data, 1, 0, 1), 1)
+  assert.equal(averageLuma(data, 1, 1, 2), 0)
+  assert.equal(averageLuma(data, 1), 0.5)
+  assert.equal(averageLuma(new Uint8ClampedArray(0), 1), null)
 })
 
 test('the scrim never goes fully opaque', () => {

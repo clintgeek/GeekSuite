@@ -81,7 +81,9 @@ The Photo-mode scrim's darkness follows the wallpaper's own luminance —
 averages its luma, and maps it through a clamped linear ramp
 (`scrimFactorForLuminance`: luminance 0 → 0.75x, 1 → 1.4x the fixed scrim
 alphas). Since 2026-11-18 (`lib/scrim.js`, design review #1) a bright photo
-(luminance 0.5 → 0.75) also gets a floor of 0.64 under the top and middle
+(luminance 0.5 → 0.75; since 2026-11-20 the luminance of the photo's top
+40%, where the hero text sits, when that is brighter than the whole — a white
+sky over a dark landscape averages mid-grey) also gets a floor of 0.64 under the top and middle
 stops, so `--ink-2` small text clears 4.5:1 even over white; the three alphas
 go to `--scrim-top/-mid/-bottom` on the backdrop root and `.wallpaper-scrim`
 reads them. Small text straight on the wallpaper (rail, date, weather line)

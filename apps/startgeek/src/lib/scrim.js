@@ -31,14 +31,50 @@ export function scrimFloor(luminance) {
   return t * FLOOR_ALPHA
 }
 
+/** The top share of the photo the hero text sits over (rail, clock, weather). */
+export const HERO_SHARE = 0.4
+
+/**
+ * Average luma (Rec. 601, 0 black .. 1 white) of rows [fromRow, toRow) of an
+ * RGBA pixel buffer `width` pixels wide, or null for no pixels.
+ */
+export function averageLuma(data, width, fromRow = 0, toRow = Infinity) {
+  const rows = Math.floor(data.length / 4 / width)
+  const start = Math.max(0, fromRow) * width * 4
+  const end = Math.min(rows, toRow) * width * 4
+  let sum = 0
+  let n = 0
+  for (let i = start; i < end; i += 4) {
+    sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
+    n += 1
+  }
+  return n ? sum / n / 255 : null
+}
+
+/**
+ * The whole photo's luma and its top `HERO_SHARE`'s, from a sampled
+ * `size`×`size` RGBA buffer.
+ */
+export function sampleLuma(data, size) {
+  return {
+    whole: averageLuma(data, size),
+    top: averageLuma(data, size, 0, Math.max(1, Math.round(size * HERO_SHARE))),
+  }
+}
+
 /**
  * The three scrim alphas for a wallpaper's sampled luminance (0..1), or the
  * fixed originals when it is unknown (null: the probe failed).
+ *
+ * `topLuminance` is the luma of the part under the hero text. A white sky
+ * over a dark landscape averages out mid-grey, which earned no floor while the
+ * date sat on white; the floor follows the top (or the whole, if brighter).
  */
-export function scrimStops(luminance) {
+export function scrimStops(luminance, topLuminance = luminance) {
   if (luminance == null || !Number.isFinite(luminance)) return { ...BASE }
   const f = scrimFactorForLuminance(luminance)
-  const floor = scrimFloor(luminance)
+  const top = Number.isFinite(topLuminance) ? Math.max(topLuminance, luminance) : luminance
+  const floor = scrimFloor(top)
   const r = (n) => Math.round(Math.min(0.92, n) * 1000) / 1000
   return {
     top: r(Math.max(BASE.top * f, floor)),

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { loadBackdrop } from '@geeksuite/backdrop'
 import { useSettings } from '../hooks/useSettings'
 import { BASEGEEK } from '../lib/basegeek'
-import { scrimStops } from '../lib/scrim'
+import { sampleLuma, scrimStops } from '../lib/scrim'
 
 // The scrim's three alphas come from the wallpaper's luminance
 // (lib/scrim.js): the 2026-09-05 ramp, plus a floor for bright photos so the
@@ -21,11 +21,8 @@ const sampleLuminance = (img) => {
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     ctx.drawImage(img, 0, 0, size, size)
     const { data } = ctx.getImageData(0, 0, size, size)
-    let sum = 0
-    for (let i = 0; i < data.length; i += 4) {
-      sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
-    }
-    return sum / (data.length / 4) / 255
+    // The whole photo for the ramp, its top for the floor (lib/scrim.js).
+    return sampleLuma(data, size)
   } catch {
     return null
   }
@@ -77,8 +74,8 @@ const BackgroundManager = () => {
     probe.crossOrigin = 'anonymous'
     probe.onload = () => {
       if (cancelled) return
-      const luminance = sampleLuminance(probe)
-      setScrim(scrimStops(luminance))
+      const luma = sampleLuminance(probe)
+      setScrim(luma ? scrimStops(luma.whole, luma.top) : scrimStops(null))
     }
     probe.onerror = () => {
       if (cancelled) return
