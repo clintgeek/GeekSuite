@@ -373,6 +373,23 @@ describe('BookDetailModal', () => {
     expect(within(dialog).getByRole('button', { name: 'Send' })).toBeDisabled();
   });
 
+  it('while the profile is loading, or failed to load, the confirm does not claim there is no address (review 2026-11-19 #10)', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderWithProviders(
+      <BookDetailModal {...baseProps({ kindleEmail: null, kindleEmailStatus: 'loading' })} />
+    );
+    await user.click(screen.getByRole('button', { name: 'To Kindle' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Send to your Kindle?' });
+    expect(within(dialog).queryByText(/no Kindle address/)).toBeNull();
+    expect(within(dialog).getByText(/Looking up your Kindle address/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Send' })).toBeDisabled();
+
+    rerender(<BookDetailModal {...baseProps({ kindleEmail: null, kindleEmailStatus: 'error' })} />);
+    expect(within(dialog).queryByText(/no Kindle address/)).toBeNull();
+    expect(within(dialog).getByText(/Couldn’t load your Kindle address/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Send' })).toBeDisabled();
+  });
+
   it('with no Kindle address the confirm says so and cannot send', async () => {
     const user = userEvent.setup();
     renderWithProviders(<BookDetailModal {...baseProps({ kindleEmail: null })} />);

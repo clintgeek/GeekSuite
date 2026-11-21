@@ -111,6 +111,9 @@ export default function BookDetailModal({
   handleSendToKindle,
   // The reader's Kindle address (profile), named in the confirm before a send.
   kindleEmail = null,
+  // Whether `kindleEmail` is known yet: "loading" | "error" | "ready". Only a
+  // loaded profile can say there is no address.
+  kindleEmailStatus = "ready",
   handleUpdateProgress,
   handleUpdateShelf,
   handleSaveLastRead,
@@ -533,6 +536,14 @@ export default function BookDetailModal({
               {kindleEmail}
             </Box>
             . An email can’t be taken back once it is sent.
+          </Typography>
+        ) : kindleEmailStatus === "loading" ? (
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            Looking up your Kindle address…
+          </Typography>
+        ) : kindleEmailStatus === "error" ? (
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            Couldn’t load your Kindle address just now. Try again in a moment.
           </Typography>
         ) : (
           <Typography variant="body2" sx={{ color: "text.secondary" }}>

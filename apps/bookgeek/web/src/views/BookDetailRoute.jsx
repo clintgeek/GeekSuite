@@ -24,7 +24,7 @@ import ReaderModal from "./ReaderModal";
 function BookDetail({ bookId }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { basket, shelves, settings, user, rateBook, profile } = useBookGeek();
+  const { basket, shelves, settings, user, rateBook, profile, profileError, profileLoadedAt } = useBookGeek();
   const rateWithUndo = useRateWithUndo(rateBook);
   const closingRef = useRef(false);
 
@@ -67,6 +67,7 @@ function BookDetail({ bookId }) {
         metadataDraftEnabled={settings.libraryAssistantPref}
         onRate={rateWithUndo}
         kindleEmail={profile?.kindleEmail || null}
+        kindleEmailStatus={profileLoadedAt ? "ready" : profileError ? "error" : "loading"}
       />
       {reader.readerOpen ? (
         <ReaderModal
