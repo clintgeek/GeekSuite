@@ -124,7 +124,8 @@ describe('Phase 1.6: Simple keeps the Log page to the point', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(10); });
     expect(screen.queryByLabelText('Change your daily target')).toBeNull();
     expect(screen.queryByTestId('activity-allowance')).toBeNull();
-    expect(primaryAction).toHaveBeenCalledWith(expect.objectContaining({ hidden: true }));
+    // No visible floating button is registered (a hidden one registers nothing).
+    expect(primaryAction.mock.calls.filter(([config]) => !config?.hidden)).toEqual([]);
   });
 
   it('Full keeps the gear and the activity line', async () => {
@@ -136,8 +137,6 @@ describe('Phase 1.6: Simple keeps the Log page to the point', () => {
   it('A2/B6: Full hides the floating button too — the add box is on the page, and it covered "+ Add"', async () => {
     renderPage({ simple: false });
     await screen.findByTestId('activity-allowance');
-    expect(primaryAction).toHaveBeenCalled();
-    expect(primaryAction).not.toHaveBeenCalledWith(expect.objectContaining({ hidden: false }));
-    expect(primaryAction).toHaveBeenLastCalledWith(expect.objectContaining({ hidden: true }));
+    expect(primaryAction.mock.calls.filter(([config]) => !config?.hidden)).toEqual([]);
   });
 });

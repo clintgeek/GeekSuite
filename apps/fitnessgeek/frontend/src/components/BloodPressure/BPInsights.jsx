@@ -109,7 +109,6 @@ const BPInsights = ({ bpLogs = [] }) => {
       trend,
       healthyPercentage,
       totalReadings: sortedLogs.length,
-      last7DaysCount: last7Days.length,
       last30DaysCount: last30Days.length
     };
   }, [bpLogs]);

@@ -348,7 +348,7 @@ const FoodComposer = ({
           ]);
         }
         // "Egg ×2", not "Egg", when it wasn't one (L4).
-        const what = items.length === 1 ? withAmount(items[0].name, items[0].type === 'household-meal' ? 1 : items[0].servings) : `${ok} items`;
+        const what = items.length === 1 ? withAmount(items[0].name, items[0].type === 'household-meal' ? 1 : items[0].servings) : `${ok} foods`;
         sayAdded(addedMessage(meal || mealType, what), result?.fail ? 'warning' : 'success');
         forgetDraft();
       }

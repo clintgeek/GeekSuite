@@ -33,10 +33,7 @@ import { useToast } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { settingsService } from '../../services/settingsService';
 import { errorMessage } from '../../utils/errorMessage.js';
-
-// Every Settings switch on the right, its label on the left (UX review
-// 2026-11, A11), as "Larger text" does.
-const SWITCH_ROW = { display: 'flex', justifyContent: 'space-between', ml: 0, mr: 0, minHeight: 48, gap: 2 };
+import { SWITCH_ROW } from './switchRow.js';
 
 const HouseholdSettings = () => {
   const { notify } = useToast();

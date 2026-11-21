@@ -15,8 +15,7 @@ import { useTheme } from '@mui/material/styles';
 import { trackColor } from '../theme/theme.jsx';
 import {
   ContentCopy as CopyIcon,
-  People as PeopleIcon,
-  Add as AddIcon
+  People as PeopleIcon
 } from '@mui/icons-material';
 import NutritionSummary from '../components/FoodLog/NutritionSummary.jsx';
 import CalorieSummary from '../components/FoodLog/CalorieSummary.jsx';
@@ -37,7 +36,7 @@ import { useFoodLog } from '../hooks/useFoodLog.js';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { settingsService } from '../services/settingsService.js';
 import { goalsService } from '../services/goalsService.js';
-import { useGeekPrimaryAction, useToast } from '@geeksuite/ui';
+import { useToast } from '@geeksuite/ui';
 import { Surface, SectionLabel, StatNumber } from '../components/primitives';
 import { useExperience } from '../contexts/ExperienceContext.jsx';
 import { friendlyDay, mealWord } from '../utils/plainWords.js';
@@ -97,8 +96,8 @@ const FoodLog = () => {
   // Bug: this used to hardcode 'snack' regardless of the clock, so tapping a
   // search result — the advertised "one tap to log it" path — logged
   // breakfast as a snack until you noticed the chip and fixed it by hand.
-  // The FAB already gets this right via mealTypeForNow(); the inline search
-  // box's own initial chip did not.
+  // The inline search box's initial chip starts on this hour's meal
+  // (mealTypeForNow()).
   const [selectedMealType, setSelectedMealType] = useState(() => mealTypeForNow());
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingLog, setEditingLog] = useState(null);
@@ -339,17 +338,12 @@ const FoodLog = () => {
     setShowAddDialog(true);
   };
 
-  // The shell's floating "Log food" button stays hidden on this page, in both
-  // modes. Simple first (REVIEW_2026-10 Phase 1.6): the add box is already on
-  // the page, and the button sat over the Again chips. Full too (UX review
-  // 2026-11, A2/B6): it was the third add control on one screen, and it
-  // covered "+ Add", a row's delete icon and "Same as yesterday's breakfast".
-  useGeekPrimaryAction({
-    label: 'Log food',
-    icon: <AddIcon />,
-    onClick: () => handleAddFood(mealTypeForNow()),
-    hidden: true
-  });
+  // No floating "Log food" button on this page, in either mode, so none is
+  // registered with the shell. Simple first (REVIEW_2026-10 Phase 1.6): the
+  // add box is already on the page, and the button sat over the Again chips.
+  // Full too (UX review 2026-11, A2/B6): it was the third add control on one
+  // screen, and it covered "+ Add", a row's delete icon and "Same as
+  // yesterday's breakfast".
 
   const handleEditLog = (log) => {
     setEditingLog(log);

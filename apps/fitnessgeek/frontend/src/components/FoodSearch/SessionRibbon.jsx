@@ -45,8 +45,8 @@ const useCountUp = (target, duration = 380) => {
  * FROM THE FIRST ITEM (L10). It used to wait for the second, and the only way
  * out of a picking session was the sheet's ✕, which reads as "cancel what I
  * did here" — so Heather hesitated, or tapped the food again "to be sure".
- * Now one tap shows "✓ 1 added to lunch · 190 cal" with a Done that closes
- * the sheet.
+ * Now one tap shows "✓ Egg added to lunch · 72 cal" (or "3 foods added …")
+ * with a Done that closes the sheet.
  *
  * NO "UNDO ALL" (L11). A red Undo all sat beside Undo last, two small buttons
  * apart, with no redo: one slip took back the whole sitting. Its Undo takes
