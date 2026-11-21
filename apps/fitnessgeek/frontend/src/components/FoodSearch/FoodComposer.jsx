@@ -409,7 +409,8 @@ const FoodComposer = ({
    * Amount → 3 → Log it, left four eggs in two entries while the row still
    * said "Added". Now the entry is patched to the new servings (and meal, if
    * she moved it). Where the entry can't be patched from here, it is replaced
-   * — removed, then added again — so the day still ends with one entry.
+   * — the new one added, then the old one removed — so the day still ends
+   * with one entry, and a failure never loses the food.
    */
   const changeAmount = useCallback(async (key, food, meal) => {
     const prior = key ? addedRef.current[key] : null;
@@ -437,29 +438,29 @@ const FoodComposer = ({
       return true;
     }
 
-    // No way to edit an entry here: take the old one out, then add the new.
+    // No way to edit an entry here: add the new one FIRST, then take the old
+    // one out (review 2026-11-20). Deleting first lost the food whenever the
+    // add then failed; this way a failure leaves two entries, and says so.
     if (!onUndo) return false;
-    if (!beginWrite(key)) return true;
-    let removed = false;
-    try {
-      const { deleted } = await runUndo(onUndo, [logId]);
-      removed = deleted.includes(logId);
-      if (removed) forgetDeleted(deleted);
-    } finally {
-      endWrite();
-    }
-    if (!removed) {
-      sayError(null, "Couldn’t change that. Try again.");
-      return true;
-    }
     const written = await logFoods([food], target, key);
     const ids = written?.perItem?.[0] || written?.logIds || [];
-    if ((written?.ok ?? 0) > 0 && ids.length === 1) {
-      setAddedByKey((prev) => ({
-        ...prev,
-        [key]: { logIds: ids, servings: count, name: food.name, mealType: target, date: day },
-      }));
+    // Not added: logFoods has said why, and the old entry stands.
+    if (!((written?.ok ?? 0) > 0 && ids.length === 1)) return true;
+    let removed = false;
+    if (beginWrite(key)) {
+      try {
+        const { deleted } = await runUndo(onUndo, [logId]);
+        removed = deleted.includes(logId);
+        if (removed) forgetDeleted(deleted);
+      } finally {
+        endWrite();
+      }
     }
+    setAddedByKey((prev) => ({
+      ...prev,
+      [key]: { logIds: ids, servings: count, name: food.name, mealType: target, date: day },
+    }));
+    if (!removed) sayError(null, `Couldn’t remove the earlier ${prior.name}. Delete it from the log.`);
     return true;
   }, [onUpdateLog, onUndo, beginWrite, endWrite, notify, sayError, forgetDeleted, logFoods, day]);
 

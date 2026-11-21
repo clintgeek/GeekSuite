@@ -1314,10 +1314,35 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(2));
-    expect(onUndo).toHaveBeenCalledWith(['egg-1']);
-    expect(onUndo.mock.invocationCallOrder[0]).toBeLessThan(onLogItems.mock.invocationCallOrder[1]);
+    await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['egg-1']));
+    // The new entry is written before the old one goes (a failed add must not lose the food).
+    expect(onLogItems.mock.invocationCallOrder[1]).toBeLessThan(onUndo.mock.invocationCallOrder[0]);
     expect(onLogItems.mock.calls[1][0][0]).toMatchObject({ name: 'Egg', servings: 3 });
     await waitFor(() => expect(screen.getByTestId('session-ribbon')).toHaveTextContent('Egg ×3 added to breakfast'));
+  });
+
+  it('B2: where the entry cannot be edited and the new one fails to add, the old one is kept', async () => {
+    const onLogItems = vi.fn()
+      .mockResolvedValueOnce({ ok: 1, fail: 0, logIds: ['egg-1'], perItem: [['egg-1']] })
+      .mockRejectedValueOnce(new Error('Network Error'));
+    const onUndo = vi.fn().mockResolvedValue({ deleted: ['egg-1'], failed: [] });
+    suggest.mockResolvedValue([egg()]);
+    renderBox({ onLogItems, onUndo, mealType: 'breakfast' });
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
+    await screen.findByText(/Added/, { selector: '[data-testid="food-row-subtitle"] span' });
+    await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: /change the amount of egg/i }));
+    fireEvent.change(await screen.findByLabelText('Servings'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(2));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(onUndo).not.toHaveBeenCalled();
+    expect(screen.getByTestId('session-ribbon')).toHaveTextContent('Egg added to breakfast');
   });
 
   it('a chip that re-logs two says so ("Toast ×2")', async () => {
