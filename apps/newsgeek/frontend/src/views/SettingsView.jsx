@@ -29,12 +29,24 @@ import Column from '../components/Column';
 import HomePlacesSettings from '../components/HomePlacesSettings';
 import InkSwitch from '../components/InkSwitch';
 import PublishersSettings from '../components/PublishersSettings';
-import { SET_NEWS_PREFS } from '../graphql/mutations';
+import { SET_NEWS_PREFS, SET_NEWS_PUBLISHER_OPENER } from '../graphql/mutations';
 import { GET_NEWS_PREFS } from '../graphql/queries';
 import { GOTHIC, flagSx, visuallyHiddenSx } from '../theme/theme';
 import { MAX_LABEL, MAX_READER_LINKS, READER_LINK_HELP, READER_LINK_PLACEHOLDER, cleanReaderLinks, readerLinkErrors } from '../utils/readerLinks';
 
 const same = (a, b) => JSON.stringify(cleanReaderLinks(a)) === JSON.stringify(cleanReaderLinks(b));
+
+/** A mutation's `update` that replaces the cached prefs with what `field` answered. */
+const writePrefsFrom = (field) => (cache, { data }) => {
+  if (data?.[field]) cache.writeQuery({ query: GET_NEWS_PREFS, data: { newsPrefs: data[field] } });
+};
+const plainLink = ({ label, template }) => ({ label, template });
+/** `list` with each removed link put back at the place it had. */
+const withRestored = (list, removed) => {
+  const out = [...list];
+  for (const { link, at } of removed) out.splice(Math.min(at, out.length), 0, plainLink(link));
+  return out;
+};
 
 export const NEW_TAB_LABEL = 'Open stories in a new tab';
 export const NEW_TAB_HELP = 'Off: stories open here, and Back brings you back to NewsGeek.';
@@ -81,33 +93,29 @@ export default function SettingsView() {
 
   const setLink = (i, key) => (e) => setLinks((ls) => ls.map((l, j) => (j === i ? { ...l, [key]: e.target.value } : l)));
 
-  const writeLinks = (list) =>
-    setPrefs({
-      variables: { input: { readerLinks: cleanReaderLinks(list) } },
-      update(cache, { data }) {
-        if (data?.newsSetPrefs) cache.writeQuery({ query: GET_NEWS_PREFS, data: { newsPrefs: data.newsSetPrefs } });
-      },
-    });
+  const writeLinks = (list) => setPrefs({ variables: { input: { readerLinks: cleanReaderLinks(list) } }, update: writePrefsFrom('newsSetPrefs') });
 
   // What the gateway has now — read through a ref, so Undo (fired from a toast
   // made a render ago) compares against the save that just landed.
   const savedRef = useRef(saved);
   savedRef.current = saved;
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
 
-  /** Save `list` whole when every link in it is complete; true when it was sent and landed. */
+  /** Save `list` whole when every link in it is complete; the prefs the gateway answered once it landed, else null. */
   const persist = async (list) => {
     const current = savedRef.current;
-    if (!current || same(list, current) || !validOf(list)) return false;
+    if (!current || same(list, current) || !validOf(list)) return null;
     setSaveError('');
     setSaveState('saving');
     try {
-      await writeLinks(list);
+      const res = await writeLinks(list);
       setSaveState('saved');
-      return true;
+      return res?.data?.newsSetPrefs ?? null;
     } catch (err) {
       setSaveState(null);
       setSaveError(err?.graphQLErrors?.[0]?.message || err?.message || 'Couldn’t save. Try again.');
-      return false;
+      return null;
     }
   };
 
@@ -116,30 +124,59 @@ export default function SettingsView() {
     persist(links);
   };
 
+  /**
+   * Undo a removal. Removing a link also drops, on the gateway, every
+   * publisher that opened with it (newsSetPrefs pulls openers whose link is
+   * gone), so Undo puts the link back first — into what the gateway has now,
+   * at its old place, so its id (a hash of the template) is the same — and
+   * then those publishers, one at a time (each opener write rewrites the
+   * whole list). Through the client, so it still works once the page is left.
+   */
+  const undoRemove = async (removed, lost) => {
+    setLinks((ls) => (ls ? withRestored(ls, removed) : ls));
+    try {
+      const now = client.readQuery({ query: GET_NEWS_PREFS })?.newsPrefs?.readerLinks ?? savedRef.current ?? [];
+      await client.mutate({
+        mutation: SET_NEWS_PREFS,
+        variables: { input: { readerLinks: cleanReaderLinks(withRestored(now.map(plainLink), removed)) } },
+        update: writePrefsFrom('newsSetPrefs'),
+      });
+      for (const o of lost) {
+        await client.mutate({
+          mutation: SET_NEWS_PUBLISHER_OPENER,
+          variables: o.sourceId ? { sourceId: o.sourceId, linkId: o.linkId } : { domain: o.domain, linkId: o.linkId },
+          update: writePrefsFrom('newsSetPublisherOpener'),
+        });
+      }
+    } catch {
+      notify('Couldn’t put the link back. Try again.', { tone: 'error' });
+    }
+  };
+
   const remove = async (i) => {
-    const before = links;
     const gone = links[i];
     const next = links.filter((_, j) => j !== i);
+    // What the gateway has before: the links with their ids, and who opens with them.
+    const savedBefore = savedRef.current ?? [];
+    const openersBefore = prefsRef.current?.openers ?? [];
     setLinks(next);
     setLeft(new Set());
+    const after = await persist(next);
+    if (!after) return;
+    const kept = new Set((after.readerLinks ?? []).map((l) => l.id));
+    const removed = savedBefore.map((link, at) => ({ link, at })).filter(({ link }) => !kept.has(link.id));
+    if (!removed.length) return;
+    const removedIds = new Set(removed.map(({ link }) => link.id));
+    const lost = openersBefore.filter((o) => removedIds.has(o.linkId));
     const name = gone.label.trim() || 'Link';
-    if (await persist(next)) {
-      notify(`${name} removed.`, {
-        tone: 'success',
-        action: (
-          <Button
-            color="inherit"
-            size="small"
-            onClick={() => {
-              setLinks(before);
-              persist(before);
-            }}
-          >
-            Undo
-          </Button>
-        ),
-      });
-    }
+    notify(`${name} removed.`, {
+      tone: 'success',
+      action: (
+        <Button color="inherit" size="small" onClick={() => undoRemove(removed, lost)}>
+          Undo
+        </Button>
+      ),
+    });
   };
 
   // Leaving the page with a complete edit not yet saved (Back straight from a

@@ -11,7 +11,7 @@ import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import ArticleItem from '../../components/ArticleItem';
 import { pageNavigation } from '../../utils/openUrl';
-import { SET_NEWS_PREFS } from '../../graphql/mutations';
+import { SET_NEWS_PREFS, SET_NEWS_PUBLISHER_OPENER } from '../../graphql/mutations';
 import { GET_NEWS_PREFS } from '../../graphql/queries';
 import SettingsView from '../../views/SettingsView';
 import { article, copy, newsPrefs, opener } from '../fixtures';
@@ -21,6 +21,8 @@ const LINKS = [
   { __typename: 'NewsReaderLink', id: 'aaa111', label: 'Reader one', template: 'https://example.com/read?u={url}' },
   { __typename: 'NewsReaderLink', id: 'bbb222', label: 'Reader two', template: 'https://example.org/{url}?t={title}' },
 ];
+/** The gateway's link id is a hash of the template; any stable function of it will do here. */
+const idOf = (template) => `h_${template.length}_${template.replace(/[^a-z0-9]/gi, '')}`;
 const STORY = article('a1', { title: 'Fire & ice', url: 'https://pub.example/a?b=1' });
 
 let open;
@@ -234,9 +236,48 @@ describe('Settings → Open-with links', () => {
     maxUsageCount: 10,
     result: (vars) => {
       saved(vars);
-      return { data: { newsSetPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks: vars.input.readerLinks.map((l, i) => ({ __typename: 'NewsReaderLink', id: `id${i}`, ...l })) } } };
+      return { data: { newsSetPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks: vars.input.readerLinks.map((l) => ({ __typename: 'NewsReaderLink', id: idOf(l.template), ...l })) } } };
     },
   });
+
+  /**
+   * The gateway, as far as open-with links go: a link's id is a hash of its
+   * template, saving the list drops every opener whose link is gone, and an
+   * opener write sets one publisher's link.
+   */
+  const gatewayFor = (start) => {
+    const state = { readerLinks: start.readerLinks, openers: start.openers };
+    const prefsNow = () => ({ ...newsPrefs(), readerLinks: state.readerLinks, openers: state.openers });
+    const linkSaves = vi.fn();
+    const openerSaves = vi.fn();
+    const mocks = [
+      { request: { query: GET_NEWS_PREFS }, result: () => ({ data: { newsPrefs: prefsNow() } }), maxUsageCount: 10 },
+      {
+        request: { query: SET_NEWS_PREFS },
+        variableMatcher: () => true,
+        maxUsageCount: 10,
+        result: (vars) => {
+          linkSaves(vars);
+          state.readerLinks = vars.input.readerLinks.map((l) => ({ __typename: 'NewsReaderLink', id: idOf(l.template), ...l }));
+          const ids = new Set(state.readerLinks.map((l) => l.id));
+          state.openers = state.openers.filter((o) => ids.has(o.linkId));
+          return { data: { newsSetPrefs: prefsNow() } };
+        },
+      },
+      {
+        request: { query: SET_NEWS_PUBLISHER_OPENER },
+        variableMatcher: () => true,
+        maxUsageCount: 10,
+        result: (vars) => {
+          openerSaves(vars);
+          const same = (o) => (vars.sourceId ? o.sourceId === vars.sourceId : !o.sourceId && o.domain === vars.domain);
+          state.openers = [...state.openers.filter((o) => !same(o)), opener({ sourceId: vars.sourceId ?? null, domain: vars.domain ?? null, linkId: vars.linkId })];
+          return { data: { newsSetPublisherOpener: prefsNow() } };
+        },
+      },
+    ];
+    return { state, mocks, linkSaves, openerSaves };
+  };
 
   it('starts empty, validates like the gateway, and saves the whole list when a field is left — no Save button (finding 12)', async () => {
     const saved = vi.fn();
@@ -277,7 +318,7 @@ describe('Settings → Open-with links', () => {
 
   it('removing a link saves at once and offers Undo, which puts it back', async () => {
     const saved = vi.fn();
-    const two = [0, 1].map((i) => ({ __typename: 'NewsReaderLink', id: `id${i}`, label: `L${i}`, template: `https://example.com/${i}?u={url}` }));
+    const two = [0, 1].map((i) => ({ __typename: 'NewsReaderLink', id: idOf(`https://example.com/${i}?u={url}`), label: `L${i}`, template: `https://example.com/${i}?u={url}` }));
     renderWithProviders(<SettingsView />, { mocks: [prefsMock(two), saveMockFor(saved)] });
     await userEvent.click(await screen.findByRole('button', { name: 'Remove L0' }));
     await waitFor(() => expect(saved).toHaveBeenCalledWith({ input: { readerLinks: [{ label: 'L1', template: 'https://example.com/1?u={url}' }] } }));
@@ -285,6 +326,31 @@ describe('Settings → Open-with links', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Undo' }));
     await waitFor(() => expect(screen.getAllByTestId('reader-link-row')).toHaveLength(2));
     await waitFor(() => expect(saved).toHaveBeenLastCalledWith({ input: { readerLinks: [{ label: 'L0', template: 'https://example.com/0?u={url}' }, { label: 'L1', template: 'https://example.com/1?u={url}' }] } }));
+  });
+
+  it('Undo also puts back the publishers that opened with the removed link (the gateway dropped them)', async () => {
+    const two = [0, 1].map((i) => ({ __typename: 'NewsReaderLink', id: idOf(`https://example.com/${i}?u={url}`), label: `L${i}`, template: `https://example.com/${i}?u={url}` }));
+    const gw = gatewayFor({
+      readerLinks: two,
+      openers: [
+        opener({ sourceId: 's1', domain: null, linkId: two[0].id }),
+        opener({ sourceId: null, domain: 'pub.example', linkId: two[0].id }),
+        opener({ sourceId: 's2', domain: null, linkId: two[1].id }),
+      ],
+    });
+    renderWithProviders(<SettingsView />, { mocks: gw.mocks });
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove L0' }));
+    await waitFor(() => expect(gw.linkSaves).toHaveBeenCalledTimes(1));
+    expect(gw.state.openers.map((o) => o.sourceId ?? o.domain)).toEqual(['s2']);
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(gw.openerSaves).toHaveBeenCalledTimes(2));
+    expect(gw.linkSaves).toHaveBeenLastCalledWith({ input: { readerLinks: [{ label: 'L0', template: 'https://example.com/0?u={url}' }, { label: 'L1', template: 'https://example.com/1?u={url}' }] } });
+    expect(gw.openerSaves.mock.calls.map(([v]) => v)).toEqual([
+      { sourceId: 's1', linkId: two[0].id },
+      { domain: 'pub.example', linkId: two[0].id },
+    ]);
+    expect(gw.state.openers.map((o) => `${o.sourceId ?? o.domain}→${o.linkId}`).sort()).toEqual([`pub.example→${two[0].id}`, `s1→${two[0].id}`, `s2→${two[1].id}`]);
+    expect(screen.getAllByTestId('reader-link-row')).toHaveLength(2);
   });
 
   it('lists the saved links, removes one, and stops adding at five', async () => {
