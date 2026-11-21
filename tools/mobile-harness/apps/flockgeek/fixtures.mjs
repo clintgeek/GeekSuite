@@ -13,10 +13,15 @@ const iso = (dayOffset, hour = 9) => {
   d.setHours(hour, 0, 0, 0);
   return d.toISOString();
 };
+// A calendar day as the app stores one: the LOCAL day, at UTC midnight (the
+// app saves `localDateString(new Date())`). It used to take the day from UTC,
+// so on a US evening day(0) was already tomorrow and Home's Today line had no
+// harvest for today. The browser runs in the host's zone, as Node does here.
 const day = (dayOffset) => {
   const d = new Date(now);
   d.setDate(d.getDate() + dayOffset);
-  return `${d.toISOString().slice(0, 10)}T00:00:00.000Z`;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00:00.000Z`;
 };
 
 export const LOCATIONS = [

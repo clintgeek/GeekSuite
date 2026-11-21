@@ -13,11 +13,13 @@
  * `GeekShell bottomNav` reserves the space and `GeekAppFrame` insets the
  * content, so no page needs a manual `pb`.
  *
- * The thumb-zone FAB is the shell's job too: a page calls the suite's
- * `useGeekPrimaryAction({ label, icon, onClick })` — Home and the Egg log both
- * register "Log eggs" — and `GeekShell` mounts the `GeekFab` as a sibling of
- * `GeekAppFrame`, whose route transition would otherwise capture a fixed
- * child. No page registered → no FAB.
+ * The thumb-zone FAB: a page may call the suite's
+ * `useGeekPrimaryAction({ label, icon, onClick })` and `GeekShell` mounts the
+ * `GeekFab` as a sibling of `GeekAppFrame`, whose route transition would
+ * otherwise capture a fixed child. No page does today: Home and the Egg log
+ * want "Log eggs" in words on the phone, which the shell's icon-only FAB
+ * cannot do, so `QuickHarvestSheet` portals its own extended `GeekFab` to
+ * `document.body` for the same reason.
  *
  * Seven of the nine routes are `lazy()` (see `App.jsx`), so the `Outlet` is
  * wrapped in a `Suspense` boundary. It sits INSIDE `GeekShell` and inside

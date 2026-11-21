@@ -22,14 +22,14 @@ import HomePage from "./pages/HomePage";
  *   nav's first tab, and of every post-login redirect. Making it lazy would
  *   put a second network round-trip in front of the app's most common first
  *   paint to save bytes that the very next request asks for anyway. It also
- *   registers the harvest FAB (`QuickHarvestSheet` → `useGeekPrimaryAction`),
+ *   mounts the "Log eggs" FAB (`QuickHarvestSheet` draws its own `GeekFab`),
  *   and a lazy Home would mean the shell paints, then the FAB pops in a beat
  *   later on the one screen where it is the point.
  * - `LoginPage` is 34 lines and is the whole unauthenticated app; a chunk
  *   boundary there costs a round-trip and saves nothing measurable.
  *
- * `EggLogPage` registers the same FAB and IS lazy: it is a route the user
- * navigates to, so its FAB registers when its chunk mounts, which is exactly
+ * `EggLogPage` mounts the same FAB and IS lazy: it is a route the user
+ * navigates to, so its FAB appears when its chunk mounts, which is exactly
  * when its page content appears — no window where the page is up and the FAB
  * is missing. `QuickHarvestEntry`/`QuickHarvestSheet` are shared by Home and
  * EggLog, so they ride in the eager Home graph and EggLog reuses them.

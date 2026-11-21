@@ -43,9 +43,8 @@ export const scenes = [
     async setup(page, h) {
       await graphqlRoute(page, {
         ...OPS,
-        // Drop anything dated today or later in the browser's own day: the
-        // fixture's day() takes its date from UTC, so late in a US evening
-        // day(-1) is already "today" locally.
+        // Drop anything dated today or later in the browser's own day (the
+        // fixture's day() builds local days, so this is day(0) and after).
         GetEggProductions: { eggProductions: EGGS.filter((e) => e.date.slice(0, 10) < localToday()) },
       });
       await page.goto(h.base + '/', { waitUntil: 'networkidle' });
