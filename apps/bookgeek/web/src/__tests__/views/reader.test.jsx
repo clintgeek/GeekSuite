@@ -100,7 +100,9 @@ describe("the reader over the book sheet", () => {
 describe("the reader's chrome", () => {
   it("using the font stepper keeps the chrome up; it hides only after you stop", () => {
     vi.useFakeTimers();
-    renderWithProviders(<ReaderModal {...props()} />);
+    const rendition = fakeRendition();
+    renderWithProviders(<ReaderModal {...props({ readerRenditionRef: { current: rendition } })} />);
+    act(() => rendition.emit("rendered"));
     expect(topChrome()).toHaveStyle({ opacity: "1" });
     act(() => vi.advanceTimersByTime(AUTO_HIDE_MS - 500));
     fireEvent.click(btn("Increase font size"));
@@ -126,6 +128,42 @@ describe("the reader's chrome", () => {
     expect(topChrome()).toHaveStyle({ opacity: "1" });
 
     act(() => rendition.emit("click", { target: document.createElement("p") }));
+    expect(topChrome()).toHaveStyle({ opacity: "0" });
+  });
+
+  it("a book that failed to open keeps its Close and its error on screen, and says so (review 2026-11-19 #1, #9)", () => {
+    vi.useFakeTimers();
+    renderWithProviders(<ReaderModal {...props({ readerError: "Could not open this EPUB." })} />);
+    act(() => vi.advanceTimersByTime(AUTO_HIDE_MS * 4));
+    expect(topChrome()).toHaveStyle({ opacity: "1" });
+    expect(btn("Close")).toBeInTheDocument();
+    expect(screen.getByRole("alert", { hidden: true })).toHaveTextContent("Could not open this EPUB.");
+  });
+
+  it("an error arriving after the first page brings the chrome back", () => {
+    vi.useFakeTimers();
+    const rendition = fakeRendition();
+    const view = renderWithProviders(<ReaderModal {...props({ readerRenditionRef: { current: rendition } })} />);
+    act(() => rendition.emit("rendered"));
+    act(() => vi.advanceTimersByTime(AUTO_HIDE_MS + 100));
+    expect(topChrome()).toHaveStyle({ opacity: "0" });
+    view.rerender(<ReaderModal {...props({ readerRenditionRef: { current: rendition }, readerError: "Lost the book." })} />);
+    act(() => vi.advanceTimersByTime(AUTO_HIDE_MS * 4));
+    expect(topChrome()).toHaveStyle({ opacity: "1" });
+  });
+
+  it("before the first page is drawn the chrome stays up, and a turn strip only shows it", () => {
+    vi.useFakeTimers();
+    const rendition = fakeRendition();
+    renderWithProviders(<ReaderModal {...props({ readerRenditionRef: { current: rendition } })} />);
+    act(() => vi.advanceTimersByTime(AUTO_HIDE_MS * 4));
+    expect(topChrome()).toHaveStyle({ opacity: "1" });
+    fireEvent.click(btn("Next page"));
+    expect(rendition.next).not.toHaveBeenCalled();
+    act(() => rendition.emit("rendered"));
+    fireEvent.click(btn("Next page"));
+    expect(rendition.next).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(AUTO_HIDE_MS + 100));
     expect(topChrome()).toHaveStyle({ opacity: "0" });
   });
 

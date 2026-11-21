@@ -102,6 +102,10 @@ export default function ReaderModal({
   const [progressAvailable, setProgressAvailable] = useState(false);
   const [progressPct, setProgressPct] = useState(null);
   const [currentHref, setCurrentHref] = useState(null);
+  // True once epub.js has put a page on screen. Until then a middle tap has
+  // nothing to land on (the iframe is what toggles the chrome), so the chrome
+  // stays up: an EPUB that never opens must not fade away its own Close.
+  const [bookRendered, setBookRendered] = useState(false);
   const lastCfiRef = useRef(null);
 
   const touchStartRef = useRef(null);
@@ -158,12 +162,18 @@ export default function ReaderModal({
   }, []);
 
   // Auto-hide: the chrome hides itself 2.5s after it was last shown or used,
-  // and never while Contents is open over it or keyboard focus is inside it.
+  // and never while Contents is open over it, keyboard focus is inside it,
+  // the book has failed (the error is in the bottom bar, Close in the top
+  // one) or the book has not drawn its first page yet.
+  const chromePinned = contentsOpen || chromeHeld || Boolean(readerError) || !bookRendered;
   useEffect(() => {
-    if (!chromeVisible || contentsOpen || chromeHeld) return undefined;
+    if (readerError) setChromeVisible(true);
+  }, [readerError]);
+  useEffect(() => {
+    if (!chromeVisible || chromePinned) return undefined;
     const id = setTimeout(() => setChromeVisible(false), AUTO_HIDE_MS);
     return () => clearTimeout(id);
-  }, [chromeVisible, chromeKick, contentsOpen, chromeHeld]);
+  }, [chromeVisible, chromeKick, chromePinned]);
 
   // Font-size stepper → epub.js. Guarded: the rendition may not exist yet
   // (still loading) or the fixture may error before one is created.
@@ -216,7 +226,11 @@ export default function ReaderModal({
       setProgressAvailable(true);
       let touchStart = null;
       const listeners = {
-        relocated: (location) => handlersRef.current.applyLocation(location),
+        rendered: () => setBookRendered(true),
+        relocated: (location) => {
+          setBookRendered(true);
+          handlersRef.current.applyLocation(location);
+        },
         click: (event) => {
           if (!clickBelongsToBook(event)) handlersRef.current.toggleChrome();
         },
@@ -253,7 +267,11 @@ export default function ReaderModal({
         });
       };
       try {
-        if (rendition.location) handlersRef.current.applyLocation(rendition.location);
+        if (rendition.location) {
+          // Already drawn before we got here.
+          if (rendition.location.start) setBookRendered(true);
+          handlersRef.current.applyLocation(rendition.location);
+        }
       } catch {
         // ignore
       }
@@ -442,13 +460,13 @@ export default function ReaderModal({
         {/* Page-turn strips: the outer quarters. The middle is the book's. */}
         <ButtonBase
           aria-label="Previous page"
-          onClick={goPrev}
+          onClick={bookRendered ? goPrev : pokeChrome}
           disableRipple
           sx={{ position: "absolute", top: 0, bottom: 0, left: 0, width: TURN_STRIP, zIndex: 1 }}
         />
         <ButtonBase
           aria-label="Next page"
-          onClick={goNext}
+          onClick={bookRendered ? goNext : pokeChrome}
           disableRipple
           sx={{ position: "absolute", top: 0, bottom: 0, right: 0, width: TURN_STRIP, zIndex: 1 }}
         />
@@ -571,6 +589,8 @@ export default function ReaderModal({
               variant="caption"
               noWrap
               data-testid="reader-position"
+              // A failed book is announced; the position is not (it changes every page).
+              role={readerError ? "alert" : undefined}
               sx={{
                 color: readerError ? (mode === "dark" ? "#F59A9A" : "#B02A2A") : palette.ink,
                 flex: 1,
