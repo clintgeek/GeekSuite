@@ -135,6 +135,20 @@ describe('a repeating task: which ones to save is the Save button (review 2026-1
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.body.textContent).not.toMatch(/instance/i);
   });
+  // Review 2026-11-19: the question stayed set after the fields went back to
+  // what is saved, so the next change showed it with nothing having asked.
+  it('changes undone by hand take the question away; a new change does not bring it back unasked', () => {
+    render(<ThemeProvider theme={theme}><InlineEditor task={repeat()} onSave={vi.fn()} onCancel={vi.fn()} /></ThemeProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'High' }));
+    fireEvent.keyDown(screen.getByLabelText('Task', { selector: 'input' }), { key: 'Enter' });
+    expect(screen.getByRole('alert')).toHaveTextContent(/this one, or to every one/);
+    fireEvent.click(screen.getByRole('button', { name: 'None' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Low' }));
+    expect(screen.getByRole('button', { name: 'Save this one' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
   it('Enter asks rather than guessing; Escape still discards', () => {
     const onCancel = vi.fn();
     const onSave = vi.fn();

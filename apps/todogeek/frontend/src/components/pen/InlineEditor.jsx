@@ -129,6 +129,9 @@ export default function InlineEditor({ task, onSave, onCancel, onDelete, apiRef,
   useGeekToastClearance(footerRef, sheet);
   // A repeating task with changes: which ones to save is the Save button.
   const choosing = repeating && changed;
+  // Fields back to what is saved: nothing is being asked any more, so a
+  // later change does not find the question already standing.
+  useEffect(() => { if (!changed) setAskScope(false); }, [changed]);
 
   const commit = async (scope = 'THIS_INSTANCE') => {
     setSaving(true);
