@@ -151,6 +151,13 @@ export function flattenToc(toc, depth = 0, out = []) {
 }
 
 const stripFragment = (href) => String(href || "").split("#")[0];
+/** Without the fragment and any leading "./" or "../" (a nav file in a subfolder). */
+const normalHref = (href) => stripFragment(href).replace(/^(\.\.?\/)+/, "");
+const sameFile = (a, b) => {
+  const x = normalHref(a);
+  const y = normalHref(b);
+  return Boolean(x) && Boolean(y) && (x === y || x.endsWith(`/${y}`) || y.endsWith(`/${x}`));
+};
 
 /**
  * The chapter a spine href belongs to: the first flattened TOC entry whose
@@ -161,14 +168,38 @@ const stripFragment = (href) => String(href || "").split("#")[0];
  * apart.
  */
 export function chapterEntryForHref(flatToc, href) {
-  const target = stripFragment(href);
-  if (!target || !Array.isArray(flatToc)) return null;
-  const same = (a) => {
-    const file = stripFragment(a);
-    return Boolean(file) && (file === target || target.endsWith(`/${file}`) || file.endsWith(`/${target}`));
-  };
+  if (!normalHref(href) || !Array.isArray(flatToc)) return null;
   // The first entry for the file is the chapter; later ones are its sections.
-  return flatToc.find((item) => same(item.href)) || null;
+  return flatToc.find((item) => sameFile(item.href, href)) || null;
+}
+
+/** The spine position of `href` among epub.js `spine.spineItems`, or null. */
+export function spineIndexForHref(spineItems, href) {
+  if (!Array.isArray(spineItems)) return null;
+  const item = spineItems.find((s) => s && sameFile(s.href, href));
+  return item && Number.isInteger(item.index) ? item.index : null;
+}
+
+/**
+ * The chapter you are in: the TOC entry for this file when there is one;
+ * otherwise (a chapter split over several files, only the first of which is
+ * in the TOC) the last entry that starts at or before this spine position.
+ * `spineIndexOf(href)` maps a TOC href to its spine position.
+ */
+export function chapterEntryForLocation(flatToc, { href, index, spineIndexOf } = {}) {
+  const exact = chapterEntryForHref(flatToc, href);
+  if (exact || !Array.isArray(flatToc) || !Number.isInteger(index) || typeof spineIndexOf !== "function") return exact;
+  let best = null;
+  let bestAt = -1;
+  for (const item of flatToc) {
+    const at = spineIndexOf(item.href);
+    // Strictly later only: the first entry at a position is the chapter.
+    if (Number.isInteger(at) && at <= index && at > bestAt) {
+      best = item;
+      bestAt = at;
+    }
+  }
+  return best;
 }
 
 /** The chapter's label for a spine href, or null (see chapterEntryForHref). */

@@ -21,7 +21,7 @@
  *     paper and its after-hours floor (utils/readerPalette.js), independent of
  *     the app's own light/dark mode so dark-mode readers can read on paper.
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, ButtonBase, Dialog, IconButton, Typography, alpha } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
@@ -30,7 +30,7 @@ import TocIcon from "@mui/icons-material/Toc";
 import { GeekSheet, useBackToClose } from "@geeksuite/ui";
 import { FONT_MAX, FONT_MIN, FONT_STEP, loadReaderPrefs, saveReaderPrefs } from "../utils/readerPrefs";
 import { readerPalette } from "../utils/readerPalette";
-import { chapterEntryForHref } from "../utils/readerPosition";
+import { chapterEntryForLocation, spineIndexForHref } from "../utils/readerPosition";
 import { SERIF_FONT, WOOD } from "../theme/theme";
 
 const SWIPE_THRESHOLD = 48;
@@ -102,6 +102,8 @@ export default function ReaderModal({
   const [progressAvailable, setProgressAvailable] = useState(false);
   const [progressPct, setProgressPct] = useState(null);
   const [currentHref, setCurrentHref] = useState(null);
+  // The spine position epub.js reports, for chapters split over several files.
+  const [currentIndex, setCurrentIndex] = useState(null);
   // True once epub.js has put a page on screen. Until then a middle tap has
   // nothing to land on (the iframe is what toggles the chrome), so the chrome
   // stays up: an EPUB that never opens must not fade away its own Close.
@@ -210,6 +212,7 @@ export default function ReaderModal({
       }
       setProgressPct(located && typeof pct === "number" && Number.isFinite(pct) ? Math.round(pct * 100) : null);
       setCurrentHref(start?.href || null);
+      setCurrentIndex(Number.isInteger(start?.index) ? start.index : null);
     } catch {
       // ignore malformed location payloads
     }
@@ -330,7 +333,7 @@ export default function ReaderModal({
       const rendition = readerRenditionRef.current;
       const current = rendition?.currentLocation?.();
       if (current?.start) applyLocation(current);
-      else if (lastCfiRef.current) applyLocation({ start: { cfi: lastCfiRef.current, href: currentHref } });
+      else if (lastCfiRef.current) applyLocation({ start: { cfi: lastCfiRef.current, href: currentHref, index: currentIndex } });
     } catch {
       // ignore
     }
@@ -382,7 +385,19 @@ export default function ReaderModal({
     Array.isArray(selectedBook?.authors) && selectedBook.authors.length > 0
       ? selectedBook.authors.join(", ")
       : null;
-  const chapterEntry = chapterEntryForHref(readerToc, currentHref);
+  // Each TOC entry's spine position, worked out once per Contents list (the
+  // spine is loaded by the time the TOC is, hooks/useReader.js).
+  const tocSpineIndex = useMemo(() => {
+    const spineItems = readerRenditionRef.current?.book?.spine?.spineItems;
+    const map = new Map();
+    for (const item of readerToc) map.set(item.href, spineIndexForHref(spineItems, item.href));
+    return map;
+  }, [readerToc, readerRenditionRef]);
+  const chapterEntry = chapterEntryForLocation(readerToc, {
+    href: currentHref,
+    index: currentIndex,
+    spineIndexOf: (href) => tocSpineIndex.get(href) ?? null,
+  });
   const chapter = chapterEntry?.label || null;
   const showPct = progressAvailable && progressPct != null;
   const positionLabel = [showPct ? `${progressPct}%` : null, chapter].filter(Boolean).join(" · ");

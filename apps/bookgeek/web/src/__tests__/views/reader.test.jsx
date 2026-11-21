@@ -259,6 +259,27 @@ describe("where you are in the book", () => {
     expect(entries[1]).toHaveAttribute("aria-current", "location");
   });
 
+  it("a chapter split over two files is still named on its second file (review 2026-11-19 #7)", () => {
+    const split = flattenToc([
+      { id: "1", href: "../Text/ch1.xhtml", label: "One" },
+      { id: "2", href: "../Text/ch2.xhtml", label: "Two" },
+    ]);
+    const rendition = fakeRendition();
+    rendition.book.spine = {
+      spineItems: [
+        { href: "Text/ch1.xhtml", index: 0 },
+        { href: "Text/ch1b.xhtml", index: 1 },
+        { href: "Text/ch2.xhtml", index: 2 },
+      ],
+    };
+    renderWithProviders(<ReaderModal {...props({ readerRenditionRef: { current: rendition }, readerToc: split })} />);
+    act(() => rendition.emit("relocated", { start: { cfi: CFI, href: "Text/ch1b.xhtml", index: 1, percentage: 0.1 } }));
+    expect(screen.getByTestId("reader-position")).toHaveTextContent("10% · One");
+    // A nav file one folder down ("../Text/…") still matches its spine file.
+    act(() => rendition.emit("relocated", { start: { cfi: CFI, href: "Text/ch2.xhtml", index: 2, percentage: 0.6 } }));
+    expect(screen.getByTestId("reader-position")).toHaveTextContent("60% · Two");
+  });
+
   it("chapterForHref matches by file, whichever side carries the folder", () => {
     expect(chapterForHref(toc, "Text/ch2.xhtml")).toBe("The Desert");
     expect(chapterForHref(toc, "ch1.xhtml")).toBe("One");
