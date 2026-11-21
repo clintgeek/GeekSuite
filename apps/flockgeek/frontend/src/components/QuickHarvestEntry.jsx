@@ -256,7 +256,9 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
         <Button
           onClick={() => setShowDays((v) => !v)}
           aria-expanded={showDays}
-          aria-controls="quick-harvest-days"
+          // Only while the panel exists: it unmounts when closed, and an
+          // aria-controls pointing at nothing is an orphan reference.
+          aria-controls={showDays ? "quick-harvest-days" : undefined}
           aria-label="Change days covered"
           sx={{ minHeight: 44, color: "text.secondary", textDecoration: "underline" }}
         >

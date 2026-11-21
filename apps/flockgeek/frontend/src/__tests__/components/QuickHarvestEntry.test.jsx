@@ -55,6 +55,19 @@ describe('QuickHarvestEntry', () => {
     // concurrent load this box sometimes carries; give this one room.
   }, 10000);
 
+  // Review 2026-11-20: the days panel unmounts when closed, so its toggle
+  // must not point aria-controls at an id that is not in the document.
+  it('points aria-controls at the days panel only while the panel exists', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<QuickHarvestEntry locations={[]} />);
+    const toggle = screen.getByRole('button', { name: 'Change days covered' });
+    expect(toggle).not.toHaveAttribute('aria-controls');
+    await user.click(toggle);
+    const id = toggle.getAttribute('aria-controls');
+    expect(id).toBeTruthy();
+    expect(document.getElementById(id)).toBeInTheDocument();
+  });
+
   // ÷ days folded into a "Covers 1 day · Change" line (UX review 2026-11-18,
   // FlockGeek 3): the rule is shown with the field, one tap away.
   it('shows the ÷ days helper text', async () => {
