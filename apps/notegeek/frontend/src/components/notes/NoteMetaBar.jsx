@@ -159,13 +159,21 @@ function NoteMetaBar({
               minHeight: 20,
               minWidth: 0,
               color: 'text.secondary',
-              ...(metaUp ? { [PHONE_MEDIA]: { mt: 0, mb: '2px' } } : null),
+              // In row 1 on a phone it shares the line with Back, a failed
+              // save's pill (+ Retry) and ⋯: one line that gives way, the
+              // type's name ending in "…", never running under the pill.
+              ...(metaUp ? { [PHONE_MEDIA]: { mt: 0, mb: '2px', flexWrap: 'nowrap', overflow: 'hidden' } } : null),
             }}
           >
             {meta && (
-              <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Box component="span" data-note-type-label="" sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px', minWidth: 0 }}>
                 <TypeIcon type={noteType} size={15} aria-hidden role={undefined} aria-label={undefined} />
-                <Box component="span" sx={{ fontSize: '0.8125rem' }}>{meta.label}</Box>
+                <Box
+                  component="span"
+                  sx={{ fontSize: '0.8125rem', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                  {meta.label}
+                </Box>
               </Box>
             )}
             {meta && status && (

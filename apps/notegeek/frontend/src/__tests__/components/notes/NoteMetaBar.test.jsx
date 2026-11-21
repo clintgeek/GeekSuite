@@ -131,3 +131,31 @@ describe('NoteMetaBar', () => {
         expect(screen.getByTestId('action-btn')).toHaveTextContent('Save');
     });
 });
+
+// Review 2026-11-20: on a phone the meta line shares row 1 with Back, a
+// failed save's pill + Retry, and ⋯. The type's name must give way (end in
+// "…") rather than run under the pill. jsdom does not lay out, so this pins
+// the rule that makes it give way; the harness and a device check the look.
+describe('NoteMetaBar — the type name gives way in a crowded row', () => {
+    it('the type label can shrink and ends in an ellipsis', () => {
+        render(
+            <NoteMetaBar
+                title="Roof quote"
+                onTitleChange={() => {}}
+                noteType="markdown"
+                tags={[]}
+                onTagsChange={() => {}}
+                alert={<span>offline · not saved</span>}
+            />,
+            { wrapper: AllProviders }
+        );
+        const wrap = document.querySelector('[data-note-type-label]');
+        const label = wrap.lastElementChild;
+        expect(getComputedStyle(wrap).minWidth).toMatch(/^0(px)?$/);
+        const style = getComputedStyle(label);
+        expect(style.overflow).toBe('hidden');
+        expect(style.textOverflow).toBe('ellipsis');
+        expect(style.whiteSpace).toBe('nowrap');
+        expect(style.minWidth).toMatch(/^0(px)?$/);
+    });
+});
