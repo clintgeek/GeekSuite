@@ -1,6 +1,29 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { linkTargetProps, readDisplay } from './linkTarget.js'
+import { linkTargetProps, openLink, readDisplay } from './linkTarget.js'
+
+function fakeWindow() {
+  const calls = []
+  return {
+    calls,
+    open: (...args) => calls.push(['open', ...args]),
+    location: { assign: (url) => calls.push(['assign', url]) },
+  }
+}
+
+test('Enter on a result opens a new tab on the desktop', () => {
+  const win = fakeWindow()
+  openLink('https://notegeek.clintgeek.com/notes/1', { phone: false, standalone: false }, win)
+  assert.deepEqual(win.calls, [['open', 'https://notegeek.clintgeek.com/notes/1', '_blank', 'noopener,noreferrer']])
+})
+
+test('Enter on a result stays in the same tab on a phone, and when installed', () => {
+  for (const display of [{ phone: true }, { standalone: true }]) {
+    const win = fakeWindow()
+    openLink('https://todogeek.clintgeek.com/', display, win)
+    assert.deepEqual(win.calls, [['assign', 'https://todogeek.clintgeek.com/']])
+  }
+})
 
 test('desktop opens apps in a new tab', () => {
   assert.deepEqual(linkTargetProps({ phone: false, standalone: false }), {

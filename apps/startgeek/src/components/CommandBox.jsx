@@ -4,6 +4,7 @@ import { useGlance } from '../hooks/useGlance'
 import { useSettings } from '../hooks/useSettings'
 import { useToast } from '../hooks/useToast'
 import { useDisplay } from '../hooks/useLinkTarget'
+import { openLink } from '../lib/linkTarget'
 import { gql, UnauthorizedError } from '../lib/graphql'
 import { failureMessage, isAuthFailure } from '../lib/commandFailure'
 import { ENGINES } from '../lib/engines'
@@ -94,10 +95,6 @@ const createNoteFromText = async (text) => {
   })
 }
 
-const openUrl = (url) => {
-  window.open(url, '_blank', 'noopener,noreferrer')
-}
-
 const CommandBox = ({ onOpenSettings }) => {
   const { status, markOut } = useSession()
   const { refetch } = useGlance()
@@ -118,7 +115,10 @@ const CommandBox = ({ onOpenSettings }) => {
   const [draftLoading, setDraftLoading] = useState(false)
   const [capturing, setCapturing] = useState(false)
   const [focused, setFocused] = useState(false)
-  const { phone } = useDisplay()
+  const display = useDisplay()
+  const { phone } = display
+  // Enter on a result goes where a tap on it would (lib/linkTarget.js).
+  const openUrl = useCallback((url) => openLink(url, display), [display])
 
   const inputRef = useRef(null)
   const searchDebounceRef = useRef(null)
@@ -551,6 +551,7 @@ const CommandBox = ({ onOpenSettings }) => {
     draft,
     hour12,
     notify,
+    openUrl,
   ])
 
   // Every Enter (and the draft's Create) goes through the guard: while one is
