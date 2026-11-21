@@ -99,20 +99,29 @@ export const useWeight = () => {
         // counts as today: a goal can't have started later than now.
         const usable = (g) => g && (g.enabled || (g.startWeight != null && g.targetWeight != null));
         const today = localDateString(new Date());
-        const startDay = (g) => {
+        //
+        // nutrition_goal.start_date is a CALENDAR DAY the gateway's Date
+        // scalar sends as UTC midnight ("2026-11-18T00:00:00.000Z"): it is
+        // read as its UTC day. Read on the local calendar, west of UTC it was
+        // the day before, and the stale weight_goal won again (review
+        // 2026-11-20). weight_goal.startDate is a String that may be an
+        // instant, so it is read on the local calendar.
+        const startDay = (g, { calendarDay = false } = {}) => {
           const raw = g?.startDate;
           if (!raw) return '';
           const day = /^\d{4}-\d{2}-\d{2}$/.test(String(raw)) ? String(raw) : (() => {
             const d = new Date(raw);
-            return Number.isFinite(d.getTime()) ? localDateString(d) : '';
+            if (!Number.isFinite(d.getTime())) return '';
+            return calendarDay ? utcDateString(d) : localDateString(d);
           })();
           return day > today ? today : day;
         };
         let mapped = null;
         const wgUsable = usable(wgMapped);
         const ngUsable = usable(ngMapped);
-        if (wgUsable && ngUsable) mapped = startDay(ngMapped) >= startDay(wgMapped) ? ngMapped : wgMapped;
-        else if (wgUsable) mapped = wgMapped;
+        if (wgUsable && ngUsable) {
+          mapped = startDay(ngMapped, { calendarDay: true }) >= startDay(wgMapped) ? ngMapped : wgMapped;
+        } else if (wgUsable) mapped = wgMapped;
         else if (ngUsable) mapped = ngMapped;
 
         if (mapped && mapped.enabled) {
