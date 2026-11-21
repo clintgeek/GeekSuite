@@ -97,11 +97,22 @@ export default function TopBar({ user, onSignOut }) {
 
   const mobileSearch = isMobile && onLibrary && searchOpen;
 
+  // Closing phone search (Back, Escape) hands focus back to "Search games".
+  // The toggle moves from the bar's leading slot to its actions as it closes,
+  // so it is a new element and focus would otherwise fall to the page.
+  const toggleRef = useRef(null);
+  const wasSearching = useRef(mobileSearch);
+  useEffect(() => {
+    if (wasSearching.current && !mobileSearch && isMobile && onLibrary) toggleRef.current?.focus();
+    wasSearching.current = mobileSearch;
+  }, [mobileSearch, isMobile, onLibrary]);
+
   // Phone search (review 2026-11-18 #7): Back sits at the far left where the
   // menu was, then the field (its own ✕ only clears the text). The app grid
   // and avatar step aside while it is open, to give the field the width.
   const searchToggle = (
     <IconButton
+      ref={toggleRef}
       data-geek-topbar="search"
       onClick={() => setSearchOpen((v) => !v)}
       aria-label={mobileSearch ? 'Close search' : 'Search games'}

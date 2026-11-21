@@ -44,4 +44,22 @@ describe('phone search', { timeout: 30000 }, () => {
     expect(screen.queryByRole('searchbox', { name: 'Search your games' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Search games' })).toBeInTheDocument();
   });
+
+  it('closing search hands focus back to "Search games" (Back and Escape)', () => {
+    const shell = { isMobile: true, mobileOpen: false, hasNav: true, bottomInset: 0, leftInset: 0, openNav: () => {}, closeNav: () => {}, toggleNav: () => {} };
+    renderWithProviders(
+      <GeekShellContext.Provider value={shell}>
+        <TopBar user={{ username: 'chef' }} onSignOut={() => {}} />
+      </GeekShellContext.Provider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Search games' }));
+    const back = screen.getByRole('button', { name: 'Close search' });
+    back.focus();
+    fireEvent.click(back);
+    expect(screen.getByRole('button', { name: 'Search games' })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search games' }));
+    fireEvent.keyDown(screen.getByRole('searchbox', { name: 'Search your games' }), { key: 'Escape' });
+    expect(screen.getByRole('button', { name: 'Search games' })).toHaveFocus();
+  });
 });
