@@ -2,7 +2,7 @@
 // (design review 2026-11-18, findings 5 and 6).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeToast, toastLifetime, toggleTaskWithUndo, TOAST_MS, TOAST_ACTION_MS } from './feedback.js'
+import { normalizeToast, pausesOnPointer, toastLifetime, toggleTaskWithUndo, TOAST_MS, TOAST_ACTION_MS } from './feedback.js'
 
 test('a plain message stays about 6 s, not 2.5 s', () => {
   assert.equal(toastLifetime(normalizeToast('Added for today')), TOAST_MS)
@@ -17,6 +17,13 @@ test('a message with Undo stays longer', () => {
 
 test('a failure stays until dismissed', () => {
   assert.equal(toastLifetime(normalizeToast({ tone: 'error', message: "Couldn't add the task" })), null)
+})
+
+test('only a mouse resting on the toast pauses it; a tap does not', () => {
+  assert.equal(pausesOnPointer('mouse'), true)
+  assert.equal(pausesOnPointer('touch'), false)
+  assert.equal(pausesOnPointer('pen'), false)
+  assert.equal(pausesOnPointer(undefined), false)
 })
 
 test('nothing to say is no toast', () => {

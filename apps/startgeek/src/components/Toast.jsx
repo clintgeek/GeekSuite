@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ANIMATION } from '../constants'
-import { toastLifetime } from '../lib/feedback'
+import { pausesOnPointer, toastLifetime } from '../lib/feedback'
 
 /**
  * One message at a time, at the bottom above the dock.
@@ -54,8 +54,12 @@ const Toast = ({ toast, onClose }) => {
               WebkitBackdropFilter: 'blur(14px)',
               boxShadow: '0 10px 40px rgba(0,0,0,0.45)',
             }}
-            onMouseEnter={() => setPaused(true)}
-            onMouseLeave={() => setPaused(false)}
+            onPointerEnter={(e) => {
+              if (pausesOnPointer(e.pointerType)) setPaused(true)
+            }}
+            onPointerLeave={(e) => {
+              if (pausesOnPointer(e.pointerType)) setPaused(false)
+            }}
             onFocus={() => setPaused(true)}
             onBlur={() => setPaused(false)}
           >

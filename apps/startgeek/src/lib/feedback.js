@@ -40,6 +40,15 @@ export function toastLifetime(toast) {
   return toast.action ? TOAST_ACTION_MS : TOAST_MS
 }
 
+/**
+ * Does a pointer resting on the toast pause its clock? Only a mouse: a
+ * finger "enters" on a tap and never leaves, so a tapped toast would stay
+ * until something else was tapped.
+ */
+export function pausesOnPointer(pointerType) {
+  return pointerType === 'mouse'
+}
+
 const shorten = (text, max = 48) => {
   const s = String(text ?? '').trim()
   return s.length > max ? `${s.slice(0, max - 1)}…` : s
