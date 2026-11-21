@@ -268,6 +268,18 @@ test('describeCapture says what was understood, on the chosen clock', () => {
   assert.equal(describeCapture(friday, { now }), 'Added for Fri 20')
 })
 
+test('describeCapture: a far or past date says its month, yesterday is yesterday, #blocked is said once', () => {
+  const now = new Date(2026, 10, 18, 9, 38) // Wed 18 Nov 2026
+  const say = (line) => describeCapture(parseTaskInput(line, { now }), { now })
+  assert.equal(say('pay rent /2026-11-24'), 'Added for Tue 24') // within the week
+  assert.equal(say('renew passport /2026-12-03'), 'Added for Thu 3 Dec')
+  assert.equal(say('file it /2026-11-17'), 'Added for yesterday')
+  assert.equal(say('file it /2026-11-02'), 'Added for Mon 2 Nov')
+  assert.equal(say('plan it /2027-01-04'), 'Added for Mon 4 Jan 2027')
+  assert.equal(say('renew passport #blocked ~blocked waiting on photos'), 'Added for today · #blocked')
+  assert.equal(say('renew passport ~blocked'), 'Added for today · #blocked')
+})
+
 test('formatTime', () => {
   assert.equal(formatTime(new Date(2026, 0, 1, 0, 5)), '12:05am')
   assert.equal(formatTime(new Date(2026, 0, 1, 12, 0)), '12pm')

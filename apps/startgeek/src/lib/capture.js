@@ -110,6 +110,22 @@ export function draftFields(draft, line = '') {
 }
 
 /**
+ * A due day in the fewest words that cannot be misread: today, tomorrow,
+ * yesterday; the weekday and date within the coming week ("Fri 20"); with the
+ * month beyond that or in the past ("Thu 5 Mar"), and the year when it is
+ * not this one ("Mon 5 Jan 2027").
+ */
+function dayWords(d, diff, now) {
+  if (diff === 0) return 'today'
+  if (diff === 1) return 'tomorrow'
+  if (diff === -1) return 'yesterday'
+  const day = `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${d.getDate()}`
+  if (diff > 1 && diff < 7) return day
+  const month = d.toLocaleDateString('en-US', { month: 'short' })
+  return d.getFullYear() === now.getFullYear() ? `${day} ${month}` : `${day} ${month} ${d.getFullYear()}`
+}
+
+/**
  * The words the capture toast uses for what was understood:
  * "Added for Thu 19 · 2pm · #work · private". `hour12` follows the clock
  * setting.
@@ -122,20 +138,16 @@ export function describeCapture(fields, { now = new Date(), hour12 = true } = {}
       const a = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       const b = new Date(d.getFullYear(), d.getMonth(), d.getDate())
       const diff = Math.round((b - a) / 86400000)
-      parts.push(
-        diff === 0
-          ? 'today'
-          : diff === 1
-            ? 'tomorrow'
-            : `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${d.getDate()}`
-      )
+      parts.push(dayWords(d, diff, now))
       if (fields.hasTime) parts.push(formatTime(d, hour12))
     }
   } else {
     parts.push('today')
   }
-  for (const tag of fields?.tags || []) parts.push(`#${tag}`)
-  if (fields?.blocked) parts.push('#blocked')
+  const tags = [...(fields?.tags || [])]
+  // `~blocked` files a #blocked tag; said once even when #blocked was typed too.
+  if (fields?.blocked && !tags.some((t) => String(t).toLowerCase() === 'blocked')) tags.push('blocked')
+  for (const tag of tags) parts.push(`#${tag}`)
   if (fields?.private) parts.push('private')
   return `Added for ${parts.join(' · ')}`
 }
