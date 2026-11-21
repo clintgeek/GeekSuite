@@ -17,7 +17,7 @@
  * And it wears the yard: kraft under the sections, the livery band under the
  * header, like the top bar.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { GeekSheet } from '@geeksuite/ui';
 import { ActiveChips, FilterSections, showLabel, useCollectionConfig } from '@geeksuite/collection';
@@ -64,17 +64,26 @@ export default function ThingFiltersSheet({ open, onClose, sections, lib, facets
   const active = lib.activeCount > 0;
   const [hidden, setHidden] = useState({});
   const ready = Boolean(facets?.current);
+  // Seeded once per open, at the first live answer: with nothing on then, nothing is
+  // hidden for the rest of this open — a filter tapped inside the sheet never makes
+  // options vanish under the finger. Afterwards the set is only ever intersected.
+  const seededRef = useRef(false);
 
-  // Taken as the sheet opens (or as soon as the live counts land), then only ever shrunk.
   useEffect(() => {
-    if (!open || !active) {
+    if (!open) {
+      seededRef.current = false;
       setHidden({});
       return;
     }
     if (!ready) return;
+    if (!seededRef.current) {
+      seededRef.current = true;
+      setHidden(active ? emptyOptions(facets) : {});
+      return;
+    }
     setHidden((prev) => {
-      const now = emptyOptions(facets);
-      if (!Object.keys(prev).length) return now;
+      if (!Object.keys(prev).length) return prev;
+      const now = active ? emptyOptions(facets) : {};
       const next = {};
       Object.entries(prev).forEach(([key, set]) => {
         const still = new Set([...set].filter((v) => now[key]?.has(v)));

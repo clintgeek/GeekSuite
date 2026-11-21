@@ -59,6 +59,28 @@ describe('the sheet', () => {
     expect(on.compareDocumentPosition(firstSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('a filter tapped inside the sheet never makes options vanish while it is open; the next open leaves them out', () => {
+    const sheet = (l, facets, open = true) => (
+      <ThingFiltersSheet open={open} onClose={() => {}} sections={SECTIONS} lib={l} facets={facets} context={context} sectionsOpen={{ type: true, tags: true }} onToggleSection={() => {}} total={4} chips={activeChips(l.state, context)} />
+    );
+    // Opened with nothing on…
+    const { rerender } = renderWithProviders(sheet(lib(), { base, current: base }));
+    // …then a tag tapped in the sheet: the filtered answer lands while it is still open.
+    const on = lib({ tags: ['fishing'] });
+    rerender(sheet(on, { base, current: null }));
+    rerender(sheet(on, { base, current }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Tool')).toBeInTheDocument();
+    expect(within(dialog).getByText('shop')).toBeInTheDocument();
+    expect(screen.queryByTestId('filters-sheet-folded')).toBeNull();
+
+    // Closed and opened again with the filter on: now they are left out.
+    rerender(sheet(on, { base, current }, false));
+    rerender(sheet(on, { base, current }));
+    expect(within(screen.getByRole('dialog')).queryByText('Tool')).toBeNull();
+    expect(screen.getByTestId('filters-sheet-folded')).toHaveTextContent('3 options');
+  });
+
   it('nothing on: every option, no strip', () => {
     const l = lib();
     renderWithProviders(
