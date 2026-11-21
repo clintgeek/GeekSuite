@@ -198,7 +198,6 @@ export default function TodayView() {
     <Column>
       <NewStoriesBar count={pending?.count} onShow={showNew} />
       <Masthead
-        edition="Today’s paper"
         updatedAt={front?.generatedAt}
         aside={freeSwitch}
         note={

@@ -82,6 +82,7 @@ function SectionHead({ id, children, count }) {
 
 function SourceRow({ source, onToggle }) {
   const retired = source.status === 'retired';
+  const status = rowStatus(source);
   return (
     <Box component="li" data-testid="source-row" data-source-id={source.id} sx={{ py: 4, borderBottom: 1, borderColor: 'divider' }}>
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 1 }}>
@@ -106,7 +107,7 @@ function SourceRow({ source, onToggle }) {
       </Box>
       <Typography sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', color: 'text.secondary', mb: 1 }}>
         {[
-          rowStatus(source) ? labelFor(STATUS_LABEL, rowStatus(source)) : null,
+          status ? labelFor(STATUS_LABEL, status) : null,
           source.sections.map((s) => labelFor(SECTION_LABEL, s)).join(', '),
           `${source.articlesLast7d} this week`,
           source.addedByMe ? 'added by you' : null,

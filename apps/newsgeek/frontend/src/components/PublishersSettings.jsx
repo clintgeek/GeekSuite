@@ -134,7 +134,6 @@ function OpenersList({ sources }) {
   );
 }
 
-
 export default function PublishersSettings() {
   const client = useApolloClient();
   const { notify } = useToast();

@@ -49,7 +49,6 @@ import WhyChips from './WhyChips';
 import TimeAgo from './TimeAgo';
 import { linkTargetProps, resolveStoryOpen } from '../utils/openUrl';
 
-
 const publisherSx = { fontFamily: GOTHIC, fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'text.primary' };
 
 export default function ArticleItem({

@@ -30,7 +30,7 @@ function Note({ note }) {
   return <Box sx={noteSx}>{note}</Box>;
 }
 
-export default function Masthead({ now, edition = 'Latest edition', updatedAt = null, compact = false, title = null, aside = null, note = null }) {
+export default function Masthead({ now, edition = 'Today’s paper', updatedAt = null, compact = false, title = null, aside = null, note = null }) {
   // The dateline is re-read when the PWA comes back (a paper left open overnight).
   useResumeTick();
   const day = now ?? new Date();
