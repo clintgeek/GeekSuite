@@ -3,8 +3,10 @@ import Narration from '../Narration';
 import DiceRoll from './DiceRoll';
 import { fonts } from '../../theme/theme';
 
+// px strings: in `sx` a bare 1 is 100% (width/height) and -1 is a spacing
+// step (margin), so the "hidden" label was as wide as its row.
 const visuallyHidden = {
-  position: 'absolute', width: 1, height: 1, p: 0, m: -1, overflow: 'hidden',
+  position: 'absolute', width: '1px', height: '1px', p: 0, m: '-1px', overflow: 'hidden',
   clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0,
 };
 
