@@ -89,10 +89,18 @@ describe('the remembered pen', () => {
   });
 
   it('ignores a remembered pen that no longer exists', async () => {
+    const user = userEvent.setup();
     window.localStorage.setItem(LAST_PEN_KEY, 'gone');
     renderWithProviders(<QuickHarvestEntry locations={PENS} />);
     expect(screen.getByRole('combobox', { name: 'Location / Pen' })).not.toHaveTextContent(/North|South|East/);
-  });
+    // The display alone proves nothing: MUI's Select shows a blank for a
+    // value that matches no option too. What is submitted is the proof — a
+    // deleted pen's id must never reach the gateway (review 2026-11-20).
+    await user.click(screen.getByRole('button', { name: '3' }));
+    await user.click(screen.getByRole('button', { name: /log 3 eggs/i }));
+    expect(mockRecordEggProduction).toHaveBeenCalledTimes(1);
+    expect(mockRecordEggProduction.mock.calls[0][0].variables).not.toHaveProperty('locationId');
+  }, 30000);
 
   it('remembers the pen a harvest was logged to', async () => {
     const user = userEvent.setup();

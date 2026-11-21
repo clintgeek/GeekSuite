@@ -2,7 +2,7 @@
 // were logged — the question a keeper opens the app with. A "Today" line
 // under the greeting answers it.
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import { MockedProvider } from '@apollo/client/testing';
 import { localDateString } from '@geeksuite/utils';
@@ -55,6 +55,13 @@ const render = (eggs) =>
     </MockedProvider>
   );
 
+const REAL_TZ = process.env.TZ;
+afterEach(() => {
+  vi.useRealTimers();
+  if (REAL_TZ === undefined) delete process.env.TZ;
+  else process.env.TZ = REAL_TZ;
+});
+
 describe('Home — Today', () => {
   it('says when today is not logged yet, with a way to log it', async () => {
     render([egg('e1', '2020-01-01T00:00:00.000Z', 8, 'north')]);
@@ -63,12 +70,30 @@ describe('Home — Today', () => {
     expect(screen.getByRole('link', { name: 'Log eggs' })).toHaveAttribute('href', '/egg-log');
   });
 
-  it("says how many eggs are in today, and from which pen", async () => {
-    const todayIso = `${localDateString(new Date())}T00:00:00.000Z`;
-    render([egg('e1', todayIso, 9, 'north'), egg('e0', '2020-01-01T00:00:00.000Z', 8, 'north')]);
+  // Pinned to a US evening (review 2026-11-20): 21:00 on 19 Nov in Chicago is
+  // already 20 Nov in UTC. A harvest logged tonight is stored as 19 Nov (the
+  // local day, at UTC midnight), so "today" must be the local day. Run on a
+  // UTC machine, the old version of this test could not tell the two apart.
+  it("says how many eggs are in today, and from which pen — today being the local day", async () => {
+    process.env.TZ = 'America/Chicago';
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-20T03:00:00.000Z'));
+    expect(localDateString(new Date())).toBe('2026-11-19');
+
+    render([egg('e1', '2026-11-19T00:00:00.000Z', 9, 'north'), egg('e0', '2020-01-01T00:00:00.000Z', 8, 'north')]);
     const today = await screen.findByTestId('home-today');
     expect(await screen.findByText(/9 eggs · North Coop/)).toBeInTheDocument();
     expect(today).not.toHaveTextContent('not logged yet');
+  });
+
+  it("does not count tomorrow's UTC day as today on a US evening", async () => {
+    process.env.TZ = 'America/Chicago';
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-20T03:00:00.000Z'));
+
+    render([egg('e1', '2026-11-20T00:00:00.000Z', 9, 'north')]);
+    const today = await screen.findByTestId('home-today');
+    expect(today).toHaveTextContent('Today: not logged yet');
   });
 
   // Review 2026-11-20: on the phone the Today line's "Log eggs" opens the
