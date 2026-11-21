@@ -12,8 +12,8 @@ import { create } from 'zustand';
  *              The docked toolbar repeats it, because on a phone the note's
  *              own head has scrolled away by the time you are typing.
  *   retrySave  the page's save, for the alert's Retry.
- *   alertInView  the head's own SaveAlert is on screen (IntersectionObserver
- *              in SaveAlert's `reportInView`). The docked copy shows only
+ *   alertInView  the head's own SaveAlert is on screen, measured against
+ *              the visual viewport (SaveAlert's `reportInView`, `onScreen`). The docked copy shows only
  *              while it is not, so a failed save is said once, not three
  *              times (review 2026-11-18, #3).
  */

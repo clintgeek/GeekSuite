@@ -198,3 +198,55 @@ describe('NoteShell writing focus', () => {
     expect(useEditorChrome.getState().writing).toBe(false);
   });
 });
+
+// Review 2026-11-20: the head's pill was measured only by an
+// IntersectionObserver (the layout viewport), and only once its first
+// callback came in.
+describe('SaveAlert in the head is measured against what is on screen', () => {
+  const rectAt = (top) => ({ top, bottom: top + 32, left: 16, right: 216, width: 200, height: 32, x: 16, y: top });
+  let spy;
+  afterEach(() => {
+    spy?.mockRestore();
+    delete window.IntersectionObserver;
+  });
+  const renderHead = async () => {
+    const { SaveAlert } = await import('../../../components/notes/SaveStatus');
+    return render(<ThemeProvider theme={theme}><SaveAlert error="x" reportInView onRetry={vi.fn()} /></ThemeProvider>);
+  };
+
+  it('knows at once, before any observer callback, so the docked copy never flashes', async () => {
+    window.IntersectionObserver = vi.fn(function IO() { this.observe = vi.fn(); this.disconnect = vi.fn(); });
+    Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
+    spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(rectAt(80));
+    await renderHead();
+    // The observer has said nothing yet.
+    expect(useEditorChrome.getState().alertInView).toBe(true);
+  });
+
+  it('a head inside the page but panned off the screen by the keyboard is not "in view"', async () => {
+    let cb;
+    window.IntersectionObserver = vi.fn(function IO(fn) { cb = fn; this.observe = vi.fn(); this.disconnect = vi.fn(); });
+    const vvListeners = {};
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: {
+        offsetTop: 300, offsetLeft: 0, height: 400, width: 390,
+        addEventListener: (t, fn) => { vvListeners[t] = fn; },
+        removeEventListener: vi.fn(),
+      },
+    });
+    spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(rectAt(80));
+    await renderHead();
+    expect(useEditorChrome.getState().alertInView).toBe(false);
+    // The observer (layout viewport) says it intersects; the screen does not show it.
+    act(() => cb([{ isIntersecting: true, boundingClientRect: rectAt(80) }]));
+    expect(useEditorChrome.getState().alertInView).toBe(false);
+    // The browser pans back to the top: now it is seen.
+    window.visualViewport.offsetTop = 0;
+    await act(async () => {
+      vvListeners.scroll();
+      await new Promise((r) => requestAnimationFrame(r));
+    });
+    expect(useEditorChrome.getState().alertInView).toBe(true);
+  });
+});
