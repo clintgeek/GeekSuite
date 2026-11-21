@@ -14,6 +14,8 @@ import { createFlockTheme } from '../theme/theme';
 import GroupsPage from '../pages/GroupsPage';
 import { GET_FLOCK_GROUPS, GET_GROUP_MEMBERSHIPS } from '../graphql/queries';
 import { DELETE_ENTITY } from '../graphql/mutations';
+import { useConfirmDelete } from '../components/primitives/ConfirmDelete';
+import { renderWithProviders } from './testUtils';
 
 const theme = createFlockTheme('dark');
 
@@ -85,5 +87,59 @@ describe('Deleting a group', () => {
   it('counts one bird as "1 bird"', async () => {
     renderGroups(vi.fn());
     expect(await screen.findByText('1 bird')).toBeInTheDocument();
+  }, 30000);
+});
+
+// Review 2026-11-20: the pages' delete mutations carry an onError toast, so
+// Apollo resolves a failed delete with `errors` instead of throwing. Birds
+// collapsed the open row and closed the editor anyway, throwing away the
+// edits for a delete that never happened. And a delete removes its own
+// trigger, so focus fell to the page body.
+function DeleteHarness({ onConfirm, onDeleted }) {
+  const [confirmDelete, confirmDialog] = useConfirmDelete();
+  return (
+    <>
+      <h3 data-geek-topbar="title">Birds</h3>
+      <button type="button" onClick={() => confirmDelete({ title: 'Delete this bird?', body: 'Gone.', onConfirm, onDeleted })}>
+        Delete Henrietta
+      </button>
+      {confirmDialog}
+    </>
+  );
+}
+
+describe('useConfirmDelete', () => {
+  it('runs the page tidy-up only when the delete worked', async () => {
+    const user = userEvent.setup();
+    const onDeleted = vi.fn();
+    renderWithProviders(
+      <DeleteHarness onConfirm={() => Promise.resolve({ data: null, errors: [new Error('nope')] })} onDeleted={onDeleted} />
+    );
+    await user.click(screen.getByRole('button', { name: 'Delete Henrietta' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete this bird?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(onDeleted).not.toHaveBeenCalled();
+  }, 30000);
+
+  it('treats a thrown delete as failed too', async () => {
+    const user = userEvent.setup();
+    const onDeleted = vi.fn();
+    renderWithProviders(<DeleteHarness onConfirm={() => Promise.reject(new Error('offline'))} onDeleted={onDeleted} />);
+    await user.click(screen.getByRole('button', { name: 'Delete Henrietta' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(onDeleted).not.toHaveBeenCalled();
+  }, 30000);
+
+  it('after a delete, tidies up and puts focus on the list heading, not the body', async () => {
+    const user = userEvent.setup();
+    const onDeleted = vi.fn();
+    renderWithProviders(<DeleteHarness onConfirm={() => Promise.resolve({ data: { deleteFlockEntity: true } })} onDeleted={onDeleted} />);
+    await user.click(screen.getByRole('button', { name: 'Delete Henrietta' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(onDeleted).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByText('Birds')));
   }, 30000);
 });

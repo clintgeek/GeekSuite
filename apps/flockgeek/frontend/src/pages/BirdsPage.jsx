@@ -259,8 +259,10 @@ const BirdsPage = () => {
     confirmDelete({
       title: "Delete this bird?",
       body: `${who} will be removed from your flock records.`,
-      onConfirm: async () => {
-        await deleteEntity({ variables: { type: "bird", id } });
+      onConfirm: () => deleteEntity({ variables: { type: "bird", id } }),
+      // Only once the gateway has said yes: a failed delete leaves the row
+      // open and the edits in it as they were.
+      onDeleted: () => {
         setExpandedBirdId(null);
         setEditingBird(null);
         setEditDialogOpen(false);
