@@ -361,6 +361,18 @@ describe('BookDetailModal', () => {
     expect(handleSendToKindle).toHaveBeenCalledWith(book);
   });
 
+  it('the confirm\'s Send is off while a send is already going', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderWithProviders(
+      <BookDetailModal {...baseProps({ kindleEmail: 'chef@kindle.com' })} />
+    );
+    await user.click(screen.getByRole('button', { name: 'To Kindle' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Send to your Kindle?' });
+    expect(within(dialog).getByRole('button', { name: 'Send' })).toBeEnabled();
+    rerender(<BookDetailModal {...baseProps({ kindleEmail: 'chef@kindle.com', sendToKindleLoading: true })} />);
+    expect(within(dialog).getByRole('button', { name: 'Send' })).toBeDisabled();
+  });
+
   it('with no Kindle address the confirm says so and cannot send', async () => {
     const user = userEvent.setup();
     renderWithProviders(<BookDetailModal {...baseProps({ kindleEmail: null })} />);

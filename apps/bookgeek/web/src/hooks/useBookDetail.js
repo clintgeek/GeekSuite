@@ -248,9 +248,14 @@ export function useBookDetail({ bookId, onClose, onDeleted, readerId = null }) {
     }
   }
 
+  // An email cannot be unsent: one send at a time, whatever the taps do (a
+  // double tap on the confirm's Send landed twice while the dialog faded).
+  const kindleInFlightRef = useRef(false);
+
   async function handleSendToKindle(book) {
     const id = bookIdOf(book);
-    if (!id) return;
+    if (!id || kindleInFlightRef.current) return;
+    kindleInFlightRef.current = true;
 
     setSendToKindleLoading(true);
     setSendToKindleError(null);
@@ -271,6 +276,7 @@ export function useBookDetail({ bookId, onClose, onDeleted, readerId = null }) {
     } catch (err) {
       setSendToKindleError(err.message || "Send to Kindle failed");
     } finally {
+      kindleInFlightRef.current = false;
       setSendToKindleLoading(false);
     }
   }

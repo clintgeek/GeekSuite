@@ -515,7 +515,7 @@ export default function BookDetailModal({
           <Button
             variant="contained"
             color="primary"
-            disabled={!kindleEmail}
+            disabled={!kindleEmail || sendToKindleLoading}
             onClick={() => {
               setKindleConfirmOpen(false);
               handleSendToKindle(selectedBook);
