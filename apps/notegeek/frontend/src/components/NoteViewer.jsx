@@ -80,6 +80,10 @@ function NoteViewer() {
     const { archived, archivedAt, deletedAt } = useNoteArchiveState(id);
     const { archive, restore, busy: isArchiving } = useArchiveNotes();
     const handleArchiveToggle = () => (archived ? restore([id]) : archive([id]));
+    // In Recently deleted (review 2026-11-20): read it, print it, or put it
+    // back with the banner's Restore — nothing else. Edit, Fold in, Archive
+    // and Delete would all act on a note that is in the bin.
+    const inBin = Boolean(deletedAt);
 
     const handleEdit = () => {
         if (noteToView) {
@@ -159,6 +163,7 @@ function NoteViewer() {
 
                     <Box sx={{ flex: 1 }} />
 
+                    {!inBin && (
                     <Tooltip title="Edit" arrow>
                         <IconButton
                             onClick={handleEdit}
@@ -174,8 +179,9 @@ function NoteViewer() {
                             <EditIcon sx={{ fontSize: 17 }} />
                         </IconButton>
                     </Tooltip>
+                    )}
 
-                    {canFoldInto(noteToView) ? (
+                    {!inBin && canFoldInto(noteToView) ? (
                         <Tooltip title="Fold in new info" arrow>
                             <IconButton
                                 onClick={() => setFoldInOpen(true)}
@@ -211,6 +217,7 @@ function NoteViewer() {
                         </IconButton>
                     </Tooltip>
 
+                    {!inBin && (
                     <Tooltip title={archived ? 'Restore from archive' : 'Archive'} arrow>
                         <IconButton
                             onClick={handleArchiveToggle}
@@ -228,7 +235,9 @@ function NoteViewer() {
                             {archived ? <UnarchiveOutlined sx={{ fontSize: 17 }} /> : <ArchiveOutlined sx={{ fontSize: 17 }} />}
                         </IconButton>
                     </Tooltip>
+                    )}
 
+                    {!inBin && (
                     <Tooltip title="Delete" arrow>
                         <IconButton
                             onClick={handleDeleteClick}
@@ -243,6 +252,7 @@ function NoteViewer() {
                             <DeleteIcon sx={{ fontSize: 17 }} />
                         </IconButton>
                     </Tooltip>
+                    )}
                 </Box>
 
                 {deletedAt ? (

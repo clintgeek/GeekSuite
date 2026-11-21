@@ -186,3 +186,21 @@ describe('Delete note in the ⋯ menu', () => {
     }
   });
 });
+
+// Review 2026-11-20: a note in Recently deleted (a sketch or mind map opens
+// in the editor, and so does /notes/:id/edit) is read-only with no ⋯ menu;
+// the banner's Restore is the one action.
+describe('a note in Recently deleted, in the editor', () => {
+  it('is read-only, has no ⋯ menu, and Ctrl+S does not save it', async () => {
+    archiveState = { archived: false, archivedAt: null, deletedAt: '2026-11-19T12:00:00.000Z' };
+    renderEditor();
+    await waitFor(() => {
+      if (!document.querySelector('[data-deleted-banner]')) throw new Error('no banner yet');
+    });
+    expect(screen.getByRole('textbox', { name: 'Note title' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'More note actions' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
+    await act(async () => { fireEvent.keyDown(window, { key: 's', ctrlKey: true }); });
+    expect(updateNote).not.toHaveBeenCalled();
+  });
+});

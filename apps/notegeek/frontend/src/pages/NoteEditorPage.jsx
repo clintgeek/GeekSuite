@@ -139,6 +139,8 @@ function NoteEditorPage({ editorKey } = {}) {
   isSavingRef.current = isSaving;
   // Set where readOnlyMeta is computed (below); read by automatic transcription.
   const readOnlyMetaRef = useRef(false);
+  // The note is in Recently deleted (set where `deletedAt` is read, below).
+  const inBinRef = useRef(false);
   const [saveError, setSaveError] = useState(null);
   const [saveEmpty, setSaveEmpty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
@@ -1322,7 +1324,8 @@ function NoteEditorPage({ editorKey } = {}) {
     const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        handleSaveRef.current();
+        // A note in Recently deleted is read-only: nothing to save.
+        if (!inBinRef.current) handleSaveRef.current();
       }
     };
     window.addEventListener('keydown', handler);
@@ -1372,6 +1375,11 @@ function NoteEditorPage({ editorKey } = {}) {
    * says what happened and the toast carries Undo.
    */
   const { archived, archivedAt, deletedAt } = useNoteArchiveState(savedNoteId);
+  // In Recently deleted (review 2026-11-20): read-only, no ⋯ menu; the
+  // banner's Restore is the one thing to do. Opened from the bin's list, a
+  // [[link]] or history, on a phone or in the two-pane's note pane alike.
+  const inBin = Boolean(deletedAt);
+  inBinRef.current = inBin;
   const { archive: archiveNotes, restore: restoreNotes, busy: isArchiving } = useArchiveNotes();
   const handleArchiveToggle = async () => {
     if (!savedNoteId) return;
@@ -1569,7 +1577,7 @@ function NoteEditorPage({ editorKey } = {}) {
   }
 
   const isCanvas = isMindMap || isHandwritten;
-  const readOnlyMeta = !isEditMode && isMindMap;
+  const readOnlyMeta = (!isEditMode && isMindMap) || inBin;
   readOnlyMetaRef.current = readOnlyMeta;
   const saveState = {
     saving: isSaving,
@@ -1648,7 +1656,7 @@ function NoteEditorPage({ editorKey } = {}) {
               ) : null}
               </>
             ) : null}
-            actions={
+            actions={inBin ? null : (
               <NoteActions
                 onSave={handleSave}
                 // At once, with Undo in the toast; no confirm (review
@@ -1676,7 +1684,7 @@ function NoteEditorPage({ editorKey } = {}) {
                 archived={archived}
                 isArchiving={isArchiving}
               />
-            }
+            )}
           />
         }
         disableContentScroll={isHandwritten}

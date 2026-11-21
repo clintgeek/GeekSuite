@@ -102,3 +102,34 @@ describe('Archive from the viewer', () => {
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
   });
 });
+
+// Review 2026-11-20: a note in Recently deleted (opened from the bin's list,
+// a [[link]] or history) is read-only; the banner's Restore is the action.
+describe('a note in Recently deleted, opened directly', () => {
+  it('shows the deleted banner and offers no Edit, Fold in, Archive or Delete', async () => {
+    renderViewer([
+      noteMock,
+      {
+        request: { query: NOTE_ARCHIVE_STATE, variables: { id: 'n1' } },
+        result: { data: { note: { __typename: 'Note', id: 'n1', archived: false, archivedAt: null, deletedAt: '2026-11-19T12:00:00.000Z' } } },
+        maxUsageCount: 5,
+      },
+    ]);
+    await waitFor(() => {
+      if (!document.querySelector('[data-deleted-banner]')) throw new Error('no banner yet');
+    });
+    expect(screen.getAllByText('Patch the flashing.').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
+    for (const name of ['Edit', 'Fold in new info', 'Archive', 'Delete']) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
+  });
+
+  it('a note that is not deleted keeps its actions', async () => {
+    renderViewer([noteMock, stateMock(false)]);
+    await screen.findAllByText('Patch the flashing.');
+    await screen.findByRole('button', { name: 'Archive' });
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  });
+});
