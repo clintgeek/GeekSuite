@@ -25,6 +25,30 @@ export function readerKeyFor(user) {
   return key ? String(key) : null;
 }
 
+const isEpubFile = (file) => {
+  const fmt = String(file?.format || "").toLowerCase();
+  if (fmt === "epub") return true;
+  const path = String(file?.path || "");
+  return path.includes(".") && path.split(".").pop().toLowerCase() === "epub";
+};
+
+/**
+ * The storage id for a book's EPUB: the book id plus the file's identity
+ * (size and when it was added — what the client has). Upload a new EPUB to
+ * the same book and its saved positions and cached locations are not reused:
+ * a CFI or a location list from the old file points at the wrong text.
+ * No file record → the bare book id.
+ */
+export function readerBookKey(book) {
+  const id = book?.id || book?._id;
+  if (!id) return null;
+  const file = Array.isArray(book.files) ? book.files.find(isEpubFile) : null;
+  if (!file) return String(id);
+  const parts = [file.size, file.addedAt].filter((v) => v != null && v !== "");
+  const identity = parts.length ? parts.join("~") : file.path || "";
+  return identity ? `${id}@${identity}` : String(id);
+}
+
 const positionKey = (readerId, bookId) => `${readerId || "anon"}:${bookId}`;
 
 function readJson(key, fallback) {

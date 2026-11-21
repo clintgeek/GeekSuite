@@ -16,6 +16,7 @@ import {
   flattenToc,
   loadCachedLocations,
   loadReaderPosition,
+  readerBookKey,
   saveReaderPosition,
 } from "../../utils/readerPosition";
 import { saveReaderPrefs } from "../../utils/readerPrefs";
@@ -258,8 +259,10 @@ describe("the place you stopped, on this device", () => {
     ePub.mockReturnValue(book);
   });
 
-  async function openReader(readerId) {
-    const epubBook = { id: "b1", files: [{ format: "epub", path: "a.epub" }] };
+  const EPUB_BOOK = { id: "b1", files: [{ format: "epub", path: "a.epub", size: 1000, addedAt: "2026-01-01T00:00:00Z" }] };
+  const KEY = readerBookKey(EPUB_BOOK);
+
+  async function openReader(readerId, epubBook = EPUB_BOOK) {
     const hook = renderHook(() => useReader(epubBook, { readerId }));
     act(() => hook.result.current.setReaderOpen(true));
     // The Dialog attaches its container after it opens (a portal): the load
@@ -270,21 +273,21 @@ describe("the place you stopped, on this device", () => {
   }
 
   it("reopens where this reader left off, and each page turn is saved", async () => {
-    saveReaderPosition("chef", "b1", CFI);
+    saveReaderPosition("chef", KEY, CFI);
     const hook = await openReader("chef");
     expect(rendition.display).toHaveBeenCalledWith(CFI);
     expect(hook.result.current.readerToc).toEqual([{ id: "1", label: "One", href: "ch1.xhtml", depth: 0 }]);
 
     const next = "epubcfi(/6/10!/4/2/1:0)";
     act(() => rendition.emit("relocated", { start: { cfi: next } }));
-    expect(loadReaderPosition("chef", "b1")).toBe(next);
+    expect(loadReaderPosition("chef", KEY)).toBe(next);
   });
 
   it("the remembered theme and font size are on before the saved page is laid out (review 2026-11-19 #2)", async () => {
     // The drift itself (text reflowing under epub.js's pixel offset) needs a
     // real browser; jsdom can only prove the order of the calls.
     saveReaderPrefs({ fontPct: 130 });
-    saveReaderPosition("chef", "b1", CFI);
+    saveReaderPosition("chef", KEY, CFI);
     await openReader("chef");
     expect(rendition.themes.fontSize).toHaveBeenCalledWith("130%");
     expect(rendition.display).toHaveBeenCalledWith(CFI);
@@ -293,8 +296,24 @@ describe("the place you stopped, on this device", () => {
     expect(rendition.themes.select.mock.invocationCallOrder[0]).toBeLessThan(displayAt);
   });
 
+  it("a new file uploaded to the same book starts fresh: no old CFI, no old locations (review 2026-11-19 #4)", async () => {
+    await openReader("chef");
+    act(() => rendition.emit("relocated", { start: { cfi: CFI } }));
+    rendition.display.mockClear();
+    book.locations.generate.mockClear();
+    book.locations.load.mockClear();
+
+    const replaced = { id: "b1", files: [{ format: "epub", path: "a.epub", size: 2400, addedAt: "2026-11-19T00:00:00Z" }] };
+    expect(readerBookKey(replaced)).not.toBe(KEY);
+    await openReader("chef", replaced);
+    expect(rendition.display).toHaveBeenCalledWith();
+    expect(rendition.display).not.toHaveBeenCalledWith(CFI);
+    expect(book.locations.load).not.toHaveBeenCalled();
+    expect(book.locations.generate).toHaveBeenCalledTimes(1);
+  });
+
   it("another reader on the same device starts at the cover", async () => {
-    saveReaderPosition("chef", "b1", CFI);
+    saveReaderPosition("chef", KEY, CFI);
     await openReader("heather");
     expect(rendition.display).toHaveBeenCalledWith();
   });
@@ -302,7 +321,7 @@ describe("the place you stopped, on this device", () => {
   it("generates the locations once and caches them for the next open", async () => {
     await openReader("chef");
     expect(book.locations.generate).toHaveBeenCalledTimes(1);
-    expect(loadCachedLocations("b1")).toBe('["epubcfi(/6/2)"]');
+    expect(loadCachedLocations(KEY)).toBe('["epubcfi(/6/2)"]');
     book.locations.generate.mockClear();
     await openReader("chef");
     expect(book.locations.generate).not.toHaveBeenCalled();

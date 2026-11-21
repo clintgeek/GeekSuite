@@ -19,6 +19,7 @@ import { READER_PALETTES } from "../utils/readerPalette";
 import {
   flattenToc,
   loadCachedLocations,
+  readerBookKey,
   loadReaderPosition,
   saveCachedLocations,
   saveReaderPosition,
@@ -67,6 +68,9 @@ export function useReader(selectedBook, { readerId = null } = {}) {
   const [readerToc, setReaderToc] = useState([]);
   const [locationsReady, setLocationsReady] = useState(false);
   const bookId = selectedBook?.id || selectedBook?._id;
+  // Positions and cached locations belong to this book's FILE, not just the
+  // book: a re-uploaded EPUB starts fresh rather than at a stale CFI.
+  const bookKey = readerBookKey(selectedBook);
   const readerIdRef = useRef(readerId);
   readerIdRef.current = readerId;
 
@@ -133,7 +137,7 @@ export function useReader(selectedBook, { readerId = null } = {}) {
           });
           rendition.on("relocated", (location) => {
             const cfi = location?.start?.cfi;
-            if (!cancelled && cfi) saveReaderPosition(readerIdRef.current, bookId, cfi);
+            if (!cancelled && cfi) saveReaderPosition(readerIdRef.current, bookKey, cfi);
           });
         }
 
@@ -149,7 +153,7 @@ export function useReader(selectedBook, { readerId = null } = {}) {
           rendition.themes.fontSize(`${ fontPct }%`);
         }
 
-        const saved = loadReaderPosition(readerIdRef.current, bookId);
+        const saved = loadReaderPosition(readerIdRef.current, bookKey);
         if (saved) {
           try {
             await rendition.display(saved);
@@ -181,7 +185,7 @@ export function useReader(selectedBook, { readerId = null } = {}) {
       const locations = book.locations;
       if (!locations) return;
       try {
-        const cached = loadCachedLocations(bookId);
+        const cached = loadCachedLocations(bookKey);
         if (cached) {
           locations.load(cached);
         } else {
@@ -189,7 +193,7 @@ export function useReader(selectedBook, { readerId = null } = {}) {
           if (cancelled) return;
           await locations.generate(LOCATION_CHARS);
           if (cancelled) return;
-          saveCachedLocations(bookId, locations.save());
+          saveCachedLocations(bookKey, locations.save());
         }
         if (!cancelled && (locations.length?.() ?? 0) > 0) setLocationsReady(true);
       } catch {
@@ -221,11 +225,11 @@ export function useReader(selectedBook, { readerId = null } = {}) {
       }
       readerBookRef.current = null;
     };
-    // Re-opened only when the reader opens, its container mounts, or the book changes — not on every
+    // Re-opened only when the reader opens, its container mounts, or the book (or its file) changes — not on every
     // cache update of the same book, and not on a theme flip (the effect
     // below re-themes the live rendition).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readerOpen, bookId, containerNode]);
+  }, [readerOpen, bookId, bookKey, containerNode]);
 
   useEffect(() => {
     if (readerRenditionRef.current?.themes?.select) {
