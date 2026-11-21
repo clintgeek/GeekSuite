@@ -12,21 +12,32 @@ export const formatElapsed = (seconds) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
+/** A time as epoch ms, or null: a Date, an ISO string (the server's), or ms. */
+const toMs = (value) => {
+  if (value == null || value === '') return null;
+  const t = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(t) ? t : null;
+};
+
 /**
- * Seconds since the component mounted (or since `active` last turned on),
- * ticking once a second. A text change, not motion, so reduced motion does
- * not stop it.
+ * Seconds since `startedAt` (when the wait really began: the send, or the
+ * server's lock), or since the component mounted when that is unknown,
+ * ticking once a second. Counting from the start, not the mount, keeps the
+ * clock from going back to 0:00 when the play screen swaps one indicator
+ * for another mid-turn (its own send → waiting out the same turn) or comes
+ * back to a turn already running. Never negative: a server clock a little
+ * ahead of this one reads 0:00. A text change, not motion, so reduced
+ * motion does not stop it.
  */
-export function useElapsedSeconds(active = true) {
-  const [elapsed, setElapsed] = useState(0);
+export function useElapsedSeconds(startedAt = null) {
+  const [mountedAt] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!active) { setElapsed(0); return undefined; }
-    const started = Date.now();
-    setElapsed(0);
-    const id = setInterval(() => setElapsed((Date.now() - started) / 1000), 1000);
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [active]);
-  return elapsed;
+  }, []);
+  const from = toMs(startedAt) ?? mountedAt;
+  return Math.max(0, (now - from) / 1000);
 }
 
 /**
@@ -52,17 +63,19 @@ export const LONG_WAIT = 'Taking longer than usual — still writing. You can le
  * than writing — the player's own resent turn, or another device's. The
  * usual-wait line follows either way, and changes once, at two minutes, to
  * say the turn is running long. `usualLine`/`longLine` reword those for a
- * wait that is not a turn (Bookify binding the tale).
+ * wait that is not a turn (Bookify binding the tale). `startedAt` is when
+ * the wait began (see `useElapsedSeconds`); without it the clock starts now.
  */
 export default function WritingIndicator({
   label = 'The Game Master is writing',
   detail = null,
   usualLine = USUAL_WAIT,
   longLine = LONG_WAIT,
+  startedAt = null,
 }) {
   const theme = useTheme();
   const c = theme.palette.candle;
-  const elapsed = useElapsedSeconds(true);
+  const elapsed = useElapsedSeconds(startedAt);
   const expectation = elapsed >= LONG_WAIT_SECONDS ? longLine : usualLine;
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3, mt: 0.5 }}>

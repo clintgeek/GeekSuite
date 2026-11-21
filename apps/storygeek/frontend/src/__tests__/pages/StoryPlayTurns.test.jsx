@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within, fireEvent, cleanup } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -235,6 +235,53 @@ describe('item 5 — one turn at a time', () => {
     renderPlay();
     expect(await screen.findByText('A turn is being written elsewhere')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('What do you do?')).toBeDisabled();
+  });
+});
+
+// The wait clock counts from when the turn began, not from when an indicator
+// mounted: the screen swaps its "writing" indicator for a "still being
+// written" one mid-turn, and a reload finds a turn already running. Either
+// way it used to say 0:00 and "usually one to three minutes" after minutes.
+describe('the wait clock counts from the start of the turn', () => {
+  const realNow = Date.now.bind(Date);
+  let offset = 0;
+  let nowSpy;
+  beforeEach(() => {
+    offset = 0;
+    nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+  });
+  afterEach(() => { nowSpy.mockRestore(); });
+
+  it('opening a tale whose turn began 2½ minutes ago shows that, and says it is running long', async () => {
+    const startedAt = new Date(realNow() - 150_000).toISOString();
+    serve({
+      story: baseStory([opening], { turnInProgress: { clientId: 'other', startedAt, expiresAt: '2099-01-01T00:00:00Z' } }),
+      turn: { status: 'unknown', turnInProgress: { clientId: 'other', startedAt } },
+    });
+    renderPlay();
+    expect(await screen.findByText('A turn is being written elsewhere')).toBeInTheDocument();
+    expect(screen.getByTestId('writing-elapsed').textContent).toMatch(/^2:3\d$/);
+    expect(screen.getByText(/taking longer than usual/i)).toBeInTheDocument();
+  });
+
+  it('a send that timed out and is still being written keeps counting from the send', async () => {
+    let fail;
+    serve({
+      story: baseStory(),
+      // No server start time: the screen's own send time is the clock's start.
+      turn: { status: 'in_progress', turnInProgress: { clientId: 'mine' } },
+    });
+    api.post.mockImplementation(() => new Promise((_, reject) => { fail = reject; }));
+    renderPlay();
+    await sendAction('I step into the mist.');
+    expect(await screen.findByTestId('writing-elapsed')).toHaveTextContent('0:00');
+
+    // Three minutes later the request gives up; the turn is still running.
+    offset = 185_000;
+    fail(timeout());
+    expect(await screen.findByText('Your turn is still being written')).toBeInTheDocument();
+    expect(screen.getByTestId('writing-elapsed').textContent).toMatch(/^3:0\d$/);
+    expect(screen.getByText(/taking longer than usual/i)).toBeInTheDocument();
   });
 });
 

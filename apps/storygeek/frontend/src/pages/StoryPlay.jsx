@@ -125,11 +125,16 @@ function StoryPlay() {
   const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
   // A `/back` waiting on the player's say-so: `{ input, checkpoint, lostTurns }`.
   const [backConfirm, setBackConfirm] = useState(null);
-  // A turn this screen is waiting out instead of writing: `{ yours, clientId }`.
-  // `yours` — the player's own turn (a resend whose original is still being
-  // written, or a reload mid-turn); otherwise another device's. The composer
-  // stays shut until it finishes.
+  // A turn this screen is waiting out instead of writing: `{ yours, clientId,
+  // startedAt }`. `yours` — the player's own turn (a resend whose original is
+  // still being written, or a reload mid-turn); otherwise another device's.
+  // `startedAt` — when that turn began, so the wait clock carries on from
+  // there rather than restarting at 0:00. The composer stays shut until it
+  // finishes.
   const [turnBusy, setTurnBusy] = useState(null);
+  // When this screen sent the turn it is writing now (epoch ms): the clock's
+  // start while `loading`, and while waiting out the same turn afterwards.
+  const [sentAt, setSentAt] = useState(null);
   // The turn last sent and not yet accepted: `{ clientId, input }`. Sending
   // the same words again reuses the clientId, which is what lets the server
   // answer a resend with the turn it already wrote (turnClient.js).
@@ -299,11 +304,11 @@ function StoryPlay() {
    * that is the turn — nothing to send again. If it ended without landing,
    * the words come back.
    */
-  const waitForTurn = ({ yours, clientId, input = null }) => {
+  const waitForTurn = ({ yours, clientId, input = null, startedAt = null }) => {
     stopWaiting();
     const gen = waitGenRef.current;
     const probeId = clientId || newClientId();
-    setTurnBusy({ yours: Boolean(yours), clientId: clientId || null });
+    setTurnBusy({ yours: Boolean(yours), clientId: clientId || null, startedAt: startedAt ?? null });
     let attempt = 0;
     // The server's lock expires after 5 minutes, so a status that cannot be
     // read for longer than that (offline, the tale deleted elsewhere) is not
@@ -351,7 +356,10 @@ function StoryPlay() {
       const yours = Boolean(draft?.clientId && running.clientId === draft.clientId);
       if (draft && !yours) setUserInput(draft.text);
       if (draft?.clientId) pendingRef.current = { clientId: draft.clientId, input: draft.text };
-      waitForTurn({ yours, clientId: yours ? draft.clientId : null, input: yours ? draft.text : null });
+      waitForTurn({
+        yours, clientId: yours ? draft.clientId : null, input: yours ? draft.text : null,
+        startedAt: running.startedAt ?? null,
+      });
       return;
     }
     if (!draft?.clientId) return;
@@ -461,6 +469,8 @@ function StoryPlay() {
     setUserInput('');
     refocusRef.current = true;
     setMessages(prev => [...prev, { type: 'user', content: input, timestamp: new Date() }]);
+    const sendStarted = Date.now();
+    setSentAt(sendStarted);
     setLoading(true);
 
     try {
@@ -528,10 +538,11 @@ function StoryPlay() {
       // original is still being written) the words are not offered back —
       // they are about to land.
       if (isTurnInProgress(err)) {
-        const yours = Boolean(err.response?.data?.turnInProgress?.yours);
+        const running = err.response?.data?.turnInProgress;
+        const yours = Boolean(running?.yours);
         if (!yours) handBack(input, clientId);
         notify(err.message || 'A turn is already being written for this tale.', { tone: 'info' });
-        waitForTurn({ yours, clientId, input });
+        waitForTurn({ yours, clientId, input, startedAt: running?.startedAt ?? (yours ? sendStarted : null) });
         return;
       }
 
@@ -547,7 +558,9 @@ function StoryPlay() {
           }
           if (status.status === 'in_progress') {
             notify('Your turn is still being written. It will appear here when it is finished.', { tone: 'info' });
-            waitForTurn({ yours: true, clientId, input });
+            // The same turn, still being written: the clock carries on
+            // from the send (or the server's own start), not from 0:00.
+            waitForTurn({ yours: true, clientId, input, startedAt: status.turnInProgress?.startedAt ?? sendStarted });
             return;
           }
         } catch (checkErr) {
@@ -865,9 +878,10 @@ function StoryPlay() {
               </Typography>
             )}
             {messages.map((m, i, all) => renderMessage(m, i, all, player?.name))}
-            {loading && <WritingIndicator />}
+            {loading && <WritingIndicator startedAt={sentAt} />}
             {!loading && turnBusy && (
               <WritingIndicator
+                startedAt={turnBusy.startedAt}
                 label={turnBusy.yours ? 'Your turn is still being written' : 'A turn is being written elsewhere'}
                 detail={turnBusy.yours
                   ? 'It was sent before; it will appear here when it is finished.'
