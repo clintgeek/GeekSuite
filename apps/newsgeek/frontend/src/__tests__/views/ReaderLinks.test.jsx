@@ -6,14 +6,15 @@
  * Open-with links.
  */
 import React from 'react';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { GraphQLError } from 'graphql';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import ArticleItem from '../../components/ArticleItem';
 import { pageNavigation } from '../../utils/openUrl';
 import { SET_NEWS_PREFS, SET_NEWS_PUBLISHER_OPENER } from '../../graphql/mutations';
 import { GET_NEWS_PREFS } from '../../graphql/queries';
-import SettingsView from '../../views/SettingsView';
+import SettingsView, { LEAVE_SAVE_FAILED } from '../../views/SettingsView';
 import { article, copy, newsPrefs, opener } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
 
@@ -314,6 +315,65 @@ describe('Settings → Open-with links', () => {
     expect(saved).not.toHaveBeenCalled();
     unmount();
     await waitFor(() => expect(saved).toHaveBeenCalledWith({ input: { readerLinks: [{ label: 'Reader two', template: 'https://example.com/r?u={url}' }] } }));
+  });
+
+  /** Settings with a way to leave it (the route going away) while the toast layer stays. */
+  function Leaving() {
+    const [here, setHere] = React.useState(true);
+    return (
+      <>
+        {here ? <SettingsView /> : null}
+        <button type="button" onClick={() => setHere(false)}>
+          Leave
+        </button>
+      </>
+    );
+  }
+  const one = [{ __typename: 'NewsReaderLink', id: 'id0', label: 'Reader', template: 'https://example.com/r?u={url}' }];
+  const failingSave = (sent) => ({
+    request: { query: SET_NEWS_PREFS },
+    variableMatcher: () => true,
+    maxUsageCount: 10,
+    result: (vars) => {
+      sent(vars);
+      return { errors: [new GraphQLError('Gateway down')] };
+    },
+  });
+
+  it('leaving from a field sends the edit once: the blur’s save, not a second one on the way out', async () => {
+    const saved = vi.fn();
+    renderWithProviders(<Leaving />, { mocks: [prefsMock(one), saveMockFor(saved)] });
+    const label = await screen.findByLabelText('Label 1');
+    await userEvent.clear(label);
+    await userEvent.type(label, 'Reader two');
+    await userEvent.click(screen.getByRole('button', { name: 'Leave' }));
+    await waitFor(() => expect(saved).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByLabelText('Label 1')).toBeNull());
+    // Both sends, had there been two, start before the first answer lands.
+    await act(() => new Promise((r) => setTimeout(r, 0)));
+    expect(saved).toHaveBeenCalledTimes(1);
+  });
+
+  it('a save on the way out that fails says so in a toast (no field was left first)', async () => {
+    const sent = vi.fn();
+    renderWithProviders(<Leaving />, { mocks: [prefsMock(one), failingSave(sent)] });
+    const label = await screen.findByLabelText('Label 1');
+    await userEvent.clear(label);
+    await userEvent.type(label, 'Reader two');
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+    expect(await screen.findByText(LEAVE_SAVE_FAILED)).toBeInTheDocument();
+    expect(sent).toHaveBeenCalledTimes(1);
+  });
+
+  it('a blur’s save that fails after the page is gone says so in a toast', async () => {
+    const sent = vi.fn();
+    renderWithProviders(<Leaving />, { mocks: [prefsMock(one), failingSave(sent)] });
+    const label = await screen.findByLabelText('Label 1');
+    await userEvent.clear(label);
+    await userEvent.type(label, 'Reader two');
+    await userEvent.click(screen.getByRole('button', { name: 'Leave' }));
+    expect(await screen.findByText(LEAVE_SAVE_FAILED)).toBeInTheDocument();
+    expect(sent).toHaveBeenCalledTimes(1);
   });
 
   it('removing a link saves at once and offers Undo, which puts it back', async () => {

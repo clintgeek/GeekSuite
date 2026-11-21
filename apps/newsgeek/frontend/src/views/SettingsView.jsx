@@ -34,7 +34,8 @@ import { GET_NEWS_PREFS } from '../graphql/queries';
 import { GOTHIC, flagSx, visuallyHiddenSx } from '../theme/theme';
 import { MAX_LABEL, MAX_READER_LINKS, READER_LINK_HELP, READER_LINK_PLACEHOLDER, cleanReaderLinks, readerLinkErrors } from '../utils/readerLinks';
 
-const same = (a, b) => JSON.stringify(cleanReaderLinks(a)) === JSON.stringify(cleanReaderLinks(b));
+const linksKey = (list) => JSON.stringify(cleanReaderLinks(list));
+const same = (a, b) => linksKey(a) === linksKey(b);
 
 /** A mutation's `update` that replaces the cached prefs with what `field` answered. */
 const writePrefsFrom = (field) => (cache, { data }) => {
@@ -49,6 +50,7 @@ const withRestored = (list, removed) => {
 };
 
 export const NEW_TAB_LABEL = 'Open stories in a new tab';
+export const LEAVE_SAVE_FAILED = 'Couldn’t save your open-with links. Open Settings to try again.';
 export const NEW_TAB_HELP = 'Off: stories open here, and Back brings you back to NewsGeek.';
 
 export default function SettingsView() {
@@ -101,6 +103,17 @@ export default function SettingsView() {
   savedRef.current = saved;
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
+  // The list a save is carrying right now (linksKey), so leaving the page doesn't send it twice.
+  const sending = useRef(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const notifyRef = useRef(notify);
+  notifyRef.current = notify;
 
   /** Save `list` whole when every link in it is complete; the prefs the gateway answered once it landed, else null. */
   const persist = async (list) => {
@@ -108,6 +121,8 @@ export default function SettingsView() {
     if (!current || same(list, current) || !validOf(list)) return null;
     setSaveError('');
     setSaveState('saving');
+    const key = linksKey(list);
+    sending.current = key;
     try {
       const res = await writeLinks(list);
       setSaveState('saved');
@@ -115,7 +130,11 @@ export default function SettingsView() {
     } catch (err) {
       setSaveState(null);
       setSaveError(err?.graphQLErrors?.[0]?.message || err?.message || 'Couldn’t save. Try again.');
+      // The page is gone (Back straight from a field): the line under the list can't say it.
+      if (!mounted.current) notifyRef.current(LEAVE_SAVE_FAILED, { tone: 'error' });
       return null;
+    } finally {
+      if (sending.current === key) sending.current = null;
     }
   };
 
@@ -180,21 +199,20 @@ export default function SettingsView() {
   };
 
   // Leaving the page with a complete edit not yet saved (Back straight from a
-  // field): send it on the way out.
+  // field): send it on the way out — unless the blur that came first is
+  // already sending that same list — and say so if it fails.
   const pending = useRef(null);
   pending.current = dirty && !invalid ? links : null;
   useEffect(
     () => () => {
-      if (!pending.current) return;
+      if (!pending.current || linksKey(pending.current) === sending.current) return;
       client
         .mutate({
           mutation: SET_NEWS_PREFS,
           variables: { input: { readerLinks: cleanReaderLinks(pending.current) } },
-          update(cache, { data }) {
-            if (data?.newsSetPrefs) cache.writeQuery({ query: GET_NEWS_PREFS, data: { newsPrefs: data.newsSetPrefs } });
-          },
+          update: writePrefsFrom('newsSetPrefs'),
         })
-        .catch(() => {});
+        .catch(() => notifyRef.current(LEAVE_SAVE_FAILED, { tone: 'error' }));
     },
     [client]
   );
