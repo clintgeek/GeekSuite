@@ -156,6 +156,8 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
     if (plausibleWeight(initialProfile.weight) && t >= Number(initialProfile.weight)) return '';
     return String(Math.round(t * 10) / 10);
   });
+  // The goal it opened with, so emptying the box can mean "no goal" (below).
+  const [prefilledAim] = useState(aim);
   const [showWorking, setShowWorking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -191,7 +193,16 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
     if (!plan || saving) return;
     setSaving(true);
     try {
-      await settingsService.updateSettings({ nutrition_goal: nutritionGoalPayload(plan, { mode: 'standard' }) });
+      const goal = nutritionGoalPayload(plan, { mode: 'standard' });
+      // Emptying a goal she had clears it (review 2026-11-20). The settings
+      // write merges, so a plan with no target left the old one standing and
+      // the Weight page kept showing it; null is what the merge writes.
+      const cleared = !maintain && prefilledAim !== '' && !aimTyped;
+      await settingsService.updateSettings({
+        nutrition_goal: cleared
+          ? { ...goal, target_weight: null, goal_weight_lbs: null, timeline_weeks: null, estimated_end_date: null }
+          : goal,
+      });
     } catch (err) {
       notify(errorMessage(err, 'Couldn’t save your target. Try again.'), { tone: 'error' });
       setSaving(false);

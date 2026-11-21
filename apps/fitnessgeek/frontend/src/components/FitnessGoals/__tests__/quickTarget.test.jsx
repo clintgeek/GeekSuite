@@ -132,6 +132,25 @@ describe('Quick target — Simple', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
+  it('emptying the goal she had clears it (the settings write merges, so it sends null)', async () => {
+    setup({ nutrition_goal: { enabled: true, target_weight: 165, daily_calorie_target: 1500 } });
+    const aim = await screen.findByLabelText(/What weight are you aiming for/i);
+    fireEvent.change(aim, { target: { value: '' } });
+    await screen.findByTestId('quick-result');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalledTimes(1));
+    const ng = settingsService.updateSettings.mock.calls[0][0].nutrition_goal;
+    expect(ng).toMatchObject({ target_weight: null, goal_weight_lbs: null, timeline_weeks: null, estimated_end_date: null });
+  });
+
+  it('a goal box that opened empty and stays empty leaves the stored goal alone', async () => {
+    setup();
+    await screen.findByTestId('quick-result');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalledTimes(1));
+    expect(settingsService.updateSettings.mock.calls[0][0].nutrition_goal).not.toHaveProperty('target_weight');
+  });
+
   it('keeps the BMR/TDEE card behind "How this was worked out"', async () => {
     setup();
     await screen.findByTestId('quick-result');
