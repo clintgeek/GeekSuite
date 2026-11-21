@@ -3,7 +3,7 @@
  * whether what is on it has been saved.
  *
  * Mounted with `key={dayKey}`, so each day gets a fresh canvas. The saving
- * itself lives in data/dayNoteStore.js and carries on after this unmounts.
+ * itself lives in store/dayNoteStore.js and carries on after this unmounts.
  */
 import React, { Suspense, lazy, useEffect, useMemo, useRef } from 'react';
 import { Box, Button, CircularProgress, Typography } from '@mui/material';

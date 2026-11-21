@@ -16,7 +16,7 @@ import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTi
 import { useUser } from '@geeksuite/user';
 import { GeekToastProvider, LoginSplash } from '@geeksuite/ui';
 import DayPage from './pages/DayPage.jsx';
-import { resetDayNoteStores } from './data/dayNoteStore.js';
+import { resetDayNoteStores } from './store/dayNoteStore.js';
 import { DISPLAY_FONT } from './theme/theme.js';
 
 export const APP_ID = 'geekday';

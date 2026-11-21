@@ -27,7 +27,7 @@ Every operation it sends is in `frontend/src/graphql/documents.js`.
 | `components/ConfirmTaskDialog.jsx` | Circle to task: read, correct, create |
 | `components/DockedView.jsx` | The idle clock face |
 | `ink/` | The canvas: tldraw 2.4.6, trimmed from NoteGeek's sketch editor, plus the lasso |
-| `data/dayNoteStore.js` | Finding, creating and saving a day's note; retries; conflicts |
+| `store/dayNoteStore.js` | Finding, creating and saving a day's note; retries; conflicts |
 | `hooks/useDayTasks.js` | A day's tasks with optimistic tick / move / add |
 | `lib/tasks.js`, `lib/days.js`, `lib/capture.js` | Pure rules: grouping, day keys, text → task |
 | `theme/theme.js` | "Desk Diary" |

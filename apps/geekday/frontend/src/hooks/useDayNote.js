@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useApolloClient } from '@apollo/client';
-import { dayNoteStore, releaseDayNoteStores, unsavedDayNoteStores } from '../data/dayNoteStore.js';
+import { dayNoteStore, releaseDayNoteStores, unsavedDayNoteStores } from '../store/dayNoteStore.js';
 
 /** The ink page for `dayKey`: its state and the store that saves it. */
 export function useDayNote(dayKey) {
