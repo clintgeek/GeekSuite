@@ -224,6 +224,26 @@ describe('Edit works like Add', () => {
     expect(screen.getAllByRole('button', { name: 'Save' })).toHaveLength(1);
   });
 
+  it('a field focused near the foot scrolls clear of the Save bar, and the bar docks above the keyboard', () => {
+    const vv = window.visualViewport;
+    const listeners = {};
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: { height: window.innerHeight - 300, offsetTop: 0, addEventListener: (k, fn) => (listeners[k] = fn), removeEventListener: () => {} },
+    });
+    try {
+      mount(() => {});
+      const body = document.querySelector('[data-geek-dialog="body"]');
+      const css = [...document.querySelectorAll('style')].map((st) => st.textContent).join('\n');
+      const rulesFor = (el) => [...el.classList].filter((c) => c.startsWith('css-')).map((c) => new RegExp(`\\.${c}\\{([^}]*)\\}`).exec(css)?.[1] ?? '').join(';');
+      // Keyboard (300px) + the bar's clearance (88px) reserved at the foot of the scroll.
+      expect(rulesFor(body)).toMatch(/scroll-padding-bottom:calc\(388px \+ env\(safe-area-inset-bottom\)\)/);
+      expect(rulesFor(screen.getByTestId('edit-save-bar'))).toMatch(/bottom:300px/);
+    } finally {
+      Object.defineProperty(window, 'visualViewport', { configurable: true, value: vv });
+    }
+  });
+
   it('untouched, Cancel just closes', () => {
     const onClose = vi.fn();
     mount(onClose);

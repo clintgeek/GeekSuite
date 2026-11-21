@@ -26,6 +26,7 @@ import TagInput from '../../components/TagInput';
 import TypeIcon from '../../components/TypeIcon';
 import { useThingActions } from '../../hooks/useThingActions';
 import { useUploads } from '../../hooks/useUploads';
+import useKeyboardInset from '../../hooks/useKeyboardInset';
 import { GET_THING } from '../../graphql/queries';
 import { useThingTree, useThingTypes, useVocabulary } from '../../hooks/useThingMeta';
 import { subtreeIds } from '../../utils/where';
@@ -173,6 +174,13 @@ function Group({ id, title, hint, children }) {
   );
 }
 
+/**
+ * Room the sticky Save bar takes at the foot of the scrolling body (its 48px
+ * buttons, padding and stripe, plus a little air): the body's scroll padding,
+ * so a field focused near the bottom scrolls clear of the bar, not under it.
+ */
+export const EDIT_BAR_CLEARANCE_PX = 88;
+
 const grid2 = { display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2.25 };
 
 export default function EditThingDialog({ open, onClose, thing, focus }) {
@@ -194,6 +202,8 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
   const { items: uploads } = useUploads(thing?.id);
   // 'done' items stay listed until the thing has been re-read with them.
   const uploading = uploads.some((u) => u.status !== 'failed');
+  // On a phone the keyboard covers the foot of the dialog: the bar docks above it (as Add's does).
+  const keyboard = useKeyboardInset();
 
   // What the form was opened with, to tell an edit from a look.
   const baselineRef = useRef(null);
@@ -286,7 +296,7 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
       sx={{ bgcolor: 'background.desk', backgroundImage: (t) => dustImage(t.palette.mode) }}
       headerSx={{ ...LIVERY_SHEET_HEADER_SX, bgcolor: 'background.desk' }}
       titleSx={LIVERY_SHEET_HEADER_SX}
-      bodySx={{ pt: 2.5, pb: 0, px: { xs: 2, sm: 3 } }}
+      bodySx={{ pt: 2.5, pb: 0, px: { xs: 2, sm: 3 }, scrollPaddingBottom: `calc(${keyboard + EDIT_BAR_CLEARANCE_PX}px + env(safe-area-inset-bottom))` }}
     >
       <Box ref={bodyRef} data-testid="edit-form">
         <Group id="basics" title="Basics">
@@ -372,7 +382,7 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
           data-testid="edit-save-bar"
           sx={{
             position: 'sticky',
-            bottom: 0,
+            bottom: `${keyboard}px`,
             zIndex: 2,
             mx: { xs: -2, sm: -3 },
             mt: 1,
