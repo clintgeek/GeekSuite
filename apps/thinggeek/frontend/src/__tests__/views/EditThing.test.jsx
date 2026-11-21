@@ -252,6 +252,34 @@ describe('Edit works like Add', () => {
     expect(screen.queryByText('Discard changes?')).toBeNull();
   });
 
+  it('reopened after a discard, the guard stays down: no unsaved-changes hooks for a form nobody touched', async () => {
+    const thing = wendyWithEverything();
+    const onClose = vi.fn();
+    const ui = (open) => (
+      <UploadsProvider upload={() => new Promise(() => {})}>
+        <EditThingDialog open={open} onClose={onClose} thing={thing} />
+      </UploadsProvider>
+    );
+    const { rerender } = renderWithProviders(ui(true), { mocks: [] });
+    fireEvent.change(screen.getByRole('textbox', { name: /Name/ }), { target: { value: 'Wendy II' } });
+    fireEvent.click(within(screen.getByTestId('edit-save-bar')).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    rerender(ui(false));
+
+    const added = vi.spyOn(window, 'addEventListener');
+    try {
+      rerender(ui(true));
+      expect(added.mock.calls.filter(([type]) => type === 'beforeunload')).toHaveLength(0);
+    } finally {
+      added.mockRestore();
+    }
+    expect(await screen.findByRole('textbox', { name: /Name/ })).toHaveValue('Wendy');
+    fireEvent.click(within(screen.getByTestId('edit-save-bar')).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('Discard changes?')).toBeNull();
+    expect(onClose).toHaveBeenCalledTimes(2);
+  }, 90000);
+
   it('changed, Cancel asks first instead of closing; Discard goes', async () => {
     const onClose = vi.fn();
     mount(onClose);

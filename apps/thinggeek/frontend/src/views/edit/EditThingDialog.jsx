@@ -214,6 +214,10 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
       baselineRef.current = JSON.stringify(seeded);
       seededRef.current = thing;
       setShowErrors(false);
+    } else {
+      // Closed: forget it, so the next open's first render (still holding this
+      // session's form) is not mistaken for an edit and the guard stays down.
+      baselineRef.current = null;
     }
     // Re-seed only when the dialog opens; the thing can update underneath
     // (an upload finishing) without wiping what's being typed.
