@@ -137,6 +137,18 @@ export function useReader(selectedBook, { readerId = null } = {}) {
           });
         }
 
+        // Theme and the remembered font size go on BEFORE the first page is
+        // laid out. Applied after, the text reflowed under a scroll offset
+        // epub.js keeps in pixels, so a restored position showed earlier text
+        // than where you stopped (and that earlier place was then saved).
+        if (rendition.themes?.select) {
+          rendition.themes.select(readerTheme);
+        }
+        const { fontPct } = loadReaderPrefs();
+        if (fontPct && rendition.themes?.fontSize) {
+          rendition.themes.fontSize(`${ fontPct }%`);
+        }
+
         const saved = loadReaderPosition(readerIdRef.current, bookId);
         if (saved) {
           try {
@@ -147,16 +159,6 @@ export function useReader(selectedBook, { readerId = null } = {}) {
           }
         } else {
           await rendition.display();
-        }
-
-        if (rendition.themes?.select) {
-          rendition.themes.select(readerTheme);
-        }
-        // The remembered font size: ReaderModal's stepper only reaches a
-        // rendition that already exists, and this one did not until now.
-        const { fontPct } = loadReaderPrefs();
-        if (fontPct && rendition.themes?.fontSize) {
-          rendition.themes.fontSize(`${ fontPct }%`);
         }
 
         // Contents, then locations — both after the first page is up, so the

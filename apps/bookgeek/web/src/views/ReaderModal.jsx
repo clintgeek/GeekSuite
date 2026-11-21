@@ -176,10 +176,21 @@ export default function ReaderModal({
   }, [chromeVisible, chromeKick, chromePinned]);
 
   // Font-size stepper → epub.js. Guarded: the rendition may not exist yet
-  // (still loading) or the fixture may error before one is created.
+  // (still loading) or the fixture may error before one is created. The
+  // opening size is applied by hooks/useReader.js before the first page; a
+  // change here reflows the text under epub.js's pixel scroll offset, so the
+  // page you were on is displayed again by its CFI.
+  const appliedFontRef = useRef(fontPct);
   useEffect(() => {
+    if (appliedFontRef.current === fontPct) return;
+    appliedFontRef.current = fontPct;
+    const rendition = readerRenditionRef.current;
     try {
-      readerRenditionRef.current?.themes?.fontSize?.(`${fontPct}%`);
+      const cfi = rendition?.location?.start?.cfi;
+      rendition?.themes?.fontSize?.(`${fontPct}%`);
+      if (cfi && typeof rendition.display === "function") {
+        rendition.display(cfi)?.catch?.(() => {});
+      }
     } catch {
       // ignore — rendition not ready / API unavailable
     }

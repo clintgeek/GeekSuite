@@ -18,6 +18,7 @@ import {
   loadReaderPosition,
   saveReaderPosition,
 } from "../../utils/readerPosition";
+import { saveReaderPrefs } from "../../utils/readerPrefs";
 import { renderWithProviders } from "../testUtils";
 
 vi.mock("epubjs", () => ({ default: vi.fn() }));
@@ -167,6 +168,24 @@ describe("the reader's chrome", () => {
     expect(topChrome()).toHaveStyle({ opacity: "0" });
   });
 
+  it("a font size change shows the same page again, by its CFI (review 2026-11-19 #2)", () => {
+    const rendition = {
+      ...fakeRendition(),
+      location: { start: { cfi: CFI } },
+      display: vi.fn(() => Promise.resolve()),
+      themes: { fontSize: vi.fn() },
+    };
+    renderWithProviders(<ReaderModal {...props({ readerRenditionRef: { current: rendition } })} />);
+    // Opening applies nothing here: useReader set the size before the first page.
+    expect(rendition.display).not.toHaveBeenCalled();
+    fireEvent.click(btn("Increase font size"));
+    expect(rendition.themes.fontSize).toHaveBeenLastCalledWith("110%");
+    expect(rendition.display).toHaveBeenCalledWith(CFI);
+    expect(rendition.display.mock.invocationCallOrder[0]).toBeGreaterThan(
+      rendition.themes.fontSize.mock.invocationCallOrder.at(-1)
+    );
+  });
+
   it("a swipe inside the book's page turns it", () => {
     const rendition = fakeRendition();
     renderWithProviders(<ReaderModal {...props({ readerRenditionRef: { current: rendition } })} />);
@@ -259,6 +278,19 @@ describe("the place you stopped, on this device", () => {
     const next = "epubcfi(/6/10!/4/2/1:0)";
     act(() => rendition.emit("relocated", { start: { cfi: next } }));
     expect(loadReaderPosition("chef", "b1")).toBe(next);
+  });
+
+  it("the remembered theme and font size are on before the saved page is laid out (review 2026-11-19 #2)", async () => {
+    // The drift itself (text reflowing under epub.js's pixel offset) needs a
+    // real browser; jsdom can only prove the order of the calls.
+    saveReaderPrefs({ fontPct: 130 });
+    saveReaderPosition("chef", "b1", CFI);
+    await openReader("chef");
+    expect(rendition.themes.fontSize).toHaveBeenCalledWith("130%");
+    expect(rendition.display).toHaveBeenCalledWith(CFI);
+    const displayAt = rendition.display.mock.invocationCallOrder[0];
+    expect(rendition.themes.fontSize.mock.invocationCallOrder[0]).toBeLessThan(displayAt);
+    expect(rendition.themes.select.mock.invocationCallOrder[0]).toBeLessThan(displayAt);
   });
 
   it("another reader on the same device starts at the cover", async () => {
