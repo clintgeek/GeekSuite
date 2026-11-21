@@ -138,6 +138,18 @@ export default function SettingsView() {
     }
   };
 
+  // Enter (Go on a phone keyboard) in a field: save now, and show what's missing.
+  // A form of several fields and no submit button never submits on Enter by
+  // itself, so the key is caught here too.
+  const submit = (e) => {
+    e.preventDefault();
+    setLeft(new Set(links.flatMap((_, i) => [`${i}:label`, `${i}:template`])));
+    persist(links);
+  };
+  const enterSaves = (e) => {
+    if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.target.tagName === 'INPUT') submit(e);
+  };
+
   const leave = (i, key) => () => {
     setLeft((prev) => new Set(prev).add(`${i}:${key}`));
     persist(links);
@@ -266,7 +278,7 @@ export default function SettingsView() {
             <CircularProgress size={20} aria-label="Loading settings" sx={{ color: 'text.secondary' }} />
           )
         ) : (
-          <Box component="form" noValidate onSubmit={(e) => e.preventDefault()} data-testid="reader-links-form">
+          <Box component="form" noValidate onSubmit={submit} onKeyDown={enterSaves} data-testid="reader-links-form">
             {links.length ? null : (
               <Typography data-testid="reader-links-empty" sx={{ fontStyle: 'italic', color: 'text.secondary', mb: 4 }}>
                 No open-with links yet. Stories open at the publisher.

@@ -376,6 +376,25 @@ describe('Settings → Open-with links', () => {
     expect(sent).toHaveBeenCalledTimes(1);
   });
 
+  it('Enter (Go on a phone) in a field saves without leaving it', async () => {
+    const saved = vi.fn();
+    renderWithProviders(<SettingsView />, { mocks: [prefsMock(one), saveMockFor(saved)] });
+    const label = await screen.findByLabelText('Label 1');
+    await userEvent.clear(label);
+    await userEvent.type(label, 'Reader two{Enter}');
+    await waitFor(() => expect(saved).toHaveBeenCalledWith({ input: { readerLinks: [{ label: 'Reader two', template: 'https://example.com/r?u={url}' }] } }));
+    expect(label).toHaveFocus();
+  });
+
+  it('Enter on a half-filled link saves nothing and shows what it needs', async () => {
+    const saved = vi.fn();
+    renderWithProviders(<SettingsView />, { mocks: [prefsMock(one), saveMockFor(saved)] });
+    await userEvent.click(await screen.findByRole('button', { name: 'Add a link' }));
+    await userEvent.type(screen.getByLabelText('Label 2'), 'Half{Enter}');
+    expect(await screen.findByText('Add the link.')).toBeInTheDocument();
+    expect(saved).not.toHaveBeenCalled();
+  });
+
   it('removing a link saves at once and offers Undo, which puts it back', async () => {
     const saved = vi.fn();
     const two = [0, 1].map((i) => ({ __typename: 'NewsReaderLink', id: idOf(`https://example.com/${i}?u={url}`), label: `L${i}`, template: `https://example.com/${i}?u={url}` }));
