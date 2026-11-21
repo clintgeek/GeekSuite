@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Box, Button, Divider, Skeleton, Typography, useTheme } from '@mui/material';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
-import { useMutation, useQuery } from '@apollo/client';
+import { useApolloClient, useMutation, useQuery } from '@apollo/client';
 import { GeekDialog, GeekEmptyState, GeekErrorState, useToast } from '@geeksuite/ui';
 import NoteRow from '../components/notes/NoteRow';
 import { DELETED_NOTES } from '../graphql/queries';
@@ -34,54 +34,81 @@ export default function DeletedNotes() {
   const selection = useNoteSelection();
   const [confirm, setConfirm] = useState(null); // ids to delete forever
   const { data, loading, error, refetch } = useQuery(DELETED_NOTES, { variables: { limit: 200 }, fetchPolicy: 'cache-and-network' });
-  const [restoreMutation, { loading: restoring }] = useMutation(RESTORE_NOTE, { update: onNoteRestored });
-  const [purgeMutation, { loading: purging }] = useMutation(PURGE_NOTE);
+  const client = useApolloClient();
+  // No per-call cache `update`: each one evicted the lists, and every live
+  // list refetched once per note in the batch. The batch evicts once, below.
+  const [restoreMutation] = useMutation(RESTORE_NOTE);
+  const [purgeMutation] = useMutation(PURGE_NOTE);
+  // Held for the whole batch. Apollo's per-call `loading` drops to false
+  // between one note and the next, which re-enabled the bar mid-batch.
+  const [running, setRunning] = useState(false);
+  const runningRef = useRef(false);
   const notes = data?.deletedNotes || [];
 
   // One id at a time: the gateway has no batch restore or purge for the bin.
   // What went through leaves the selection; what failed stays selected.
-  const runEach = async (ids, one) => {
+  // `settle(done)` runs once, after the last call, for the cache.
+  const runBatch = async (ids, one, settle) => {
+    if (runningRef.current) return null;
+    runningRef.current = true;
+    setRunning(true);
     const done = [];
     let failure = null;
-    for (const id of ids) {
-      try {
-        await one(id);
-        done.push(id);
-      } catch (err) {
-        failure = failure || err;
+    try {
+      for (const id of ids) {
+        try {
+          await one(id);
+          done.push(id);
+        } catch (err) {
+          failure = failure || err;
+        }
       }
+      if (done.length) {
+        try { settle(done); } catch { /* never fail the batch on the cache */ }
+      }
+      await refetch().catch(() => {});
+    } finally {
+      runningRef.current = false;
+      setRunning(false);
     }
+    if (failure) selection.remove(done);
+    else selection.exit();
     return { done, failure };
   };
 
   const restore = async (ids) => {
-    const { done, failure } = await runEach(ids, (id) => restoreMutation({ variables: { id } }));
+    const result = await runBatch(
+      ids,
+      (id) => restoreMutation({ variables: { id } }),
+      () => onNoteRestored(client.cache),
+    );
+    if (!result) return;
+    const { done, failure } = result;
     if (done.length) {
       useNoteStore.getState().refreshLists?.();
       notify(`Restored ${plural(done.length)}`, { tone: 'success' });
     }
     if (failure) notify(failure?.message || 'Could not restore the note.', { tone: 'error' });
-    await refetch().catch(() => {});
-    if (failure) selection.remove(done);
-    else selection.exit();
   };
 
   const purge = async (ids) => {
     setConfirm(null);
-    const { done, failure } = await runEach(ids, (id) => purgeMutation({
-      variables: { id },
-      update: (cache) => {
-        const ref = cache.identify({ __typename: 'Note', id: String(id) });
-        if (ref) cache.evict({ id: ref });
-        cache.evict({ id: 'ROOT_QUERY', fieldName: 'deletedNotes' });
-        cache.gc();
+    const result = await runBatch(
+      ids,
+      (id) => purgeMutation({ variables: { id } }),
+      (done) => {
+        for (const id of done) {
+          const ref = client.cache.identify({ __typename: 'Note', id: String(id) });
+          if (ref) client.cache.evict({ id: ref });
+        }
+        client.cache.evict({ id: 'ROOT_QUERY', fieldName: 'deletedNotes' });
+        client.cache.gc();
       },
-    }));
+    );
+    if (!result) return;
+    const { done, failure } = result;
     if (done.length) notify(done.length === 1 ? 'Deleted forever' : `Deleted ${plural(done.length)} forever`, { tone: 'success' });
     if (failure) notify(failure?.message || 'Could not delete the note.', { tone: 'error' });
-    await refetch().catch(() => {});
-    if (failure) selection.remove(done);
-    else selection.exit();
   };
 
   const confirmTitle = confirm?.length === 1
@@ -138,7 +165,7 @@ export default function DeletedNotes() {
 
       <SelectionBar
         selection={selection}
-        deleted={{ onRestore: restore, onPurge: (ids) => setConfirm(ids), busy: restoring || purging }}
+        deleted={{ onRestore: restore, onPurge: (ids) => setConfirm(ids), busy: running }}
       />
 
       <GeekDialog

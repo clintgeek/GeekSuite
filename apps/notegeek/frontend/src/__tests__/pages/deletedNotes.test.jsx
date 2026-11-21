@@ -10,6 +10,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { MockedProvider } from '@apollo/client/testing';
+import { InMemoryCache } from '@apollo/client';
 import { GeekToastProvider } from '@geeksuite/ui';
 import { createNoteTheme } from '../../theme/createAppTheme';
 import { DELETED_NOTES } from '../../graphql/queries';
@@ -32,10 +33,10 @@ const restoredRow = (id) => ({
   createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-02T10:00:00.000Z',
 });
 
-function renderPage(mocks) {
+function renderPage(mocks, { cache } = {}) {
   return render(
     <ThemeProvider theme={createNoteTheme('light')}>
-      <MockedProvider mocks={mocks} addTypename={false}>
+      <MockedProvider mocks={mocks} addTypename={false} cache={cache}>
         <GeekToastProvider>
           <MemoryRouter initialEntries={['/deleted']}>
             <Routes>
@@ -88,5 +89,51 @@ describe('Recently deleted — one way to restore, like Archived', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete forever' }));
     await waitFor(() => expect(purged).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Deleted forever')).toBeInTheDocument();
+  });
+});
+
+// Review 2026-11-20: a batch runs one call per note, so what failed must stay
+// selected, and the lists are evicted once for the batch, not once per note.
+describe('Recently deleted — a batch of several', () => {
+  const pickBoth = async () => {
+    await screen.findByText('Roof quote');
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Old standup template/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Roof quote/ }));
+  };
+
+  it('a partial failure restores what it could and keeps the failed note selected', async () => {
+    const ok = vi.fn(() => ({ data: { restoreNote: restoredRow('d1') } }));
+    renderPage([
+      listMock(),
+      { request: { query: RESTORE_NOTE, variables: { id: 'd1' } }, result: ok },
+      { request: { query: RESTORE_NOTE, variables: { id: 'd2' } }, error: new Error('The server said no.') },
+    ]);
+    await pickBoth();
+    fireEvent.click(bar().getByRole('button', { name: 'Restore 2 notes' }));
+    await waitFor(() => expect(ok).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Restored 1 note')).toBeInTheDocument();
+    expect(await screen.findByText('The server said no.')).toBeInTheDocument();
+    // Still selecting, with only the one that failed.
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /Roof quote/ })).toHaveAttribute('aria-checked', 'true'));
+    expect(screen.getByRole('checkbox', { name: /Old standup template/ })).toHaveAttribute('aria-checked', 'false');
+    expect(bar().getByRole('button', { name: 'Restore' })).toBeEnabled();
+  });
+
+  it('evicts the bin list once for the batch, and the bar stays disabled until it is done', async () => {
+    const cache = new InMemoryCache({ addTypename: false });
+    const evict = vi.spyOn(cache, 'evict');
+    renderPage([
+      listMock(),
+      { request: { query: RESTORE_NOTE, variables: { id: 'd1' } }, result: { data: { restoreNote: restoredRow('d1') } } },
+      { request: { query: RESTORE_NOTE, variables: { id: 'd2' } }, result: { data: { restoreNote: restoredRow('d2') } }, delay: 150 },
+    ], { cache });
+    await pickBoth();
+    fireEvent.click(bar().getByRole('button', { name: 'Restore 2 notes' }));
+    expect(bar().getByRole('button', { name: 'Restore 2 notes' })).toBeDisabled();
+    expect(bar().getByRole('button', { name: 'Delete forever' })).toBeDisabled();
+    expect(await screen.findByText('Restored 2 notes')).toBeInTheDocument();
+    const binEvictions = evict.mock.calls.filter(([opts]) => opts?.fieldName === 'deletedNotes');
+    expect(binEvictions).toHaveLength(1);
   });
 });
