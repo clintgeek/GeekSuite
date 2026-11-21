@@ -339,6 +339,9 @@ export default function ReaderModal({
 
   const handleKeyDown = useCallback(
     (e) => {
+      // React bubbles keys through portals: a key pressed in the Contents
+      // sheet (portalled out of this Dialog) is not a key for the page.
+      if (!e.currentTarget?.contains?.(e.target)) return;
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         goPrev();

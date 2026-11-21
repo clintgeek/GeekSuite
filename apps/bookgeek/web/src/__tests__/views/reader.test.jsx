@@ -230,6 +230,20 @@ describe("where you are in the book", () => {
     expect(goToHref).toHaveBeenCalledWith("Text/ch2.xhtml#s2");
   });
 
+  it("arrow keys turn the page, but not while you move through Contents (review 2026-11-19 #5)", async () => {
+    const rendition = fakeRendition();
+    renderWithProviders(<ReaderModal {...props({ readerRenditionRef: { current: rendition }, readerToc: toc })} />);
+    fireEvent.keyDown(btn("Close"), { key: "ArrowRight" });
+    expect(rendition.next).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(btn("Contents"));
+    const entry = await screen.findByRole("button", { name: "Night" });
+    fireEvent.keyDown(entry, { key: "ArrowRight" });
+    fireEvent.keyDown(entry, { key: "ArrowLeft" });
+    expect(rendition.next).toHaveBeenCalledTimes(1);
+    expect(rendition.prev).not.toHaveBeenCalled();
+  });
+
   it("chapterForHref matches by file, whichever side carries the folder", () => {
     expect(chapterForHref(toc, "Text/ch2.xhtml")).toBe("The Desert");
     expect(chapterForHref(toc, "ch1.xhtml")).toBe("One");
