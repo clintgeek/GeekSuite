@@ -208,7 +208,7 @@ describe('Move to Trash: reversible, so it acts at once and offers Undo', () => 
     const mocks = [
       { request: { query: GET_THING, variables: { id: 'th1' } }, result: { data: { thing } }, maxUsageCount: 10 },
       { request: { query: DELETE_THING, variables: { id: 'th1' } }, result: trashed },
-      { request: { query: RESTORE_THING, variables: { id: 'th1' } }, result: restored },
+      restoreResult instanceof Error ? { request: { query: RESTORE_THING, variables: { id: 'th1' } }, error: restoreResult } : { request: { query: RESTORE_THING, variables: { id: 'th1' } }, result: restored },
     ];
     renderWithProviders(
       <Routes>
@@ -252,6 +252,27 @@ describe('Move to Trash: reversible, so it acts at once and offers Undo', () => 
     await waitFor(() => expect(restored).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Wendy is back.')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { level: 1, name: 'Wendy' })).toBeInTheDocument();
+  }, 30000);
+
+  it('the trash refused: it says so, nothing moves, and there is no Undo to offer', async () => {
+    const { trashed } = trashSetup({ trashResult: { data: { deleteThing: { __typename: 'DeleteResponse', success: false, message: 'Thing not found' } } } });
+    await trashIt();
+    await waitFor(() => expect(trashed).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Thing not found')).toBeInTheDocument();
+    expect(screen.queryByText(/is in the Trash/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(screen.queryByText(/^At \//)).toBeNull();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Wendy' })).toBeInTheDocument();
+  }, 30000);
+
+  it('Undo fails: it says the thing is still in the Trash, and stays where it is', async () => {
+    trashSetup({ restoreResult: new Error('The server did not answer') });
+    await trashIt();
+    expect(await screen.findByText('At /')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByText('The server did not answer')).toBeInTheDocument();
+    expect(screen.queryByText('Wendy is back.')).toBeNull();
+    expect(screen.getByText('At /')).toBeInTheDocument();
   }, 30000);
 
   it('gone on somewhere else before Undo: it comes back, and the reader stays put with an Open', async () => {

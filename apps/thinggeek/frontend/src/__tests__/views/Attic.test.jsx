@@ -296,7 +296,7 @@ describe('adding a document', () => {
     expect(number).toHaveAttribute('data-masked', 'false');
   });
 
-  it('Cancel with something typed asks before throwing it away; untouched, it just goes', async () => {
+  it('untouched (only a type picked), Cancel goes without asking', async () => {
     form();
     fireEvent.click(await screen.findByRole('radio', { name: 'Passport' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
