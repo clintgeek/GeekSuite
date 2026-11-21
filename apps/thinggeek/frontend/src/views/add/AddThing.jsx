@@ -45,7 +45,7 @@ import { useThingTree, useThingTypes } from '../../hooks/useThingMeta';
 import { useUploads } from '../../hooks/useUploads';
 import useKeyboardInset from '../../hooks/useKeyboardInset';
 import ChromeTheme from '../../components/Chrome';
-import { CHROME, DISPLAY_FONT, LIVERY, STENCIL_FONT } from '../../theme/theme';
+import { DISPLAY_FONT, LIVERY, STENCIL_FONT } from '../../theme/theme';
 import { chipGroupSx } from '../../theme/chipStyles';
 import { photoRoleLabel } from '../../utils/vocab';
 import { buildAttributes } from '../../utils/attributes';
@@ -56,6 +56,7 @@ import { visuallyHidden } from '../../utils/a11y';
 import AttributeField from '../edit/AttributeField';
 import { PHOTO_ACCEPT } from '../detail/AddFileSheet';
 import PhotoPair from '../../components/PhotoPair';
+import { HERO_BUTTON_SX, SAVE_BAR_SX } from '../../components/saveBar';
 
 const ADD_ROLES = ['overview', 'id-plate', 'receipt'];
 export const LAST_PLACE_KEY = 'thinggeek.lastPlace';
@@ -302,15 +303,8 @@ export default function AddThing() {
               right: 0,
               bottom: `${keyboard}px`,
               zIndex: theme.zIndex.appBar,
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-              gap: 1,
-              px: 2,
+              ...SAVE_BAR_SX,
               pb: keyboard ? 1.25 : 'calc(10px + env(safe-area-inset-bottom))',
-              bgcolor: CHROME.bar,
-              // the livery: the orange stripe along the top
-              backgroundImage: `linear-gradient(180deg, ${LIVERY.orange} 0 4px, transparent 4px)`,
-              pt: '14px',
             }
           : { display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3, pt: 2, borderTop: '3px solid', borderColor: 'rule.main' }
       }
@@ -329,7 +323,7 @@ export default function AddThing() {
         disableElevation
         onClick={() => save(false)}
         disabled={Boolean(busy)}
-        sx={{ fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'hero.contrastText' }}
+        sx={HERO_BUTTON_SX}
       >
         {busy === 'save' ? 'Saving…' : 'Save'}
       </Button>

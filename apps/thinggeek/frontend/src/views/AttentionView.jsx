@@ -23,7 +23,6 @@ import React, { useMemo } from 'react';
 import { Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import { ChevronRight as GoIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
-
 import PageHeader, { PageFrame } from '../components/PageHeader';
 import SectionHeading, { StripeMark } from '../components/SectionHeading';
 import OnboardingChecklist, { DoneStamp } from '../components/OnboardingChecklist';

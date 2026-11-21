@@ -20,9 +20,10 @@ import { Box, Button, InputAdornment, MenuItem, TextField, Typography } from '@m
 import { useApolloClient } from '@apollo/client';
 import { GeekDialog, useToast, useUnsavedGuard } from '@geeksuite/ui';
 import ChromeTheme from '../../components/Chrome';
-import { CHROME, LIVERY, LIVERY_SHEET_HEADER_SX, dustImage } from '../../theme/theme';
+import { CHROME, LIVERY_SHEET_HEADER_SX, dustImage } from '../../theme/theme';
 import WherePicker from '../../components/WherePicker';
 import TagInput from '../../components/TagInput';
+import { HERO_BUTTON_SX, SAVE_BAR_SX } from '../../components/saveBar';
 import TypeIcon from '../../components/TypeIcon';
 import { useThingActions } from '../../hooks/useThingActions';
 import { useUploads } from '../../hooks/useUploads';
@@ -390,14 +391,8 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
             zIndex: 2,
             mx: { xs: -2, sm: -3 },
             mt: 1,
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-            gap: 1,
-            px: 2,
-            pt: '14px',
+            ...SAVE_BAR_SX,
             pb: 'calc(10px + env(safe-area-inset-bottom))',
-            bgcolor: CHROME.bar,
-            backgroundImage: `linear-gradient(180deg, ${LIVERY.orange} 0 4px, transparent 4px)`,
           }}
         >
           <Button variant="outlined" onClick={guard.requestClose} sx={{ minHeight: 48, color: CHROME.text, borderColor: CHROME.text, fontWeight: 700 }}>
@@ -409,7 +404,7 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
             disableElevation
             onClick={save}
             disabled={busy}
-            sx={{ minHeight: 48, fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'hero.contrastText' }}
+            sx={{ minHeight: 48, ...HERO_BUTTON_SX }}
           >
             {busy ? 'Saving…' : 'Save'}
           </Button>

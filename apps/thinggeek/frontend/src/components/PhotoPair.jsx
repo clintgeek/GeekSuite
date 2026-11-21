@@ -8,8 +8,9 @@
 import React from 'react';
 import { Box, Button } from '@mui/material';
 import { FolderOpenOutlined as FileIcon, PhotoCameraOutlined as CameraIcon } from '@mui/icons-material';
+import { HERO_BUTTON_SX } from './saveBar';
 
-const HERO_SX = { minHeight: 48, fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'hero.contrastText' };
+const HERO_SX = { minHeight: 48, ...HERO_BUTTON_SX };
 const PLAIN_SX = { minHeight: 48, fontWeight: 700, color: 'text.primary', borderColor: 'text.secondary' };
 
 export default function PhotoPair({ onCamera, onFile, fileLabel = 'Choose a file', sx }) {

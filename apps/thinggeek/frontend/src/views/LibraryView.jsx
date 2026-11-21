@@ -23,7 +23,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress, LinearProgress, Skeleton, useMediaQuery, useTheme } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
-
 import { FilterPanel, LibraryHeader, useInfiniteSentinel, useScrollMemory, useSectionOpen } from '@geeksuite/collection';
 import { useLibraryFilter, useThingFacets, useThingPages } from '../hooks/useLibrary';
 import { useFacetContext, useThingTree } from '../hooks/useThingMeta';

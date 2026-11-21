@@ -39,7 +39,11 @@ import { usePageTitle } from './pageTitle';
 export const SEARCH_EXAMPLE = ['type:boat', 'tag:fishing', 'in:garage', 'missing:receipt'];
 export const SEARCH_MORE = ['before:2020', 'due:30d', 'has:document'];
 
-const tokenSx = {
+/** `type:boat` → `type:` — what a tap on the example puts in the field. */
+export const tokenPrefix = (token) => token.slice(0, token.indexOf(':') + 1);
+
+const TOKEN_SX = {
+  font: 'inherit',
   fontFamily: MONO_FONT,
   fontSize: '0.75rem',
   color: 'text.primary',
@@ -47,58 +51,43 @@ const tokenSx = {
   border: 1,
   borderColor: 'divider',
   borderRadius: '4px',
-  px: 0.5,
-  py: '1px',
   whiteSpace: 'nowrap',
+  display: 'inline-flex',
+  alignItems: 'center',
+  minHeight: 44,
+  px: 1,
+  py: 0,
+  mr: 0.5,
+  mb: 0.5,
+  cursor: 'pointer',
+  verticalAlign: 'middle',
+  '&:hover': { borderColor: 'text.primary' },
 };
-
-/** `type:boat` → `type:` — what a tap on the example puts in the field. */
-export const tokenPrefix = (token) => token.slice(0, token.indexOf(':') + 1);
 
 /**
  * The grammar helper. Its words are the field's accessible description, so
- * the helper itself stays out of the reading order (aria-hidden). With
- * `onPick`, each example is a tap target that puts its prefix (`type:`) into
- * the field — the colon is on the phone keyboard's symbol layer — without
- * taking focus from it (mousedown is held, the buttons are tabIndex -1).
+ * the helper itself stays out of the reading order (aria-hidden). Each example
+ * is a tap target that puts its prefix (`type:`) into the field — the colon is
+ * on the phone keyboard's symbol layer — without taking focus from it
+ * (mousedown is held, the buttons are tabIndex -1).
  */
-export function SearchHint({ sx, onPick }) {
-  const token = (t) =>
-    onPick ? (
-      <Box
-        component="button"
-        type="button"
-        tabIndex={-1}
-        data-testid="search-token"
-        data-token={t}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => onPick(tokenPrefix(t))}
-        sx={{
-          ...tokenSx,
-          font: 'inherit',
-          fontFamily: MONO_FONT,
-          fontSize: '0.75rem',
-          display: 'inline-flex',
-          alignItems: 'center',
-          minHeight: 44,
-          px: 1,
-          py: 0,
-          mr: 0.5,
-          mb: 0.5,
-          cursor: 'pointer',
-          verticalAlign: 'middle',
-          '&:hover': { borderColor: 'text.primary' },
-        }}
-      >
-        {t}
-      </Box>
-    ) : (
-      <Box component="span" sx={tokenSx}>
-        {t}
-      </Box>
-    );
+function SearchHint({ onPick }) {
+  const token = (t) => (
+    <Box
+      component="button"
+      type="button"
+      tabIndex={-1}
+      data-testid="search-token"
+      data-token={t}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => onPick(tokenPrefix(t))}
+      sx={TOKEN_SX}
+    >
+      {t}
+    </Box>
+  );
   return (
-    <Box aria-hidden="true" data-testid="search-hint" sx={{ fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.9, ...sx }}>
+    <Box aria-hidden="true" data-testid="search-hint" sx={{ fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.9 }}>
       <Box component="span" sx={{ mr: 0.75, fontWeight: 600, color: 'text.primary' }}>
         Try
       </Box>
@@ -109,14 +98,13 @@ export function SearchHint({ sx, onPick }) {
         </React.Fragment>
       ))}
       <Box component="span" sx={{ display: 'block' }}>
-        Also {SEARCH_MORE.map((t, i) => (
+        Also{' '}
+        {SEARCH_MORE.map((t) => (
           <React.Fragment key={t}>
-            {i && !onPick ? ' · ' : ''}
-            {token(t)}
-            {onPick ? ' ' : ''}
+            {token(t)}{' '}
           </React.Fragment>
         ))}
-        {onPick ? 'or just type a name.' : ', or just type a name.'}
+        or just type a name.
       </Box>
     </Box>
   );
