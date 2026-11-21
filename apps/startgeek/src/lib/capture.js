@@ -57,14 +57,20 @@ export function captureAttemptFor(previous, key, makeId = newClientId) {
  * - `~blocked` → a `#blocked` tag with the reason in the note, as TodoGeek
  *   files it (the parked state has no screen there any more);
  * - `$^note` is not part of the task: `runTaskCapture` sends it to NoteGeek.
+ *
+ * Null when no words are left once the tokens are read (`> #work /tomorrow`):
+ * there is no task to add, and the gateway would refuse an empty one.
  */
 export function taskVariables(fields, clientId, now = new Date()) {
   const { input } = toCreateInput(
     { ...fields, content: fields.content || '' },
     { today: now, explicit: true },
   )
-  return { ...(input || { content: '', signifier: '*' }), clientId }
+  return input ? { ...input, clientId } : null
 }
+
+/** What TodoGeek's add box says for a line with no words left. */
+export const NOTHING_TO_ADD = 'Nothing to add: type some words for the task.'
 
 /**
  * A model draft (`glanceDraft`) as the fields the grammar would have read.
@@ -156,7 +162,15 @@ export async function runTaskCapture(fields, attempt, steps, now = new Date()) {
   }
 
   if (!attempt.taskId) {
-    const task = await step('task', () => steps.createTask(taskVariables(fields, attempt.clientId, now)))
+    const variables = taskVariables(fields, attempt.clientId, now)
+    if (!variables) {
+      // Refused here, with no request: nothing is filed, the line stays.
+      const err = new Error(NOTHING_TO_ADD)
+      err.captureStep = 'task'
+      err.nothingToAdd = true
+      throw err
+    }
+    const task = await step('task', () => steps.createTask(variables))
     attempt.taskId = task?.id || null
     if (!attempt.taskId) {
       const err = new Error("Couldn't add the task")

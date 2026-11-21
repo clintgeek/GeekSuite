@@ -6,6 +6,7 @@ import {
   describeCapture,
   draftFields,
   formatTime,
+  NOTHING_TO_ADD,
   newClientId,
   partialCaptureMessage,
   runTaskCapture,
@@ -238,6 +239,23 @@ test('a drafted repeat keeps its frequency, anchored on the drafted date; a $^no
   const gw = fakeGateway()
   await runTaskCapture(fields, captureAttemptFor(null, `draft:${line}`), gw.steps)
   assert.equal(gw.calls.createNote, 1)
+})
+
+test('a line with no words left is refused with TodoGeek\'s words, and nothing is sent', async () => {
+  for (const line of ['#work /tomorrow', '(private) !high', '$^just an idea']) {
+    const gw = fakeGateway()
+    const attempt = captureAttemptFor(null, `task:${line}`)
+    await assert.rejects(runTaskCapture(parseTaskInput(line), attempt, gw.steps), (err) => {
+      assert.equal(err.message, NOTHING_TO_ADD)
+      assert.equal(err.nothingToAdd, true)
+      assert.equal(partialCaptureMessage(err, attempt), null)
+      return true
+    })
+    assert.equal(gw.calls.createTask, 0, line)
+    assert.equal(gw.calls.createNote, 0, line)
+  }
+  assert.equal(NOTHING_TO_ADD, 'Nothing to add: type some words for the task.')
+  assert.equal(taskVariables(parseTaskInput('#work'), 'cid'), null)
 })
 
 test('describeCapture says what was understood, on the chosen clock', () => {

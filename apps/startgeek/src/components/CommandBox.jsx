@@ -352,7 +352,8 @@ const CommandBox = ({ onOpenSettings }) => {
       // A task that was filed before a later step failed must say so, or
       // the person retypes it. Enter again finishes only the missing step.
       notify({
-        tone: 'error',
+        // "Nothing to add" is a hint about the line, not a failure to pin.
+        tone: err?.nothingToAdd ? 'info' : 'error',
         message: partialCaptureMessage(err, attemptRef.current) || failureMessage(err, fallback),
       })
     },
