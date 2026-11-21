@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, renderHook, screen, waitFor } from "@testing-library/react";
 import ePub from "epubjs";
 import { Dialog } from "@mui/material";
+import { GeekSheet } from "@geeksuite/ui";
 import ReaderModal, { AUTO_HIDE_MS } from "../../views/ReaderModal";
 import { useReader } from "../../hooks/useReader";
 import {
@@ -72,16 +73,31 @@ afterEach(() => {
 });
 
 describe("the reader's Back", () => {
-  it("Back (popstate) closes the reader and only the reader", () => {
-    const before = window.history.state?.__geekBack?.length ?? 0;
+  it("Back (popstate) closes the reader and only the reader: the book sheet under it stays", async () => {
+    const sheetClose = vi.fn();
     const setReaderOpen = vi.fn();
-    renderWithProviders(<ReaderModal {...props({ setReaderOpen })} />);
-    // The reader owns one entry on the suite back stack, on top of the book's route.
-    expect(window.history.state?.__geekBack?.length).toBe(before + 1);
+    const Page = ({ reading }) => (
+      <>
+        <GeekSheet open onClose={sheetClose} title="Lock In">
+          <p>the book sheet</p>
+        </GeekSheet>
+        {reading ? <ReaderModal {...props({ setReaderOpen })} /> : null}
+      </>
+    );
+    const view = renderWithProviders(<Page reading={false} />);
+    await waitFor(() => expect(window.history.state?.__geekBack?.length ?? 0).toBeGreaterThan(0));
+    // The history entry the book sheet owns, before the reader opens.
+    const sheetEntry = window.history.state;
+    view.rerender(<Page reading />);
+    // The reader owns one more entry, on top of the sheet's.
+    await waitFor(() => expect(window.history.state.__geekBack.length).toBe(sheetEntry.__geekBack.length + 1));
+
+    // Back lands on the sheet's entry.
     act(() => {
-      window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+      window.dispatchEvent(new PopStateEvent("popstate", { state: sheetEntry }));
     });
     expect(setReaderOpen).toHaveBeenCalledWith(false);
+    expect(sheetClose).not.toHaveBeenCalled();
   });
 });
 
