@@ -4,8 +4,10 @@ The pen-first daily page: one day's TodoGeek tasks beside a handwriting page
 stored in NoteGeek. What it must do is `DOCS/GEEKDAY_SPEC.md` (signed off
 2026-11-20); this file is how it does it.
 
-**Status (2026-11-20): built locally, not deployed.** Port 1840, Vite dev port
-1841, hostname `geekday.clintgeek.com`. Nothing has been run on the Lenovo.
+**Status (2026-11-21): deployed** at `geekday.clintgeek.com` (port 1840, Vite dev
+port 1841). The week spread, the scrolling page and page templates were added
+the night of 2026-11-20 (spec §6, `DOCS/TEMPLATES_SPEC.md`). Nothing has been
+run on the Lenovo.
 
 ## Shape
 
@@ -21,12 +23,13 @@ Every operation it sends is in `frontend/src/graphql/documents.js`.
 
 | Path | Job |
 |---|---|
-| `pages/DayPage.jsx` | The page: routes `/` (today, follows midnight) and `/day/<yyyy-MM-dd>`; day flip by buttons, arrow keys, `t`, and a finger swipe |
+| `pages/DayPage.jsx` | The page: routes `/` (today, follows midnight) and `/day/<yyyy-MM-dd>`; day flip by buttons, arrow keys, `t`, and a finger swipe; `w` opens the week |
+| `pages/WeekPage.jsx`, `components/week/`, `hooks/useWeek*.js`, `lib/week.js` | The week spread: `/week` and `/week/<yyyy-MM-dd>`, Monday to Sunday plus "Not scheduled" |
 | `components/Agenda.jsx` | Overdue / Scheduled / To do / Done, tick, move to next day, the add box |
 | `components/InkPane.jsx` | Hosts the canvas; shows saving, saved, not saved, conflict |
 | `components/ConfirmTaskDialog.jsx` | Circle to task: read, correct, create |
 | `components/DockedView.jsx` | The idle clock face |
-| `ink/` | The canvas: tldraw 2.4.6, trimmed from NoteGeek's sketch editor, plus the lasso |
+| `ink/` | The canvas: tldraw 2.4.6, trimmed from NoteGeek's sketch editor, plus the lasso, the scrolling page (`pageCamera.js`, `pageGestures.js`) and page templates (`pageTemplate.js`, `PagePaper.jsx`, `PageMenu.jsx`) |
 | `store/dayNoteStore.js` | Finding, creating and saving a day's note; retries; conflicts |
 | `hooks/useDayTasks.js` | A day's tasks with optimistic tick / move / add |
 | `lib/tasks.js`, `lib/days.js`, `lib/capture.js` | Pure rules: grouping, day keys, text → task |
@@ -69,6 +72,29 @@ layer above the page and wakes on release, so the waking touch never reaches
 what is under it. Weather is read straight from the browser (Open-Meteo, with
 ipapi.co for location and Arkadelphia as the fallback), as StartGeek does.
 
+**The page scrolls.** It is 1000 page units wide and at least three sheets
+tall, growing so there is always a sheet below the lowest ink. Zoomed out it
+is exactly as wide as its pane; pinch zooms in to 3x. tldraw's own camera
+stays locked: wheel, one-finger pan, two-finger pan and pinch are GeekDay's
+(`ink/pageGestures.js`), because tldraw's pen mode ignores a single finger and
+an unlocked camera lets a palm beside the pen register as a pinch. A touch
+that lands while the pen is down, or within 300 ms of a pen event, never moves
+the page.
+
+**Page templates** are printed backgrounds from `@geeksuite/ui`
+(`packages/ui/src/paper/`), shared with NoteGeek. The id is stored in the
+sketch's tldraw document meta as `paperTemplate`, beside NoteGeek's
+`paperColor` / `paperPattern`. The device default (`geekday:pageTemplate`)
+applies to blank days only; a page that already has ink and no stored
+template is Ruled. A template is never a shape: it is not erasable and not in
+a lasso crop. A blank day saves nothing until it has ink.
+
+**The week spread** reads `weeklyTasks` (Monday to Sunday) for the seven cells
+and `dailyTasks(today)` for "Not scheduled"; in a week with a clock change it
+reads once per UTC offset. `monthlyTasks` is not a date range (it ignores its
+end date). Each cell is grouped by the day page's own `groupDayTasks`. Ink
+pictures are drawn as SVG from the note's stroke points, without tldraw.
+
 ## Known limits
 
 - Two devices that both put first ink on the same new day at the same moment
@@ -77,11 +103,13 @@ ipapi.co for location and Arkadelphia as the fallback), as StartGeek does.
 - A day page is searchable by its words only after NoteGeek has transcribed
   it, which happens when the note is open in NoteGeek. It is always findable
   by tag and title.
-- The page is one fixed sheet: no scrolling, panning or zoom.
+- No keyboard scrolling of the ink page; trackpad pinch does not zoom in desktop Safari (Ctrl + wheel does).
+- Tasks cannot be added from the week page. Its ink pictures come from the saved note, one fetch per day.
 - Phone and desktop are not designed for (spec §3). Below 600 px the agenda
   stacks above the ink.
-- Not verified on a device: pen latency, palm rejection, the Lenovo pen
-  button, real handwriting through the transcriber, the wake lock.
+- Not verified on a device: pen latency, palm rejection (now also while
+  scrolling), the Lenovo pen button, real handwriting through the
+  transcriber, the wake lock, dragging a task with a pen or finger.
 
 ## Run and test
 
@@ -99,14 +127,11 @@ to; see `DOCS/RUNBOOK.md` §7. The harness needs none: every request is stubbed
 
 ## Deploying
 
-Not done. In order:
+Deployed 2026-11-20. A push to `main` builds `ghcr.io/clintgeek/geekday` and
+Watchtower replaces the container (`DOCS/CICD.md`). `apps/geekday/.env.production`
+on the box holds no secrets. The nginx vhost is
+`/mnt/Media/Docker/nginx/config/sites-available/clintgeek.com_geekDay.conf`.
 
-1. Push to `main`. CI builds `ghcr.io/clintgeek/geekday` and redeploys
-   basegeek, which carries the `geekday` entries in `VALID_APPS`, the CORS
-   list and the app registry.
-2. On the box: create `apps/geekday/.env.production` from `.env.example`, make
-   the GHCR package public, then `docker compose up -d` in `apps/geekday`
-   (Watchtower updates containers; it does not create them).
-3. Reload nginx. The vhost is already written and passes `nginx -t`:
-   `/mnt/Media/Docker/nginx/config/sites-available/clintgeek.com_geekDay.conf`.
-   Until it is reloaded the hostname is not served.
+Do not name a source folder `data/`: the repo's `.gitignore` ignores it, the
+files never reach the image, and the build fails on the import (it happened
+on the first deploy; the store is `src/store/` for that reason).

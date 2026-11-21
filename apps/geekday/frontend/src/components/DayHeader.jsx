@@ -25,7 +25,7 @@ const navButtonSx = (theme) => ({
   borderRadius: 2.5,
 });
 
-export default function DayHeader({ dayKey, today, onPrev, onNext, onToday, noteId, mode, onToggleMode, onSignOut, now }) {
+export default function DayHeader({ dayKey, today, onPrev, onNext, onToday, onWeek, noteId, mode, onToggleMode, onSignOut, now }) {
   const [anchor, setAnchor] = useState(null);
   const isToday = dayKey === today;
   const relative = relativeName(dayKey, now);
@@ -73,7 +73,9 @@ export default function DayHeader({ dayKey, today, onPrev, onNext, onToday, note
           sx={{
             fontFamily: DISPLAY_FONT,
             fontWeight: 600,
-            fontSize: { xs: '2rem', sm: '2.75rem' },
+            // 40px at the 800px tablet, 44px from 880px up: with the Week button beside Today, the longest
+            // date this year ("Wednesday September 30", 528px at 44px) would otherwise be cut off.
+            fontSize: { xs: '2rem', sm: 'clamp(2.25rem, 5vw, 2.75rem)' },
             lineHeight: 1.05,
             letterSpacing: '-0.02em',
             whiteSpace: 'nowrap',
@@ -98,6 +100,17 @@ export default function DayHeader({ dayKey, today, onPrev, onNext, onToday, note
             sx={(theme) => ({ minHeight: TARGET, borderRadius: 2.5, px: 1.75, color: 'secondary.main', borderColor: theme.palette.secondary.main })}
           >
             Today
+          </Button>
+        ) : null}
+        {onWeek ? (
+          // To the week spread (spec §6, W8).
+          <Button
+            onClick={onWeek}
+            data-testid="day-week"
+            variant="outlined"
+            sx={(theme) => ({ minHeight: TARGET, minWidth: 0, borderRadius: 2.5, px: 1.75, color: 'text.primary', borderColor: theme.palette.day.border })}
+          >
+            Week
           </Button>
         ) : null}
         <Tooltip title="Previous day">

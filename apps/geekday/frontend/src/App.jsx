@@ -1,5 +1,5 @@
 /**
- * GeekDay root: the session gate and the two routes. Each screen owns its own
+ * GeekDay root: the session gate and the routes (the day page, the week spread). Each screen owns its own
  * state and queries.
  *
  * Session rules are the suite's (as ThingGeek): `getMe()` on load; no user
@@ -16,6 +16,7 @@ import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTi
 import { useUser } from '@geeksuite/user';
 import { GeekToastProvider, LoginSplash } from '@geeksuite/ui';
 import DayPage from './pages/DayPage.jsx';
+import WeekPage from './pages/WeekPage.jsx';
 import { resetDayNoteStores } from './store/dayNoteStore.js';
 import { DISPLAY_FONT } from './theme/theme.js';
 
@@ -119,6 +120,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<DayPage onSignOut={handleSignOut} />} />
         <Route path="/day/:dayKey" element={<DayPage onSignOut={handleSignOut} />} />
+        <Route path="/week" element={<WeekPage />} />
+        <Route path="/week/:dayKey" element={<WeekPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </GeekToastProvider>

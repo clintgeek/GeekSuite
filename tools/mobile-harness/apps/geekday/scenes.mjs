@@ -5,6 +5,9 @@
 // for design, but they must not break. Every scene THROWS when the thing it
 // is named for is not on screen.
 
+import { scenes as weekScenes } from './scenes.week.mjs';
+import { scenes as inkScenes } from './scenes.ink.mjs';
+
 const must = async (page, selector, what) => {
   const node = page.locator(selector).first();
   if (!(await node.count()) || !(await node.isVisible())) throw new Error(`missing: ${what} (${selector})`);
@@ -51,7 +54,7 @@ async function circleIt(page, box) {
 
 const tablet = ['tablet-portrait'];
 
-export const scenes = [
+const dayScenes = [
   {
     // The day page with tasks: overdue, scheduled, to do, and a blank ink page.
     name: '01-day',
@@ -207,5 +210,7 @@ export const scenes = [
     },
   },
 ];
+
+export const scenes = [...dayScenes, ...weekScenes, ...inkScenes];
 
 export const waivers = [];

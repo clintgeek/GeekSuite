@@ -80,6 +80,8 @@ export function createInkSaver({ serialize, emit, debounceMs = SAVE_DEBOUNCE_MS,
       emitted = [];
     },
     hasPending: () => dirty,
+    /** Has this page ever had a body (loaded with one, or saved one)? */
+    hasBody: () => lastKnown !== '',
     dispose: cancelTimer,
   };
 }

@@ -11,6 +11,8 @@
 //   ?__fixture=nosave   reads work; saving the ink page fails
 //   ?__fixture=noread   reads work; reading circled handwriting fails
 import { json, sessionRoutes, graphqlRoute } from '../../lib/net.mjs';
+import { extend as extendWeek } from './fixtures.week.mjs';
+import { extend as extendInk } from './fixtures.ink.mjs';
 
 const DAY_MS = 86400000;
 
@@ -68,7 +70,7 @@ const refuse = (message, code = 'INTERNAL_SERVER_ERROR') => ({ __graphql: { data
 let created = 0;
 const byId = (vars, id) => dayTasks(vars).find((t) => t.id === id) || { ...TASK, id, content: 'Task' };
 
-const OPS = {
+const BASE_OPS = {
   GetDayTasks: (vars, route) => {
     const mode = fixtureOf(route);
     if (mode === 'error') return refuse('upstream unavailable');
@@ -117,6 +119,13 @@ const OPS = {
     return { transcribeSketch: { __typename: 'SketchTranscript', text: '* call vet fri 2pm' } };
   },
 };
+
+// The week spread and the ink page add their own stubs; each may wrap a base op.
+const withWeek = { ...BASE_OPS, ...extendWeek(BASE_OPS) };
+const OPS = { ...withWeek, ...extendInk(withWeek) };
+
+// Shared with the extension modules.
+export { TASK, dayTasks, fixtureOf, refuse, dateOnly, timed };
 
 export async function routes(ctx) {
   await sessionRoutes(ctx);

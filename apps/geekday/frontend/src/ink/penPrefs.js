@@ -24,7 +24,7 @@ const store = () => {
   }
 };
 
-function read(key) {
+export function readPref(key) {
   try {
     return store()?.getItem(key) ?? null;
   } catch {
@@ -32,7 +32,7 @@ function read(key) {
   }
 }
 
-function write(key, value) {
+export function writePref(key, value) {
   try {
     if (value === null) store()?.removeItem(key);
     else store()?.setItem(key, value);
@@ -41,11 +41,11 @@ function write(key, value) {
   }
 }
 
-export const readPenSeen = () => read(PEN_PREF_KEYS.penSeen) === '1';
-export const writePenSeen = () => { if (!readPenSeen()) write(PEN_PREF_KEYS.penSeen, '1'); };
+export const readPenSeen = () => readPref(PEN_PREF_KEYS.penSeen) === '1';
+export const writePenSeen = () => { if (!readPenSeen()) writePref(PEN_PREF_KEYS.penSeen, '1'); };
 
-export const readFingerDraws = () => read(PEN_PREF_KEYS.fingerDraws) === '1';
-export const writeFingerDraws = (on) => write(PEN_PREF_KEYS.fingerDraws, on ? '1' : null);
+export const readFingerDraws = () => readPref(PEN_PREF_KEYS.fingerDraws) === '1';
+export const writeFingerDraws = (on) => writePref(PEN_PREF_KEYS.fingerDraws, on ? '1' : null);
 
 /**
  * Does a finger draw? Only until a pen has been seen on this device, or when

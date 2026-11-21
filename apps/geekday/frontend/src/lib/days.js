@@ -95,3 +95,63 @@ export function msUntilTomorrow(now = new Date()) {
   const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1, 0);
   return Math.max(1000, next.getTime() - now.getTime());
 }
+
+// ── Weeks (the week spread, DOCS/GEEKDAY_SPEC.md §6) ──────────────────────
+// A week is Monday to Sunday, as everywhere else in the suite (the gateway's
+// `weeklyTasks` snaps to Monday too). Like days, weeks are calendar
+// arithmetic on local fields: a week with a DST change still has seven keys.
+
+/** The key of the Monday of the week `key` falls in. */
+export function weekStart(key) {
+  const date = keyToDate(key);
+  if (!date) return key;
+  // Sunday is 0, so (day + 6) % 7 is "days back to Monday".
+  return addDays(key, -((date.getDay() + 6) % 7));
+}
+
+/** The seven keys, Monday to Sunday, of the week `key` falls in. */
+export function weekKeys(key) {
+  const monday = weekStart(key);
+  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+}
+
+/** The same weekday `weeks` weeks later (or earlier). */
+export const addWeeks = (key, weeks) => addDays(key, weeks * 7);
+
+/** "Fri" */
+export const shortWeekday = (key, locale) => keyToDate(key)?.toLocaleDateString(locale, { weekday: 'short' }) ?? '';
+
+/** "Nov 20" */
+export const shortMonthDay = (key, locale) => keyToDate(key)?.toLocaleDateString(locale, { month: 'short', day: 'numeric' }) ?? '';
+
+/** "20" — the day of the month, as a diary prints it in the corner of a box. */
+export const dayOfMonth = (key) => String(keyToDate(key)?.getDate() ?? '');
+
+/**
+ * A week's span as a diary heads it: "Nov 16 – 22", "Nov 30 – Dec 6", and
+ * with the years only when one of them is not this year
+ * ("Dec 28, 2026 – Jan 3, 2027").
+ */
+export function weekRangeLabel(key, now = new Date(), locale) {
+  const keys = weekKeys(key);
+  const first = keyToDate(keys[0]);
+  const last = keyToDate(keys[6]);
+  if (!first || !last) return '';
+  const month = (date) => date.toLocaleDateString(locale, { month: 'short' });
+  const thisYear = now.getFullYear();
+  const sameYear = first.getFullYear() === last.getFullYear();
+  const showYear = first.getFullYear() !== thisYear || last.getFullYear() !== thisYear;
+  const from = `${month(first)} ${first.getDate()}${showYear && !sameYear ? `, ${first.getFullYear()}` : ''}`;
+  const to = `${first.getMonth() === last.getMonth() && sameYear ? '' : `${month(last)} `}${last.getDate()}${showYear ? `, ${last.getFullYear()}` : ''}`;
+  return `${from} – ${to}`;
+}
+
+/** "This week", "Next week", "Last week", or '' for any other week. */
+export function relativeWeekName(key, now = new Date()) {
+  const monday = weekStart(key);
+  const current = weekStart(todayKey(now));
+  if (monday === current) return 'This week';
+  if (monday === addWeeks(current, 1)) return 'Next week';
+  if (monday === addWeeks(current, -1)) return 'Last week';
+  return '';
+}

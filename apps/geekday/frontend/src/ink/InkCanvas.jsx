@@ -11,7 +11,12 @@
  * pen key, the pen button and the two-finger tap.
  *
  * What is different here:
- *   - A fixed page (pageCamera.js): the camera is locked, 1000 page units wide.
+ *   - A tall page, not an infinite canvas (pageCamera.js): 1000 page units
+ *     wide, at least three sheets tall, scrolled and zoomed by our own
+ *     gestures (pageGestures.js) with tldraw's camera kept locked.
+ *   - The paper: ruled lines and the page template, in page space
+ *     (PagePaper.jsx, pageTemplate.js). The template id is kept in tldraw's
+ *     document meta, as NoteGeek keeps a sketch's paper.
  *   - Our own pointer rule instead of leaving tldraw's pen mode to itself: the
  *     pen and the mouse always draw; a finger draws only until a pen has been
  *     seen on this device, or when "Finger draws" is on.
@@ -30,6 +35,7 @@ import {
   exportToBlob, getPointerInfo, loadSnapshot as loadTldrawSnapshot, useEditor, useValue,
 } from '@tldraw/tldraw';
 import '@tldraw/tldraw/tldraw.css';
+import { PAPER_TEMPLATE_META_KEY } from '@geeksuite/ui';
 import InkToolbar from './InkToolbar';
 import { INK_TOOLS } from './inkTools';
 import { createInkSaver } from './inkSaver';
@@ -38,7 +44,16 @@ import { attachPenButton } from './penButton';
 import { attachPenKey } from './penKey';
 import { attachTwoFingerTap } from './twoFingerTap';
 import { readFingerDraws, readPenSeen, touchDraws, writeFingerDraws, writePenSeen } from './penPrefs';
-import { RULE_SPACING, lockPageCamera, pageZoom } from './pageCamera';
+import {
+  MIN_SHEETS, SHEET_HEIGHT, cameraAfterResize, clampCamera, fitCamera, isZoomedIn, pageBoxToPane, pageHeightFor,
+  setPageCamera, topOfPage,
+} from './pageCamera';
+import { attachPageGestures } from './pageGestures';
+import { PagePaper } from './PagePaper';
+import { InkPageContext } from './paperLook';
+import {
+  RULED, readDeviceTemplate, resolveTemplate, storedTemplate, templateToKeep, withTemplate, writeDeviceTemplate,
+} from './pageTemplate';
 import { lassoSelection, shapeSample, TAP_TOLERANCE } from './lassoGeometry';
 import { exportSketchPng, unionBounds, LASSO_MIN_SHORT_EDGE } from './sketchExport';
 
@@ -56,38 +71,10 @@ const screenBoundsOf = (el) => {
   return new TlBox(r.left, r.top, Math.max(1, r.width), Math.max(1, r.height));
 };
 
-/**
- * The paper: the theme's surface with faint ruled lines every RULE_SPACING
- * page units. Decorative, drawn behind the ink, never stored.
- */
-function RuledPaper() {
-  const editor = useEditor();
-  const theme = useTheme();
-  const zoom = useValue('zoom', () => editor.getZoomLevel(), [editor]);
-  const step = Math.max(8, RULE_SPACING * zoom);
-  // GeekDay's theme names the diary paper and its ruling (palette.day); any
-  // other theme falls back to MUI's own surface and divider.
-  const paper = theme.palette.day?.page ?? theme.palette.background.paper;
-  const rule = theme.palette.day?.rule ?? theme.palette.divider;
-  return (
-    <div
-      aria-hidden="true"
-      data-testid="ink-paper"
-      style={{
-        position: 'absolute',
-        inset: 0,
-        backgroundColor: paper,
-        backgroundImage: `linear-gradient(to bottom, transparent ${step - 1}px, ${rule} ${step - 1}px)`,
-        backgroundSize: `100% ${step}px`,
-      }}
-    />
-  );
-}
-
 // <Tldraw>'s props must keep their identity across renders: tldraw rebuilds its
 // editor when `options` or `components` change.
 const TLDRAW_OPTIONS = { maxPointsPerDrawShape: 200 };
-const TLDRAW_COMPONENTS = { Background: RuledPaper };
+const TLDRAW_COMPONENTS = { Background: PagePaper };
 
 /** tldraw's colour scheme follows the app theme: black ink reads light on dark paper. */
 function ColorSchemeSync() {
@@ -100,6 +87,10 @@ function ColorSchemeSync() {
 }
 
 const pathData = (points) => points.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join('');
+
+/** How often the page's height is re-measured while ink is changing. */
+const PAGE_SYNC_MS = 200;
+const BLANK_PAGE = { template: RULED, stored: null, hasInk: false, pageHeight: SHEET_HEIGHT * MIN_SHEETS };
 
 /** Everything on the page as lasso samples (lassoGeometry.js). */
 function pageSamples(editor) {
@@ -118,7 +109,10 @@ function pageSamples(editor) {
  * The lasso layer: sits above the canvas. While the lasso tool is active it
  * takes the pointer, so tldraw underneath never sees the drag and cannot draw.
  */
-function LassoLayer({ active, canDraw, zoom, highlight, onFinish, onStart }) {
+function LassoLayer({ active, canDraw, highlight, onFinish, onStart }) {
+  const editor = useEditor();
+  // The highlight is in page units: it follows the page as it scrolls and zooms.
+  const camera = useValue('camera', () => editor.getCamera(), [editor]);
   const layerRef = useRef(null);
   const pathRef = useRef(null);
   const dragRef = useRef(null); // { pointerId, rect, points: [{x, y}] in layer px }
@@ -167,14 +161,8 @@ function LassoLayer({ active, canDraw, zoom, highlight, onFinish, onStart }) {
     if (!cancelled) onFinish(drag.points, drag.rect);
   };
 
-  const box = highlight?.bounds
-    ? {
-      x: highlight.bounds.x * zoom - 6,
-      y: highlight.bounds.y * zoom - 6,
-      w: highlight.bounds.w * zoom + 12,
-      h: highlight.bounds.h * zoom + 12,
-    }
-    : null;
+  const pane = highlight?.bounds ? pageBoxToPane(highlight.bounds, camera) : null;
+  const box = pane ? { x: pane.x - 6, y: pane.y - 6, w: pane.w + 12, h: pane.h + 12 } : null;
 
   return (
     <Box
@@ -221,10 +209,11 @@ function LassoLayer({ active, canDraw, zoom, highlight, onFinish, onStart }) {
  * @param {object} props
  * @param {string|null} props.content  tldraw snapshot JSON; null or '' is a blank page
  * @param {(content: string) => void} [props.onChange]  debounced, user edits only
- * @param {{current: object|null}} [props.apiRef]  filled with { flush, hasShapes, undo, redo, setTool, clearLasso }
+ * @param {{current: object|null}} [props.apiRef]  filled with { flush, hasShapes, undo, redo, setTool, clearLasso, setTemplate, fitPage, view }
  * @param {(lasso: {shapeIds: string[], image: {base64: string, mediaType: 'image/png'}}) => void} [props.onLasso]
  * @param {(message: string) => void} [props.onLassoError]
  * @param {(touchDraws: boolean) => void} [props.onTouchDrawsChange]
+ * @param {(state: {zoomed: boolean}) => void} [props.onPanStateChange]  the page is zoomed in (a finger pans it sideways)
  * @param {boolean} [props.readOnly]
  * @param {string} [props.ariaLabel]
  */
@@ -235,6 +224,7 @@ export default function InkCanvas({
   onLasso = null,
   onLassoError = null,
   onTouchDrawsChange = null,
+  onPanStateChange = null,
   readOnly = false,
   ariaLabel = 'Handwriting page',
 }) {
@@ -252,7 +242,16 @@ export default function InkCanvas({
   const containerRef = useRef(null);
   const editorRef = useRef(null);
   const [editor, setEditor] = useState(null);
-  const [zoom, setZoom] = useState(1);
+  /** The pane's rect when the camera was last fitted to it. */
+  const viewportRef = useRef(null);
+  const [zoomed, setZoomed] = useState(false);
+  const zoomedRef = useRef(false);
+  // The page on screen: its template and its height (PagePaper, the Page menu).
+  const [page, setPage] = useState(BLANK_PAGE);
+  const pageRef = useRef(page);
+  const [deviceTemplate, setDeviceTemplateState] = useState(() => readDeviceTemplate());
+  const deviceTemplateRef = useRef(deviceTemplate);
+  const pageSyncTimerRef = useRef(null);
   const [tool, setToolState] = useState('pen');
   const [highlight, setHighlight] = useState(null); // { ids, bounds } in page units
   const [hint, setHint] = useState('');
@@ -273,7 +272,14 @@ export default function InkCanvas({
   const saverRef = useRef(null);
   if (!saverRef.current) {
     saverRef.current = createInkSaver({
-      serialize: () => JSON.stringify(editorRef.current.store.getStoreSnapshot()),
+      // A page that has never had a body and has no ink is still a blank day:
+      // a template chosen on it (or a stroke that was taken back) must not
+      // create a note. The choice is in the document and rides with the first ink.
+      serialize: () => (
+        editorRef.current.getCurrentPageShapeIds().size === 0 && !saverRef.current.hasBody()
+          ? ''
+          : JSON.stringify(editorRef.current.store.getStoreSnapshot())
+      ),
       emit: (serialized) => onChangeRef.current?.(serialized),
     });
   }
@@ -284,25 +290,81 @@ export default function InkCanvas({
     setHighlight(null);
   }, []);
 
-  const applyCamera = useCallback(() => {
+  const viewport = useCallback(() => {
+    if (viewportRef.current) return viewportRef.current;
+    const r = containerRef.current?.getBoundingClientRect();
+    return { left: r?.left || 0, top: r?.top || 0, width: r?.width || 0, height: r?.height || 0 };
+  }, []);
+
+  /** Every camera move goes through here: tldraw's own camera is locked. */
+  const moveCamera = useCallback((camera) => {
+    const ed = editorRef.current;
+    if (!ed || ed.isDisposed) return;
+    setPageCamera(ed, camera);
+    const zoomedIn = isZoomedIn(camera, viewport());
+    if (zoomedIn !== zoomedRef.current) {
+      zoomedRef.current = zoomedIn;
+      setZoomed(zoomedIn);
+    }
+  }, [viewport]);
+
+  /**
+   * Read the page back from the document: which template it has, whether it
+   * has ink, and how tall it is. The height only grows while a page is open
+   * (erasing must not pull the paper out from under the view); a load starts
+   * again (`fresh`).
+   */
+  const syncPage = useCallback((ed, { fresh = false } = {}) => {
+    if (!ed || ed.isDisposed) return;
+    const stored = storedTemplate(ed.getDocumentSettings?.()?.meta);
+    const hasInk = ed.getCurrentPageShapeIds().size > 0;
+    const bounds = hasInk ? ed.getCurrentPageBounds?.() : null;
+    const inkBottom = bounds ? (bounds.maxY ?? (bounds.y || 0) + (bounds.h || 0)) : 0;
+    const wanted = pageHeightFor(inkBottom, viewportRef.current);
+    const prev = pageRef.current;
+    const next = {
+      stored,
+      hasInk,
+      template: resolveTemplate({ stored, hasInk, deviceDefault: deviceTemplateRef.current }),
+      pageHeight: fresh ? wanted : Math.max(prev.pageHeight, wanted),
+    };
+    if (next.stored === prev.stored && next.hasInk === prev.hasInk && next.template === prev.template && next.pageHeight === prev.pageHeight) return;
+    pageRef.current = next;
+    setPage(next);
+  }, []);
+
+  /**
+   * Tell tldraw where its container is (pointer coordinates), then put the
+   * page back in it. `top`: the top of the page, zoomed out (a day opening).
+   * Otherwise the pane changed size: keep what was at the top-left there.
+   */
+  const applyCamera = useCallback(({ top = false } = {}) => {
     const el = containerRef.current;
     const ed = editorRef.current;
     if (!el || !ed || ed.isDisposed) return;
-    const width = el.getBoundingClientRect().width;
-    // Tell tldraw where its container is (pointer coordinates), then put the
-    // page back: 1000 page units across whatever width that is.
+    const r = el.getBoundingClientRect();
     ed.updateViewportScreenBounds(screenBoundsOf(el));
-    if (width > 1) {
-      lockPageCamera(ed, width);
-      setZoom(pageZoom(width));
-    }
-  }, []);
+    if (!(r.width > 1)) return;
+    const after = { left: r.left, top: r.top, width: r.width, height: r.height };
+    const before = viewportRef.current;
+    viewportRef.current = after;
+    syncPage(ed); // a taller pane may need a taller page
+    const height = pageRef.current.pageHeight;
+    const camera = top || !before ? topOfPage(after) : cameraAfterResize(ed.getCamera(), before, after, height);
+    moveCamera(clampCamera(camera, after, height));
+  }, [moveCamera, syncPage]);
 
   /** Put `body` on the canvas as a load: not an edit, not undoable. */
   const load = useCallback((ed, body) => {
     const blank = () => {
       const ids = ed.store.allRecords().filter((r) => r.typeName === 'shape' || r.typeName === 'asset').map((r) => r.id);
       if (ids.length) ed.store.mergeRemoteChanges(() => ed.store.remove(ids));
+      // A blank page has no template of its own either.
+      const meta = ed.getDocumentSettings?.()?.meta;
+      if (storedTemplate(meta)) {
+        const { [PAPER_TEMPLATE_META_KEY]: _dropped, ...rest } = meta;
+        ed.store.mergeRemoteChanges(() => ed.updateDocumentSettings({ meta: rest }));
+      }
     };
     try { ed.complete?.(); } catch { /* no stroke in progress */ }
     if (!body) {
@@ -323,7 +385,10 @@ export default function InkCanvas({
     ed.history?.clear?.();
     saver.loaded(body);
     clearLasso();
-  }, [saver, clearLasso]);
+    clearTimeout(pageSyncTimerRef.current);
+    pageSyncTimerRef.current = null;
+    syncPage(ed, { fresh: true });
+  }, [saver, clearLasso, syncPage]);
 
   const handleMount = useCallback((ed) => {
     editorRef.current = ed;
@@ -346,18 +411,39 @@ export default function InkCanvas({
     // or the selection (session), and not a load (remote). It only marks the
     // page dirty; nothing is serialised inside a pointer event.
     const offStore = ed.store.listen(() => {
-      if (!readOnlyRef.current) saver.markDirty();
+      if (readOnlyRef.current) return;
+      saver.markDirty();
+      const was = pageRef.current;
+      if (!was.hasInk) {
+        // The first ink: the page keeps the template it was written on, so a
+        // later change of this device's default cannot change this day.
+        if (ed.getCurrentPageShapeIds().size > 0) {
+          const meta = ed.getDocumentSettings?.()?.meta || {};
+          const keep = templateToKeep({ stored: storedTemplate(meta), shown: was.template });
+          // Marked first: this write comes straight back through this listener.
+          pageRef.current = { ...was, hasInk: true };
+          if (keep) ed.updateDocumentSettings({ meta: withTemplate(meta, keep) });
+        }
+        syncPage(ed);
+      } else if (!pageSyncTimerRef.current) {
+        // More ink: the page may need another sheet. Not on every point of a stroke.
+        pageSyncTimerRef.current = setTimeout(() => {
+          pageSyncTimerRef.current = null;
+          syncPage(editorRef.current);
+        }, PAGE_SYNC_MS);
+      }
     }, { scope: 'document', source: 'user' });
 
-    const el = containerRef.current;
-    if (el) lockPageCamera(ed, el.getBoundingClientRect().width);
     setEditor(ed);
+    applyCamera({ top: true });
 
     return () => {
       offFine?.();
       offStore?.();
+      clearTimeout(pageSyncTimerRef.current);
+      pageSyncTimerRef.current = null;
     };
-  }, [load, saver]);
+  }, [load, saver, syncPage, applyCamera]);
 
   // `content` changed. Reload ONLY what came from outside (another day,
   // another device). Our own saves coming back are echoes: reloading one wiped
@@ -367,7 +453,7 @@ export default function InkCanvas({
   useEffect(() => {
     if (!editor || saver.isOwn(content)) return;
     load(editor, content);
-    applyCamera();
+    applyCamera({ top: true });
   }, [content, editor, load, saver, applyCamera]);
 
   useEffect(() => {
@@ -387,22 +473,23 @@ export default function InkCanvas({
     const el = containerRef.current;
     if (!el || !editor) return undefined;
     let frame = 0;
+    const now = () => applyCamera();
     const later = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(applyCamera);
+      frame = requestAnimationFrame(now);
     };
     const observer = new ResizeObserver(later);
     observer.observe(el);
-    window.addEventListener('scroll', applyCamera, { passive: true });
+    window.addEventListener('scroll', now, { passive: true });
     window.addEventListener('orientationchange', later);
-    applyCamera();
+    now();
     // Late layout shifts (fonts, a sibling that grows).
-    const t1 = setTimeout(applyCamera, 50);
-    const t2 = setTimeout(applyCamera, 200);
+    const t1 = setTimeout(now, 50);
+    const t2 = setTimeout(now, 200);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener('scroll', applyCamera);
+      window.removeEventListener('scroll', now);
       window.removeEventListener('orientationchange', later);
       clearTimeout(t1);
       clearTimeout(t2);
@@ -464,6 +551,50 @@ export default function InkCanvas({
     };
   }, [editor, readOnly]);
 
+  // Moving the page: wheel, one finger when fingers do not draw, two fingers always.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !editor) return undefined;
+    return attachPageGestures(el, {
+      getCamera: () => editor.getCamera(),
+      setCamera: moveCamera,
+      getViewport: viewport,
+      getPageHeight: () => pageRef.current.pageHeight,
+      fingerPans: () => readOnlyRef.current || !touchDraws({ penSeen: penSeenRef.current, fingerDraws: fingerDrawsRef.current }),
+    });
+  }, [editor, moveCamera, viewport]);
+
+  const onPanStateChangeRef = useRef(onPanStateChange);
+  onPanStateChangeRef.current = onPanStateChange;
+  useEffect(() => {
+    onPanStateChangeRef.current?.({ zoomed });
+  }, [zoomed]);
+
+  const fitPage = useCallback(() => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    moveCamera(fitCamera(ed.getCamera(), viewport(), pageRef.current.pageHeight));
+  }, [moveCamera, viewport]);
+
+  /** Choose this page's template. Stored with the page, like NoteGeek's paper. */
+  const setTemplate = useCallback((id) => {
+    const ed = editorRef.current;
+    if (!ed || readOnlyRef.current) return;
+    const meta = ed.getDocumentSettings?.()?.meta || {};
+    const next = withTemplate(meta, id);
+    if (storedTemplate(meta) !== storedTemplate(next)) ed.updateDocumentSettings({ meta: next });
+    syncPage(ed);
+  }, [syncPage]);
+
+  /** This device's page for new days (and for this one, if it is blank and never chose). */
+  const setDeviceTemplate = useCallback((id) => {
+    writeDeviceTemplate(id);
+    const now = readDeviceTemplate();
+    deviceTemplateRef.current = now;
+    setDeviceTemplateState(now);
+    syncPage(editorRef.current);
+  }, [syncPage]);
+
   const onTouchDrawsChangeRef = useRef(onTouchDrawsChange);
   onTouchDrawsChangeRef.current = onTouchDrawsChange;
   useEffect(() => {
@@ -492,11 +623,14 @@ export default function InkCanvas({
   }, []);
   useEffect(() => () => clearTimeout(hintTimerRef.current), []);
 
-  const finishLasso = useCallback(async (points, rect) => {
+  const finishLasso = useCallback(async (points) => {
     const ed = editorRef.current;
     if (!ed) return;
-    const z = pageZoom(rect.width);
-    const path = points.map((p) => ({ x: p.x / z, y: p.y / z }));
+    // Layer px to page units, with the camera as it is now: the page may be
+    // scrolled and zoomed. (The layer fills the container, as the canvas does.)
+    const camera = ed.getCamera();
+    const z = camera.z || 1;
+    const path = points.map((p) => ({ x: p.x / z - camera.x, y: p.y / z - camera.y }));
     const ids = lassoSelection(pageSamples(ed), path, {
       tapSlop: TAP_SLOP_PX / z,
       tapTolerance: Math.max(TAP_TOLERANCE, 16 / z),
@@ -535,7 +669,14 @@ export default function InkCanvas({
     redo: () => { editorRef.current?.redo(); },
     setTool,
     clearLasso,
-  }), [saver, setTool, clearLasso]);
+    setTemplate,
+    fitPage,
+    /** Where the page is: `{ x, y, z, zoomed, pageHeight }` (page units; see pageCamera.js). */
+    view: () => {
+      const camera = editorRef.current?.getCamera();
+      return camera ? { x: camera.x, y: camera.y, z: camera.z, zoomed: zoomedRef.current, pageHeight: pageRef.current.pageHeight } : null;
+    },
+  }), [saver, setTool, clearLasso, setTemplate, fitPage]);
 
   useEffect(() => {
     if (!apiRef) return undefined;
@@ -559,6 +700,8 @@ export default function InkCanvas({
     };
   }, [saver]);
 
+  const pageContext = useMemo(() => ({ template: page.template, pageHeight: page.pageHeight }), [page.template, page.pageHeight]);
+
   return (
     <Box
       ref={containerRef}
@@ -567,6 +710,8 @@ export default function InkCanvas({
       data-testid="ink-canvas"
       data-ink-tool={tool}
       data-ink-ready={editor ? 'true' : 'false'}
+      data-ink-zoomed={zoomed ? 'true' : 'false'}
+      data-ink-template={page.template}
       sx={{
         position: 'absolute',
         inset: 0,
@@ -576,6 +721,7 @@ export default function InkCanvas({
         '& .tl-container': { position: 'absolute !important', inset: '0 !important' },
       }}
     >
+      <InkPageContext.Provider value={pageContext}>
       <Tldraw onMount={handleMount} hideUi components={TLDRAW_COMPONENTS} options={TLDRAW_OPTIONS}>
         <ColorSchemeSync />
         {!readOnly && editor ? (
@@ -583,7 +729,6 @@ export default function InkCanvas({
             <LassoLayer
               active={tool === 'lasso'}
               canDraw={{ touch: fingerCanDraw }}
-              zoom={zoom}
               highlight={highlight}
               onStart={clearLasso}
               onFinish={finishLasso}
@@ -623,10 +768,17 @@ export default function InkCanvas({
               fingerDraws={fingerDraws}
               onFingerDrawsChange={setFingerDraws}
               penMode={!fingerCanDraw}
+              template={page.template}
+              deviceTemplate={deviceTemplate}
+              onTemplate={setTemplate}
+              onDeviceTemplate={setDeviceTemplate}
+              zoomed={zoomed}
+              onFit={fitPage}
             />
           </>
         ) : null}
       </Tldraw>
+      </InkPageContext.Provider>
     </Box>
   );
 }

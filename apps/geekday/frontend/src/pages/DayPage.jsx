@@ -18,7 +18,7 @@ import { useDayNote, useUnsavedInkGuard } from '../hooks/useDayNote.js';
 import { landsOn, useDayTasks } from '../hooks/useDayTasks.js';
 import { useIdle, useMinuteClock, useSwipe, useToday, useWakeLock } from '../hooks/useDevice.js';
 import { newClientId } from '../lib/capture.js';
-import { addDays, isDayKey, monthDay, relativeName, shortDay, weekdayName } from '../lib/days.js';
+import { addDays, isDayKey, monthDay, relativeName, shortDay, weekStart, weekdayName } from '../lib/days.js';
 import { isDone, nextDayKey } from '../lib/tasks.js';
 
 /** Spec req 14, confirmed 2026-11-20. */
@@ -44,6 +44,11 @@ export default function DayPage({ onSignOut }) {
   const goPrev = useCallback(() => go(addDays(dayKey, -1)), [go, dayKey]);
   const goNext = useCallback(() => go(addDays(dayKey, 1)), [go, dayKey]);
   const goToday = useCallback(() => go(today), [go, today]);
+  // The week spread (spec §6, W8). It is told which day it was opened from, so its "Day" button comes back here.
+  const goWeek = useCallback(
+    () => navigate(weekStart(dayKey) === weekStart(today) ? '/week' : `/week/${dayKey}`, { state: { fromDay: dayKey } }),
+    [navigate, dayKey, today]
+  );
 
   const tasks = useDayTasks(dayKey, today);
   const { state: noteState, store: noteStore } = useDayNote(dayKey);
@@ -151,8 +156,12 @@ export default function DayPage({ onSignOut }) {
   useSwipe(pageRef, {
     onLeft: goNext,
     onRight: goPrev,
-    // A finger that draws is writing, not turning the page; so is one in a text field.
-    ignore: (target) => isTyping(target) || (touchDraws && Boolean(target?.closest?.('[data-testid="ink-canvas"]'))),
+    // A finger that draws is writing, not turning the page; so is one in a text field; and over a
+    // zoomed-in ink page a finger pans it (spec S4; the canvas says so in `data-ink-zoomed`).
+    ignore: (target) =>
+      isTyping(target) ||
+      (touchDraws && Boolean(target?.closest?.('[data-testid="ink-canvas"]'))) ||
+      Boolean(target?.closest?.('[data-ink-zoomed="true"]')),
     enabled: !idle && !crop,
   });
 
@@ -163,10 +172,11 @@ export default function DayPage({ onSignOut }) {
       if (event.key === 'ArrowLeft') goPrev();
       else if (event.key === 'ArrowRight') goNext();
       else if (event.key === 't' || event.key === 'T') goToday();
+      else if (event.key === 'w' || event.key === 'W') goWeek();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [idle, crop, goPrev, goNext, goToday]);
+  }, [idle, crop, goPrev, goNext, goToday, goWeek]);
 
   useEffect(() => {
     document.title = dayKey === today ? 'GeekDay' : `${shortDay(dayKey, now)} · GeekDay`;
@@ -199,6 +209,7 @@ export default function DayPage({ onSignOut }) {
         onPrev={goPrev}
         onNext={goNext}
         onToday={goToday}
+        onWeek={goWeek}
         noteId={noteState.noteId}
         mode={mode}
         onToggleMode={toggleTheme}

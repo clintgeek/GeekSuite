@@ -112,4 +112,24 @@ describe('createInkSaver', () => {
     vi.advanceTimersByTime(1000);
     expect(emit).not.toHaveBeenCalled();
   });
+
+  it('hasBody: has this page ever had a body (loaded with one, or saved one)?', () => {
+    let body = 'one';
+    const saver = createInkSaver({ serialize: () => body, emit: () => {} });
+    expect(saver.hasBody()).toBe(false);
+    saver.loaded(null);
+    expect(saver.hasBody()).toBe(false);
+    saver.markDirty();
+    saver.flush();
+    expect(saver.hasBody()).toBe(true);
+    saver.loaded('');
+    expect(saver.hasBody()).toBe(false);
+    saver.loaded('{"store":{}}');
+    expect(saver.hasBody()).toBe(true);
+    body = '';
+    saver.loaded(null);
+    saver.markDirty();
+    expect(saver.flush()).toBe(null); // an empty serialisation is "nothing to save"
+    expect(saver.hasBody()).toBe(false);
+  });
 });

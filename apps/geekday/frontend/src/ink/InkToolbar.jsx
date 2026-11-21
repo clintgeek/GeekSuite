@@ -2,19 +2,23 @@
  * InkToolbar.jsx — the day page's own small toolbar (tldraw's UI is hidden).
  *
  * Cut down from apps/notegeek/frontend/src/components/editors/DrawingToolbar.jsx:
- * Pen, Eraser, Lasso, Undo, Redo and "Finger draws", and nothing that opens a
- * popover. The Lenovo pen never reports a held button, so every tool is a
- * button here. Palm rejection is NoteGeek's (palmTouch.js).
+ * Pen, Eraser, Lasso, Undo, Redo, "Finger draws", and Page (the page
+ * template, PageMenu.jsx); "Fit" appears only while the page is zoomed in.
+ * The Lenovo pen never reports a held button, so every tool is a button here.
+ * Palm rejection is NoteGeek's (palmTouch.js).
  *
  * It must render INSIDE <Tldraw>: useEditor() only resolves in tldraw's context.
  */
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, IconButton, SvgIcon } from '@mui/material';
 import { useEditor, useValue } from '@tldraw/tldraw';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import UndoIcon from '@mui/icons-material/Undo';
 import RedoIcon from '@mui/icons-material/Redo';
 import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined';
+import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
+import FitScreenOutlinedIcon from '@mui/icons-material/FitScreenOutlined';
+import PageMenu from './PageMenu';
 import { isPalmTouch } from './palmTouch';
 
 // Material Symbols "ink_eraser" (Apache 2.0); MUI's icon set has no eraser.
@@ -32,7 +36,7 @@ const LassoIcon = (props) => (
   </SvgIcon>
 );
 
-function BarButton({ label, testId, pressed, onClick, disabled = false, children }) {
+function BarButton({ label, testId, pressed, onClick, disabled = false, children, ...rest }) {
   const toggle = pressed !== undefined;
   return (
     <IconButton
@@ -42,6 +46,7 @@ function BarButton({ label, testId, pressed, onClick, disabled = false, children
       data-testid={testId}
       onClick={onClick}
       disabled={disabled}
+      {...rest}
       sx={{
         width: 44,
         height: 44,
@@ -73,8 +78,18 @@ const Divider = () => <Box aria-hidden sx={{ width: '1px', height: 24, bgcolor: 
  * @param {boolean} props.fingerDraws        the writer's override is on
  * @param {(on: boolean) => void} props.onFingerDrawsChange
  * @param {boolean} props.penMode            fingers do not draw right now (palm rejection applies)
+ * @param {string} props.template            the page on screen (pageTemplate.js PAGE_CHOICES)
+ * @param {string} props.deviceTemplate      this device's page for new days
+ * @param {(id: string) => void} props.onTemplate
+ * @param {(id: string) => void} props.onDeviceTemplate
+ * @param {boolean} props.zoomed             the page is zoomed in
+ * @param {() => void} props.onFit           back to the whole width
  */
-export default function InkToolbar({ tool, onTool, fingerDraws, onFingerDrawsChange, penMode }) {
+export default function InkToolbar({
+  tool, onTool, fingerDraws, onFingerDrawsChange, penMode,
+  template, deviceTemplate, onTemplate, onDeviceTemplate, zoomed = false, onFit,
+}) {
+  const [pageAnchor, setPageAnchor] = useState(null);
   const editor = useEditor();
   const canUndo = useValue('can undo', () => editor.getCanUndo(), [editor]);
   const canRedo = useValue('can redo', () => editor.getCanRedo(), [editor]);
@@ -154,6 +169,28 @@ export default function InkToolbar({ tool, onTool, fingerDraws, onFingerDrawsCha
       <BarButton label="Finger draws" testId="ink-finger-draws" pressed={Boolean(fingerDraws)} onClick={() => onFingerDrawsChange(!fingerDraws)}>
         <TouchAppOutlinedIcon fontSize="small" />
       </BarButton>
+      <BarButton
+        label="Page"
+        testId="ink-page"
+        aria-haspopup="menu"
+        aria-expanded={pageAnchor ? 'true' : 'false'}
+        onClick={(e) => setPageAnchor(e.currentTarget)}
+      >
+        <ArticleOutlinedIcon fontSize="small" />
+      </BarButton>
+      {zoomed ? (
+        <BarButton label="Fit page to width" testId="ink-fit" onClick={onFit}>
+          <FitScreenOutlinedIcon fontSize="small" />
+        </BarButton>
+      ) : null}
+      <PageMenu
+        anchorEl={pageAnchor}
+        onClose={() => setPageAnchor(null)}
+        template={template}
+        deviceDefault={deviceTemplate}
+        onTemplate={onTemplate}
+        onDeviceDefault={onDeviceTemplate}
+      />
     </Box>
   );
 }

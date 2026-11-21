@@ -122,7 +122,7 @@ function SaveLine({ state, store }) {
   );
 }
 
-export default function InkPane({ dayLabel, state, store, inkRef, onLasso, onLassoError, onTouchDrawsChange }) {
+export default function InkPane({ dayLabel, state, store, inkRef, onLasso, onLassoError, onTouchDrawsChange, onPanStateChange }) {
   const localRef = useRef(null);
   const apiRef = inkRef || localRef;
 
@@ -173,6 +173,7 @@ export default function InkPane({ dayLabel, state, store, inkRef, onLasso, onLas
             onLasso={onLasso}
             onLassoError={onLassoError}
             onTouchDrawsChange={onTouchDrawsChange}
+            onPanStateChange={onPanStateChange}
             ariaLabel={`Handwriting page for ${dayLabel}`}
           />
         </Suspense>

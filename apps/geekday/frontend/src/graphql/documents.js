@@ -147,3 +147,48 @@ export const READ_CIRCLED_INK = gql`
     }
   }
 `;
+
+// ── The week spread (DOCS/GEEKDAY_SPEC.md §6) ─────────────────────────────
+
+/**
+ * Everything due in one Monday-to-Sunday week. `weeklyTasks(date)` snaps
+ * `date` to the Monday of its week itself (taskService.startOfUtcWeek), so
+ * the week page always sends the Monday. What it answers, and what it does
+ * not, is written up in hooks/useWeekTasks.js.
+ */
+export const GET_WEEK_TASKS = gql`
+  query GetWeekTasks($date: String, $tzOffsetMinutes: Int) {
+    weeklyTasks(date: $date, tzOffsetMinutes: $tzOffsetMinutes) {
+      ...DayTaskFields
+    }
+  }
+  ${TASK_FIELDS}
+`;
+
+/**
+ * Today's list, read for its overdue and undated tasks: the week page's
+ * "Not scheduled" cell. The same field as GET_DAY_TASKS under its own name,
+ * so the two pages can be told apart in a log (and stubbed apart in the
+ * harness).
+ */
+export const GET_UNSCHEDULED_TASKS = gql`
+  query GetUnscheduledTasks($date: String, $tzOffsetMinutes: Int) {
+    dailyTasks(date: $date, tzOffsetMinutes: $tzOffsetMinutes) {
+      ...DayTaskFields
+    }
+  }
+  ${TASK_FIELDS}
+`;
+
+/** One day's ink page, for its picture on the week spread. Same lookup as FIND_DAY_NOTE. */
+export const FIND_WEEK_DAY_NOTE = gql`
+  query FindWeekDayNote($tag: String!) {
+    notes(tag: $tag, type: "handwritten", limit: 5, sort: "createdAt_asc") {
+      id
+      content
+      archived
+      deletedAt
+      createdAt
+    }
+  }
+`;
