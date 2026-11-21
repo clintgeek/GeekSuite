@@ -9,7 +9,7 @@ Maintained as the primary orientation and operating truth for Sage and the engin
 
 ## 1. System Architecture Overview
 
-GeekSuite is a self-hosted, multi-tenant productivity and life-management ecosystem composed of **11 active applications**, shared backend services, and a unified authentication and data access layer.
+GeekSuite is a self-hosted, multi-tenant productivity and life-management ecosystem composed of **12 applications** (11 running, plus GeekDay, built locally and not yet deployed), shared backend services, and a unified authentication and data access layer.
 
 ```mermaid
 graph TD
@@ -17,7 +17,7 @@ graph TD
     Edge -->|"*.clintgeek.com"| Apps["App Frontend & Services"]
     Edge -->|"*/graphql"| Gateway["Apollo GraphQL Gateway<br/>(basegeek :8987)"]
     
-    subgraph Suite Apps [11 Active Applications]
+    subgraph Suite Apps [12 Applications]
         basegeek["basegeek (:8987)<br/>Auth, Gateway, AI, Admin"]
         bookgeek["bookgeek (:1800)<br/>Library, Baskets, E-Reader"]
         todogeek["todogeek (:5005)<br/>Tasks & Habits"]
@@ -29,6 +29,7 @@ graph TD
         gamegeek["gamegeek (:1810)<br/>Game Library (Playnite)"]
         thinggeek["thinggeek (:1820)<br/>Household Inventory, Attic"]
         newsgeek["newsgeek (:1830)<br/>Local-first News Briefing"]
+        geekday["geekday (:1840)<br/>Daily Page, Handwriting (not yet deployed)"]
     end
     
     Gateway --> Datastores
@@ -73,6 +74,7 @@ All containers run on `server` (`192.168.1.17`) attached to `datageek_network` (
 | **gamegeek** | `1810` | `1810` | Vite + React + MUI 5 / Node + Express | Game library fed by Playnite exports |
 | **thinggeek** | `1820` | `1820` | Vite + React + MUI 5 / Node + Express | Household inventory; the Attic (sealed documents) |
 | **newsgeek** | `1830` | `1830` | Vite + React + MUI 5 / Node + Express | Local-first news briefing; feed ingest worker |
+| **geekday** | `1840` | `1840` | Vite + React + MUI 5 / Node + Express | Running: no — built locally, not yet deployed. Pen-first daily page: a day's TodoGeek tasks beside a handwriting page stored in NoteGeek. No database; Vite dev port `1841` |
 | **storygeek** | `9977` | `9977` | Vite + React / Node + Express | Interactive writing, narrative generation |
 
 ### 1.4 Shared Packages (`packages/*`)

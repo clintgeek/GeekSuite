@@ -54,6 +54,7 @@ export const APPS = {
   storygeek: 'apps/storygeek/frontend',
   thinggeek: 'apps/thinggeek/frontend',
   newsgeek: 'apps/newsgeek/frontend',
+  geekday: 'apps/geekday/frontend',
 };
 
 // Paths no service worker may ever cache (DOCS/THINGGEEK_PLAN.md "The Attic").

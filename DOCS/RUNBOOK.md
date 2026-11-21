@@ -55,6 +55,7 @@ SSO/static-file shell (see `DOCS/CONTEXT.md` and each app's own `CONTEXT.md`).
 | notegeek | `notegeek.clintgeek.com` (+ `notes.`) | `notegeek` | `ghcr.io/clintgeek/notegeek:latest` | 9988→9988 | `wget --spider http://localhost:9988/` (root) | Vite + React | Node + Express — **two auth middlewares** (legacy Bearer-only + local DB, and a newer cookie-first one); see `DOCS/SSO_OVERVIEW.md` §NoteGeek |
 | startgeek | `start.clintgeek.com` (canonical since 2026-09-05; `startgeek.clintgeek.com` 301-redirects there) | `startgeek` | `ghcr.io/clintgeek/startgeek:latest` | 3000→3000 | `node -e "fetch('http://localhost:3000')…"` | Vite 5 + React + Tailwind 3, standalone npm app (no pnpm workspace deps by design — see `TODO_ORDER.md` #5) | none — static build served by `serve` |
 | newsgeek | `newsgeek.clintgeek.com` | `newsgeek` | `ghcr.io/clintgeek/newsgeek:latest` | 1830→1830 | `wget --spider http://localhost:1830/api/health` | Vite + React + MUI 5 (`frontend/`) | Node + Express (`backend/`): auth proxy, static, **ingest worker** (RSS/Atom/NWS polling) and purge. Reads and admin writes go through the gateway (`apps/newsgeek/DOCS/CONTEXT.md`) |
+| geekday | `geekday.clintgeek.com` (**not yet deployed** — built locally; running: no) | `geekday` | `ghcr.io/clintgeek/geekday:latest` | 1840→1840 | `wget --spider http://127.0.0.1:1840/api/health` | Vite + React + MUI 5 (`frontend/`) | Node + Express (`backend/`): **no database**; serves the built page, proxies sign-in to basegeek, answers `/api/health`. Tasks come from the gateway (TodoGeek), the handwriting page is stored in NoteGeek (`DOCS/GEEKDAY_SPEC.md`) |
 | storygeek | `storygeek.clintgeek.com` | `storygeek` | `ghcr.io/clintgeek/storygeek:latest` | 9977→9977 | `node -e "…/api/health…"` | Vite + React | Node + Express |
 
 ### Env vars required per app
@@ -111,6 +112,7 @@ of each app's backend source. Names only — no values were read or printed.
   `FILES_PATH` (compose), `PURGE_DISABLED`/`PURGE_AUTORUN`, `LOG_LEVEL`, `PORT`, `NODE_ENV`, and
   **`THINGGEEK_VAULT_KEY`** (+ optional `THINGGEEK_VAULT_KEY_VERSION`, `THINGGEEK_VAULT_KEYS_RETIRED`,
   `ATTIC_RP_ID`, `ATTIC_ORIGINS`) — the Attic's key, thinggeek ONLY, never basegeek (§15)
+- **geekday** (`apps/geekday/.env.example`; no database, no `JWT_SECRET`): `BASEGEEK_URL`, `BASEGEEK_TIMEOUT_MS`, `CORS_ORIGINS`, `CSRF_GUARD`, `LOG_LEVEL`, `PORT`, `NODE_ENV`
 - **storygeek**: `DB_URI`, `JWT_SECRET`, `BASEGEEK_URL`, `BASEGEEK_JWT_TOKEN`,
   `STORYGEEK_FREE_ONLY`, `STORYGEEK_GM_PROVIDER`, `STORYGEEK_GM_MODEL`, `STORYGEEK_GM_FALLBACKS`,
   `STORYGEEK_AUX_PROVIDER`, `STORYGEEK_AUX_MODEL`, `STORYGEEK_TEST_TOKEN` (test-only),
@@ -162,6 +164,8 @@ Mongo's LAN address is `192.168.1.17:27018` — this is the value every app's `M
 | Cert | Wildcard `_.clintgeek.com_ssl_cert_combined.cer` at `/etc/nginx/certs/`, renewed by the `ACME2` container (`neilpang/acme.sh`, its own IONOS DNS API account, separate from `ACME` which handles `rallycenter.org`) |
 | Adding a host | Drop a new `clintgeek.com_<name>.conf` in the host's `sites-available/` directory (server blocks for 80 + 443, `proxy_pass http://192.168.1.17:<port>`), then reload |
 | Reload command | Not written down anywhere in the repo or nginx config; the standard is `docker exec NGINX nginx -s reload`. `ACME2`'s `--reloadcmd` also sends a SIGHUP to `NGINX` via the mounted Docker socket after a cert renewal — same effect. |
+
+**geekday vhost** (`/mnt/Media/Docker/nginx/config/sites-available/clintgeek.com_geekDay.conf`, outside this repo): its `/graphql` location sets `client_max_body_size 12m` and 90 s proxy timeouts (`proxy_read_timeout` / `proxy_send_timeout`), for handwriting-page saves through the gateway. Recorded here from the GeekDay spec work; the file is not in git, so check it on the box.
 
 Every suite app's site config proxies to `192.168.1.17:<app's host port>` (see the per-app
 table in §2), and every one (except startgeek) also has a `/graphql` location proxied to
@@ -357,6 +361,7 @@ longer the primary deploy path (`DEPLOY.md`) — and using it re-triggers landmi
 | flockgeek | `nodemon src/server.js` (`backend/`) | `vite` — 5173 dev / 4173 preview (`frontend/vite.config.js`) | dedupe: `['@mui/material','@emotion/react','@emotion/styled','react','react-dom']` |
 | notegeek | `nodemon server.js` (`backend/`) | `vite` — 5173 (`frontend/vite.config.js`) | dedupe: same MUI set. **Dev server fault fixed 2026-09-05** (`70eb36e`): `styled_default is not a function` from the dependency optimizer's lazy `init_styled` — `vite.config.js` now pins `@mui/material/styles` and emotion into `optimizeDeps.include`. |
 | startgeek | none (no backend) | `vite` — 3000 | Standalone `npm` app, no pnpm workspace deps, its own ESLint 8 config — a `workspace:*` devDependency broke its image build once (`TODO_ORDER.md` #5) |
+| geekday | `node --watch server.js` (`backend/`, `npm run dev`) — `PORT` default 1840, env from `backend/.env.local` (optional) | `vite` — 1841 (`frontend/vite.config.js`) | Not yet deployed. Dev origins `http://localhost:1841` / `:1840` are in the backend's default allow-list and in basegeek's dev-only CORS list |
 | storygeek | `nodemon src/server.js` (`backend/`) | `vite` — 5173 (`frontend/vite.config.js`) | |
 
 **The `resolve.dedupe` requirement** (all six MUI-consuming apps: todogeek, fitnessgeek,

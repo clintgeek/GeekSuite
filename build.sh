@@ -22,6 +22,7 @@ APPS=(
   todogeek
   fitnessgeek
   flockgeek
+  geekday
   gamegeek
   musicgeek
   newsgeek

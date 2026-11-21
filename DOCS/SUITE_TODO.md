@@ -28,6 +28,15 @@ Pull from here when planning the next pass; update as work lands or priorities s
   - aiGeek UsagePanel shows session-wide call counts against a per-user daily cap, and no `costUnknown` yet.
   - A provider may bill a request cancelled mid-flight; the per-call cap and OpenRouter's credit limit are the backstop.
   - ~~`goingOverFitnessGlance` DST case~~ fixed 2026-11-15 (counts in UTC days); `aiHardeningCancellation` was a load flake on 2026-11-15 and passes.
+- **GeekDay (2026-11-20)** — built locally, uncommitted, not deployed; see `WORK_LOG_2026-11.md` and `apps/geekday/DOCS/CONTEXT.md`. Left open:
+  - **Deploy (Chef's go-ahead):** push to `main` (builds the image, redeploys basegeek with the `geekday` app entries), create `apps/geekday/.env.production` on the box, make the GHCR package public, `docker compose up -d`, reload nginx.
+  - **Device session on the Lenovo:** pen latency, palm rejection, the pen double-click undo, real handwriting through circle-to-task, the wake lock, a finger swipe between days, whether the Fine line is too thin at an 800 px page.
+  - **Open a GeekDay page in NoteGeek** and edit it there, then reopen it in GeekDay. Same snapshot format, but never tried.
+  - Weekday abbreviations ("fri") are read in GeekDay only. Moving that into `@geeksuite/task-grammar` would give it to TodoGeek and NoteGeek, and changes their parsing: Chef's call.
+  - A day page is not searchable by its words until NoteGeek has transcribed it (only while open in NoteGeek). GeekDay could run the same auto-transcribe; it costs readings from the shared cap of 40 a day.
+  - A corrupt page snapshot opens as a blank page, and the next stroke would save over it. Wants a load-error state instead.
+  - Two devices putting first ink on the same new day at the same moment make two notes (`createNote` has no idempotency key).
+  - The CI tablet shard is advisory and runs dark portrait + light landscape; GeekDay's scenes are portrait-only, so CI does not gate its light-portrait run. Run it locally before a UI push.
 
 ---
 

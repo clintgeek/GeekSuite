@@ -636,3 +636,33 @@ another builder's commit and reworded it; it restored the original at once. Hist
 checked: intact.
 
 **Not built, on purpose** — see `SUITE_TODO.md` §13.
+
+## 2026-11-20 — GeekDay: the pen-first daily page (BUILT LOCALLY, NOT DEPLOYED)
+
+A new app, `apps/geekday`: one day's TodoGeek tasks beside a handwriting page stored as a
+NoteGeek note. Spec `DOCS/GEEKDAY_SPEC.md` (Chef, signed off the same day); how it works is
+`apps/geekday/DOCS/CONTEXT.md`. Port 1840, `geekday.clintgeek.com`.
+
+- **Gateway:** nothing added, nothing changed. GeekDay uses TodoGeek's `dailyTasks`,
+  `createTask`, `updateTask`, `updateTaskStatus` and NoteGeek's `notes`, `createNote`,
+  `updateNote`, `transcribeSketch`.
+- **Page:** agenda (overdue / scheduled / to do / done, tick, move to the next day, add box
+  with a "how this was read" line), ink page (tldraw 2.4.6, trimmed from NoteGeek's editor,
+  a fixed sheet with no pan or zoom), day flip, docked clock after 2 idle minutes with the
+  next task and the weather, screen wake lock.
+- **Circle to task:** new lasso tool. The circled strokes go to `transcribeSketch` as a PNG
+  with no `noteId`, the reading is shown for correction, and only Create makes the task.
+- **Weekday abbreviations:** `@geeksuite/task-grammar` reads "friday" but not "fri", so the
+  spec's own example did not parse. Handled in GeekDay only (`lib/capture.js`); the shared
+  grammar is unchanged.
+- **Registered in:** `tools/` (ci-affected, pwa-audit, pwa-icons, boot-smoke, gql-arg-audit,
+  harness registry and the CI tablet shard), `build.sh`, basegeek (`VALID_APPS`, CORS list,
+  app registry seed), the app switcher, StartGeek's dock, the docs tables.
+- **nginx:** `clintgeek.com_geekDay.conf` written on the box and passes `nginx -t`. **Not
+  reloaded.** Any reload (including the one after a cert renewal) makes the hostname live;
+  until the container exists it answers 502.
+- **Checked:** 197 frontend tests, 20 backend tests, lint, `pwa-audit`, `gql-arg-audit`,
+  `boot-smoke`; harness at tablet portrait light + dark with a11y enforced (11 scenes, 22
+  runs, 0 findings) and `01-day` at phone and desktop. Pen and touch were synthetic.
+- **Not checked:** anything on the Lenovo; real handwriting through the transcriber; opening
+  a GeekDay page in NoteGeek; the live gateway (every harness request is stubbed).

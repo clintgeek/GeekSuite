@@ -136,6 +136,7 @@ const DOCUMENT_ROOTS = [
   'apps/gamegeek/frontend/src',
   'apps/thinggeek/frontend/src',
   'apps/newsgeek/frontend/src',
+  'apps/geekday/frontend/src',
   'apps/basegeek/packages/ui/src',
   'apps/startgeek/src',
 ];

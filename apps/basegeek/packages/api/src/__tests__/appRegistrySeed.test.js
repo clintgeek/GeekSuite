@@ -84,4 +84,17 @@ describe('seedMissingApps', () => {
     const orders = DEFAULT_APPS.map((a) => a.sortOrder);
     expect(new Set(orders).size).toBe(orders.length);
   });
+
+  it('includes geekday (daily page), with a unique sortOrder', async () => {
+    expect(DEFAULT_APPS.find((a) => a.name === 'geekday')).toMatchObject({
+      displayName: 'geekDay',
+      icon: 'TodayOutlined',
+      color: '#22324A',
+      url: 'https://geekday.clintgeek.com',
+    });
+    const orders = DEFAULT_APPS.map((a) => a.sortOrder);
+    expect(new Set(orders).size).toBe(orders.length);
+    const { VALID_APPS } = await import('../config/validApps.js');
+    expect(VALID_APPS).toContain('geekday');
+  });
 });

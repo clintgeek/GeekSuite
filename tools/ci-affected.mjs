@@ -45,6 +45,7 @@ export const CI_APPS = [
   { app: 'bookgeek', be: 'apps/bookgeek/api', be_cmd: 'npm test', fe: 'apps/bookgeek/web', web: 'apps/bookgeek/web' },
   { app: 'gamegeek', be: 'apps/gamegeek/backend', be_cmd: 'npm test', fe: 'apps/gamegeek/frontend', web: 'apps/gamegeek/frontend' },
   { app: 'thinggeek', be: 'apps/thinggeek/backend', be_cmd: 'npm test', fe: 'apps/thinggeek/frontend', web: 'apps/thinggeek/frontend' },
+  { app: 'geekday', be: 'apps/geekday/backend', be_cmd: 'npm test', fe: 'apps/geekday/frontend', web: 'apps/geekday/frontend' },
   {
     app: 'newsgeek',
     be: 'apps/newsgeek/backend',

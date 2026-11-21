@@ -20,6 +20,7 @@ export const DEFAULT_APPS = [
   { name: 'gamegeek', displayName: 'gameGeek', description: 'Video game library', icon: 'SportsEsports', color: '#d9a441', url: 'https://gamegeek.clintgeek.com', tag: 'library', sortOrder: 10 },
   { name: 'thinggeek', displayName: 'thingGeek', description: 'Household inventory', icon: 'Inventory2', color: '#6fa89a', url: 'https://thinggeek.clintgeek.com', tag: 'household', sortOrder: 11 },
   { name: 'newsgeek', displayName: 'newsGeek', description: 'Local news briefing', icon: 'Newspaper', color: '#c9b28a', url: 'https://newsgeek.clintgeek.com', tag: 'reading', sortOrder: 12 },
+  { name: 'geekday', displayName: 'geekDay', description: "One page per day: today's tasks beside a handwriting page.", icon: 'TodayOutlined', color: '#22324A', url: 'https://geekday.clintgeek.com', tag: 'productivity', sortOrder: 13 },
   // Static bundle behind `serve`: no /api/health, so probe the root.
   { name: 'startgeek', displayName: 'startGeek', description: 'Start page & launcher', icon: 'RocketLaunch', color: '#e6b35a', url: 'https://start.clintgeek.com', healthEndpoint: '/', tag: 'launcher', sortOrder: 9 },
 ];

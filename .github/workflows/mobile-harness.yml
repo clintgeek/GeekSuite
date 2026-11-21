@@ -117,7 +117,7 @@ jobs:
             const out = names.flatMap((app) => split[app]
               ? split[app].map(([part, scenes]) => ({ app, label: app + ' ' + part, key: app + '-' + part.replace('+', ''), scenes, args: base }))
               : [{ app, label: app, key: app, scenes: '', args: base }]);
-            for (const app of ['notegeek', 'todogeek'].filter((a) => hit.includes(a))) {
+            for (const app of ['notegeek', 'todogeek', 'geekday'].filter((a) => hit.includes(a))) {
               out.push({ app, label: app + ' tablet', key: app + '-tablet', scenes: '', args: tabletArgs });
             }
             console.log(JSON.stringify(out));")

@@ -14,6 +14,7 @@ export const VALID_APPS = [
   'gamegeek',
   'thinggeek',
   'newsgeek',
+  'geekday',
   'photogeek',
   'dashgeek',
   'geekpr',

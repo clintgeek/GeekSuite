@@ -66,6 +66,15 @@ export const NewsIcon = ({ className = 'w-5 h-5' }) => (
   </svg>
 )
 
+export const DayIcon = ({ className = 'w-5 h-5' }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...s}>
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M7.5 8.5l1 1 2-2M13 8.5h4" />
+    <rect x="7.5" y="12" width="2" height="2" rx="0.4" />
+    <path d="M13 13h4M7.5 17h2M13 17h3" />
+  </svg>
+)
+
 export const PhotosIcon = ({ className = 'w-5 h-5' }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...s}>
     <rect x="3" y="3" width="18" height="18" rx="2" />

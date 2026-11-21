@@ -28,6 +28,7 @@ pulls new images via Watchtower — no inbound access from CI. Details in [DOCS/
 | **newsgeek** | Running | `1830` | Local-first news briefing: Clark & Hot Spring County, then state, national, world, tech |
 | **gamegeek** | Running | `1810` | Game library, fed by Playnite exports |
 | **thinggeek** | Running | `1820` | Household inventory — things, where they are, and the sealed Attic |
+| **geekday** | No — built locally, not yet deployed | `1840` | Pen-first daily page: a day's TodoGeek tasks beside a handwriting page stored in NoteGeek |
 | **startgeek** | Running | `3000` | Personal-desktop launcher — clock, weather, world clocks, app dock |
 
 ---
@@ -43,6 +44,7 @@ GeekSuite/
 │   ├── fitnessgeek/       # Fitness tracking (:4080)
 │   ├── flockgeek/         # Flock management (:5001)
 │   ├── gamegeek/          # Game library (:1810)
+│   ├── geekday/           # Daily page: tasks + handwriting (:1840, not yet deployed)
 │   ├── newsgeek/          # News briefing (:1830)
 │   ├── notegeek/          # Notes (:9988)
 │   ├── startgeek/         # App launcher (:3000)

@@ -1,4 +1,4 @@
-import { NotesIcon, TodoIcon, FitnessIcon, BooksIcon, GamesIcon, NewsIcon } from '../components/icons'
+import { NotesIcon, TodoIcon, FitnessIcon, BooksIcon, GamesIcon, NewsIcon, DayIcon } from '../components/icons'
 
 // GeekSuite App Registry
 // Central config for all app URLs, icons, and metadata.
@@ -11,4 +11,5 @@ export const PRIMARY_APPS = [
   { id: 'bookgeek',    icon: <BooksIcon />,   label: 'Books',   url: 'https://bookgeek.clintgeek.com' },
   { id: 'gamegeek',    icon: <GamesIcon />,   label: 'Games',   url: 'https://gamegeek.clintgeek.com' },
   { id: 'newsgeek',    icon: <NewsIcon />,    label: 'News',    url: 'https://newsgeek.clintgeek.com' },
+  { id: 'geekday',     icon: <DayIcon />,     label: 'Day',     url: 'https://geekday.clintgeek.com' },
 ]

@@ -30,6 +30,7 @@ export const productionOrigins = [
   'https://gamegeek.clintgeek.com',  // GameGeek — video game library
   'https://thinggeek.clintgeek.com', // ThingGeek — household inventory (member-gated)
   'https://newsgeek.clintgeek.com',  // NewsGeek — local news briefing
+  'https://geekday.clintgeek.com',   // GeekDay — daily page: tasks beside handwriting
   'https://storygeek.clintgeek.com',  // StoryGeek production
   'https://flockgeek.clintgeek.com',  // FlockGeek production
   'https://dash.clintgeek.com',       // DashGeek production
@@ -48,6 +49,7 @@ export const devOnlyOrigins = [
   'http://localhost:5000',    // Backend dev server (alternative port)
   'http://localhost:3000',    // StartGeek & StoryGeek frontend
   'http://localhost:1801',    // BookGeek dev server
+  'http://localhost:1841',    // GeekDay dev server
   'http://192.168.1.17:5173',  // Local network access
   'http://192.168.1.17:5174',   // Local network access (alternative port)
   'http://192.168.1.17:9977'   // StoryGeek local network access

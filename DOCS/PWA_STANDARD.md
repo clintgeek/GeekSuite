@@ -9,7 +9,7 @@
 >
 > | Flavor | Apps |
 > |---|---|
-> | A — VitePWA/Workbox `generateSW` | basegeek, todogeek, fitnessgeek, notegeek, gamegeek, thinggeek, newsgeek |
+> | A — VitePWA/Workbox `generateSW` | basegeek, todogeek, fitnessgeek, notegeek, gamegeek, thinggeek, newsgeek, geekday (built locally, not yet deployed) |
 > | B — hand-rolled `public/sw.js` | bookgeek, flockgeek, storygeek, startgeek |
 >
 > The per-app tables further down (§1a and "Current Status") are 2026-09-05 snapshots of
@@ -192,7 +192,7 @@ including the async ones nobody downloads on the first visit).
 
 #### A. VitePWA + Workbox (preferred for new apps)
 
-Used by: basegeek, TodoGeek, fitnessGeek, NoteGeek, GameGeek, ThingGeek, NewsGeek
+Used by: basegeek, TodoGeek, fitnessGeek, NoteGeek, GameGeek, ThingGeek, NewsGeek, GeekDay (`apps/geekday/frontend/pwa/runtimeCaching.js`: auth, then the rest of `/api` NetworkOnly, then guarded assets; not yet deployed)
 
 Config lives in `vite.config.js` under `VitePWA({ workbox: { runtimeCaching: [...] } })`.
 
