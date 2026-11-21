@@ -71,17 +71,36 @@ export function relativeDay(value, now = new Date()) {
  * caught by CI running in the evening).
  */
 export function relativeInstant(value, now = new Date()) {
-  if (!value) return '';
+  return instantParts(value, now).text;
+}
+
+/**
+ * relativeInstant() for the middle of a sentence: "Played today", "Last ran
+ * 3 days ago", but "Played Sep 22" — only the relative words are lower-cased,
+ * never a month name (review 2026-11-18 #8). It knows which answer it gave,
+ * rather than guessing from the formatted words.
+ */
+export function relativeInstantInSentence(value, now = new Date()) {
+  const { text, relative } = instantParts(value, now);
+  return relative ? text.toLowerCase() : text;
+}
+
+/** `{ text, relative }`: the words, and whether they are relative ("Today") or a date. */
+export function instantParts(value, now = new Date()) {
+  if (!value) return { text: '', relative: false };
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
+  if (Number.isNaN(d.getTime())) return { text: '', relative: false };
   const localDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = Math.round((localDay(now) - localDay(d)) / 86400000);
-  if (diff === 0) return 'Today';
-  if (diff === 1) return 'Yesterday';
-  if (diff > 1 && diff < 7) return `${diff} days ago`;
-  return d.toLocaleDateString(undefined, {
-    month: 'short', day: 'numeric', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric',
-  });
+  if (diff === 0) return { text: 'Today', relative: true };
+  if (diff === 1) return { text: 'Yesterday', relative: true };
+  if (diff > 1 && diff < 7) return { text: `${diff} days ago`, relative: true };
+  return {
+    text: d.toLocaleDateString(undefined, {
+      month: 'short', day: 'numeric', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric',
+    }),
+    relative: false,
+  };
 }
 
 /** Minutes → "1h 30m", "45m", "2h". */
@@ -100,13 +119,4 @@ export function formatHours(hours) {
   if (h < 1) return `${Math.round(h * 60)} min`;
   const rounded = h >= 100 ? Math.round(h) : Math.round(h * 10) / 10;
   return `${rounded} h`;
-}
-
-/**
- * "Played today", "Played 3 days ago" — but "Played Sep 22", never "sep 22"
- * (review 2026-11-18 #8): of `relativeInstant`'s answers, only the relative
- * words are lower-cased.
- */
-export function playedWhen(last) {
-  return /^(Today|Yesterday|\d+ days ago)$/.test(last) ? last.toLowerCase() : last;
 }

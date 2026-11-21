@@ -181,7 +181,7 @@ describe('PlayniteImportCard', () => {
       renderCard();
       await waitFor(() =>
         expect(screen.getByTestId('playnite-auto-import')).toHaveTextContent(
-          'Auto-import: watching gamegeek-import/chef/ in Nextcloud — last export imported Today (3 new, 5 updated)'
+          'Auto-import: watching gamegeek-import/chef/ in Nextcloud — last export imported today (3 new, 5 updated)'
         )
       );
     });

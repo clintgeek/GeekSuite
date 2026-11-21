@@ -14,7 +14,7 @@ import { useToast } from '@geeksuite/ui';
 import { GET_DELETED_GAMES } from '../../graphql/queries';
 import { RESTORE_DELETED_GAME } from '../../graphql/mutations';
 import { resetLibraryLists } from '../../graphql/cachePolicies';
-import { relativeInstant } from '../../utils/dates';
+import { instantParts } from '../../utils/dates';
 import SettingsCard from './SettingsCard';
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -33,11 +33,11 @@ export function restoreHint(entry) {
 }
 
 function deletedLine(entry) {
-  const when = relativeInstant(entry.deletedAt);
+  const { text: when, relative } = instantParts(entry.deletedAt);
   const who = entry.deletedByName ? ` by ${entry.deletedByName}` : '';
   if (!when) return `Deleted${who}`;
-  // "Today" / "Yesterday" read as words mid-sentence; a date ("Nov 3") keeps its case.
-  const said = when === 'Today' || when === 'Yesterday' ? when.toLowerCase() : /ago$/.test(when) ? when : `on ${when}`;
+  // Relative words read lower-case mid-sentence; a date ("Nov 3") keeps its case.
+  const said = relative ? when.toLowerCase() : `on ${when}`;
   return `Deleted ${said}${who}`;
 }
 

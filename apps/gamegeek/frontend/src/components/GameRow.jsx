@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
-import { playedWhen, relativeInstant } from '../utils/dates';
+import { relativeInstantInSentence } from '../utils/dates';
 import { platformShort, shelfLabel } from '../utils/vocab';
 import GameCover from './GameCover';
 import { copyPlatforms } from './PlatformChips';
@@ -20,8 +20,8 @@ export default function GameRow({ game, onOpen, onRate, showShelf = true, custom
   const platforms = copyPlatforms(game).map(platformShort).join(' · ');
   const rateable = Boolean(onRate) && canRate(game);
   const shelf = showShelf && me.shelf ? shelfLabel(me.shelf, customShelves) : null;
-  const last = me.lastPlayedAt ? relativeInstant(me.lastPlayedAt) : null;
-  const detail = [platforms, last && `Played ${playedWhen(last)}`].filter(Boolean).join(' · ');
+  const last = me.lastPlayedAt ? relativeInstantInSentence(me.lastPlayedAt) : null;
+  const detail = [platforms, last && `Played ${last}`].filter(Boolean).join(' · ');
 
   return (
     <Box

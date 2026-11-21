@@ -13,7 +13,7 @@ import { useToast } from '@geeksuite/ui';
 import { runEnrich } from '../../api/rest';
 import { useMetadataStatus } from '../../hooks/useMetadataEnrichment';
 import { DISPLAY_FONT, DISPLAY_WEIGHT } from '../../theme/theme';
-import { relativeInstant } from '../../utils/dates';
+import { relativeInstantInSentence } from '../../utils/dates';
 import SettingsCard from './SettingsCard';
 import { resetLibraryLists } from '../../graphql/cachePolicies';
 
@@ -151,7 +151,7 @@ export default function MetadataCard() {
 
       {status?.lastRunAt ? (
         <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 1.5 }}>
-          Last ran {relativeInstant(status.lastRunAt)}
+          Last ran {relativeInstantInSentence(status.lastRunAt)}
         </Typography>
       ) : null}
     </SettingsCard>
