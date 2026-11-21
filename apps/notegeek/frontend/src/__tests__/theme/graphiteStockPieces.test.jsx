@@ -35,4 +35,15 @@ describe.each(['light', 'dark'])('Graphite stock pieces (%s)', (mode) => {
     expect(getComputedStyle(track).opacity).toBe('1');
     expect(hex(getComputedStyle(base).color)).toBe(g.onHl.toUpperCase());
   });
+
+  // Review 2026-11-20: the "on" colours outranked MUI's disabled rules, so a
+  // switch that was on and disabled (Send tasks while sending) looked live.
+  it('a Switch that is on but disabled reads as disabled', () => {
+    const { container } = wrap(<Switch checked disabled onChange={() => {}} inputProps={{ 'aria-label': 'Anchored' }} />);
+    const track = container.querySelector('.MuiSwitch-track');
+    const base = container.querySelector('.MuiSwitch-switchBase');
+    expect(hex(getComputedStyle(base).color)).not.toBe(g.onHl.toUpperCase());
+    expect(hex(getComputedStyle(track).backgroundColor)).not.toBe(g.hl.toUpperCase());
+    expect(Number(getComputedStyle(track).opacity)).toBeLessThan(1);
+  });
 });

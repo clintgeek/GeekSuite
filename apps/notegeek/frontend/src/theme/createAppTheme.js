@@ -231,6 +231,11 @@ function buildNoteOverrides(mode) {
           colorPrimary: {
             '&.Mui-checked': { color: g.onHl },
             '&.Mui-checked + .MuiSwitch-track': { backgroundColor: g.hl, opacity: 1 },
+            // On but disabled (Send tasks while sending): the rules above
+            // outrank MUI's disabled ones, so say "inert" here, one class
+            // stronger — a grey thumb on a faded rule, no highlighter.
+            '&.Mui-checked.Mui-disabled': { color: g.disabled },
+            '&.Mui-checked.Mui-disabled + .MuiSwitch-track': { backgroundColor: g.border, opacity: 0.5 },
           },
           track: {
             backgroundColor: g.border,
