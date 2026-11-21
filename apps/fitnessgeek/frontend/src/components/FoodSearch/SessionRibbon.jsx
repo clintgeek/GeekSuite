@@ -75,15 +75,17 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
   }, 0);
   // Foods, not picks (UX review 2026-11, B3): "Same as Sarah's dinner" is one
   // pick that writes one log per food, and "1 added" undercounted her log.
+  // A copied yesterday's meal is one entry too (`whole`), counted the same way.
+  const copied = (item) => item?.type === 'household-meal' || item?.whole;
   const foods = items.reduce((n, item) => (
-    n + (item?.type === 'household-meal' ? Math.max(1, item?.logIds?.length || 0) : 1)
+    n + (copied(item) ? Math.max(1, item?.logIds?.length || 0) : 1)
   ), 0);
   // It names what it counts (B7): the row said "2 added" (servings) while
   // the ribbon said "1 added" (entries). One entry is named with its amount,
   // "Egg ×2"; more are "3 foods".
   const single = items.length === 1 && foods === 1;
   const what = single
-    ? withAmount(items[0]?.name, items[0]?.type === 'household-meal' ? 1 : items[0]?.servings) || '1 food'
+    ? withAmount(items[0]?.name, copied(items[0]) ? 1 : items[0]?.servings) || '1 food'
     : `${foods} foods`;
   const displayed = useCountUp(Math.round(totalCalories));
   const ribbonRef = useRef(null);

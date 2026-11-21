@@ -123,6 +123,28 @@ function whatWasLogged(logged) {
 
 const quoted = (names) => names.map((n) => `“${n}”`).join(' or ');
 
+/**
+ * A copied meal ("Same as yesterday's dinner") as ONE ribbon entry: one
+ * gesture, one Undo (review 2026-11-20). `parts` are the foods that landed,
+ * each with its log ids and calories, so the entry stays right when some of
+ * its logs are deleted.
+ */
+function copiedEntry(parts, mealType, date) {
+  const calories = parts.reduce((sum, p) => sum + (Number(p.calories) || 0), 0);
+  return {
+    whole: true,
+    name: parts.length === 1 ? withAmount(parts[0].name, parts[0].servings) : null,
+    parts,
+    logIds: parts.flatMap((p) => p.logIds),
+    servings: 1,
+    nutrition: { calories_per_serving: calories },
+    mealType,
+    date,
+  };
+}
+
+const caloriesOf = (item) => (Number(item?.nutrition?.calories_per_serving) || 0) * (Number(item?.servings) || 1);
+
 const FoodComposer = ({
   mode = 'page',
   mealType = 'snack',
@@ -272,6 +294,13 @@ const FoodComposer = ({
       .map((entry) => {
         const ids = entry.logIds || [];
         if (!ids.some((id) => deleted.includes(id))) return entry;
+        if (entry.parts) {
+          // A copied meal keeps the foods still in the log, and their calories.
+          const parts = entry.parts
+            .map((p) => ({ ...p, logIds: p.logIds.filter((id) => !deleted.includes(id)) }))
+            .filter((p) => p.logIds.length > 0);
+          return copiedEntry(parts, entry.mealType, entry.date);
+        }
         return { ...entry, logIds: ids.filter((id) => !deleted.includes(id)) };
       })
       .filter((entry) => (entry.logIds || []).length > 0));
@@ -290,7 +319,7 @@ const FoodComposer = ({
     });
   }, []);
 
-  const logFoods = useCallback(async (items, meal, key = null) => {
+  const logFoods = useCallback(async (items, meal, key = null, { asOne = false } = {}) => {
     if (!items?.length || !onLogItems) return null;
     if (!beginWrite(key)) return null;
     // Another add is the next action: the "Just added" strip has done its job.
@@ -306,10 +335,18 @@ const FoodComposer = ({
         // meal expands into several, and every later item took an id belonging
         // to the meal — so undoing a row deleted somebody else's food.
         const perItem = result?.perItem || items.map((_, i) => (logIds[i] ? [logIds[i]] : []));
-        setSession((prev) => [
-          ...prev,
-          ...items.map((item, i) => ({ ...item, logIds: perItem[i] || [], mealType: meal || mealType, date: day }))
-        ]);
+        if (asOne && items.length > 1) {
+          // One gesture, one entry: the ribbon's Undo takes back the whole copy.
+          const parts = items
+            .map((item, i) => ({ name: item.name, servings: item.servings, logIds: perItem[i] || [], calories: caloriesOf(item) }))
+            .filter((p) => p.logIds.length > 0);
+          if (parts.length) setSession((prev) => [...prev, copiedEntry(parts, meal || mealType, day)]);
+        } else {
+          setSession((prev) => [
+            ...prev,
+            ...items.map((item, i) => ({ ...item, logIds: perItem[i] || [], mealType: meal || mealType, date: day }))
+          ]);
+        }
         // "Egg ×2", not "Egg", when it wasn't one (L4).
         const what = items.length === 1 ? withAmount(items[0].name, items[0].type === 'household-meal' ? 1 : items[0].servings) : `${ok} items`;
         sayAdded(addedMessage(meal || mealType, what), result?.fail ? 'warning' : 'success');
@@ -468,7 +505,7 @@ const FoodComposer = ({
       notify(`Already added to ${mealWord(mealType)} ✓`, { tone: 'info' });
       return null;
     }
-    const written = await logFoods(items, mealType, key);
+    const written = await logFoods(items, mealType, key, { asOne: true });
     const ids = (written?.perItem || []).flat().filter(Boolean);
     const logIds = ids.length ? ids : (written?.logIds || []);
     if (key && (written?.ok ?? 0) > 0 && logIds.length > 0) {

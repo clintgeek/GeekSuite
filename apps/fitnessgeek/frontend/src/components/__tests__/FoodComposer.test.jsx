@@ -1560,6 +1560,26 @@ describe('L7: "Same as Chef\'s dinner"', () => {
     expect(onLogItems).toHaveBeenCalledTimes(1);
   });
 
+  it('a copied yesterday\'s meal is one gesture, so the ribbon\'s one Undo takes back the whole copy', async () => {
+    recent.logs = ['Steak', 'Salad'].map((name, i) => ({
+      id: `y${i}`, meal_type: 'dinner', servings: 1, log_date: '2026-10-13T00:00:00.000Z',
+      nutrition: { calories_per_serving: 300 }, food_item_id: { id: name.toLowerCase(), name },
+    }));
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 2, fail: 0, logIds: ['n1', 'n2'], perItem: [['n1'], ['n2']] });
+    const onUndo = vi.fn().mockResolvedValue({ deleted: ['n1', 'n2'], failed: [] });
+    renderBox({ onLogItems, onUndo, mealType: 'dinner', showQuickPicks: true, date: TODAY });
+
+    fireEvent.click(await screen.findByTestId('same-as-yesterday'));
+    await waitFor(() => expect(screen.getByTestId('session-ribbon')).toHaveTextContent('2 foods added to dinner'));
+    await waitFor(() => expect(screen.getByTestId('session-ribbon')).toHaveTextContent('600 cal'));
+
+    fireEvent.click(within(screen.getByTestId('session-ribbon')).getByRole('button', { name: /^undo$/i }));
+    await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['n1', 'n2']));
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    // The whole copy is gone, so the card can copy it again.
+    await waitFor(() => expect(screen.getByTestId('same-as-yesterday')).not.toHaveTextContent(/· Added/));
+  });
+
   it('no member logged this meal → no pick', async () => {
     household = [];
     renderBox({ mealType: 'dinner', showQuickPicks: true, date: TODAY });
