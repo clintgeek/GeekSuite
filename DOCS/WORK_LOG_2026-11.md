@@ -545,7 +545,12 @@ Chef: "let's get these builds as tight as possible."
   (StartGeek wallpaper address, NewsGeek Today opens scrolled, BaseGeek scenes 09/10
   point at a route that no longer exists).
 
-## 2026-11-18 → 19 — Overnight build from the design and UX review (local, NOT pushed)
+## 2026-11-18 → 19 — Overnight build from the design and UX review (DEPLOYED 2026-11-19)
+
+**Pushed and deployed 2026-11-19** on Chef's word (`a4d6694f..fbec2de2`, 126 commits). CI, the
+mobile harness and the image release all passed on the pushed commit; Watchtower updated all
+eleven apps at 12:30–12:44 with no failures. Chef tried the apps on 2026-11-20: "they all look
+good". The text below was written before the push.
 
 Chef: "please fix as you suggest. lets also consider using shared components where
 appropriate… make decisions on my behalf and report in the morning." Eight builders,
