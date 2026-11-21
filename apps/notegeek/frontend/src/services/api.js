@@ -3,7 +3,7 @@ import { setupAxiosInterceptors } from '@geeksuite/auth';
 
 import { apolloClient } from '../apolloClient';
 import { SEARCH_NOTES, GET_NOTES, GET_NOTE_BY_ID, GET_TAGS } from '../graphql/queries';
-import { RENAME_TAG, DELETE_TAG, CREATE_NOTE, UPDATE_NOTE, DELETE_NOTE, RESTORE_NOTE, PURGE_NOTE } from '../graphql/mutations';
+import { RENAME_TAG, DELETE_TAG, CREATE_NOTE, UPDATE_NOTE, DELETE_NOTE, RESTORE_NOTE } from '../graphql/mutations';
 // Every mutation owns the cache consequences of its own write — see
 // graphql/cacheUpdates.js for what each of these owes and why.
 import { onNoteCreated, onNoteUpdated, onNoteDeleted, onNoteRestored, onTagsRewritten } from '../graphql/cacheUpdates';
@@ -78,19 +78,6 @@ export const restoreNoteApi = async (id) => {
         update: onNoteRestored,
     });
     return { data: data.restoreNote };
-};
-/** Delete forever — only a note already in Recently deleted. */
-export const purgeNoteApi = async (id) => {
-    const { data } = await apolloClient.mutate({
-        mutation: PURGE_NOTE,
-        variables: { id },
-        update: (cache) => {
-            const ref = cache.identify({ __typename: 'Note', id: String(id) });
-            if (ref) cache.evict({ id: ref });
-            onNoteRestored(cache);
-        },
-    });
-    return { data: data.purgeNote };
 };
 
 // Tags

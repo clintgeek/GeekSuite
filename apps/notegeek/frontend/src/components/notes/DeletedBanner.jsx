@@ -3,8 +3,7 @@ import { Box, Button, Typography, useTheme } from '@mui/material';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
 import { useToast } from '@geeksuite/ui';
 import { graphiteTokens } from '../../theme/tokens';
-import { restoreNoteApi } from '../../services/api';
-import useNoteStore from '../../store/noteStore';
+import { restoreDeletedNote } from '../../hooks/useDeleteNote';
 
 /**
  * "In Recently deleted · Restore" (C4, review 2026-11 1.19) — on a deleted
@@ -20,11 +19,7 @@ export default function DeletedBanner({ noteId, deletedAt, sx }) {
   const restore = async () => {
     setBusy(true);
     try {
-      await restoreNoteApi(noteId);
-      useNoteStore.getState().refreshLists?.();
-      notify('Note restored', { tone: 'success' });
-    } catch (err) {
-      notify(err?.message || 'Could not restore the note.', { tone: 'error' });
+      await restoreDeletedNote(noteId, notify);
     } finally {
       setBusy(false);
     }

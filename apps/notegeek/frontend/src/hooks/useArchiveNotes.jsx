@@ -1,10 +1,10 @@
 import React, { useCallback, useRef } from 'react';
-import { Button } from '@mui/material';
 import { useMutation } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import { ARCHIVE_NOTES, RESTORE_NOTES } from '../graphql/archive';
 import { onNotesArchived } from '../graphql/cacheUpdates';
 import useNoteStore from '../store/noteStore';
+import UndoButton from '../components/notes/UndoButton';
 
 const plural = (n) => `${n} note${n === 1 ? '' : 's'}`;
 
@@ -59,17 +59,12 @@ export function useArchiveNotes() {
         tone: 'success',
         duration: undo ? 10000 : undefined,
         action: undo && changed.length ? (
-          <Button
-            color="inherit"
-            size="small"
+          <UndoButton
             onClick={() => {
               if (toastId != null) dismiss?.(toastId);
               restoreRef.current?.(changed);
             }}
-            sx={{ textTransform: 'none', fontWeight: 600, minHeight: 44, minWidth: 44 }}
-          >
-            Undo
-          </Button>
+          />
         ) : undefined,
       });
       return changed;

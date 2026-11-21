@@ -1,9 +1,27 @@
 import React, { useCallback } from 'react';
-import { Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 import useNoteStore from '../store/noteStore';
 import { restoreNoteApi } from '../services/api';
+import UndoButton from '../components/notes/UndoButton';
+
+/**
+ * Put one note back from Recently deleted, refresh the lists, and say so —
+ * the delete toast's Undo and the deleted note's banner both do exactly
+ * this. Resolves true when it is back. (Recently deleted's own bar restores
+ * in batches through Apollo; that is DeletedNotes.jsx.)
+ */
+export async function restoreDeletedNote(noteId, notify, { failMessage = 'Could not restore the note.' } = {}) {
+  try {
+    await restoreNoteApi(noteId);
+    useNoteStore.getState().refreshLists?.();
+    notify('Note restored', { tone: 'success' });
+    return true;
+  } catch (err) {
+    notify(err?.message || failMessage, { tone: 'error' });
+    return false;
+  }
+}
 
 /**
  * Delete a note at once, with Undo in the toast — the same as Archive.
@@ -45,23 +63,12 @@ export function useDeleteNote() {
       tone: 'success',
       duration: 10000,
       action: (
-        <Button
-          color="inherit"
-          size="small"
-          onClick={async () => {
+        <UndoButton
+          onClick={() => {
             if (toastId != null) dismiss?.(toastId);
-            try {
-              await restoreNoteApi(noteId);
-              useNoteStore.getState().refreshLists?.();
-              notify('Note restored', { tone: 'success' });
-            } catch (err) {
-              notify(err?.message || 'Could not restore it. It is in Recently deleted.', { tone: 'error' });
-            }
+            restoreDeletedNote(noteId, notify, { failMessage: 'Could not restore it. It is in Recently deleted.' });
           }}
-          sx={{ textTransform: 'none', fontWeight: 600, minHeight: 44, minWidth: 44 }}
-        >
-          Undo
-        </Button>
+        />
       ),
     });
     return true;
