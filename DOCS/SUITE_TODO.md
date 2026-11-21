@@ -744,3 +744,36 @@ From `SUITE_UX_REVIEW_2026-11.md`; the overnight build did the rest (work log, 2
 - GameGeek: the header comment in `frontend/src/utils/installDecision.js` is stale (the import no longer flags games); the "how did it end?" banner is legacy for games flagged before 2026-10-09.
 - BaseGeek: no show-password control on the login.
 
+
+---
+
+## 14. Left from the code-quality sweep (2026-11-20)
+
+### Device checks
+- BookGeek: reopen a book with a non-100% font size (does it land on the same page?); iOS middle tap toggling the reader chrome; reader offline keeps Close and the error.
+- NoteGeek: keyboard up, save failing — the docked "not saved" icon appears when the head pans off screen.
+- ThingGeek: Edit's Save bar above the keyboard on Android and iOS.
+- StartGeek: no chips over the modules on load (Android); Go on a result stays in the app; tick then quick Undo.
+- FlockGeek: focus ring on the page title / Today line after a delete or a harvest.
+
+### Shared packages (not started)
+- `GeekSheet` re-mounts its children when the width crosses `md` (GameGeek notes carry a workaround).
+- One `visuallyHidden` style in `@geeksuite/ui` (four app copies; `width: 1` bug came from this).
+- `useUndoToast` / `UndoButton` (NoteGeek, FitnessGeek, ThingGeek hand-roll it).
+- `GeekToastProvider`: `actionDuration` should be `Math.max(duration, 8000)`; no hover/focus pause.
+- `GeekSearchField` clear button with focus return (six apps hand-roll one).
+- `GeekFab` option to keep its label at `xs` (FlockGeek reaches into its markup).
+- `@geeksuite/collection`: style hooks for pills, chips and facet headings (BookGeek skins by aria-label and DOM shape); the Filters sheet's "active first / hide dead options".
+- `@geeksuite/task-grammar`: an undated repeat anchors DTSTART on the real clock, not the `now` passed in.
+
+### Needs the gateway or a backend
+- NewsGeek: preview of an off source's stories (`newsArticles` argument that skips the reader's filters).
+- StoryGeek backend: `/back` prefix strip is case-sensitive (`/Back gate` matches nothing).
+
+### Chef's call
+- NewsGeek: hide the section chips on Everything's section tabs too?
+
+### Small
+- StoryGeek: the `xl` worded EPUB/Bookify buttons still drop keyboard focus while exporting.
+- FitnessGeek: a goal box that opens empty because the goal is already reached leaves the stale goal stored.
+- StartGeek: Chips, TaskRow, Toast and `openUrl` wiring have no component tests (logic only).

@@ -666,3 +666,44 @@ NoteGeek note. Spec `DOCS/GEEKDAY_SPEC.md` (Chef, signed off the same day); how 
   runs, 0 findings) and `01-day` at phone and desktop. Pen and touch were synthetic.
 - **Not checked:** anything on the Lenovo; real handwriting through the transcriber; opening
   a GeekDay page in NoteGeek; the live gateway (every harness request is stubbed).
+
+## 2026-11-20 — Code-quality sweep of the UX review build
+
+Eight reviewers read the overnight diff (`a4d6694f..fbec2de2`), one lane each, read-only, then
+built their own findings: 72 commits, one per fix, each behaviour fix with a test proved red.
+Shared packages and the gateway were not touched.
+
+- **BookGeek:** reader chrome no longer hides on a failed or unrendered book (it took Close
+  with it); font size applied before the saved position is shown; Send to Kindle cannot go
+  twice; position and location keys carry the file's identity (**every saved place restarted
+  once**); Contents arrow keys and same-label chapters.
+- **StartGeek:** a drafted task (and the draft's Edit path) keeps `(private)`, `~blocked`,
+  notes and repeats; an empty task is refused on the client; Go on a result follows the link
+  rule; a ticked row resets after Undo; shortcut chips wait for a real tap; scrim floor reads
+  the top of the photo.
+- **FitnessGeek:** `nutrition_goal.start_date` read as the UTC day the gateway sends (the
+  11-18 fix read it a day early; its test used a date form the server never sends); a copied
+  meal is one Undo; a partly failed copy retries what failed; closing a sitting offers Undo
+  unless the "Just added" strip or the describe's own toast already does (`1916ff20`, after the
+  harness caught the double Undo on scene 48c); clearing a prefilled goal weight clears it.
+- **NoteGeek:** Delete saves a dirty note first; a note in Recently deleted is read-only;
+  batch restore/purge evicts once; the docked "not saved" copy is measured against the visual
+  viewport.
+- **NewsGeek:** Undo of a removed open-with link restores its publishers; Go saves the field;
+  Recent stories refetches and says when a source is not in the paper.
+- **StoryGeek:** wait clock counts from the turn's real start; `/back` asks only when a
+  checkpoint matches and says what is truly lost. The StoryList Undo test raced the toast's
+  real life; it is on a fake clock now.
+- **ThingGeek:** Filters sheet never drops options while open; Edit's Save bar rides above the
+  keyboard; Undo after trash does not pull the reader off another page.
+- **BaseGeek:** saving one provider key keeps the drafts in other open rows; Cancel resets the
+  row. **FlockGeek:** a failed delete keeps the row and its edits. **TodoGeek:** Undo is 8 s
+  (the shared constant), so a delete is sent after 8 s. **GameGeek:** notes draft holds only
+  changed fields.
+- **Review finding that was wrong:** TodoGeek `penIntegrity` "no toast with nothing on screen"
+  does go red without its guard.
+- **Checked (quiet machine):** 13 suites, 5,842 tests, 0 failures; lint 0 errors; syntax-check,
+  gql-arg-audit, gql-surface clean; harness all eleven apps PASS (FitnessGeek after `1916ff20`).
+- **Deployed 2026-11-20 23:00 by another session's push** (the GeekDay commits, `88212ca6`),
+  before the harness had finished: the 48c double Undo was live until `1916ff20` shipped.
+- **Not checked:** anything on a device (see SUITE_TODO §14).
