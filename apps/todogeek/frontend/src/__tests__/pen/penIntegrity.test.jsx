@@ -67,6 +67,9 @@ describe('a failed load is not "Nothing due today" (1.12)', () => {
     expect(ref.current.loadError).toBeNull();
   });
 
+  // Guards PenContext's own rule: the stale-list toast is only for a list on
+  // screen (it goes red if that check is dropped). TaskContext's old second
+  // toast for the same failure is guarded in TaskContext.test.jsx.
   it('with nothing on screen, a failed load raises no toast: the page says it (review 2026-11-18 #10)', async () => {
     mount({ fetchTasks: vi.fn(() => Promise.resolve({ status: 'error', error: new Error('Service unavailable') })) });
     await flush();

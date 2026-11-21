@@ -68,8 +68,8 @@ export default function usePenRows(order, { onMove, onDragEnd, pane = false } = 
 
   /**
    * Close the open editor, saving what changed. False when it has to stay open
-   * (a repeating task is asking "this one or the series?", or its words were
-   * emptied).
+   * (a repeating task with changes is asking "this one or every one?" above
+   * its two Save buttons, or its words were emptied).
    */
   const collapse = useCallback(() => {
     const api = editorApi.current;

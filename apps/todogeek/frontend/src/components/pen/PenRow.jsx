@@ -66,8 +66,9 @@ export function timePassed(task, when, now) {
 }
 /**
  * Does a swipe's word fit in the strip the row has uncovered? A safe
- * over-estimate of 15px bold Inter Tight (9px a character), plus the icon,
- * the gap and the strip's 16px padding each side. Short of it, the icon alone.
+ * over-estimate of 15px bold Inter Tight (9px a character) plus the strip's
+ * 12px padding each side. Short of it, the icon alone; `revealParts` adds the
+ * icon and its gap before it shows both.
  */
 export const REVEAL_CHAR_PX = 9;
 export const REVEAL_PAD_PX = 24;            // the strip's 12px padding, each side

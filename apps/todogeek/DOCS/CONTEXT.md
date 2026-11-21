@@ -941,7 +941,8 @@ The gateway stays compatible with the live old bundle and NoteGeek's Send tasks.
 - **Done ink (D7).** Done is a neutral ink on the checkbox and swipe, not the priority red; the Help sheet carries
   a priority legend. Passed times read "9am - passed"; counts are blank while loading.
 - **Retired pages deleted (Phase 4).** The eight retired pages, `components/{plan,review,templates,today,tasks,
-  shared,primitives,navigation}` (except `components/tasks/RecurringEditDialog.jsx`, which `InlineEditor` uses),
+  shared,primitives,navigation}` (`components/tasks/RecurringEditDialog.jsx` too, since 2026-11-18: a repeating
+  task's editor saves with two buttons, "Save this one" / "Save every one", and asks no dialog),
   `layout/PageHeader`, five hooks, `TemplateContext` and their tests are gone. Redirects remain
   (`RETIRED_PATHS`). The gateway subtask API is untouched. Unreachable leftovers are listed in `DOCS/SUITE_TODO.md`.
 - **Shell.** Swipe actions have icons and vibrate; swipe-left is disabled on done rows; scroll resets on route
