@@ -1580,6 +1580,27 @@ describe('L7: "Same as Chef\'s dinner"', () => {
     await waitFor(() => expect(screen.getByTestId('same-as-yesterday')).not.toHaveTextContent(/· Added/));
   });
 
+  it('a copy that partly failed is not "Added", and the next tap adds only what failed', async () => {
+    recent.logs = ['Steak', 'Salad'].map((name, i) => ({
+      id: `y${i}`, meal_type: 'dinner', servings: 1, log_date: '2026-10-13T00:00:00.000Z',
+      nutrition: { calories_per_serving: 300 }, food_item_id: { id: name.toLowerCase(), name },
+    }));
+    const onLogItems = vi.fn()
+      .mockResolvedValueOnce({ ok: 1, fail: 1, logIds: ['n1'], perItem: [['n1'], []], errors: [new Error('boom')] })
+      .mockResolvedValueOnce({ ok: 1, fail: 0, logIds: ['n2'], perItem: [['n2']] });
+    renderBox({ onLogItems, onUndo: vi.fn(), mealType: 'dinner', showQuickPicks: true, date: TODAY });
+
+    fireEvent.click(await screen.findByTestId('same-as-yesterday'));
+    await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
+    expect(screen.getByTestId('same-as-yesterday')).not.toHaveTextContent(/· Added/);
+
+    fireEvent.click(screen.getByTestId('same-as-yesterday'));
+    await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(2));
+    expect(onLogItems.mock.calls[1][0].map((f) => f.name)).toEqual(['Salad']);
+    await waitFor(() => expect(screen.getByTestId('same-as-yesterday')).toHaveTextContent(/· Added/));
+  });
+
   it('no member logged this meal → no pick', async () => {
     household = [];
     renderBox({ mealType: 'dinner', showQuickPicks: true, date: TODAY });

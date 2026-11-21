@@ -87,7 +87,8 @@ export default function QuickPicks({
   // check and keeps its food list; the box ignores a second tap.
   const wholeDone = (key) => {
     const a = added?.[key];
-    return Boolean(a && a.mealType === mealType && a.date === date);
+    // A copy with foods still to add (some failed) is not done: a tap retries them.
+    return Boolean(a && a.mealType === mealType && a.date === date && !a.failed?.length);
   };
   const listOf = (names) => `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`;
 

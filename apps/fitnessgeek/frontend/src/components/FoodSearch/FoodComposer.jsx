@@ -500,19 +500,29 @@ const FoodComposer = ({
   const handleQuick = useCallback(async (items, key) => {
     const whole = items?.length > 1 || items?.[0]?.type === 'household-meal';
     if (!whole) return pickOne(items?.[0], key);
-    const prior = key ? addedRef.current[key] : null;
-    if (prior && prior.mealType === mealType && prior.date === day) {
+    const found = key ? addedRef.current[key] : null;
+    const prior = found && found.mealType === mealType && found.date === day ? found : null;
+    if (prior && !prior.failed?.length) {
       notify(`Already added to ${mealWord(mealType)} ✓`, { tone: 'info' });
       return null;
     }
-    const written = await logFoods(items, mealType, key, { asOne: true });
-    const ids = (written?.perItem || []).flat().filter(Boolean);
-    const logIds = ids.length ? ids : (written?.logIds || []);
-    if (key && (written?.ok ?? 0) > 0 && logIds.length > 0) {
-      setAddedByKey((prev) => ({
-        ...prev,
-        [key]: { logIds, servings: 1, name: items[0].name, mealType, date: day, whole: true },
-      }));
+    // A copy that partly failed is not "Added": the next tap writes only the
+    // foods that didn't land, which is what "Try again" promised.
+    const toWrite = prior ? prior.failed : items;
+    const written = await logFoods(toWrite, mealType, key, { asOne: true });
+    const perItem = written?.perItem
+      || toWrite.map((_, i) => (written?.logIds?.[i] ? [written.logIds[i]] : []));
+    const ids = perItem.flat().filter(Boolean);
+    const failed = (written?.fail ?? 0) > 0 ? toWrite.filter((_, i) => !(perItem[i]?.length)) : [];
+    if (key && (written?.ok ?? 0) > 0) {
+      setAddedByKey((prev) => {
+        const logIds = [...(prior ? prev[key]?.logIds || [] : []), ...ids];
+        if (!logIds.length) return prev;
+        return {
+          ...prev,
+          [key]: { logIds, servings: 1, name: items[0].name, mealType, date: day, whole: true, failed },
+        };
+      });
     }
     return written;
   }, [pickOne, logFoods, mealType, day, notify]);
