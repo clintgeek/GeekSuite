@@ -5,6 +5,7 @@ import { useSettings } from '../hooks/useSettings'
 import { useToast } from '../hooks/useToast'
 import { useDisplay } from '../hooks/useLinkTarget'
 import { openLink } from '../lib/linkTarget'
+import { showShortcutChips } from '../lib/shortcutChips'
 import { gql, UnauthorizedError } from '../lib/graphql'
 import { failureMessage, isAuthFailure } from '../lib/commandFailure'
 import { ENGINES } from '../lib/engines'
@@ -115,6 +116,9 @@ const CommandBox = ({ onOpenSettings }) => {
   const [draftLoading, setDraftLoading] = useState(false)
   const [capturing, setCapturing] = useState(false)
   const [focused, setFocused] = useState(false)
+  // True once the person taps the box; the page's own focus on load does
+  // not count (lib/shortcutChips.js). Cleared when the box loses focus.
+  const [userFocused, setUserFocused] = useState(false)
   const display = useDisplay()
   const { phone } = display
   // Enter on a result goes where a tap on it would (lib/linkTarget.js).
@@ -629,8 +633,12 @@ const CommandBox = ({ onOpenSettings }) => {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPointerDown={() => setUserFocused(true)}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false)
+            setUserFocused(false)
+          }}
           placeholder={phone ? PHONE_PLACEHOLDER : DESKTOP_PLACEHOLDER}
           className="flex-1 min-w-0 bg-transparent text-ink placeholder:text-ink-3 text-[17px] focus:outline-none"
           aria-label="Command box"
@@ -714,7 +722,7 @@ const CommandBox = ({ onOpenSettings }) => {
         )}
       </div>
 
-      {phone && focused && !value && status === 'in' && (
+      {showShortcutChips({ phone, focused, userFocused, value, signedIn: status === 'in' }) && (
         // Laid over the content, not in its flow: when a tap elsewhere blurs
         // the box, a row in the flow would vanish between touch-down and
         // touch-up and shift the page, so the tap missed what it aimed at

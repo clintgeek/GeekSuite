@@ -83,14 +83,19 @@ export const scenes = [
   // ---- The command box in use (design review 2026-11-18: none of these
   // had a scene). ----
 
-  // Phone: the box focused and empty shows the four prefixes.
+  // Phone: the box tapped and empty shows the four prefixes. The focus the
+  // page gives the box on load must not: the chips would lie over the top of
+  // the modules from the first paint (review 2026-11-20).
   {
     name: '07-command-focused',
     goto: '/',
     wait: 1200,
     viewports: ['phone'],
     async setup(page, h) {
-      await commandBox(page).focus();
+      if (await page.getByRole('group', { name: 'Command shortcuts' }).count()) {
+        throw new Error('the shortcuts show on load, before the box was tapped');
+      }
+      await commandBox(page).click();
       await h.settle(400);
       if (!(await page.getByRole('group', { name: 'Command shortcuts' }).count())) {
         throw new Error('the focused phone command box shows no shortcuts');
