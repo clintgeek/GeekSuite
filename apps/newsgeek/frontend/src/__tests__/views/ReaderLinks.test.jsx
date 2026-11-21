@@ -52,13 +52,34 @@ describe('Share / Copy link (UX review 2026-11-18, finding 6)', () => {
     expect(share).toHaveBeenCalledWith({ title: 'Fire & ice', url: 'https://pub.example/a?b=1' });
   });
 
-  it('dismissing the share sheet says nothing', async () => {
-    navigator.share = vi.fn().mockRejectedValue(Object.assign(new Error('cancelled'), { name: 'AbortError' }));
+  /** Share through the menu with a share sheet that rejects with `err`; resolves once the menu has handled it. */
+  const shareRejectedWith = async (err) => {
+    let settled;
+    const done = new Promise((r) => {
+      settled = r;
+    });
+    navigator.share = vi.fn(() => {
+      const p = Promise.reject(err);
+      p.catch(() => {}).then(() => settled());
+      return p;
+    });
     renderWithProviders(<ArticleItem article={STORY} readerLinks={LINKS} />);
     await userEvent.click(screen.getByRole('button', { name: /More for/ }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Share…' }));
-    await new Promise((r) => setTimeout(r, 50));
+    // The rejection has reached the menu's handler, and React has drawn whatever it asked for.
+    await act(() => done);
+    await act(() => Promise.resolve());
+  };
+
+  it('dismissing the share sheet says nothing', async () => {
+    await shareRejectedWith(Object.assign(new Error('cancelled'), { name: 'AbortError' }));
+    expect(navigator.share).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a share that really fails says so, at the same moment (the check above can see a toast)', async () => {
+    await shareRejectedWith(Object.assign(new Error('not allowed'), { name: 'NotAllowedError' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t share this story. Try again.');
   });
 
   it('without one: "Copy link" copies the original url and says "Link copied."', async () => {

@@ -9,7 +9,7 @@
  *  - finding 11: an opened headline turns to the faint ink.
  */
 import React from 'react';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import ArticleItem from '../../components/ArticleItem';
 import { GAZETTE } from '../../theme/theme';
 import { article } from '../fixtures';
@@ -60,6 +60,33 @@ describe('the whole story is one tap (finding 2)', () => {
     const also = screen.getByTestId('also-in');
     expect(getComputedStyle(also).position).toBe('relative');
     expect(getComputedStyle(also).zIndex).toBe('1');
+  });
+});
+
+describe('the card’s own controls never open the story too (finding 2)', () => {
+  // jsdom does no hit-testing, so the z-index layering is checked above by its
+  // CSS and on a device; what can be proved here is that the ⋯ and Also-in are
+  // not inside the story link, so a tap on them is never also a tap on it.
+  it('the ⋯ menu and an Also-in link sit outside the headline link, and tapping them does not click it', () => {
+    renderWithProviders(<ArticleItem article={article('a1', { alsoIn: [{ __typename: 'NewsAlsoIn', publisher: 'KARK', url: 'https://kark.com/x', sourceId: 's9' }] })} />);
+    const link = screen.getByTestId('story-link');
+    const opened = vi.fn((e) => e.preventDefault());
+    link.addEventListener('click', opened);
+    const menu = screen.getByTestId('article-menu-button');
+    const alsoBox = screen.getByTestId('also-in');
+    const toggle = within(alsoBox).getByRole('button');
+    expect(link.contains(menu)).toBe(false);
+    expect(link.contains(alsoBox)).toBe(false);
+    fireEvent.click(toggle);
+    const also = within(alsoBox).getByRole('link', { name: /KARK/ });
+    also.addEventListener('click', (e) => e.preventDefault());
+    fireEvent.click(also);
+    // Last: the open menu is modal and hides the rest from the accessibility tree.
+    fireEvent.click(menu);
+    expect(opened).not.toHaveBeenCalled();
+    // The headline itself still opens it, once.
+    fireEvent.click(link);
+    expect(opened).toHaveBeenCalledTimes(1);
   });
 });
 
