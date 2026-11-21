@@ -11,7 +11,7 @@ import { Box, Button, Typography } from "@mui/material";
 import { Link as RouterLink } from "react-router-dom";
 import CheckIcon from "@mui/icons-material/CheckCircleOutline";
 
-const TodayLine = ({ today, locationName = () => null, onLog, isMobile }) => {
+const TodayLine = ({ today, locationName = () => null, onLog, isMobile, lineRef }) => {
   if (!today) return null;
   const pens = today.locationIds.map(locationName).filter(Boolean);
   const logAction = isMobile
@@ -21,6 +21,10 @@ const TodayLine = ({ today, locationName = () => null, onLog, isMobile }) => {
   return (
     <Box
       data-testid="home-today"
+      // Focus lands here after the harvest sheet it opened closes on a log:
+      // the "Log eggs" button that opened it has become "Egg log" by then.
+      ref={lineRef}
+      tabIndex={-1}
       sx={{
         display: "flex",
         alignItems: "center",

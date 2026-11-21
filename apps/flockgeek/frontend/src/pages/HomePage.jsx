@@ -1,7 +1,7 @@
 import EggIcon from "@mui/icons-material/EggOutlined";
 import GroupIcon from "@mui/icons-material/GroupsOutlined";
 import BirdIcon from "@mui/icons-material/PetsOutlined";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Button, Stack, Typography, useMediaQuery } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { useQuery } from "@apollo/client";
@@ -51,6 +51,26 @@ const HomePage = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down(geekLayout.navBreakpoint));
   // Held here so the "Today" line can open the same sheet the FAB opens.
   const [harvestOpen, setHarvestOpen] = useState(false);
+  // A log from the Today line replaces the button that opened the sheet
+  // ("Log eggs" becomes "Egg log" once the refetch lands), so the sheet's
+  // focus return would hit a removed node and drop to the page body. Focus
+  // goes to the Today line instead, which now reads what was logged. Opened
+  // from the FAB, the FAB is still there and gets focus back as usual.
+  const openedFromToday = useRef(false);
+  const todayLineRef = useRef(null);
+  const [refocusToday, setRefocusToday] = useState(false);
+  const onHarvestOpenChange = (next) => {
+    if (next) openedFromToday.current = false;
+    setHarvestOpen(next);
+  };
+  const onHarvestLogged = () => {
+    if (openedFromToday.current) setRefocusToday(true);
+  };
+  useEffect(() => {
+    if (!refocusToday || harvestOpen) return;
+    setRefocusToday(false);
+    todayLineRef.current?.focus({ preventScroll: true });
+  }, [refocusToday, harvestOpen]);
   const locationName = (id) => locations.find((l) => l.id === id)?.name ?? null;
 
   const rawName = user?.name || user?.username || user?.email?.split("@")[0] || "";
@@ -61,7 +81,7 @@ const HomePage = () => {
   return (
     <Box component={motion.div} variants={stagger} initial="hidden" animate="show" sx={{ pb: HARVEST_FAB_CLEARANCE }}>
       {/* The "Log eggs" FAB and the sheet it opens. Renders nothing at `md`+. */}
-      <QuickHarvestSheet locations={locations} open={harvestOpen} onOpenChange={setHarvestOpen} />
+      <QuickHarvestSheet locations={locations} open={harvestOpen} onOpenChange={onHarvestOpenChange} onSuccess={onHarvestLogged} />
 
       {/* Greeting header — left-hung, extra vertical air */}
       <motion.div variants={fadeUp}>
@@ -86,7 +106,8 @@ const HomePage = () => {
             today={homeData.today}
             locationName={locationName}
             isMobile={isMobile}
-            onLog={() => setHarvestOpen(true)}
+            lineRef={todayLineRef}
+            onLog={() => { openedFromToday.current = true; setHarvestOpen(true); }}
           />
         </motion.div>
       )}
