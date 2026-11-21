@@ -12,7 +12,7 @@ import {
   runTaskCapture,
   taskVariables,
 } from './capture.js'
-import { parseTaskInput, toCreateInput } from '@geeksuite/task-grammar'
+import { parseTaskInput } from '@geeksuite/task-grammar'
 
 /**
  * A fake gateway with TodoGeek's contract C1: one task per clientId. `fail`
@@ -192,9 +192,48 @@ test('"call Dana tomorrow 2pm" reads the same as in TodoGeek: tomorrow at 2 pm, 
   assert.equal(due.getDate(), 19)
   assert.equal(due.getHours(), 14)
   assert.equal(due.getMinutes(), 0)
-  // And it is exactly TodoGeek's createTask input for the same line.
-  const { input } = toCreateInput(fields, { today: now, explicit: true })
-  assert.deepEqual({ ...vars, clientId: undefined }, { ...input, clientId: undefined })
+  // The whole input, spelled out: what TodoGeek's add box ends up sending for
+  // the same line (toCreateInput, then TaskContext's withDueFlag deriving
+  // hasDueTime from a timed value). Comparing against toCreateInput itself
+  // proved nothing — taskVariables IS that call.
+  assert.deepEqual(vars, {
+    content: 'call Dana',
+    signifier: '*',
+    dueDate: new Date(2026, 10, 19, 14, 0, 0, 0),
+    hasDueTime: true,
+    tags: ['work'],
+    clientId: 'cid',
+  })
+})
+
+test('the createTask input for a plain line, a dated line and a repeat, spelled out', () => {
+  const now = new Date(2026, 10, 18, 9, 38)
+  const vars = (line) => taskVariables(parseTaskInput(line, { now }), 'cid', now)
+  // No date: today, date-only — TodoGeek's `localDateString(today)`.
+  assert.deepEqual(vars('buy milk !high'), {
+    content: 'buy milk', signifier: '*', dueDate: '2026-11-18', hasDueTime: false, priority: 1, clientId: 'cid',
+  })
+  // A date without a time: date-only.
+  assert.deepEqual(vars('@ dentist /2026-11-20 (private)'), {
+    content: 'dentist', signifier: '@', dueDate: '2026-11-20', hasDueTime: false, private: true, clientId: 'cid',
+  })
+  // A repeat: anchored at its day's 09:00, timed, and the browser's zone
+  // rides along (TodoGeek's createTask adds localTimeZone() for a repeat the
+  // same way). Dated, because the grammar anchors an undated repeat's RRULE
+  // on the real clock, not on the `now` a test passes.
+  const nine = new Date(2026, 10, 19, 9, 0, 0, 0)
+  const start = nine.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+  const repeat = vars('vitamins /2026-11-19 (daily)')
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  assert.deepEqual(repeat, {
+    content: 'vitamins',
+    signifier: '*',
+    dueDate: nine,
+    hasDueTime: true,
+    recurrenceRule: `DTSTART:${start}\nRRULE:FREQ=DAILY`,
+    ...(zone ? { timeZone: zone } : {}),
+    clientId: 'cid',
+  })
 })
 
 test('a model draft keeps its time', () => {
