@@ -77,7 +77,8 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry, attic
   const value = <ValueSection thing={thing} onEdit={edit('value')} />;
   const documents = <DocumentsSection documents={thing.documents ?? []} uploads={docUploads} onAdd={() => onPanel('document')} onRetry={onRetry} />;
   // Once the name has scrolled under the pinned action bar, the top bar names the thing.
-  useTitleWhenScrolledPast(pathname, thing.name, heading, scrollRoot, ACTION_BAR_PX);
+  // Only a phone pins the bar; on a desktop the name just has to leave the top.
+  useTitleWhenScrolledPast(pathname, thing.name, heading, scrollRoot, phone ? ACTION_BAR_PX : 0);
   return (
     <Box component="article" ref={articleRef} aria-labelledby="thing-name" data-testid="thing-page" sx={{ maxWidth: 1120, mx: 'auto', px: { xs: 0, md: 3 }, pt: { xs: 0, md: 3 } }}>
       {/* display:contents on a phone (this box and the column inside it), so the

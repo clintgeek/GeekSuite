@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, within, waitFor } from '@testing-library/react';
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import ThingDetail, { ThingDetailBody } from '../../views/detail/ThingDetail';
+import { ACTION_BAR_PX } from '../../views/detail/ActionBar';
 import ReadinessPanel from '../../views/detail/ReadinessPanel';
 import TopBar from '../../components/TopBar';
 import { mockViewport, renderWithProviders } from '../testUtils';
@@ -373,6 +374,35 @@ describe('on a phone, the action bar pins and the top bar names the thing', () =
     } finally {
       window.IntersectionObserver = Original;
     }
+  });
+});
+
+describe('the top bar title swap: the pinned bar only counts on a phone', () => {
+  const marginFor = (width) => {
+    const seen = [];
+    const Original = window.IntersectionObserver;
+    window.IntersectionObserver = class {
+      constructor(cb, options) {
+        seen.push(options);
+      }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+    };
+    const restore = width ? mockViewport(width) : () => {};
+    try {
+      const { unmount } = renderWithProviders(body(makeThing({ name: 'Wendy' })), { initialEntries: ['/thing/t-wendy'] });
+      unmount();
+    } finally {
+      restore();
+      window.IntersectionObserver = Original;
+    }
+    return seen.at(-1)?.rootMargin;
+  };
+
+  it('a phone allows for the pinned action bar; a desktop, where the bar does not pin, does not', () => {
+    expect(marginFor(390)).toBe(`-${ACTION_BAR_PX}px 0px 0px 0px`);
+    expect(marginFor(1280)).toBe('-0px 0px 0px 0px');
   });
 });
 

@@ -13,12 +13,16 @@ import ChromeTheme from '../../components/Chrome';
 import { CHROME, LIVERY } from '../../theme/theme';
 import { AddAPhotoOutlined as PhotoIcon, EditOutlined as EditIcon, MoreHoriz as MoreIcon, NoteAddOutlined as DocumentIcon } from '@mui/icons-material';
 
-/** The bar's height on a phone (52px buttons + its padding and stripe): how much of the page it covers once pinned. */
-export const ACTION_BAR_PX = 65;
+const BUTTON_PX = 52;
+const PAD_TOP_PX = 2;
+const PAD_BOTTOM_PX = 9; // the 3px livery stripe sits inside this
+
+/** The bar's height on a phone, from the same numbers its sx uses: how much of the page it covers once pinned. */
+export const ACTION_BAR_PX = BUTTON_PX + PAD_TOP_PX + PAD_BOTTOM_PX;
 
 const BAR_BUTTON_SX = {
   minWidth: 0,
-  minHeight: 52,
+  minHeight: BUTTON_PX,
   px: 0.5,
   py: 0.75,
   flexDirection: 'column',
@@ -45,8 +49,8 @@ export default function ActionBar({ onEdit, onAddPhoto, onAddDocument, onMore })
           gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
           gap: 0.5,
           px: { xs: 1, md: 0.5 },
-          pt: 0.5,
-          pb: '9px',
+          pt: `${PAD_TOP_PX}px`,
+          pb: `${PAD_BOTTOM_PX}px`,
           bgcolor: CHROME.bar,
           backgroundImage: `linear-gradient(0deg, ${LIVERY.orange} 0 3px, transparent 3px)`,
           borderRadius: { xs: 0, md: '4px' },
