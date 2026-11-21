@@ -1402,6 +1402,29 @@ function NoteEditorPage({ editorKey } = {}) {
     clearDraft(draftKeyRef.current);
   }, []);
 
+  /**
+   * Delete, at once, with Undo in the toast (review 2026-11-18 #8). Edits
+   * the autosave has not written yet are saved FIRST: Undo restores the
+   * server's copy, so without this the last seconds of typing were gone for
+   * good. A save that fails stops the delete; the head already says "not
+   * saved", and the toast says the note was kept. A note emptied by hand has
+   * nothing worth saving (the save refuses it), so it is simply deleted.
+   */
+  const handleDeleteNote = async () => {
+    const id = savedNoteIdRef.current || savedNoteId;
+    if (!id) return;
+    const blank = !contentRef.current.trim() && !titleRef.current.trim();
+    if (!blank && (dirtyRef.current || savingRef.current)) {
+      const settled = await settleSave();
+      if (!settled) {
+        const why = saveErrorRef.current || 'Your latest edits are not saved.';
+        notify(`${why} The note was not deleted.`, { tone: 'error' });
+        return;
+      }
+    }
+    await deleteNoteNow(id, { onDeleted: handleDiscarded });
+  };
+
   // beforeunload guard — prevents accidental data loss on tab-close / hard-reload
   useEffect(() => {
     if (!dirty) return;
@@ -1629,8 +1652,9 @@ function NoteEditorPage({ editorKey } = {}) {
               <NoteActions
                 onSave={handleSave}
                 // At once, with Undo in the toast; no confirm (review
-                // 2026-11-18 #8). Only a saved note offers Delete.
-                onDelete={() => deleteNoteNow(savedNoteId, { onDeleted: handleDiscarded })}
+                // 2026-11-18 #8). Only a saved note offers Delete; unsaved
+                // edits are saved before it goes (handleDeleteNote).
+                onDelete={handleDeleteNote}
                 onToggleEdit={() => setIsEditMode(!isEditMode)}
                 canDelete={!isNewNote || !!savedNoteId}
                 canToggleEdit={isMindMap && !isNewNote && !!savedNoteId}

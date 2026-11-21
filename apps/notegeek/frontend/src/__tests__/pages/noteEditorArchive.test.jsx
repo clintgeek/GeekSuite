@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { createNoteTheme } from '../../theme/createAppTheme';
@@ -73,6 +73,7 @@ async function openMenu() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  updateNote.mockReset();
   archiveState = { archived: false, archivedAt: null };
   archiveNotes.mockResolvedValue({ data: { archiveNotes: { ids: ['note-1'], count: 1 } } });
   restoreNotes.mockResolvedValue({ data: { restoreNotes: { ids: ['note-1'], count: 1 } } });
@@ -132,6 +133,54 @@ describe('Delete note in the ⋯ menu', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(notify).toHaveBeenCalledWith('Note deleted', expect.objectContaining({ action: expect.anything() }));
       expect(updateNote).not.toHaveBeenCalled();
+    } finally {
+      useNoteStore.setState({ deleteNote: real });
+    }
+  });
+
+  // Review 2026-11-20: Undo restores the server's copy, so edits the
+  // autosave has not written yet are saved before the delete.
+  it('saves unsaved edits first, then deletes', async () => {
+    const deleteNote = vi.fn().mockResolvedValue(true);
+    const real = useNoteStore.getState().deleteNote;
+    useNoteStore.setState({ deleteNote });
+    updateNote.mockImplementation(async ({ variables }) => ({
+      data: { updateNote: { ...NOTE, title: variables.title, updatedAt: '2026-09-21T12:00:00.000Z' } },
+    }));
+    try {
+      renderEditor();
+      const title = await screen.findByRole('textbox', { name: 'Note title' });
+      fireEvent.change(title, { target: { value: 'Scraps, sorted' } });
+      await openMenu();
+      const item = await screen.findByRole('menuitem', { name: 'Delete note' });
+      await act(async () => { item.click(); });
+      await waitFor(() => expect(deleteNote).toHaveBeenCalledWith('note-1'));
+      expect(updateNote).toHaveBeenCalledWith(expect.objectContaining({
+        variables: expect.objectContaining({ id: 'note-1', title: 'Scraps, sorted' }),
+      }));
+      expect(updateNote.mock.invocationCallOrder[0]).toBeLessThan(deleteNote.mock.invocationCallOrder[0]);
+    } finally {
+      useNoteStore.setState({ deleteNote: real });
+    }
+  });
+
+  it('a save that fails keeps the note, and says it was not deleted', async () => {
+    const deleteNote = vi.fn().mockResolvedValue(true);
+    const real = useNoteStore.getState().deleteNote;
+    useNoteStore.setState({ deleteNote });
+    updateNote.mockRejectedValue(new Error('Network down'));
+    try {
+      renderEditor();
+      const title = await screen.findByRole('textbox', { name: 'Note title' });
+      fireEvent.change(title, { target: { value: 'Scraps, sorted' } });
+      await openMenu();
+      const item = await screen.findByRole('menuitem', { name: 'Delete note' });
+      await act(async () => { item.click(); });
+      await waitFor(() => expect(notify).toHaveBeenCalledWith(
+        expect.stringMatching(/The note was not deleted\.$/), { tone: 'error' },
+      ));
+      expect(updateNote).toHaveBeenCalled();
+      expect(deleteNote).not.toHaveBeenCalled();
     } finally {
       useNoteStore.setState({ deleteNote: real });
     }
