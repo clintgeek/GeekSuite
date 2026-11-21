@@ -12,7 +12,7 @@ import QuickPicks from './QuickPicks';
 import EntryList from './EntryList.jsx';
 import FixSheet from './FixSheet.jsx';
 import { useEntryFixes } from './useEntryFixes.js';
-import { identityOf, applyItemChange, entryFromLogged, withAmount } from './entries.js';
+import { identityOf, applyItemChange, entryFromLogged, withAmount, sittingWhat } from './entries.js';
 import SignInButton, { isSignedOutMessage } from './SignInButton.jsx';
 import { readDraft, writeDraft, draftsAvailable } from './composerDraft.js';
 import { useSpeechInput } from '../../hooks/useSpeechInput.js';
@@ -760,12 +760,45 @@ const FoodComposer = ({
   }, [result, undoIds]);
 
   /** The ribbon's Done (L10): the sitting is over, and the sheet closes. */
+  /**
+   * THE SITTING'S UNDO OUTLIVES THE SHEET (review 2026-11-20). The ribbon
+   * carries the only Undo for a tap, and it goes when the sheet closes — so
+   * closing a sitting with something in it (Done, ✕, Back, leaving the page)
+   * offers one toast with Undo for everything just added, as the suite rule
+   * asks. The short "Added" toast it replaces is taken down.
+   */
+  const offerSittingUndo = useCallback((items) => {
+    const ids = items.flatMap((entry) => entry.logIds || []);
+    if (!ids.length) return;
+    if (addedToast.current != null) {
+      dismiss?.(addedToast.current);
+      addedToast.current = null;
+    }
+    const what = sittingWhat(items);
+    const oneMeal = items.every((entry) => entry.mealType === items[0].mealType);
+    offerUndo(oneMeal ? addedMessage(items[0].mealType, what) : `Added ✓ · ${what}`, ids);
+  }, [dismiss, offerUndo]);
+
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const offerSittingUndoRef = useRef(offerSittingUndo);
+  offerSittingUndoRef.current = offerSittingUndo;
+  // The sheet closed some other way than Done: it unmounts with the sitting.
+  useEffect(() => () => {
+    const left = sessionRef.current;
+    sessionRef.current = [];
+    if (left.length) offerSittingUndoRef.current(left);
+  }, []);
+
   const finishSession = useCallback(() => {
     const meal = session[session.length - 1]?.mealType ?? mealType;
+    const left = session;
+    sessionRef.current = [];
     setSession([]);
     setAddedByKey({});
+    offerSittingUndo(left);
     onClose?.({ mealType: meal });
-  }, [session, mealType, onClose]);
+  }, [session, mealType, onClose, offerSittingUndo]);
 
   const finishResult = useCallback(() => {
     const meal = result?.mealType ?? mealType;

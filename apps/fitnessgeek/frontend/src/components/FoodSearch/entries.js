@@ -24,6 +24,23 @@ export function withAmount(name, servings) {
   return `${name} ×${Math.round(n * 100) / 100}`;
 }
 
+/**
+ * What a sitting added, in the ribbon's words: "Egg ×2" for one entry,
+ * "3 foods" for more. Foods, not picks (UX review 2026-11, B3/B7): a copied
+ * meal ("Same as Sarah's dinner", a household copy or yesterday's, `whole`)
+ * is one entry that wrote one log per food, and counts its foods.
+ */
+export function sittingWhat(items = []) {
+  const copied = (item) => item?.type === 'household-meal' || item?.whole;
+  const foods = items.reduce((n, item) => (
+    n + (copied(item) ? Math.max(1, item?.logIds?.length || 0) : 1)
+  ), 0);
+  if (items.length === 1 && foods === 1) {
+    return withAmount(items[0]?.name, copied(items[0]) ? 1 : items[0]?.servings) || '1 food';
+  }
+  return `${foods} foods`;
+}
+
 const roundTo10 = (n) => Math.max(10, Math.round(n / 10) * 10);
 
 /** The Smaller and Bigger numbers for an entry. */

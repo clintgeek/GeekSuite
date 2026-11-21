@@ -3,7 +3,7 @@ import { Box, Typography, Button } from '@mui/material';
 import { Undo as UndoIcon, CheckCircle as LoggedIcon } from '@mui/icons-material';
 import { useTheme, alpha, keyframes } from '@mui/material/styles';
 import { useGeekToastClearance } from '@geeksuite/ui';
-import { withAmount } from './entries.js';
+import { sittingWhat } from './entries.js';
 
 const riseIn = keyframes`
   from { transform: translateY(100%); opacity: 0; }
@@ -73,20 +73,9 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
     const per = Number(source?.calories_per_serving) || 0;
     return sum + per * (Number(item?.servings) || 1);
   }, 0);
-  // Foods, not picks (UX review 2026-11, B3): "Same as Sarah's dinner" is one
-  // pick that writes one log per food, and "1 added" undercounted her log.
-  // A copied yesterday's meal is one entry too (`whole`), counted the same way.
-  const copied = (item) => item?.type === 'household-meal' || item?.whole;
-  const foods = items.reduce((n, item) => (
-    n + (copied(item) ? Math.max(1, item?.logIds?.length || 0) : 1)
-  ), 0);
-  // It names what it counts (B7): the row said "2 added" (servings) while
-  // the ribbon said "1 added" (entries). One entry is named with its amount,
-  // "Egg ×2"; more are "3 foods".
-  const single = items.length === 1 && foods === 1;
-  const what = single
-    ? withAmount(items[0]?.name, copied(items[0]) ? 1 : items[0]?.servings) || '1 food'
-    : `${foods} foods`;
+  // It names what it counts (B7): "Egg ×2" for one entry, "3 foods" for
+  // more, a copied meal by its foods (entries.js).
+  const what = sittingWhat(items);
   const displayed = useCountUp(Math.round(totalCalories));
   const ribbonRef = useRef(null);
   useGeekToastClearance(ribbonRef, items.length > 0);

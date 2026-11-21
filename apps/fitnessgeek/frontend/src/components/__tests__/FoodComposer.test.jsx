@@ -1370,6 +1370,54 @@ describe('A9/B7: one Undo in the sheet, and one way of counting', () => {
   });
 });
 
+describe('the sitting\'s Undo outlives the sheet (suite rule: act at once, Undo in a toast)', () => {
+  const toastUndoFor = (text) => screen.queryByText(text)?.closest('[data-geek-toast]')?.querySelector('button') || null;
+
+  it('Done with something added leaves one toast whose Undo takes back the whole sitting', async () => {
+    const onLogItems = vi.fn()
+      .mockResolvedValueOnce({ ok: 1, fail: 0, logIds: ['e1'], perItem: [['e1']] })
+      .mockResolvedValueOnce({ ok: 1, fail: 0, logIds: ['t1'], perItem: [['t1']] });
+    const onUndo = vi.fn().mockResolvedValue({ deleted: ['e1', 't1'], failed: [] });
+    const onClose = vi.fn();
+    suggest.mockResolvedValue([food('Egg'), food('Toast')]);
+    renderBox({ onLogItems, onUndo, onClose, mealType: 'breakfast' });
+    type('e');
+    await vi.advanceTimersByTimeAsync(200);
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
+    await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
+    fireEvent.click((await screen.findAllByText('Toast'))[0]);
+    await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
+
+    fireEvent.click(within(screen.getByTestId('session-ribbon')).getByRole('button', { name: 'Done' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(toastUndoFor('Added to breakfast ✓ · 2 foods')).toHaveTextContent(/^Undo$/));
+    fireEvent.click(toastUndoFor('Added to breakfast ✓ · 2 foods'));
+    await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['e1', 't1']));
+  });
+
+  it('closing the sheet some other way (it unmounts) offers the same Undo', async () => {
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['e1'], perItem: [['e1']] });
+    const onUndo = vi.fn().mockResolvedValue({ deleted: ['e1'], failed: [] });
+    suggest.mockResolvedValue([food('Egg')]);
+    const tree = (open) => (
+      <GeekToastProvider>
+        {open ? <FoodComposer onLogItems={onLogItems} onUndo={onUndo} mealType="breakfast" /> : null}
+      </GeekToastProvider>
+    );
+    const { rerender } = render(tree(true));
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
+    await waitFor(() => expect(screen.getByTestId('session-ribbon')).toHaveTextContent('Egg added to breakfast'));
+
+    rerender(tree(false));
+    await waitFor(() => expect(toastUndoFor('Added to breakfast ✓ · Egg')).toHaveTextContent(/^Undo$/));
+    fireEvent.click(toastUndoFor('Added to breakfast ✓ · Egg'));
+    await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['e1']));
+  });
+});
+
 describe('L12: with a "Just added" strip, no toast sits on top of it', () => {
   const pancakes = {
     ok: 1, fail: 0, logIds: ['log-1'], skipped: [], questions: [], totalCalories: 880,
