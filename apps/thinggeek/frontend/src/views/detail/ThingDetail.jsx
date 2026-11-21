@@ -146,6 +146,24 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry, attic
   );
 }
 
+/**
+ * The trash toast's Undo. It renders inside the router (the toast stack lives
+ * in the shell), so it can see where the reader is when it is tapped: on the
+ * page the trash left them on (the first one after the thing's), or elsewhere.
+ */
+function TrashUndoButton({ trashedFrom, onUndo }) {
+  const { pathname } = useLocation();
+  const landed = useRef(null);
+  useEffect(() => {
+    if (landed.current === null && pathname !== trashedFrom) landed.current = pathname;
+  }, [pathname, trashedFrom]);
+  return (
+    <Button color="inherit" size="small" onClick={() => onUndo(landed.current === null || landed.current === pathname)} sx={{ fontWeight: 800, minHeight: 44, minWidth: 44 }}>
+      Undo
+    </Button>
+  );
+}
+
 export default function ThingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -194,10 +212,13 @@ export default function ThingDetail() {
   };
 
   // The Trash keeps it for trashDays, so this is reversible (suite rule): act at
-  // once, leave the page, and offer Undo, which restores it and comes back here.
+  // once, leave the page, and offer Undo, which restores it and comes back here —
+  // unless the reader has gone on somewhere else meanwhile (an Add half-typed, say):
+  // then it says it is back, with Open, and leaves them where they are.
   const moveToTrash = async () => {
     const { id: thingId, name } = thing;
     const inside = thing.contentsCount ?? 0;
+    const trashedFrom = location.pathname;
     try {
       await trashThing(thingId);
     } catch (err) {
@@ -205,25 +226,42 @@ export default function ThingDetail() {
       return;
     }
     let toastId = null;
-    const undo = async () => {
+    const undo = async (stillThere) => {
       dismiss(toastId);
       try {
         await restoreThing(thingId);
-        notify(`${name} is back.`, { tone: 'success' });
-        navigate(thingPath(thingId));
       } catch (err) {
         notify(err?.message || `Couldn't bring ${name} back. It's in the Trash.`, { tone: 'error' });
+        return;
       }
+      if (stillThere) {
+        notify(`${name} is back.`, { tone: 'success' });
+        navigate(thingPath(thingId));
+        return;
+      }
+      let backId = null;
+      backId = notify(`${name} is back.`, {
+        tone: 'success',
+        action: (
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => {
+              dismiss(backId);
+              navigate(thingPath(thingId));
+            }}
+            sx={{ fontWeight: 800, minHeight: 44, minWidth: 44 }}
+          >
+            Open
+          </Button>
+        ),
+      });
     };
     const stays = inside ? ` ${inside === 1 ? 'The 1 thing inside stays put' : `The ${inside} things inside stay put`}.` : '';
     toastId = notify(`${name} is in the Trash for ${vocab.trashDays} days.${stays}`, {
       tone: 'success',
       duration: 8000,
-      action: (
-        <Button color="inherit" size="small" onClick={undo} sx={{ fontWeight: 800, minHeight: 44, minWidth: 44 }}>
-          Undo
-        </Button>
-      ),
+      action: <TrashUndoButton trashedFrom={trashedFrom} onUndo={undo} />,
     });
     close();
   };

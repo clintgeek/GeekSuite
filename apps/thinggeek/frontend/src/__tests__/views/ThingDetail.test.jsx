@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, within, waitFor } from '@testing-library/react';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import ThingDetail, { ThingDetailBody } from '../../views/detail/ThingDetail';
 import ReadinessPanel from '../../views/detail/ReadinessPanel';
 import TopBar from '../../components/TopBar';
@@ -192,8 +192,37 @@ describe('the ⋯ More sheet, mounted for real', () => {
 describe('Move to Trash: reversible, so it acts at once and offers Undo', () => {
   function LocationProbe() {
     const location = useLocation();
-    return <p>At {location.pathname}</p>;
+    return (
+      <>
+        <p>At {location.pathname}</p>
+        <Link to="/add">Add a thing</Link>
+      </>
+    );
   }
+
+  const trashSetup = ({ trashResult, restoreResult } = {}) => {
+    const thing = makeThing({ id: 'th1', name: 'Wendy', contentsCount: 2, contents: [] });
+    const trashed = vi.fn(() => trashResult ?? { data: { deleteThing: { __typename: 'DeleteResponse', success: true, message: null } } });
+    const restored = vi.fn(() => restoreResult ?? { data: { restoreThing: thing } });
+    const mocks = [
+      { request: { query: GET_THING, variables: { id: 'th1' } }, result: { data: { thing } }, maxUsageCount: 10 },
+      { request: { query: DELETE_THING, variables: { id: 'th1' } }, result: trashed },
+      { request: { query: RESTORE_THING, variables: { id: 'th1' } }, result: restored },
+    ];
+    renderWithProviders(
+      <Routes>
+        <Route path="/thing/:id" element={<ThingDetail />} />
+        <Route path="/" element={<LocationProbe />} />
+        <Route path="/add" element={<LocationProbe />} />
+      </Routes>,
+      { initialEntries: ['/thing/th1'], mocks }
+    );
+    return { trashed, restored };
+  };
+  const trashIt = async () => {
+    fireEvent.click(await screen.findByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByText('Move to Trash', { exact: true }));
+  };
 
   it('no confirmation; the toast says so and Undo restores it and comes back to it', async () => {
     const thing = makeThing({ id: 'th1', name: 'Wendy', contentsCount: 2, contents: [] });
@@ -221,6 +250,21 @@ describe('Move to Trash: reversible, so it acts at once and offers Undo', () => 
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     await waitFor(() => expect(restored).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Wendy is back.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Wendy' })).toBeInTheDocument();
+  }, 30000);
+
+  it('gone on somewhere else before Undo: it comes back, and the reader stays put with an Open', async () => {
+    const { restored } = trashSetup();
+    await trashIt();
+    expect(await screen.findByText('At /')).toBeInTheDocument();
+    // The reader moves on (say, to Add) while the toast is still up.
+    fireEvent.click(screen.getByRole('link', { name: 'Add a thing' }));
+    expect(await screen.findByText('At /add')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(restored).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Wendy is back.')).toBeInTheDocument();
+    expect(screen.getByText('At /add')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Wendy' })).toBeInTheDocument();
   }, 30000);
 });
