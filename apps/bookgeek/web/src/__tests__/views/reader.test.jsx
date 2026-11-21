@@ -16,6 +16,8 @@ import {
   flattenToc,
   loadCachedLocations,
   loadReaderPosition,
+  MAX_CACHED_LOCATIONS,
+  saveCachedLocations,
   readerBookKey,
   saveReaderPosition,
 } from "../../utils/readerPosition";
@@ -376,6 +378,16 @@ describe("the place you stopped, on this device", () => {
     await openReader("chef");
     expect(book.locations.generate).not.toHaveBeenCalled();
     expect(book.locations.load).toHaveBeenCalledWith('["epubcfi(/6/2)"]');
+  });
+
+  it("the locations cache keeps the books you open, not the ones cached first (review 2026-11-19 #7)", () => {
+    for (let i = 0; i < MAX_CACHED_LOCATIONS; i += 1) saveCachedLocations(`k${i}`, `["${i}"]`);
+    // Reopening the oldest makes it the newest...
+    expect(loadCachedLocations("k0")).toBe('["0"]');
+    saveCachedLocations("k-new", '["n"]');
+    // ...so the next book in pushes out the least recently opened one instead.
+    expect(loadCachedLocations("k0")).toBe('["0"]');
+    expect(loadCachedLocations("k1")).toBeNull();
   });
 
   it("blocked storage still opens the book, at the cover", async () => {

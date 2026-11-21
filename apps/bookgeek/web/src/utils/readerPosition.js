@@ -94,12 +94,21 @@ export function saveReaderPosition(readerId, bookId, cfi, now = Date.now()) {
   writeJson(READER_POSITIONS_KEY, all);
 }
 
-/** epub.js's saved locations (a JSON string) for this book, or null. */
+/**
+ * epub.js's saved locations (a JSON string) for this book, or null. A hit
+ * moves the book to the newest end of the index, so the eviction below drops
+ * the books least recently OPENED, not the ones cached first.
+ */
 export function loadCachedLocations(bookId) {
   if (!bookId) return null;
   try {
     const raw = window.localStorage.getItem(READER_LOCATIONS_PREFIX + bookId);
-    return typeof raw === "string" && raw.startsWith("[") ? raw : null;
+    if (!(typeof raw === "string" && raw.startsWith("["))) return null;
+    const index = readJson(READER_LOCATIONS_INDEX, { ids: [] });
+    const ids = Array.isArray(index.ids) ? index.ids.filter((id) => id !== bookId) : [];
+    ids.push(bookId);
+    writeJson(READER_LOCATIONS_INDEX, { ids });
+    return raw;
   } catch {
     return null;
   }
