@@ -13,6 +13,7 @@ import {
   MoreHoriz as MoreIcon,
   ViewList as ListIcon,
 } from "@mui/icons-material";
+import { signBoardShadow } from "../theme/theme";
 
 // An aisle sign like Filters and Sort beside it (review 2026-11-18 #5).
 const roundIconSx = {
@@ -22,7 +23,7 @@ const roundIconSx = {
   bgcolor: "sign.board",
   color: "sign.ink",
   border: (t) => `1px solid ${t.palette.sign.edge}`,
-  boxShadow: (t) => `inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -2px 0 ${t.palette.sign.edge}, 0 1px 2px rgba(20, 12, 4, 0.25)`,
+  boxShadow: (t) => signBoardShadow(t.palette.sign.edge),
   "&:hover": { bgcolor: "sign.edge" },
 };
 

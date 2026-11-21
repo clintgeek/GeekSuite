@@ -131,10 +131,18 @@ export const TALKER = {
  * `!important` because the package's own `sx` lands on the same element
  * with equal specificity.
  */
+/**
+ * The aisle sign's painted edge: a highlight along the top, the darker edge
+ * along the bottom, a small drop. One recipe for every board that stands on
+ * a toolbar (collectionSkin below, LibraryActions' ⋯).
+ */
+export const signBoardShadow = (edge) =>
+  `inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -2px 0 ${edge}, 0 1px 2px rgba(20, 12, 4, 0.25)`;
+
 function collectionSkin(mode) {
   const sign = SIGN[mode];
   const wood = WOOD[mode];
-  const boardEdge = `inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -2px 0 ${sign.edge}, 0 1px 2px rgba(20, 12, 4, 0.25)`;
+  const boardEdge = signBoardShadow(sign.edge);
   const pill = '[data-testid="filters-button"], button[aria-haspopup="menu"][aria-label^="Sort:"], button.MuiIconButton-root[aria-label="Save view"]';
   return {
     // Filters · Sort: two aisle signs.

@@ -639,7 +639,8 @@ export default function ReaderModal({
         onClose={() => setContentsOpen(false)}
         title="Contents"
         maxWidth="xs"
-        // Above the reader, which sits at modal + 10 without a portal.
+        // Above the reader, which is portalled at modal + 10 (the book sheet
+        // under it is at the plain modal level).
         drawerProps={{ sx: { zIndex: (t) => t.zIndex.modal + 20 } }}
         dialogProps={{ sx: { zIndex: (t) => t.zIndex.modal + 20 } }}
       >
