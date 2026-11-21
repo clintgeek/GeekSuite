@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F4EFE6">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#17191D">
+  <title>GeekDay — Offline</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      color-scheme: light dark;
+      --page: #F4EFE6; --text: #22324A; --muted: #4B586B; --rule: rgba(34, 50, 74, 0.25);
+      --btn: #22324A; --btn-text: #F4EFE6; --accent: #C2452D; --focus: #22324A;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page: #17191D; --text: #ECE7DC; --muted: #B3B0A7; --rule: rgba(236, 231, 220, 0.25);
+        --btn: #ECE7DC; --btn-text: #17191D; --accent: #E0735B; --focus: #ECE7DC;
+      }
+    }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; min-height: 100dvh;
+      background: var(--page); color: var(--text); text-align: center;
+      padding: calc(2rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
+               calc(2rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
+    }
+    .card { width: 100%; max-width: 380px; }
+    svg { display: block; width: 120px; height: auto; margin: 0 auto 1.25rem; }
+    h1 { font-size: 1.75rem; font-weight: 700; line-height: 1.15; margin-bottom: 0.5rem; }
+    p { font-size: 1rem; line-height: 1.55; color: var(--muted); margin-bottom: 1.5rem; }
+    button {
+      background: var(--btn); color: var(--btn-text); border: 0; border-radius: 10px;
+      padding: 0.75rem 2rem; min-height: 44px; min-width: 44px;
+      font: 600 1.0625rem/1 system-ui, sans-serif; cursor: pointer;
+    }
+    button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <!-- The mark: a page of task lines with a loop round one (as icons/icon.svg). -->
+    <svg viewBox="88 84 336 344" aria-hidden="true">
+      <rect x="88" y="84" width="336" height="344" rx="26" fill="none" stroke="currentColor" stroke-opacity="0.35" stroke-width="8"/>
+      <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="130" y="136" width="48" height="48" rx="9" stroke-width="10"/>
+        <path d="M141 160 L155 174 L186 138" stroke-width="12"/>
+        <rect x="130" y="232" width="48" height="48" rx="9" stroke-width="10"/>
+        <rect x="130" y="328" width="48" height="48" rx="9" stroke-width="10"/>
+        <path d="M206 160 H374 M206 256 H350 M206 352 H330" stroke-width="18"/>
+      </g>
+      <path d="M214 226 C262 204 366 206 394 240 C414 268 346 298 272 294 C208 290 176 270 186 244 C194 224 240 212 300 212" fill="none" stroke="var(--accent)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <h1>You're offline</h1>
+    <p>Today's page needs a connection to load. Your last saved ink is safe; reconnect and carry on.</p>
+    <button type="button" onclick="window.location.reload()">Retry</button>
+  </div>
+</body>
+</html>

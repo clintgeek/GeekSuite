@@ -1,0 +1,27 @@
+{
+  "name": "geekday-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GeekDay backend — serves the built page and proxies sign-in to basegeek. Part of GeekSuite.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/*.test.js",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@geeksuite/logger": "workspace:*",
+    "@geeksuite/user": "workspace:*",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@geeksuite/eslint-config": "workspace:*",
+    "eslint": "^9.39.2",
+    "supertest": "^7.1.0"
+  }
+}

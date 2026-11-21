@@ -1,0 +1,56 @@
+services:
+  geekday:
+    image: ghcr.io/clintgeek/geekday:latest
+    container_name: geekday
+    restart: unless-stopped
+
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+    networks:
+      - datageek_network
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Containers pin the host's DNS resolver at start; a Tailscale DNS change
+    # afterward leaves them stuck on a dead resolver until restarted (the
+    # suite's container-DNS landmine). Pinned so config, not a manual
+    # restart, is the fix.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+
+    # Runtime config (BASEGEEK_URL, …) comes from .env.production via
+    # env_file. Don't list it here as ${VAR} substitutions — that reads
+    # compose's own .env, a different file.
+    # NOTE: a Watchtower redeploy does not pick up NEW .env.production vars;
+    # that needs `docker compose up -d`.
+    # GeekDay has no database and no volumes: it serves the built page,
+    # proxies sign-in to basegeek, and answers health.
+    env_file:
+      - .env.production
+
+    # Compose-fixed values that don't vary per environment.
+    environment:
+      NODE_ENV: production
+      PORT: 1840
+
+    ports:
+      - "1840:1840"
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:1840/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  datageek_network:
+    external: true

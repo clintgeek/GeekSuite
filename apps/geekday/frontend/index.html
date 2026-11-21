@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>GeekDay</title>
+    <meta name="description" content="One page per day: today's tasks beside a handwriting page." />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F4EFE6" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#17191D" />
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="GeekDay" />
+    <!-- Baseline colours that snap in before React boots. Must match the MUI
+         theme's background.default (light #F4EFE6, dark #17191D). The
+         themePreboot() Vite plugin (@geeksuite/user/vite) injects a script
+         that sets <html data-theme> from the shared `geek_theme` cookie (or
+         the OS setting), the same mechanism todogeek uses. -->
+    <style>
+      :root                    { color-scheme: light; background-color: #F4EFE6; }
+      :root[data-theme="dark"] { color-scheme: dark;  background-color: #17191D; }
+      body                     { margin: 0; background-color: inherit; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
