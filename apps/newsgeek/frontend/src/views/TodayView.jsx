@@ -26,7 +26,7 @@
  * so the stories under the restored scroll position are the ones they left.
  */
 import React, { useCallback, useState } from 'react';
-import { Box, CircularProgress, Link, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Link, Typography } from '@mui/material';
 import { useApolloClient, useMutation, useQuery } from '@apollo/client';
 import { GeekLoadError, geekLoadStatus, useToast } from '@geeksuite/ui';
 import { Link as RouterLink, Navigate, useLocation, useNavigationType } from 'react-router-dom';
@@ -54,6 +54,7 @@ export const EVERYTHING_LINK = 'Everything, newest first →';
 // stories out, not how many.
 export const FREE_NOTE = 'Paywalled stories are left out.';
 export const FREE_EMPTY_LINE = 'Nothing on the front page is free to read right now. Turn off Free to read to see the stories that need a subscription.';
+export const FREE_OFF_BUTTON = 'Turn off Free to read';
 export const EMPTY_PAPER_LINE = 'Nothing on the front page yet — the presses are warming up. Sources are polled every 15–60 minutes.';
 
 function LookForFeedSheet({ url, onClose }) {
@@ -233,7 +234,14 @@ export default function TodayView() {
           <Typography sx={{ fontStyle: 'italic', color: 'text.secondary', maxWidth: 420, mx: 'auto' }}>
             {freeToRead ? FREE_EMPTY_LINE : EMPTY_PAPER_LINE}
           </Typography>
-          {freeToRead ? <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>{freeSwitch}</Box> : null}
+          {/* One Free to read switch per page (the dateline's): here, a button that turns it off. */}
+          {freeToRead ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+              <Button variant="outlined" color="inherit" onClick={() => toggleFreeToRead(false)} disabled={!prefsQ.data || savingPrefs}>
+                {FREE_OFF_BUTTON}
+              </Button>
+            </Box>
+          ) : null}
         </Box>
       ) : null}
 

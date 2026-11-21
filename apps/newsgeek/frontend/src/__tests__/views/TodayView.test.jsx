@@ -193,12 +193,26 @@ describe('Today — the masthead and Free to read (UX review 2026-11-18, finding
     expect(await screen.findByTestId('free-note')).toHaveTextContent('Paywalled stories are left out.');
   });
 
-  it('when Free to read empties the paper it says so — not "the presses are warming up" — and offers the switch', async () => {
-    renderWithProviders(<TodayView />, { mocks: [prefsMock(true), frontMock([])] });
+  it('when Free to read empties the paper it says so — not "the presses are warming up" — and offers to turn it off', async () => {
+    const sent = vi.fn();
+    const turnOff = {
+      request: { query: SET_NEWS_PREFS, variables: { input: { freeToReadOnly: false } } },
+      result: () => {
+        sent();
+        return { data: { newsSetPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks: [] } } };
+      },
+    };
+    renderWithProviders(<TodayView />, { mocks: [prefsMock(true), frontMock([]), turnOff, frontMock([])] });
     const empty = await screen.findByTestId('today-empty');
     expect(empty).toHaveTextContent('Turn off Free to read');
     expect(empty).not.toHaveTextContent(/presses are warming up/);
-    expect(within(empty).getByRole('switch', { name: 'Free to read' })).toBeChecked();
+    // One Free to read switch on the page — the dateline's — and no second copy of it here.
+    expect(screen.getAllByRole('switch', { name: 'Free to read' })).toHaveLength(1);
+    expect(screen.getAllByTestId('free-to-read')).toHaveLength(1);
+    const off = within(empty).getByRole('button', { name: 'Turn off Free to read' });
+    await waitFor(() => expect(off).toBeEnabled());
+    await userEvent.click(off);
+    await waitFor(() => expect(sent).toHaveBeenCalled());
   });
 });
 
