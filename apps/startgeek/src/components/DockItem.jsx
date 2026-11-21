@@ -3,7 +3,7 @@ import { useLinkTarget } from '../hooks/useLinkTarget'
 
 // A real link (long-press, middle-click, "copy link", announced as a link).
 // New tab on the desktop; same tab on a phone or when installed (#4).
-const DockItem = ({ icon, label, url, badge }) => {
+const DockItem = ({ icon, label, url }) => {
   const targetProps = useLinkTarget()
 
   return (
@@ -18,12 +18,6 @@ const DockItem = ({ icon, label, url, badge }) => {
       <span className="w-10 h-10 flex items-center justify-center [&>svg]:w-[22px] [&>svg]:h-[22px]">
         {icon}
       </span>
-
-      {badge && (
-        <span className="absolute top-0.5 right-2 min-w-[16px] h-[16px] px-1 flex items-center justify-center rounded-full bg-accent text-[9px] font-mono font-medium text-ground leading-none">
-          {badge}
-        </span>
-      )}
 
       <span className="dock-label block font-mono tracking-normal sm:tracking-[0.06em] uppercase leading-tight truncate w-full text-center">
         {label}

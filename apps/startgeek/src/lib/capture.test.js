@@ -5,7 +5,6 @@ import {
   createBusyGuard,
   describeCapture,
   draftFields,
-  formatTime,
   NOTHING_TO_ADD,
   newClientId,
   partialCaptureMessage,
@@ -14,6 +13,7 @@ import {
 } from './capture.js'
 import { parseTaskInput } from '@geeksuite/task-grammar'
 import { draftToSyntax } from './captureDraft.js'
+import { formatTime } from './time.js'
 
 /**
  * A fake gateway with TodoGeek's contract C1: one task per clientId. `fail`

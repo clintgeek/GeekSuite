@@ -26,8 +26,6 @@ import {
 } from '@geeksuite/task-grammar'
 import { formatTime } from './time.js'
 
-export { formatTime }
-
 /** A fresh id for one capture. */
 export function newClientId() {
   const c = globalThis.crypto

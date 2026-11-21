@@ -316,8 +316,9 @@ const CommandBox = ({ onOpenSettings }) => {
 
   /**
    * The one place a task is written, whether the fields came from the parser
-   * or from a draft the person confirmed. Unchanged from the parser's own
-   * path — including defaulting to today at 9am, as TodoGeek's quick-add does.
+   * or from a draft the person confirmed. The variables are the shared
+   * grammar's (lib/capture.js): no date means today, date-only, as TodoGeek's
+   * add box sends it.
    */
   const createTaskFromFields = useCallback(
     async (fields, key) => {

@@ -127,7 +127,7 @@ const HelpModal = ({ open, onClose }) => {
               <li><span className="font-mono text-white/80">#tag</span> tag</li>
               <li><span className="font-mono text-white/80">!high</span> priority (high · medium · low)</li>
               <li><span className="font-mono text-white/80">tomorrow 2pm</span> friday · /2026-09-10 · plain words or /dates</li>
-              <li><span className="font-mono text-white/80">(private)</span> hidden on a desktop until you show it</li>
+              <li><span className="font-mono text-white/80">(private)</span> TodoGeek hides the words on a desktop until clicked</li>
               <li><span className="font-mono text-white/80">(daily)</span> recurrence</li>
               <li><span className="font-mono text-white/80">^note</span> task note</li>
               <li><span className="font-mono text-white/80">$^note</span> also creates a NoteGeek note</li>
