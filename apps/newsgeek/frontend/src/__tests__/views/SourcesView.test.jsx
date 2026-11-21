@@ -84,6 +84,16 @@ describe('Sources at 88 (UX review 2026-11-18, finding 4)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Clear the search' }));
     expect(screen.getByRole('searchbox', { name: 'Find a source' })).toHaveValue('');
     expect(screen.getAllByTestId('source-row')).toHaveLength(all);
+    // The button is gone with the text: focus goes back to the field, not to the page.
+    expect(screen.getByRole('searchbox', { name: 'Find a source' })).toHaveFocus();
+  });
+
+  it('nothing found under a status filter says which filter, since the name may be under another', async () => {
+    await screen.findByText('Alpha Daily');
+    await userEvent.click(screen.getByRole('button', { name: /^Retired/ }));
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Find a source' }), 'alpha');
+    expect(screen.queryAllByTestId('source-row')).toHaveLength(0);
+    expect(screen.getByTestId('sources-none')).toHaveTextContent('No source called “alpha” under Retired.');
   });
 
   it('a row says its status once: not "Active", not "Broken" beside a broken feed, no On/Off text', async () => {

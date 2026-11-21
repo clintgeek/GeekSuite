@@ -19,7 +19,7 @@
  * finding 4). A row says its status once: not "Active" (the normal case), not
  * a status its feed line already shows, and no "On/Off" beside the switch.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Box, Button, Chip, CircularProgress, IconButton, InputAdornment, Link, Typography } from '@mui/material';
 import { Add as AddIcon, Close as CloseIcon } from '@mui/icons-material';
 import { useApolloClient, useMutation, useQuery } from '@apollo/client';
@@ -44,6 +44,12 @@ import SourceFormDialog from './SourceFormDialog';
 
 const FILTERS = [{ id: 'all', label: 'All' }, { id: 'attention', label: 'Needs attention' }, ...SOURCE_STATUSES.map((s) => ({ id: s, label: STATUS_LABEL[s] }))];
 const SUGGESTIONS_SHOWN = 8;
+
+/** Find a source found nothing: under a status filter, say which, since the name may be under another. */
+function noMatchLine(query, filter) {
+  const label = FILTERS.find((f) => f.id === filter)?.label;
+  return filter === 'all' || !label ? `No source called “${query.trim()}”.` : `No source called “${query.trim()}” under ${label}.`;
+}
 
 function FeedLine({ feed }) {
   return (
@@ -172,6 +178,12 @@ export default function SourcesView() {
   const { notify } = useToast();
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const searchRef = useRef(null);
+  // The clear button goes away with the text, so focus goes back to the field, not to the page.
+  const clearQuery = () => {
+    setQuery('');
+    searchRef.current?.focus();
+  };
   const finding = query.trim() !== '';
   // { initialUrl, autoRun, key } while the Add sheet is open.
   const [sheet, setSheet] = useState(null);
@@ -230,6 +242,7 @@ export default function SourcesView() {
         placeholder="Find a source"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        inputRef={searchRef}
         fullWidth
         size="small"
         slashFocus={20}
@@ -237,7 +250,7 @@ export default function SourcesView() {
         InputProps={{
           endAdornment: query ? (
             <InputAdornment position="end">
-              <IconButton aria-label="Clear the search" onClick={() => setQuery('')} edge="end" sx={{ width: 44, height: 44, color: 'text.secondary' }}>
+              <IconButton aria-label="Clear the search" onClick={clearQuery} edge="end" sx={{ width: 44, height: 44, color: 'text.secondary' }}>
                 <CloseIcon sx={{ fontSize: 20 }} />
               </IconButton>
             </InputAdornment>
@@ -285,7 +298,7 @@ export default function SourcesView() {
       ) : null}
       {data && !shown.length && (filter !== 'all' || finding || !sources.length) ? (
         <Typography data-testid="sources-none" sx={{ py: 10, textAlign: 'center', fontStyle: 'italic', color: 'text.secondary' }}>
-          {!sources.length ? 'No sources yet.' : finding ? `No source called “${query.trim()}”.` : 'No sources match this filter.'}
+          {!sources.length ? 'No sources yet.' : finding ? noMatchLine(query, filter) : 'No sources match this filter.'}
         </Typography>
       ) : null}
 
