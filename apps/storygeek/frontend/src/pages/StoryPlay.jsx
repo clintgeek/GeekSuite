@@ -27,7 +27,7 @@ import Composer from '../components/play/Composer';
 import WritingIndicator from '../components/play/WritingIndicator';
 import { NarrationEntry, PlayerEntry, SystemEntry, DayRule } from '../components/play/TranscriptEntry';
 import { opensScene, dayRuleBefore } from '../game/transcript';
-import { isBackCommand, describeBack } from '../game/checkpoints';
+import { isBackCommand, describeBack, backConsequence } from '../game/checkpoints';
 import {
   newClientId, readComposerDraft, writeComposerDraft, clearComposerDraft,
   isTurnInProgress, isAmbiguousFailure, turnWaitDelay,
@@ -442,12 +442,19 @@ function StoryPlay() {
     e.preventDefault();
     if (!userInput.trim() || loading || turnBusy) return;
     const input = userInput.trim();
-    // `/back` is the one command that destroys play: every turn after the
-    // checkpoint is replaced by its snapshot, and nothing brings them back.
-    // Ask first (the suite rule for an action that cannot be undone).
+    // `/back` is the one command that throws play away: the story returns to
+    // the checkpoint's snapshot. Turns after the NEWEST checkpoint are gone
+    // for good; those before it can be had back by `/back` to a later
+    // checkpoint (the restore keeps the checkpoint list). Ask first, and say
+    // which. When nothing matches — or there are no checkpoints — the server
+    // only answers with a message and changes nothing, so there is nothing to
+    // ask about: send, and the player reads the server's own answer.
     if (isBackCommand(input)) {
-      setBackConfirm({ input, ...describeBack(story, input) });
-      return;
+      const back = describeBack(story, input);
+      if (back.checkpoint) {
+        setBackConfirm({ input, ...back });
+        return;
+      }
     }
     await sendTurn(input);
   };
@@ -956,8 +963,9 @@ function StoryPlay() {
       <JournalDrawer open={journalOpen} onClose={() => setJournalOpen(false)} story={story} />
 
       {/* `/back` confirm — window mode like the delete confirm: a short "are
-          you sure" does not earn the whole screen. Says what is lost when
-          the checkpoint and the turn count are known. */}
+          you sure" does not earn the whole screen. Only opened for a
+          checkpoint that exists; says what is lost, and whether later
+          checkpoints still allow a way forward again. */}
       <CodexDialog
         open={Boolean(backConfirm)}
         onClose={() => setBackConfirm(null)}
@@ -975,15 +983,10 @@ function StoryPlay() {
       >
         <Typography variant="body1" sx={{ mb: 1 }}>
           {backConfirm?.checkpoint
-            ? `Return to "${backConfirm.checkpoint.description}"${Number.isFinite(backConfirm.checkpoint.turnNumber) ? ` (turn ${backConfirm.checkpoint.turnNumber})` : ''}?`
-            : 'Return to your latest checkpoint?'}
+            && `Return to "${backConfirm.checkpoint.description}"${Number.isFinite(backConfirm.checkpoint.turnNumber) ? ` (turn ${backConfirm.checkpoint.turnNumber})` : ''}?`}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {backConfirm && Number.isFinite(backConfirm.lostTurns)
-            ? (backConfirm.lostTurns === 0
-              ? 'No turns have been played since it. This cannot be undone.'
-              : `${backConfirm.lostTurns === 1 ? 'The 1 turn' : `The ${backConfirm.lostTurns} turns`} played since then will be removed. This cannot be undone.`)
-            : 'Every turn played since then will be removed. This cannot be undone.'}
+          {backConfirm && backConsequence(backConfirm)}
         </Typography>
       </CodexDialog>
 

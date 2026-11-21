@@ -73,9 +73,9 @@ describe('checkpoints helper', () => {
   });
 
   it('finds the latest checkpoint, or one by name, and counts the turns lost', () => {
-    expect(describeBack(story, '/back')).toEqual({ checkpoint: story.checkpoints[1], lostTurns: 4 });
-    expect(describeBack(story, '/back crossroads')).toEqual({ checkpoint: story.checkpoints[0], lostTurns: 9 });
-    expect(describeBack(story, '/back nowhere')).toEqual({ checkpoint: null, lostTurns: null });
+    expect(describeBack(story, '/back')).toEqual({ checkpoint: story.checkpoints[1], lostTurns: 4, laterCheckpoints: 0 });
+    expect(describeBack(story, '/back crossroads')).toEqual({ checkpoint: story.checkpoints[0], lostTurns: 9, laterCheckpoints: 1 });
+    expect(describeBack(story, '/back nowhere')).toEqual({ checkpoint: null, lostTurns: null, laterCheckpoints: 0 });
   });
 });
 
@@ -109,5 +109,38 @@ describe('/back asks before it rewinds', () => {
     await send('I step back into the mist.');
     await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
     expect(screen.queryByText('Return to a checkpoint?')).not.toBeInTheDocument();
+  });
+});
+
+// Review 2026-11-19: the dialog promised a rewind the server would not do,
+// and "cannot be undone" when a later checkpoint could undo it.
+describe('/back says only what the server will do', () => {
+  it('no matching checkpoint: no dialog — the turn is sent and the server answers', async () => {
+    api.post.mockResolvedValue({ data: { type: 'error', message: 'Checkpoint not found. Available checkpoints: At the crossroads (1), Before the gate (2)' } });
+    renderPlay();
+    await send('/back nowhere');
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(api.post.mock.calls[0][1].userInput).toBe('/back nowhere');
+    expect(screen.queryByText('Return to a checkpoint?')).not.toBeInTheDocument();
+    expect(await screen.findByText(/Checkpoint not found/)).toBeInTheDocument();
+  });
+
+  it('no checkpoints at all: no dialog either', async () => {
+    api.get.mockResolvedValue({ data: { ...story, checkpoints: [] } });
+    api.post.mockResolvedValue({ data: { type: 'error', message: 'No checkpoints available. Use /checkpoint to create one.' } });
+    renderPlay();
+    await send('/back');
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Return to a checkpoint?')).not.toBeInTheDocument();
+  });
+
+  it('an older checkpoint: the later one is kept, so it does not say "cannot be undone"', async () => {
+    renderPlay();
+    await send('/back crossroads');
+    expect(await screen.findByText('Return to "At the crossroads" (turn 3)?')).toBeInTheDocument();
+    const said = screen.getByText(/The 9 turns played since then will be removed\./);
+    expect(said).toHaveTextContent('Your later checkpoint is kept, so you can return to it; turns after the newest one are gone for good.');
+    expect(said).not.toHaveTextContent(/cannot be undone/i);
+    expect(api.post).not.toHaveBeenCalled();
   });
 });
