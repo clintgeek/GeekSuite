@@ -1462,6 +1462,45 @@ describe('L12: with a "Just added" strip, no toast sits on top of it', () => {
     expect(document.querySelector('[data-geek-toast]')).toBeNull();
   });
 
+  // The sheet really closes in Full (it unmounts): the strip has the Undo,
+  // so closing the sitting raises no second one (harness 48c).
+  const closeable = (props) => (open) => (
+    <GeekToastProvider>{open ? <FoodComposer onLogItems={vi.fn()} {...props} /> : null}</GeekToastProvider>
+  );
+
+  it('Full with a strip: the sheet closing after a describe raises no toast', async () => {
+    const onJustAdded = vi.fn();
+    const tree = closeable({ onDescribe: vi.fn().mockResolvedValue(pancakes), onJustAdded, onUndo: vi.fn(), onClose: vi.fn() });
+    const { rerender } = render(tree(true));
+    type('pancakes');
+    logIt();
+    await waitFor(() => expect(onJustAdded).toHaveBeenLastCalledWith(expect.objectContaining({ mealType: 'breakfast' })));
+    rerender(tree(false));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(document.querySelector('[data-geek-toast]')).toBeNull();
+  });
+
+  it('taps before a describe that went to the strip: the closing toast offers Undo for the taps only', async () => {
+    const onJustAdded = vi.fn();
+    const onUndo = vi.fn().mockResolvedValue({ deleted: ['e1'], failed: [] });
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['e1'], perItem: [['e1']] });
+    suggest.mockResolvedValue([food('Egg')]);
+    const tree = closeable({ onLogItems, onDescribe: vi.fn().mockResolvedValue(pancakes), onJustAdded, onUndo, onClose: vi.fn(), mealType: 'breakfast' });
+    const { rerender } = render(tree(true));
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
+    await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
+    type('pancakes');
+    logIt();
+    await waitFor(() => expect(onJustAdded).toHaveBeenLastCalledWith(expect.objectContaining({ mealType: 'breakfast' })));
+    rerender(tree(false));
+    const undo = () => screen.queryByText('Added to breakfast ✓ · Egg')?.closest('[data-geek-toast]')?.querySelector('button') || null;
+    await waitFor(() => expect(undo()).toHaveTextContent(/^Undo$/));
+    fireEvent.click(undo());
+    await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['e1']));
+  });
+
   it('with no strip to show it, the toast still says what landed, with Undo', async () => {
     renderBox({ onDescribe: vi.fn().mockResolvedValue(pancakes), onUndo: vi.fn(), onClose: vi.fn() });
     type('pancakes');

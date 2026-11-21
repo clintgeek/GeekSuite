@@ -182,6 +182,9 @@ const FoodComposer = ({
   // "Undo" on the toast sat stacked over the next row for ten seconds. Its
   // words stay (short-lived), and an Undo from the ribbon takes it down.
   const addedToast = useRef(null);
+  // Log ids whose Undo is already offered somewhere else (the strip, or a
+  // describe's own toast): the sitting's closing toast leaves them out.
+  const undoElsewhere = useRef(new Set());
   const sayAdded = useCallback((message, tone = 'success') => {
     addedToast.current = notify(message, { tone });
   }, [notify]);
@@ -615,6 +618,9 @@ const FoodComposer = ({
         // what landed and has the Undo, and the snackbar sat on top of it,
         // covering its Undo and Done for ten seconds. Without one, the toast
         // is the only confirmation, so it keeps its Undo.
+        // Either way its Undo is offered there, so closing the sitting must
+        // not offer a second one for the same gesture (harness 48c).
+        for (const id of [...logIds, ...logged.map((entry) => entry.logId)]) if (id) undoElsewhere.current.add(id);
         if (onJustAdded) {
           onJustAdded({ mealType: landed, date: onDay, items, heard: spoken });
         } else {
@@ -768,8 +774,12 @@ const FoodComposer = ({
    * offers one toast with Undo for everything just added, as the suite rule
    * asks. The short "Added" toast it replaces is taken down.
    */
-  const offerSittingUndo = useCallback((items) => {
-    const ids = items.flatMap((entry) => entry.logIds || []);
+  const offerSittingUndo = useCallback((all) => {
+    // Only what has no Undo elsewhere: a describe that closed the sheet
+    // handed its entries to the "Just added" strip (Full) or to its own Undo
+    // toast. Taps never reach the strip (logFoods clears it), so they stay.
+    const items = all.filter((entry) => (entry.logIds || []).some((id) => !undoElsewhere.current.has(id)));
+    const ids = items.flatMap((entry) => entry.logIds || []).filter((id) => !undoElsewhere.current.has(id));
     if (!ids.length) return;
     if (addedToast.current != null) {
       dismiss?.(addedToast.current);
