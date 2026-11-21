@@ -8,8 +8,15 @@
  * light and puts tldraw in its light scheme, so the default black ink stays
  * black.
  *
+ * A sketch may also carry a page TEMPLATE (DOCS/TEMPLATES_SPEC.md P1–P7): a
+ * printed layout from the suite's shared set (`@geeksuite/ui`, the same one
+ * GeekDay's day page uses), kept in the same document meta under
+ * `PAPER_TEMPLATE_META_KEY`. Per sketch only — there is no device default,
+ * so a sketch never has a template unless someone chose one for it.
+ *
  * Pure helpers only; the components are in Paper.jsx.
  */
+import { PAPER_PAGE, PAPER_RULE, PAPER_TEMPLATE_META_KEY, PAPER_TEMPLATE_NONE, isPaperTemplate } from '@geeksuite/ui';
 
 export const PAPER_COLORS = [
     // Today's look: tldraw's own ground, light or dark with the app.
@@ -138,4 +145,75 @@ export function rulingStyle(pattern, line, camera) {
         };
     }
     return {};
+}
+
+// ── Page templates ───────────────────────────────────────────────────────
+
+/**
+ * The sketch's template id, or null. Null for a sketch that never chose, for
+ * "none", and for an id this build does not know (P7: a newer or removed
+ * template opens as a plain page; the stored value is never touched here).
+ */
+export function templateFromMeta(meta) {
+    const id = meta?.[PAPER_TEMPLATE_META_KEY];
+    return isPaperTemplate(id) ? id : null;
+}
+
+/**
+ * The document meta after choosing `id` (a template id, or null for None),
+ * or null when there is nothing to write. Every other key — paper colour,
+ * ruling, anything another app keeps there — is carried over as it is.
+ *
+ * None is written as PAPER_TEMPLATE_NONE, not by deleting the key: GeekDay
+ * reads a missing key as "never chose" and may apply its own default.
+ * None on a sketch with no KNOWN template is not a change: nothing is
+ * written, so an untouched sketch stays untouched and an unknown id (P7)
+ * survives someone opening the menu.
+ */
+export function metaWithTemplate(meta, id) {
+    const current = templateFromMeta(meta);
+    const next = isPaperTemplate(id) ? id : null;
+    if (next === current) return null;
+    return { ...(meta || {}), [PAPER_TEMPLATE_META_KEY]: next || PAPER_TEMPLATE_NONE };
+}
+
+/** Printed words on a light paper / on tldraw's dark ground ("Match theme" at night). */
+export const TEMPLATE_INK = { light: '#595d66', dark: '#a4a9b3' };
+
+/**
+ * The template's colours for a resolved paper (`resolvePaper`): its rules in
+ * the paper's own line colour, a step stronger than the ruling (they are a
+ * layout, not a texture), and its words in a grey that reads on every paper.
+ * NoteGeek has no second accent, so the accent is the ink.
+ */
+export function templateColors(look) {
+    const ink = look?.colorScheme === 'dark' ? TEMPLATE_INK.dark : TEMPLATE_INK.light;
+    return { ink, line: stronger(look?.line || PAPER_COLORS[0].line), accent: ink };
+}
+
+/**
+ * Where the template's sheet is on screen, from tldraw's camera: its top-left
+ * at page (0, 0), PAPER_PAGE wide and tall, moving and scaling like the
+ * ruling. Null when zoomed so far out that it would be a grey smudge.
+ */
+export function templateSheetBox(camera) {
+    const z = camera?.z || 1;
+    if (PAPER_RULE * z < MIN_SCREEN_GAP) return null;
+    return {
+        left: (camera?.x || 0) * z,
+        top: (camera?.y || 0) * z,
+        width: PAPER_PAGE.width * z,
+        height: PAPER_PAGE.height * z,
+    };
+}
+
+/**
+ * The page box to bring into view so the sheet's full width shows, from its
+ * top: as much of the sheet's height as the viewport's shape allows.
+ */
+export function templateViewBox(viewport) {
+    const w = viewport?.w > 0 ? viewport.w : PAPER_PAGE.width;
+    const h = viewport?.h > 0 ? viewport.h : PAPER_PAGE.height;
+    const tall = Math.min(PAPER_PAGE.height, Math.max(PAPER_RULE * 4, (PAPER_PAGE.width * h) / w));
+    return { x: 0, y: 0, w: PAPER_PAGE.width, h: tall };
 }

@@ -136,7 +136,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, ARCHIVED, DELETED, NOTES, conflictAnswer, transcriptState, notesPage, listRow, NOTE_COMPOSED, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
+import { OPS, ARCHIVED, DELETED, NOTES, conflictAnswer, transcriptState, notesPage, listRow, NOTE_COMPOSED, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_SKETCH_TEMPLATE, SKETCH_TEMPLATE_META, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
 
 // ── Fold-in helpers (scenes 19a-19e) ────────────────────────────────────────
 // The gateway is stubbed with the proposal the real model made for this note
@@ -541,6 +541,30 @@ async function openComposeMany(page, h, calls) {
 // navigation that starts the next scene. The detour is a blank same-origin
 // page served by the harness (every scene navigates for itself, so none
 // depends on where the last one stopped).
+// Note templates (DOCS/TEMPLATES_SPEC.md N1). Opens the picker the way each
+// layout does and returns the dialog that holds the list.
+const TEMPLATE_IDS = ['meeting', 'one-to-one', 'weekly-review', 'project-brief', 'decision-record', 'troubleshooting', 'packing-list', 'recipe'];
+async function openTemplatePicker(page, h) {
+  if (desktopLayout(h)) {
+    await page.getByRole('button', { name: 'More kinds of note' }).click();
+    await h.settle(400);
+    const item = page.locator('[role="menu"] [data-new-entry="template"]');
+    if (!(await item.count())) throw new Error('the New menu has no "From a template"');
+    await item.click();
+  } else {
+    await navItem(page, 'new').click();
+    await h.settle(600);
+    const entry = page.getByRole('dialog', { name: /new/i }).locator('[data-new-entry="template"]');
+    if (!(await entry.count())) throw new Error('the New sheet has no "From a template"');
+    await entry.click();
+  }
+  await h.settle(700);
+  const dialog = page.getByRole('dialog', { name: 'From a template' });
+  if (!(await dialog.count())) throw new Error('"From a template" did not open the template picker');
+  if (!(await dialog.locator('[data-template-list]').count())) throw new Error('the picker has no template list');
+  return dialog;
+}
+
 const BLANK = '/__harness_blank';
 const blankRouted = new WeakSet();
 async function clearDrafts(page, h) {
@@ -614,7 +638,7 @@ export const scenes = [
           if (!(await sheet.locator(`[data-new-entry="${k}"]`).count())) throw new Error(`the New sheet has no ${k} entry`);
         }
         if (await sheet.locator('[data-new-entry="text"]').count()) throw new Error('the New sheet still offers rich text');
-        await sheet.getByRole('button', { name: /more/i }).click();
+        await sheet.getByRole('button', { name: /^more/i }).click();
         await h.settle(500);
         if (!(await sheet.locator('[data-new-entry="code"]').isVisible())) throw new Error('More did not show Code');
       } else {
@@ -2228,6 +2252,229 @@ export const scenes = [
       await h.esc(300);
       await page.evaluate(() => (document.fullscreenElement ? document.exitFullscreen() : null)).catch(() => {});
       await h.settle(400);
+    },
+  },
+
+  // ── Templates (DOCS/TEMPLATES_SPEC.md, 2026-11-20) ──────────────────────
+  {
+    // N1, N5: "From a template" on the New surfaces. Phone and tablet: the
+    // New sheet turns over to the eight templates. Desktop: the split
+    // button's menu opens the picker in a dialog.
+    name: '23a-template-picker',
+    goto: '/',
+    wait: 1200,
+    async setup(page, h) {
+      const dialog = await openTemplatePicker(page, h);
+      const rows = dialog.locator('[data-template]');
+      const ids = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-template')));
+      if (ids.join(',') !== TEMPLATE_IDS.join(',')) throw new Error(`the picker offers "${ids.join(',')}", not the eight templates`);
+      for (const id of TEMPLATE_IDS) {
+        const row = dialog.locator(`[data-template="${id}"]`);
+        const box = await row.boundingBox();
+        if (!box || box.height < 44) throw new Error(`template row ${id} is ${box ? Math.round(box.height) : 0}px high`);
+        const words = await row.locator('p, div').allInnerTexts();
+        if (words.filter((w) => w.trim()).length < 2) throw new Error(`template row ${id} has no name + description`);
+        if (!(await row.locator('svg[aria-hidden="true"]').count())) throw new Error(`template row ${id} has no glyph`);
+      }
+      // Nothing is cut off: the last one can be brought on screen.
+      const last = dialog.locator('[data-template="recipe"]');
+      await last.scrollIntoViewIfNeeded();
+      if (!(await last.isVisible())) throw new Error('the last template (Recipe) cannot be reached');
+      await dialog.locator('[data-template="meeting"]').scrollIntoViewIfNeeded();
+      await h.settle(300);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // N2, N3, N5: Meeting notes, opened from the picker — by keyboard alone
+    // on desktop. The ordinary editor, filled in; and nothing has been sent
+    // to the gateway or kept on the device, three seconds on (the autosave
+    // is two).
+    name: '23b-template-note',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const calls = { create: 0, update: 0 };
+      await graphqlRoute(page, {
+        ...OPS,
+        CreateNote: (vars) => { calls.create += 1; return OPS.CreateNote(vars); },
+        UpdateNote: (vars) => { calls.update += 1; return OPS.UpdateNote(vars); },
+      });
+      await page.goto(h.base + '/', { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      if (desktopLayout(h)) {
+        // Keyboard only: the menu button, down to the item, Enter; the
+        // picker opens with the first template focused; Enter picks it.
+        await page.getByRole('button', { name: 'More kinds of note' }).focus();
+        await page.keyboard.press('Enter');
+        await h.settle(400);
+        const item = page.getByRole('menuitem', { name: /from a template/i });
+        for (let i = 0; i < 8 && !(await item.evaluate((el) => el === document.activeElement)); i += 1) await page.keyboard.press('ArrowDown');
+        if (!(await item.evaluate((el) => el === document.activeElement))) throw new Error('the arrow keys never reach "From a template…" in the New menu');
+        await page.keyboard.press('Enter');
+        await h.settle(700);
+        const first = page.getByRole('dialog', { name: 'From a template' }).locator('[data-template="meeting"]');
+        if (!(await first.count())) throw new Error('Enter on "From a template…" did not open the picker');
+        if (!(await first.evaluate((el) => el === document.activeElement))) throw new Error('the picker opened without focus on its first template: the keyboard is stranded');
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('ArrowUp');
+        if (!(await first.evaluate((el) => el === document.activeElement))) throw new Error('the arrow keys do not move between templates');
+        await page.keyboard.press('Enter');
+      } else {
+        const dialog = await openTemplatePicker(page, h);
+        await dialog.locator('[data-template="meeting"]').click();
+      }
+      await h.settle(1200);
+      if (!/\/notes\/new\?template=meeting$/.test(page.url())) throw new Error(`picking Meeting notes went to ${page.url()}`);
+      // (A closed bottom sheet stays mounted, hidden: visible is the question.)
+      if (await page.locator('[data-template-list]:visible').count()) throw new Error('the picker is still open over the editor');
+      const title = await page.getByRole('textbox', { name: 'Note title' }).inputValue();
+      if (!/^Meeting — [A-Z][a-z]{2} \d{1,2}, \d{4}$/.test(title)) throw new Error(`the title is "${title}", not "Meeting — <date>"`);
+      // N4: the local day, as this browser sees it.
+      const today = await page.evaluate(() => {
+        const d = new Date();
+        return `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+      });
+      if (title !== `Meeting — ${today}`) throw new Error(`the title is "${title}" but the local day is ${today}`);
+      const body = await page.getByRole('textbox', { name: 'Note body' }).inputValue();
+      for (const heading of ['## Attendees', '## Agenda', '## Decisions', '## Action items']) {
+        if (!body.includes(heading)) throw new Error(`the body has no "${heading}"`);
+      }
+      if (!/- \[ \] /.test(body)) throw new Error('the action items are not a checklist');
+      if (!(await page.getByText('meeting', { exact: true }).count())) throw new Error('the note is not tagged "meeting"');
+      if (!(await page.getByRole('toolbar', { name: 'Markdown formatting' }).count())) throw new Error('this is not the ordinary Markdown editor');
+      // N3: like a new note nobody has typed in.
+      await h.settle(3000);
+      if (calls.create || calls.update) throw new Error(`a template that was only opened was saved (${calls.create} create, ${calls.update} update)`);
+      const drafts = await page.evaluate(() => new Promise((resolve) => {
+        const open = indexedDB.open('notegeek-drafts');
+        open.onerror = () => resolve(0);
+        open.onsuccess = () => {
+          const db = open.result;
+          if (!db.objectStoreNames.contains('drafts')) { db.close(); resolve(0); return; }
+          const count = db.transaction('drafts', 'readonly').objectStore('drafts').count();
+          count.onsuccess = () => { db.close(); resolve(count.result); };
+          count.onerror = () => { db.close(); resolve(-1); };
+        };
+      }));
+      if (drafts !== 0) throw new Error(`opening a template left ${drafts} device draft(s) behind`);
+      if (await page.getByRole('button', { name: /restore unsaved changes/i }).count()) throw new Error('a restore-draft banner is showing on a template nobody edited');
+      if (!(await page.getByRole('status').filter({ hasText: /^draft$/ }).count())) throw new Error('the save status is not "draft"');
+    },
+  },
+  {
+    // P5: a sketch's template is chosen where its paper is: the Paper menu,
+    // under Colour and Lines. Picking Meeting draws the sheet behind the
+    // toolbar — and the snapshot the real editor then saves carries the id
+    // in its document meta (P3), and nothing new among its shapes (P2).
+    name: '23c-sketch-template-menu',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const saved = [];
+      await graphqlRoute(page, {
+        ...OPS,
+        CreateNote: (vars) => { saved.push(vars); return OPS.CreateNote(vars); },
+        UpdateNote: (vars) => { saved.push(vars); return OPS.UpdateNote(vars); },
+      });
+      await page.goto(h.base + '/notes/new?type=handwritten', { waitUntil: 'networkidle' });
+      await h.settle(2500);
+      // A new sketch has no template (P5).
+      if (await page.locator('[data-paper-template-sheet]').count()) throw new Error('a NEW sketch already shows a template');
+      const bar = page.getByRole('toolbar', { name: 'Drawing tools' });
+      if (await bar.getByRole('button', { name: 'Paper', exact: true }).count()) {
+        await bar.getByRole('button', { name: 'Paper', exact: true }).click();
+      } else {
+        // The tight bar (a narrow phone): Paper is in More.
+        await bar.getByRole('button', { name: 'More', exact: true }).click();
+        await h.settle(300);
+        await page.getByRole('dialog', { name: 'More' }).getByRole('button', { name: 'Paper', exact: true }).click();
+      }
+      await h.settle(400);
+      const menu = page.getByRole('dialog', { name: 'Paper' });
+      const group = menu.getByRole('group', { name: 'Paper template' });
+      if (!(await group.count())) throw new Error('the Paper menu has no Template choice');
+      const names = await group.getByRole('button').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
+      const want = ['None', 'Schedule', 'Top three', 'Meeting', 'Cornell', 'Dot grid', 'Grid'].map((n) => `Template: ${n}`);
+      if (names.join('|') !== want.join('|')) throw new Error(`the Template choices are ${names.join(', ')}`);
+      if ((await group.getByRole('button', { name: 'Template: None' }).getAttribute('aria-pressed')) !== 'true') throw new Error('a new sketch does not show None as chosen');
+      for (const name of want) {
+        const box = await group.getByRole('button', { name }).boundingBox();
+        if (!box || box.height < 44 || box.width < 44) throw new Error(`"${name}" is ${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : 'not on screen'}`);
+      }
+      await group.getByRole('button', { name: 'Template: Meeting' }).click();
+      await h.settle(500);
+      if ((await group.getByRole('button', { name: 'Template: Meeting' }).getAttribute('aria-pressed')) !== 'true') throw new Error('Meeting is not shown as chosen');
+      const sheet = page.locator('img[data-paper-template-sheet="meeting"]');
+      if (!(await sheet.count())) throw new Error('picking Meeting did not draw the template');
+      // The whole menu fits on screen (it grew by a section).
+      const paper = await menu.boundingBox();
+      const vp = page.viewportSize();
+      if (!paper || paper.y < 0 || paper.y + paper.height > vp.height + 1) throw new Error(`the Paper menu runs off the screen (${paper && Math.round(paper.y)}..${paper && Math.round(paper.y + paper.height)} of ${vp.height})`);
+      // It saves with the note, like the paper: wait out the sketch's 400 ms
+      // and the page's 2 s, then read what the real editor serialised.
+      for (let i = 0; i < 20 && !saved.length; i += 1) await h.settle(250);
+      if (!saved.length) throw new Error('choosing a template was never saved');
+      const snapshot = JSON.parse(saved.at(-1).content);
+      const meta = snapshot.store['document:document']?.meta || {};
+      if (meta.paperTemplate !== 'meeting') throw new Error(`the saved sketch's document meta is ${JSON.stringify(meta)}`);
+      const shapes = Object.keys(snapshot.store).filter((k) => k.startsWith('shape:') || k.startsWith('asset:'));
+      if (shapes.length) throw new Error(`the template was saved as part of the drawing: ${shapes.join(', ')}`);
+      const device = await page.evaluate(() => Object.keys(localStorage).filter((k) => /template/i.test(k)));
+      if (device.length) throw new Error(`a template was stored as a device default: ${device.join(', ')}`);
+    },
+    teardown: async (page, h) => {
+      await h.esc(300);
+      await page.evaluate(() => localStorage.removeItem('notegeek:sketchPaper'));
+    },
+  },
+  {
+    // P2, P3, P6: a saved sketch that carries a template (a GeekDay day
+    // page, tagged `daily`) shows it here: one picture of the sheet, behind
+    // the ink, on the paper's colour — and not a shape, not text.
+    name: '23d-sketch-template',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_SKETCH_TEMPLATE, '/notes/n3t');
+      await h.settle(900);
+      if (await page.locator('.tl-error-boundary').count()) throw new Error('tldraw rendered its own error screen');
+      if (await page.getByText(/something went wrong/i).count()) throw new Error('the sketch rendered the error boundary');
+      const sheet = page.locator(`img[data-paper-template-sheet="${SKETCH_TEMPLATE_META.paperTemplate}"]`);
+      if ((await sheet.count()) !== 1) throw new Error(`the template is drawn ${await sheet.count()} times, not once`);
+      const facts = await sheet.evaluate((img) => {
+        const bg = img.closest('.tl-background');
+        const r = img.getBoundingClientRect();
+        const firstShape = document.querySelector('.tl-shape');
+        return {
+          inBackground: Boolean(bg),
+          ground: bg ? getComputedStyle(bg).backgroundColor : null,
+          ruling: bg ? getComputedStyle(bg).backgroundImage : null,
+          ariaHidden: img.getAttribute('aria-hidden'),
+          alt: img.getAttribute('alt'),
+          pointer: getComputedStyle(img).pointerEvents,
+          loaded: img.complete && img.naturalWidth > 0,
+          ratio: r.width ? r.height / r.width : 0,
+          width: r.width,
+          insideAShape: Boolean(img.closest('.tl-shape, .tl-shapes')),
+          shapes: document.querySelectorAll('.tl-shape').length,
+          // Behind the ink: the background comes before the shapes' layer.
+          behind: firstShape ? Boolean(bg.compareDocumentPosition(firstShape) & Node.DOCUMENT_POSITION_FOLLOWING) : null,
+          words: document.querySelector('.tl-container')?.innerText.match(/ATTENDEES|AGENDA|ACTIONS/g) || [],
+        };
+      });
+      if (!facts.loaded) throw new Error('the template image did not load');
+      if (!facts.inBackground || facts.insideAShape) throw new Error('the template is not in the background layer');
+      if (facts.behind === false) throw new Error('the template is not behind the ink');
+      if (facts.ground !== 'rgb(244, 238, 223)') throw new Error(`the paper under the template is ${facts.ground}, not warm`);
+      if (facts.ruling !== 'none') throw new Error('the ruling is still drawn under the template');
+      if (facts.ariaHidden !== 'true' || facts.alt !== '') throw new Error('the template is not hidden from assistive tech');
+      if (facts.pointer !== 'none') throw new Error('the template takes pointer events');
+      if (Math.abs(facts.ratio - 1.4) > 0.01) throw new Error(`the sheet is ${facts.ratio.toFixed(3)} tall per wide, not 1.4`);
+      if (facts.width < 200) throw new Error(`the sheet is only ${Math.round(facts.width)}px wide`);
+      if (facts.shapes !== 6) throw new Error(`the sketch has ${facts.shapes} shapes on screen, not its own 6`);
+      if (facts.words.length) throw new Error(`the template's words are page text: ${facts.words.join(', ')}`);
+      // The first view: the sheet's full width, from its top.
+      const box = await sheet.boundingBox();
+      const canvas = await page.locator('.tl-container').boundingBox();
+      if (box.x < canvas.x - 1 || box.x + box.width > canvas.x + canvas.width + 1) throw new Error('the sheet is not fully in view side to side');
+      if (box.y < canvas.y - 1) throw new Error('the top of the sheet is off screen');
     },
   },
 

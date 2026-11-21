@@ -3,20 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Button, Divider, ListItemIcon, ListItemText, Menu, MenuItem, useTheme } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import { IMPORT_ENTRY, NEW_FRONT, NEW_MORE, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
+import { IMPORT_ENTRY, NEW_FRONT, NEW_MORE, TEMPLATE_ENTRY, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
+import { noteTemplatePath } from '../../utils/noteTemplates';
+import { TemplatePicker } from './TemplateList';
 import { openImportPicker } from '../../store/importStore';
 import { graphiteTokens } from '../../theme/tokens';
 
 /**
  * NewNoteMenu — desktop's compact New: a split button in the top bar. The
  * main half makes a note (Markdown) in one click; the caret opens the other
- * kinds — photo, sketch, then code and mind map, then Markdown import.
+ * kinds — photo, sketch, "From a template" (which opens the template picker,
+ * DOCS/TEMPLATES_SPEC.md N1/N5), then code and mind map, then Markdown import.
  */
 function NewNoteMenu() {
   const navigate = useNavigate();
   const theme = useTheme();
   const g = graphiteTokens(theme);
   const [anchor, setAnchor] = useState(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const go = (key) => { setAnchor(null); navigate(newNotePath(key)); };
   const others = NEW_FRONT.filter((k) => k !== 'markdown');
 
@@ -58,8 +62,22 @@ function NewNoteMenu() {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 220, mt: '4px' } } }}
       >
-        {[...others, 'divider', ...NEW_MORE, 'divider2', IMPORT_ENTRY.key].map((key) => {
+        {[...others, TEMPLATE_ENTRY.key, 'divider', ...NEW_MORE, 'divider2', IMPORT_ENTRY.key].map((key) => {
           if (key.startsWith('divider')) return <Divider key={key} />;
+          if (key === TEMPLATE_ENTRY.key) {
+            const Icon = TEMPLATE_ENTRY.Icon;
+            return (
+              <MenuItem
+                key={key}
+                data-new-entry={key}
+                aria-haspopup="dialog"
+                onClick={() => { setAnchor(null); setTemplatesOpen(true); }}
+              >
+                <ListItemIcon><Icon fontSize="small" /></ListItemIcon>
+                <ListItemText>{TEMPLATE_ENTRY.long}…</ListItemText>
+              </MenuItem>
+            );
+          }
           if (key === IMPORT_ENTRY.key) {
             const Icon = IMPORT_ENTRY.Icon;
             return (
@@ -83,6 +101,11 @@ function NewNoteMenu() {
           );
         })}
       </Menu>
+      <TemplatePicker
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onPick={(id) => { setTemplatesOpen(false); navigate(noteTemplatePath(id)); }}
+      />
     </Box>
   );
 }

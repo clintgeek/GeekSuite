@@ -88,6 +88,58 @@ describe('sketch export', () => {
   });
 });
 
+/**
+ * Page templates (DOCS/TEMPLATES_SPEC.md P2): a template is a background, not
+ * a shape, so the image sent for transcription and the pages printed are the
+ * ink alone — with or without one. The export asks tldraw for shape ids and
+ * never for its background, and never reads the document's meta at all.
+ */
+describe('a page template is never in the exported image', () => {
+  const editorFor = (meta) => {
+    const editor = {
+      getCurrentPageShapeIds: () => new Set(['shape:a', 'shape:b']),
+      getCurrentPageShapesSorted: () => [{ id: 'shape:a', type: 'draw' }, { id: 'shape:b', type: 'draw' }],
+      getCurrentPageBounds: () => ({ x: 40, y: 60, w: 600, h: 300 }),
+      getShapePageBounds: () => ({ x: 40, y: 60, w: 600, h: 300 }),
+      getDocumentSettings: vi.fn(() => ({ id: 'document:document', meta })),
+    };
+    return editor;
+  };
+  const deps = (calls) => ({
+    exportToBlob: async (args) => { calls.push({ ids: args.ids, format: args.format, opts: args.opts }); return new Blob(['raw']); },
+    flatten: async () => ({ blob: new Blob(['flat']), width: 600, height: 300 }),
+    toBase64: async () => 'iVBORw0KGgo',
+  });
+
+  it('the transcription image is asked for identically with and without a template', async () => {
+    const plain = [];
+    const templated = [];
+    const a = editorFor({ paperColor: 'warm', paperPattern: 'lined' });
+    const b = editorFor({ paperColor: 'warm', paperPattern: 'lined', paperTemplate: 'meeting' });
+    const outA = await exportSketchPng(a, deps(plain));
+    const outB = await exportSketchPng(b, deps(templated));
+    expect(templated).toEqual(plain);
+    expect(templated).toEqual([{ ids: ['shape:a', 'shape:b'], format: 'png', opts: sketchExportOptions({ x: 40, y: 60, w: 600, h: 300 }) }]);
+    // Shapes only, and not tldraw's background (where the paper and the template live).
+    expect(templated[0].opts.background).toBe(false);
+    expect(templated[0].ids.every((id) => id.startsWith('shape:'))).toBe(true);
+    expect({ ...outB, blob: null }).toEqual({ ...outA, blob: null });
+    expect(b.getDocumentSettings).not.toHaveBeenCalled();
+  });
+
+  it('so are the pages for print', async () => {
+    const plain = [];
+    const templated = [];
+    await exportSketchForPrint(editorFor({}), deps(plain));
+    const b = editorFor({ paperTemplate: 'cornell' });
+    await exportSketchForPrint(b, deps(templated));
+    expect(templated.length).toBeGreaterThan(0);
+    expect(templated).toEqual(plain);
+    expect(templated.every((c) => c.opts.background === false)).toBe(true);
+    expect(b.getDocumentSettings).not.toHaveBeenCalled();
+  });
+});
+
 /** Print / Save as PDF (DOCS/CONTEXT.md §8): the sketch as paper images. */
 describe('sketch export for print', () => {
   const editorWith = (shapes) => ({

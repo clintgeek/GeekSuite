@@ -7,6 +7,7 @@ import AccountTreeIcon from '@mui/icons-material/AccountTreeOutlined';
 import GestureIcon from '@mui/icons-material/Gesture';
 import PhotoCameraOutlined from '@mui/icons-material/PhotoCameraOutlined';
 import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined';
+import DashboardCustomizeOutlined from '@mui/icons-material/DashboardCustomizeOutlined';
 
 /**
  * The five note types, in one table, so the rows, filters, editor head and
@@ -66,9 +67,24 @@ export const IMPORT_ENTRY = {
   description: '.md or .txt, one note per file',
 };
 
+/**
+ * "From a template" (DOCS/TEMPLATES_SPEC.md N1): not a type — it opens the
+ * list of note templates (components/new/TemplateList.jsx), and the one
+ * picked is an ordinary Markdown note at `/notes/new?template=<id>`.
+ */
+export const TEMPLATE_ENTRY = {
+  key: 'template',
+  label: 'Template',
+  long: 'From a template',
+  aria: 'New note from a template',
+  Icon: DashboardCustomizeOutlined,
+  description: 'Meeting notes, weekly review, packing list and more',
+};
+
 export function noteTypeMeta(type) {
   if (type === 'photo') return PHOTO_ENTRY;
   if (type === 'import') return IMPORT_ENTRY;
+  if (type === 'template') return TEMPLATE_ENTRY;
   return NOTE_TYPE_META[type] || NOTE_TYPE_META.text;
 }
 

@@ -49,6 +49,7 @@ import { onNoteCreated, onNoteUpdated } from '../graphql/cacheUpdates';
 import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
 import { applyInlineTags } from '../utils/inlineTags';
 import { containsNoteLink, insertLink, noteLinkMarkup, supportsLinkInsertion } from '../utils/noteLinks';
+import { buildNoteFromTemplate } from '../utils/noteTemplates';
 
 /**
  * NoteEditorPage - Unified page for creating and editing notes
@@ -268,7 +269,20 @@ function NoteEditorPage({ editorKey } = {}) {
       setNoteType(getTypeFromQuery() || NOTE_TYPES.MARKDOWN);
       // `?title=` — an unresolved [[link]]'s "create this note". Seeded, not
       // dirty: nothing is saved until the writer actually writes.
-      const seededTitle = new URLSearchParams(location.search).get('title');
+      const params = new URLSearchParams(location.search);
+      // `?template=` — a note template (DOCS/TEMPLATES_SPEC.md N2, N3):
+      // its title, tags and body on screen, always as Markdown. Seeded the
+      // way `?title=` is — NOT dirty — so opening a template and leaving
+      // creates no note and writes no device draft; the first edit (or Save
+      // now) saves it like any new note. An unknown id is a plain new note.
+      const template = buildNoteFromTemplate(params.get('template'), new Date());
+      if (template) {
+        setNoteType(NOTE_TYPES.MARKDOWN);
+        setTitle(template.title);
+        setContent(template.content);
+        setTags(template.tags);
+      }
+      const seededTitle = params.get('title');
       if (seededTitle) setTitle(seededTitle.trim().slice(0, 500));
       setPinnedOverride(null);
       initializedFor.current = identity;

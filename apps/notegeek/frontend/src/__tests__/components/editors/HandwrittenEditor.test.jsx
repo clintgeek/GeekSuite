@@ -438,6 +438,72 @@ describe('HandwrittenEditor', () => {
             expect(within(menu).getByRole('button', { name: 'Paper: Soft grey' })).toHaveAttribute('aria-pressed', 'true');
             expect(within(menu).getByRole('button', { name: 'Lines: Dot grid' })).toHaveAttribute('aria-pressed', 'true');
         });
+
+        // Page templates (DOCS/TEMPLATES_SPEC.md P3, P5). The model, the
+        // background and the menu are in paperTemplate.test.jsx; these are
+        // the editor's own part: the toolbar reaches it, and the first view.
+        it('P5: a new sketch has no template, and nothing is written until one is picked', async () => {
+            const user = userEvent.setup();
+            render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+            const editor = tl.editors.at(-1);
+            await user.click(await screen.findByRole('button', { name: 'Paper' }));
+            const menu = await screen.findByRole('dialog', { name: 'Paper' });
+            expect(within(menu).getByRole('button', { name: 'Template: None' })).toHaveAttribute('aria-pressed', 'true');
+            expect(editor.updateDocumentSettings).not.toHaveBeenCalled();
+            expect(editor.getDocumentSettings().meta).toEqual({});
+        });
+
+        it('P3: a template picked from the Paper menu is saved in the sketch, with its paper, and is not a device default', async () => {
+            localStorage.setItem('notegeek:sketchPaper', JSON.stringify({ color: 'warm', pattern: 'lined' }));
+            const user = userEvent.setup();
+            const onInkEdit = vi.fn();
+            render(<HandwrittenEditor content="" setContent={setContent} onInkEdit={onInkEdit} />, { wrapper: AllProviders });
+            const editor = tl.editors.at(-1);
+            editor.getViewportScreenBounds = vi.fn(() => ({ x: 0, y: 0, w: 800, h: 1000 }));
+            await user.click(await screen.findByRole('button', { name: 'Paper' }));
+            const menu = await screen.findByRole('dialog', { name: 'Paper' });
+            await user.click(within(menu).getByRole('button', { name: 'Template: Meeting' }));
+            expect(editor.getDocumentSettings().meta).toEqual({ paperTemplate: 'meeting' });
+            expect(JSON.parse(localStorage.getItem('notegeek:sketchPaper'))).toEqual({ color: 'warm', pattern: 'lined' });
+            // The camera goes to the sheet: its full width, from the top.
+            expect(editor.zoomToBounds).toHaveBeenLastCalledWith({ x: 0, y: 0, w: 1000, h: 1250 }, { targetZoom: 1, inset: 16 });
+            // Document meta is not ink: the change is saved like the paper's
+            // (the store listener serialises), but transcription is not woken.
+            editor.emit({ changes: { updated: { 'document:document': [{}, {}] } } });
+            expect(onInkEdit).not.toHaveBeenCalled();
+            await waitFor(() => expect(editor.store.getStoreSnapshot).toHaveBeenCalled());
+            editor.emit({ changes: { added: { 'shape:x': {} } } });
+            expect(onInkEdit).toHaveBeenCalledTimes(1);
+        });
+
+        it('a saved sketch with a template opens on its sheet; one without opens as before', async () => {
+            const withTemplate = JSON.stringify({ store: { 'shape:a': { id: 'shape:a', typeName: 'shape', type: 'draw', index: 'a1', x: 0, y: 0 } }, schema: {} });
+            render(<HandwrittenEditor content={withTemplate} setContent={setContent} />, { wrapper: AllProviders });
+            const editor = tl.editors.at(-1);
+            editor.document = { ...editor.document, meta: { paperTemplate: 'schedule' } };
+            editor.getViewportScreenBounds = vi.fn(() => ({ x: 0, y: 0, w: 390, h: 600 }));
+            const container = screen.getByTestId('tldraw-mock').parentElement;
+            container.getBoundingClientRect = () => ({ left: 0, top: 0, width: 390, height: 600, right: 390, bottom: 600 });
+            await waitFor(() => expect(editor.zoomToBounds).toHaveBeenCalled(), { timeout: 2000 });
+            expect(editor.zoomToBounds).toHaveBeenLastCalledWith({ x: 0, y: 0, w: 1000, h: 1400 }, { targetZoom: 1, inset: 16 });
+            // The first view is the camera's business: the sketch is not touched.
+            expect(editor.updateDocumentSettings).not.toHaveBeenCalled();
+            expect(setContent).not.toHaveBeenCalled();
+        });
+
+        it('P7: a saved sketch whose template this build does not know opens as a plain sketch does', async () => {
+            const saved = JSON.stringify({ store: { 'shape:a': { id: 'shape:a', typeName: 'shape', type: 'draw', index: 'a1', x: 0, y: 0 } }, schema: {} });
+            render(<HandwrittenEditor content={saved} setContent={setContent} />, { wrapper: AllProviders });
+            const editor = tl.editors.at(-1);
+            editor.document = { ...editor.document, meta: { paperTemplate: 'hexagons-from-2031' } };
+            const container = screen.getByTestId('tldraw-mock').parentElement;
+            container.getBoundingClientRect = () => ({ left: 0, top: 0, width: 390, height: 600, right: 390, bottom: 600 });
+            await waitFor(() => expect(editor.zoomToBounds).toHaveBeenCalled(), { timeout: 2000 });
+            // The ink's own bounds, as for any sketch (review 2.11).
+            expect(editor.zoomToBounds).toHaveBeenLastCalledWith({ x: 0, y: 0, w: 900, h: 400 }, { targetZoom: 1, inset: 32 });
+            expect(editor.updateDocumentSettings).not.toHaveBeenCalled();
+            expect(editor.getDocumentSettings().meta).toEqual({ paperTemplate: 'hexagons-from-2031' });
+        });
     });
 
     it('a read-only sketch has no drawing toolbar', async () => {

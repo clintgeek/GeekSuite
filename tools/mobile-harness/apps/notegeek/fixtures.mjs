@@ -70,6 +70,25 @@ export const NOTE_CODE = note('n6', 'debounce.js', 'code', ['dev', 'dev/frontend
 export const NOTE_MINDMAP = note('n4', 'Mind map: GeekSuite apps', 'mindmap', ['meta'], MINDMAP_CONTENT, daysAgo(3));
 export const NOTE_SKETCH = note('n3', 'Sketch: onboarding flow', 'handwritten', ['product'], SKETCH_CONTENT, daysAgo(1));
 
+// The same real snapshot with a page template chosen (DOCS/TEMPLATES_SPEC.md
+// P3, P5): the id sits in tldraw's document record, in `meta`, beside the
+// paper — exactly where the Paper menu writes it (scene '23c' picks one in
+// the real editor and checks the snapshot it then saves has this shape). It
+// is tagged `daily`, as a GeekDay day page is: such a page shows its
+// template here too. Derived, not hand-written, so it stays in step with the
+// fixture's schema.
+const withDocumentMeta = (serialized, meta) => {
+  const snapshot = JSON.parse(serialized);
+  const doc = snapshot.store['document:document'];
+  snapshot.store['document:document'] = { ...doc, meta: { ...doc.meta, ...meta } };
+  return JSON.stringify(snapshot);
+};
+export const SKETCH_TEMPLATE_META = { paperColor: 'warm', paperPattern: 'lined', paperTemplate: 'meeting' };
+export const NOTE_SKETCH_TEMPLATE = note(
+  'n3t', 'Fri 20 Nov', 'handwritten', ['daily'],
+  withDocumentMeta(SKETCH_CONTENT, SKETCH_TEMPLATE_META), daysAgo(1),
+);
+
 // A markdown note the size of Chef's real ones (most are markdown reference
 // notes of a few hundred to a few thousand characters): headings, a list, a
 // checklist, a link. The Graphite editor scenes write into it. Also the

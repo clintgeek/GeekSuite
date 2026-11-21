@@ -16,6 +16,7 @@ import {
 } from '../../utils/penPrefs';
 import { SKETCH_IMAGE_INPUT_MAX_BYTES, SKETCH_IMAGE_MAX_EDGE, sketchImageHandler } from '../../utils/sketchImages';
 import { paperFromMeta, readDevicePaper } from './paperModel';
+import { showTemplateSheet } from './usePaper';
 import { SketchPortalContext } from './sketchPortal';
 
 // tldraw 2.4's updateViewportScreenBounds takes a Box and calls .equals() on
@@ -88,7 +89,8 @@ function fitFirstPhotoPage(editor) {
 /**
  * The first view of a saved sketch (review 2.11): where the writer left it on
  * this device, or else the whole page in view (never past 100%). A photo
- * note's first page as before. Camera only — never the document.
+ * note's first page as before; a sketch with a page template, its sheet.
+ * Camera only — never the document.
  */
 function applyFirstView(editor, noteId) {
     if (!editor || editor.isDisposed) return;
@@ -98,6 +100,9 @@ function applyFirstView(editor, noteId) {
         return;
     }
     if (fitFirstPhotoPage(editor)) return;
+    // A sketch with a page template (DOCS/TEMPLATES_SPEC.md P5) opens on its
+    // sheet, full width from the top, not zoomed in on the ink alone.
+    if (showTemplateSheet(editor)) return;
     const bounds = editor.getCurrentPageBounds?.();
     if (bounds) editor.zoomToBounds?.(bounds, { targetZoom: 1, inset: 32 });
 }

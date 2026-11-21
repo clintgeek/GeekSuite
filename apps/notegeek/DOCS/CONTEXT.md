@@ -771,3 +771,45 @@ Client half of §17 (local, not deployed; the gateway goes first). `frontend/src
   `transcriptText`, `preview`, `notesPage` and `deletedAt`. The Sidebar's tag counts still use `notes { id tags }`
   with no limit, fine while `notes` is unlimited by default. Whole-page tests need the 20 s `testTimeout` (raised
   in both NoteGeek and TodoGeek on 2026-11-15; they flaked at 5 s under load).
+
+## 19. Templates (client only, 2026-11-20)
+
+Spec: `DOCS/TEMPLATES_SPEC.md` (repo root). No gateway operation, schema or storage was added.
+
+- **Note templates (N1–N5).** Eight Markdown starting pages (Meeting notes, One-to-one, Weekly review, Project
+  brief, Decision record, Troubleshooting log, Packing list, Recipe) in one pure module,
+  `frontend/src/utils/noteTemplates.js`: `id`, `label`, one-line `description`, `tags` (suite standard),
+  `title(now)`, `body(now)`. Bodies use only what the Markdown preview renders (h2, lists, `- [ ]` with words
+  after it, one table) and no `#word` (the save reads those as tags). Dates are the LOCAL calendar day, from the
+  Date's own local fields (`templateDay`, `templateWeekStart` = Monday); `@geeksuite/utils` is not a dependency
+  of this app.
+- **Where.** "From a template" on the New surfaces: `NewNoteSheet` (phone bar and tablet rail) turns the same
+  sheet over to `components/new/TemplateList.jsx` (no second sheet; "All kinds of note" goes back);
+  `NewNoteMenu` (desktop) has a menu item that opens `TemplatePicker` (a `GeekSheet`, so Esc / Android Back
+  close it). Rows are buttons; Up/Down/Home/End move between them. There is no keyboard shortcut for New in
+  NoteGeek, so none was invented.
+- **Opening one** is `/notes/new?template=<id>` — the ordinary editor route. `NoteEditorPage`'s new-note seed
+  puts title, tags and body on screen and sets the type to Markdown **without marking the form dirty**, the
+  same way `?title=` is seeded. So autosave, the device draft, the hide/unmount flushes and Back all behave as
+  on a new note nobody typed in: nothing is created or drafted until the first edit or an explicit save
+  (Ctrl/Cmd+S, "Save now"). Save, draft, conflict and autosave code is unchanged. An unknown id is a plain new
+  note; `?title=` still wins the title.
+- **Page templates in a sketch (P1–P3, P5–P7).** The suite's shared set (`@geeksuite/ui`: `PAPER_TEMPLATES`,
+  `paperTemplateDataUri`, …; the same one GeekDay uses) is chosen in the Paper menu under Colour and Lines
+  (`Paper.jsx`), and kept in tldraw DOCUMENT META as `paperTemplate`, beside `paperColor` / `paperPattern` and
+  written the same way (`usePaper.js#setPaperTemplate` → `updateDocumentSettings`; like the paper it is saved
+  with the note and is not on tldraw's undo stack). Per sketch only: no device default, and choosing paper
+  never drops it. "None" is written as `'none'` (GeekDay reads a missing key as "never chose") and only when a
+  known template is being taken off.
+- **Drawing it.** `PaperBackground` (tldraw's `Background`) draws one `<img alt="" aria-hidden>` of the sheet
+  with its top-left at page (0,0), 1000×1400 page units, following the camera; colours come from the resolved
+  paper (`paperModel.js#templateColors`). A template REPLACES the ruling while it is set (the stored
+  `paperPattern` is kept). It is not a shape: nothing selects, erases or exports it (`utils/sketchExport.js`
+  asks tldraw for shape ids with `background: false`). An id this build does not know draws nothing and is
+  never rewritten. A sketch with a known template and no remembered camera opens on its sheet (full width,
+  from the top); choosing one moves the camera there too. With no template the background element is
+  byte-for-byte what it was.
+- **Tests / harness.** `__tests__/utils/noteTemplates.test.jsx`, `pages/noteEditorTemplate.test.jsx` (N3),
+  `components/new/templatePicker.test.jsx`, `components/editors/paperTemplate.test.jsx`, plus cases in
+  `HandwrittenEditor.test.jsx` and `sketchExport.test.js`. Harness scenes `23a`–`23d`.
+- **Not done.** List thumbnails and the print copy do not show a template (print is the ink only, by P2).
