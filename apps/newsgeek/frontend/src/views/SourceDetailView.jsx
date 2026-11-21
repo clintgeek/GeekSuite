@@ -27,7 +27,7 @@
  * what the paper leaves out), and always to an admin, who changes it through
  * Edit (the gateway takes the field from admins only).
  */
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Box, Button, CircularProgress, Link, MenuItem, TextField, Typography } from '@mui/material';
 import {
   ArchiveOutlined as RetireIcon,
@@ -205,8 +205,11 @@ function SourceActions({ source, isAdmin }) {
   );
 }
 
-/** The reader's own switches, as in the Source sheet: In my paper, I subscribe. */
-function ReaderSwitches({ source }) {
+/**
+ * The reader's own switches, as in the Source sheet: In my paper, I subscribe.
+ * `onChanged` once a change has landed (both decide which stories are listed).
+ */
+function ReaderSwitches({ source, onChanged }) {
   const { notify } = useToast();
   const client = useApolloClient();
   const [setOn, onState] = useMutation(SET_NEWS_SOURCE_ON);
@@ -220,6 +223,7 @@ function ReaderSwitches({ source }) {
       });
       // Which sources a reader sees decides which stories the lists hold.
       resetArticleLists(client.cache);
+      onChanged?.();
     } catch {
       notify(`Couldn’t turn ${source.name} ${on ? 'on' : 'off'}. Try again.`, { tone: 'error' });
     }
@@ -232,6 +236,7 @@ function ReaderSwitches({ source }) {
       });
       // Free to read keeps or drops this source's stories by it.
       resetArticleLists(client.cache);
+      onChanged?.();
     } catch {
       notify('Couldn’t change your subscription. Try again.', { tone: 'error' });
     }
@@ -261,21 +266,58 @@ function ReaderSwitches({ source }) {
 
 export const RECENT_COUNT = 5;
 
+/** Said under "Recent stories" when the list can't show this source's stories. */
+const recentNote = (source, { hiddenPaywalled = 0 } = {}) => {
+  if (source.status === 'retired') return `${source.name} is retired, so its stories aren’t listed here.`;
+  if (!source.onForMe) return `${source.name} isn’t in your paper, so its stories aren’t listed here. Turn on In my paper to see them.`;
+  if (hiddenPaywalled > 0) return `Free to read leaves out ${source.name}’s stories.`;
+  return `Nothing from ${source.name} in your paper right now.`;
+};
+
 /**
  * The last five headlines from this source, and "More from this source →".
  * Fetched outside the cache: a five-story page would otherwise replace the
- * longer `?source=` list Everything keeps in the same slot.
+ * longer `?source=` list Everything keeps in the same slot. The gateway lists
+ * only what is in the reader's paper (a source that is off has none here: a
+ * preview would need a gateway argument), so an off source says so instead
+ * of looking empty, and `round` refetches when the switches above change it.
  */
-function RecentStories({ source }) {
+function RecentStories({ source, round = 0 }) {
   const prefsQ = useQuery(GET_NEWS_PREFS, { fetchPolicy: 'cache-first' });
   const opening = openingPrefs(prefsQ.data?.newsPrefs);
-  const { data, loading } = useQuery(GET_NEWS_ARTICLES, { variables: { limit: RECENT_COUNT, sourceId: source.id }, fetchPolicy: 'no-cache' });
-  const items = (data?.newsArticles?.items ?? []).slice(0, RECENT_COUNT);
+  const inPaper = Boolean(source.onForMe) && source.status !== 'retired';
+  const { data, loading, error, refetch } = useQuery(GET_NEWS_ARTICLES, {
+    variables: { limit: RECENT_COUNT, sourceId: source.id },
+    fetchPolicy: 'no-cache',
+    skip: !inPaper,
+    notifyOnNetworkStatusChange: true,
+  });
+  const seenRound = useRef(round);
+  useEffect(() => {
+    if (round === seenRound.current) return;
+    seenRound.current = round;
+    if (inPaper) refetch().catch(() => {});
+  }, [round, inPaper, refetch]);
+  const items = inPaper ? (data?.newsArticles?.items ?? []).slice(0, RECENT_COUNT) : [];
+  const failed = inPaper && error && !loading;
+  const note = !inPaper ? recentNote(source) : data && !items.length && !failed ? recentNote(source, data.newsArticles ?? {}) : null;
   return (
     <Box component="section" aria-labelledby="detail-recent" data-testid="detail-recent">
       <SectionFlag id="detail-recent">Recent stories</SectionFlag>
-      {loading && !data ? <CircularProgress size={20} aria-label="Loading recent stories" sx={{ color: 'text.secondary' }} /> : null}
-      {data && !items.length ? <Typography sx={{ fontStyle: 'italic', color: 'text.secondary' }}>Nothing from {source.name} in your paper right now.</Typography> : null}
+      {inPaper && loading && !items.length ? <CircularProgress size={20} aria-label="Loading recent stories" sx={{ color: 'text.secondary' }} /> : null}
+      {failed ? (
+        <Box role="alert" data-testid="detail-recent-error" sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 3, rowGap: 2 }}>
+          <Typography sx={{ fontStyle: 'italic', color: 'text.secondary' }}>Couldn’t load the recent stories.</Typography>
+          <Button variant="outlined" color="inherit" onClick={() => refetch().catch(() => {})}>
+            Try again
+          </Button>
+        </Box>
+      ) : null}
+      {note ? (
+        <Typography data-testid="detail-recent-note" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+          {note}
+        </Typography>
+      ) : null}
       {items.length ? (
         <Box component="ul" aria-label={`Recent stories from ${source.name}`} sx={{ listStyle: 'none', m: 0, p: 0 }}>
           {items.map((a) => {
@@ -309,16 +351,18 @@ function RecentStories({ source }) {
           })}
         </Box>
       ) : null}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1 }}>
-        <Link
-          component={RouterLink}
-          to={`/everything?source=${encodeURIComponent(source.id)}`}
-          data-testid="detail-more-from"
-          sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, fontFamily: GOTHIC, fontSize: '0.875rem', fontWeight: 700, color: 'text.primary', textDecoration: 'underline', textUnderlineOffset: '0.25em' }}
-        >
-          More from this source →
-        </Link>
-      </Box>
+      {inPaper ? (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1 }}>
+          <Link
+            component={RouterLink}
+            to={`/everything?source=${encodeURIComponent(source.id)}`}
+            data-testid="detail-more-from"
+            sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, fontFamily: GOTHIC, fontSize: '0.875rem', fontWeight: 700, color: 'text.primary', textDecoration: 'underline', textUnderlineOffset: '0.25em' }}
+          >
+            More from this source →
+          </Link>
+        </Box>
+      ) : null}
     </Box>
   );
 }
@@ -334,6 +378,8 @@ export default function SourceDetailView() {
   const { isAdmin } = useViewer();
   const { data, loading, error, refetch } = useQuery(GET_NEWS_SOURCE, { variables: { id }, fetchPolicy: 'cache-and-network' });
   const source = data?.newsSource;
+  // Bumped when In my paper / I subscribe lands: Recent stories asks again.
+  const [recentRound, setRecentRound] = useState(0);
   // Admins see who added it (the gateway sends addedByName to admins only);
   // the adder sees "you"; everyone else, nothing.
   const addedBy = !source ? null : isAdmin ? (source.addedByName ? `Added by ${source.addedByName}` : null) : source.addedByMe ? 'Added by you' : null;
@@ -396,9 +442,9 @@ export default function SourceDetailView() {
         ) : null}
       </Box>
 
-      <ReaderSwitches source={source} />
+      <ReaderSwitches source={source} onChanged={() => setRecentRound((n) => n + 1)} />
       <DetailPriority source={source} />
-      <RecentStories source={source} />
+      <RecentStories source={source} round={recentRound} />
 
       {source.canEdit || isAdmin ? (
         <>
