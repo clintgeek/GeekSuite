@@ -72,4 +72,18 @@ describe('useDeleteNote', () => {
     expect(where).toBe('/notes/n1/edit');
     expect(mocks.notify).toHaveBeenCalledWith('Could not delete the note.', { tone: 'error' });
   });
+
+  it('an Undo that fails says where the note is, and does not claim it was restored', async () => {
+    mocks.restoreNoteApi.mockRejectedValue({});
+    const { result } = renderHook(() => useDeleteNote(), { wrapper });
+    await act(async () => { await result.current('n1'); });
+    const call = mocks.notify.mock.calls.find((c) => c[0] === 'Note deleted');
+    render(call[1].action);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith(
+      'Could not restore it. It is in Recently deleted.', { tone: 'error' },
+    ));
+    expect(mocks.notify).not.toHaveBeenCalledWith('Note restored', expect.anything());
+    expect(mocks.refreshLists).not.toHaveBeenCalled();
+  });
 });
