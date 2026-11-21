@@ -316,6 +316,7 @@ export default function ProvidersBlock({
   status,
   onRetry,
   onFieldChange,
+  onDiscardDraft,
   onSaveKey,
   onRemoveKey,
 }) {
@@ -395,8 +396,10 @@ export default function ProvidersBlock({
           justSaved={justSaved === provider}
           onToggle={(p) => { setJustSaved(null); toggle(p); }}
           onCancel={(p) => {
-            // Throw the draft away: nothing typed here is kept or sent.
-            onFieldChange(p, 'apiKey', '');
+            // Throw the draft away: the row goes back to the server's state
+            // (key, Account ID, `touched`), so nothing typed is kept or sent.
+            if (onDiscardDraft) onDiscardDraft(p);
+            else onFieldChange(p, 'apiKey', '');
             toggle(p);
           }}
           onSave={async (p) => {

@@ -160,6 +160,24 @@ const withKeyDrafts = (serverConfig) => Object.fromEntries(
 );
 
 /**
+ * A config reload after one row's save (or key removal) must not eat what is
+ * typed in the OTHER open rows. Rows stay open until saved or cancelled, so
+ * two pasted keys can sit side by side; reloading used to blank every draft,
+ * leaving the second row open and silently empty. Every touched row except
+ * `except` (the row that just saved) keeps its draft key, Account ID and
+ * `touched` on top of the fresh server entry.
+ */
+export function keepKeyDrafts(prevConfig = {}, nextConfig = {}, except = null) {
+  return Object.fromEntries(Object.entries(nextConfig).map(([provider, entry]) => {
+    const prev = prevConfig[provider];
+    if (provider === except || !prev?.touched) return [provider, entry];
+    const kept = { ...entry, apiKey: prev.apiKey ?? '', touched: true };
+    if ('accountId' in prev) kept.accountId = prev.accountId;
+    return [provider, kept];
+  }));
+}
+
+/**
  * Apps that reach aiGeek from inside the suite's own process boundary rather
  * than over the wire with a key. Minting a key for one of these would create a
  * credential nothing ever presents, so the console offers a chip instead of a
@@ -206,6 +224,9 @@ const initialState = {
   // { [provider]: { hasKey, keyHint, enabled, apiKey, accountId? } } — the
   // roster as the server reports it, plus this session's key drafts.
   config: {},
+  // The same roster as last read from the server, with blank drafts: what a
+  // row's Cancel puts back.
+  configServer: {},
   configLoading: false,
   // Which provider row is mid-save, so exactly that row shows a spinner.
   savingProvider: null,
@@ -291,7 +312,26 @@ function reducer(state, action) {
     case 'config/loading':
       return { ...state, configLoading: true, configError: null };
     case 'config/loaded':
-      return { ...state, configLoading: false, config: action.config ?? state.config };
+      if (!action.config) return { ...state, configLoading: false };
+      return {
+        ...state,
+        configLoading: false,
+        // The server's view, kept so Cancel can put a row back exactly.
+        configServer: action.config,
+        config: keepKeyDrafts(state.config, action.config, action.except),
+      };
+    case 'config/discard':
+      // Cancel: the row goes back to what the server said — key draft,
+      // Account ID and `touched` alike — so nothing typed survives it.
+      return {
+        ...state,
+        config: {
+          ...state.config,
+          [action.provider]: state.configServer?.[action.provider]
+            ? { ...state.configServer[action.provider] }
+            : { ...state.config[action.provider], apiKey: '', touched: false },
+        },
+      };
     case 'config/failed':
       return { ...state, configLoading: false, configError: action.error };
     case 'config/field':
@@ -477,11 +517,12 @@ export function useAIGeek(notify) {
     }
   }, []);
 
-  const loadConfiguration = useCallback(async () => {
+  /** `except`: the row that just saved, whose draft the reload clears. */
+  const loadConfiguration = useCallback(async ({ except = null } = {}) => {
     dispatch({ type: 'config/loading' });
     try {
       const { data } = await apolloClient.query({ query: GET_AI_CONFIG, fetchPolicy: 'network-only' });
-      dispatch({ type: 'config/loaded', config: data?.aiConfig ? withKeyDrafts(data.aiConfig) : null });
+      dispatch({ type: 'config/loaded', config: data?.aiConfig ? withKeyDrafts(data.aiConfig) : null, except });
     } catch (err) {
       dispatch({ type: 'config/failed', error: err });
     }
@@ -578,6 +619,11 @@ export function useAIGeek(notify) {
     dispatch({ type: 'config/field', provider, field, value });
   }, []);
 
+  /** Cancel on a provider row: back to the server's state, nothing kept. */
+  const discardProviderDraft = useCallback((provider) => {
+    dispatch({ type: 'config/discard', provider });
+  }, []);
+
   /**
    * Save one provider's key (and Cloudflare's account id), when its row says Save key.
    *
@@ -615,7 +661,9 @@ export function useAIGeek(notify) {
 
       await apolloClient.mutate({ mutation: SAVE_AI_CONFIG, variables: { config: payload } });
       notify(draft ? `${provider} key saved` : `${provider} account id saved`, { tone: 'success' });
-      await loadConfiguration(); // re-read the hint, clear the draft and `touched`
+      // Re-read the hint and clear this row's draft and `touched`; other open
+      // rows keep what is typed in them.
+      await loadConfiguration({ except: provider });
       // The chip on this row comes from the status endpoint, and a key paste
       // should light it up without waiting out the poll (§5, "a key paste
       // shows a chip within one status poll").
@@ -635,7 +683,7 @@ export function useAIGeek(notify) {
     try {
       await apolloClient.mutate({ mutation: REMOVE_AI_PROVIDER_KEY, variables: { provider } });
       notify(`${provider} key removed — the provider is no longer used`, { tone: 'warning' });
-      await loadConfiguration();
+      await loadConfiguration({ except: provider });
       await loadStatus({ silent: true });
     } catch (err) {
       notify(err.message || `Failed to remove the ${provider} key`, { tone: 'error' });
@@ -1165,6 +1213,7 @@ export function useAIGeek(notify) {
     loadApiKeys,
     // providers
     setConfigField,
+    discardProviderDraft,
     saveProviderKey,
     removeProviderKey,
     // usage

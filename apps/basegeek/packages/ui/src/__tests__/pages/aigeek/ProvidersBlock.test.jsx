@@ -166,6 +166,21 @@ describe('ProvidersBlock', () => {
     await waitFor(() => expect(screen.queryByLabelText('API key')).toBeNull());
   });
 
+  // Review 2026-11-20: Cancel cleared only the key, so an edited Cloudflare
+  // Account ID (and `touched`) outlived it. With the page's discard wired in,
+  // Cancel hands the whole row back to the server state.
+  it('Cancel discards the whole row through onDiscardDraft when the page provides it', async () => {
+    const onFieldChange = vi.fn();
+    const onDiscardDraft = vi.fn();
+    const config = { ...CONFIG, cloudflare: { ...CONFIG.cloudflare, accountId: 'edited', touched: true } };
+    renderWithProviders(<ProvidersBlock {...baseProps({ config, onFieldChange, onDiscardDraft })} />);
+    await openRow(/add key/i); // cloudflare
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onDiscardDraft).toHaveBeenCalledWith('cloudflare');
+    expect(onFieldChange).not.toHaveBeenCalled();
+  });
+
   it('says what to do in words that work on a phone: no "click away"', async () => {
     renderWithProviders(<ProvidersBlock {...baseProps()} />);
     await openRow(/add key/i);

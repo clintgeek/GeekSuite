@@ -185,6 +185,7 @@ export default function AIGeekPage() {
               status: state.status,
               onRetry: aigeek.loadConfiguration,
               onFieldChange: aigeek.setConfigField,
+              onDiscardDraft: aigeek.discardProviderDraft,
               onSaveKey: aigeek.saveProviderKey,
               onRemoveKey: aigeek.removeProviderKey,
             }}
