@@ -396,7 +396,7 @@ export const TRANSCRIBE_MEDIA_TYPES = ['image/png', 'image/jpeg'];
  * gets extra rules (ignore ruled lines and anything printed). Optional, and
  * `sketch` when absent, so last night's clients keep working unchanged.
  */
-export const TRANSCRIBE_SOURCES = ['sketch', 'photo'];
+export const TRANSCRIBE_SOURCES = ['sketch', 'photo', 'form'];
 
 /**
  * About 8 MB of base64, which is a 6 MB image. The NoteGeek client refuses
@@ -435,7 +435,7 @@ export const transcribeSketchArgsSchema = z
       .refine((s) => s.startsWith('data:') || BASE64.test(s), 'The image is not valid base64.'),
     source: z
       .enum(TRANSCRIBE_SOURCES, {
-        errorMap: () => ({ message: `source must be ${TRANSCRIBE_SOURCES.join(' or ')}.` }),
+        errorMap: () => ({ message: `source must be ${TRANSCRIBE_SOURCES.join(', ')}.` }),
       })
       .nullish()
       .transform((v) => v ?? 'sketch'),

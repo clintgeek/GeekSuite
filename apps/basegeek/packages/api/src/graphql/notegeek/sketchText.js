@@ -120,12 +120,19 @@ export function hasAnyShape(content) {
  * (sketchTranscript.js `correctionsStillApply`). Before 2026-11-15 they stayed
  * findable forever.
  */
+/**
+ * A reading without the lines that are a template's printed headings
+ * ("§ ACTIONS": transcribe.js rule 9). They are the form's words, on every
+ * page made from it: searchable, "actions" would find every 1:1 ever held.
+ */
+export const withoutFormHeadings = (text) => String(text ?? '').split('\n').filter((line) => !/^\s*§\s/.test(line)).join('\n');
+
 export function sketchSearchText(transcript) {
   const parts = [];
   const edited = transcript?.edited;
   const editedCounts = Boolean(edited) && (edited.hash === transcript?.hash || transcript?.editedSearchable !== false);
   for (const t of [transcript?.text, editedCounts ? edited?.text : null]) {
-    const s = typeof t === 'string' ? t.trim() : '';
+    const s = typeof t === 'string' ? withoutFormHeadings(t).trim() : '';
     if (s && s !== NO_WRITING && !parts.includes(s)) parts.push(s);
   }
   return parts.join('\n\n');

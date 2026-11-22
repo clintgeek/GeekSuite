@@ -225,7 +225,7 @@ describe('transcribeSketch source', () => {
   });
 
   test('anything else is refused, by name', () => {
-    expectBadInput(() => validate({ image: JPEG, mediaType: 'image/jpeg', source: 'scan' }), /source must be sketch or photo/);
+    expectBadInput(() => validate({ image: JPEG, mediaType: 'image/jpeg', source: 'scan' }), /source must be sketch, photo, form/);
     expectBadInput(() => validate({ image: JPEG, mediaType: 'image/jpeg', source: 'PHOTO' }), /source/);
     expectBadInput(() => validate({ image: JPEG, mediaType: 'image/jpeg', source: '' }), /source/);
   });
@@ -307,5 +307,19 @@ describe('the photo prompt', () => {
 
   test('the sketch prompt has none of the photo rules', () => {
     expect(TRANSCRIBE_PROMPT).not.toMatch(/ruled lines|IGNORE PRINTED TEXT|COPE WITH SKEW/);
+  });
+});
+
+describe('the form prompt (a sketch on a template sheet)', () => {
+  test('is the shared rules plus the form ones, and is chosen by source', async () => {
+    const { TRANSCRIBE_FORM_PROMPT, transcribePromptFor, FORM_HEADING_MARK } = await import('../graphql/notegeek/transcribe.js');
+    expect(transcribePromptFor('form')).toBe(TRANSCRIBE_FORM_PROMPT);
+    expect(transcribePromptFor('sketch')).toBe(TRANSCRIBE_PROMPT);
+    expect(transcribePromptFor('photo')).toBe(TRANSCRIBE_PHOTO_PROMPT);
+    expect(TRANSCRIBE_FORM_PROMPT).toMatch(/TRANSCRIBE FAITHFULLY/);
+    expect(TRANSCRIBE_FORM_PROMPT).toMatch(/NAME THE SECTION/);
+    expect(TRANSCRIBE_FORM_PROMPT).toContain(`${FORM_HEADING_MARK}ACTIONS`);
+    expect(TRANSCRIBE_FORM_PROMPT).toMatch(/PRINTED TICK BOXES/);
+    expect(FORM_HEADING_MARK).toBe('§ ');
   });
 });

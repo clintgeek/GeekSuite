@@ -171,3 +171,24 @@ test('a background read stops at 20 of the day, the open page at 30', async () =
   expect(transcribe.mock.calls[1][0].dailyCap).toBe(AUTO_TRANSCRIBE_DAILY_CAP);
   expect(BACKGROUND_DAILY_CAP).toBeLessThan(AUTO_TRANSCRIBE_DAILY_CAP);
 });
+
+describe('a sketch on a template is read as a form (TEMPLATES_SPEC T6, 2026-11-22)', () => {
+  test('the form prompt reads it, a plain sketch keeps the sketch prompt', async () => {
+    const onSheet = await sketch(snapshot([...SHEET, stroke('a')]));
+    const plain = await sketch(snapshot([stroke('b')]));
+    const transcribe = reading('§ ACTIONS\n[ ] send the doc');
+    await run(onSheet, transcribe);
+    await run(plain, transcribe);
+    expect(transcribe.mock.calls[0][0].source).toBe('form');
+    expect(transcribe.mock.calls[1][0].source).toBe('sketch');
+  });
+
+  test("the form's headings are kept in the reading and left out of search", async () => {
+    const id = await sketch(snapshot([...SHEET, stroke('a')]));
+    const view = await run(id, reading('§ THEIR TOPICS\npromo timeline\n§ ACTIONS\n[ ] send the doc'));
+    expect(view.text).toMatch(/^§ THEIR TOPICS/);
+    const note = await Note.findById(id).lean();
+    expect(note.wordText).toBe('promo timeline\n[ ] send the doc');
+    expect(note.wordText).not.toMatch(/ACTIONS|TOPICS/);
+  });
+});

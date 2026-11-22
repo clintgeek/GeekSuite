@@ -984,7 +984,7 @@ export const resolvers = {
       const result = await transcribeSketch({ image, mediaType, source, userId });
       // A sketch's page (not a photo): keep the reading so the automatic run
       // and the next Convert don't pay for it again. Best effort.
-      if (noteId && source === 'sketch') {
+      if (noteId && source !== 'photo') {
         await rememberConvertReading({ noteId, userId, text: result.text, provenance: result.provenance });
       }
       return result;

@@ -301,7 +301,8 @@ export async function autoTranscribeSketch({ noteId, userId, image, mediaType, b
   const ours = { 'sketchTranscript.submittedHash': hash, 'sketchTranscript.status': 'processing' };
 
   try {
-    const { text, provenance } = await transcribe({ image, mediaType, source: 'sketch', userId, dailyCap: background ? BACKGROUND_DAILY_CAP : AUTO_TRANSCRIBE_DAILY_CAP });
+    // On a template sheet, the client sends the form with the writing (T6).
+    const { text, provenance } = await transcribe({ image, mediaType, source: hasPaperSheet(note.content) ? 'form' : 'sketch', userId, dailyCap: background ? BACKGROUND_DAILY_CAP : AUTO_TRANSCRIBE_DAILY_CAP });
     await storeReading({ noteId, userId, hash, text, provenance, source: 'auto', filter: ours, now });
   } catch (err) {
     const code = err?.extensions?.code || null;

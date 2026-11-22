@@ -99,8 +99,37 @@ ${TRANSCRIBE_RULES}
 10. IGNORE PRINTED TEXT. Ignore anything printed on the notebook itself — page headers, printed dates or "Date: ____" fields, page numbers, brand names and logos. Transcribe what the writer wrote into such a field, not the printed label.
 11. COPE WITH SKEW. The page may be photographed at a slight angle or be slightly rotated or curved. Read along the writer's lines as they run on the page, not along the edges of the photo.`;
 
+/** What opens a line that is one of a template's printed headings (rule 9 below). */
+export const FORM_HEADING_MARK = '§ ';
+
+/**
+ * A sketch written on a template sheet (DOCS/TEMPLATES_SPEC.md T6, as revised
+ * 2026-11-22): a printed form — a 1:1 sheet, a schedule, a meeting page — with
+ * handwriting on it. The form is sent WITH the writing, because where a line
+ * was written is half of what it means: "ship Friday" under ACTIONS is not
+ * the same note as under THEIR TOPICS. The template cannot change once the
+ * page has ink (T4), so the form in the picture is the form it was written
+ * on.
+ *
+ * The form's headings come back on their own lines behind "§ ", a mark no
+ * writer makes and no Markdown or journal grammar uses, so every reader of
+ * the transcript can tell the form's words from the writer's: search leaves
+ * those lines out (sketchText.js), and nothing mistakes one for a task.
+ */
+export const TRANSCRIBE_FORM_PROMPT = `You are transcribing a page of handwriting — a printed form (a planner or meeting template) that someone has written on with a stylus. The form's print is neat, typeset and grey or black; the handwriting is the writer's. Your job is to write down, as plain text, exactly what the writer wrote, and to say which part of the form each piece was written in.
+
+Rules:
+${TRANSCRIBE_RULES}
+8. THE FORM'S PRINT IS NOT THE WRITER'S WRITING. Never transcribe the form's ruled lines, boxes or instructions as if the writer wrote them, and never treat a printed line as an underline, a dash or a list mark.
+9. NAME THE SECTION. When the handwriting that follows was written in a section of the form that has a printed heading, first write that heading on a line of its own as "${FORM_HEADING_MARK}" followed by the heading exactly as printed (for example "${FORM_HEADING_MARK}ACTIONS"). Write each heading at most once, in page order, and only if the writer wrote something in that section. These are the only lines you may add, and the only exception to rule 2. Handwriting that is in no section is written without one.
+10. KEEP PRINTED LABELS BESIDE THE WRITING. When the writer wrote on a line that has a small printed label (a time such as "9 AM", a number), start that line with the label, then the handwriting: "9 AM standup". A label with nothing written beside it is left out.
+11. PRINTED TICK BOXES. Handwriting beside a printed tick box starts with "[x] " if the writer ticked or crossed the box and "[ ] " if they left it empty.
+12. If the writer wrote nothing at all on the form, reply with exactly "[no writing]".`;
+
 /** The system prompt for a page, by where it came from. */
-export const transcribePromptFor = (source) => (source === 'photo' ? TRANSCRIBE_PHOTO_PROMPT : TRANSCRIBE_PROMPT);
+export const transcribePromptFor = (source) => (
+  source === 'photo' ? TRANSCRIBE_PHOTO_PROMPT : source === 'form' ? TRANSCRIBE_FORM_PROMPT : TRANSCRIBE_PROMPT
+);
 
 /** A GraphQLError in the shape the client's `saveErrorMessage` already reads. */
 function transcribeError(message, code, extra = {}) {
@@ -121,7 +150,8 @@ const stripOuterFence = (text) => {
  * @param {object} opts
  * @param {string} opts.image      base64, no data: prefix (validated)
  * @param {string} opts.mediaType  image/png or image/jpeg (validated)
- * @param {'sketch'|'photo'} [opts.source]  which prompt reads it; 'sketch' by default
+ * @param {'sketch'|'photo'|'form'} [opts.source]  which prompt reads it; 'sketch' by default.
+ *        'form': a sketch on a template sheet, sent with the sheet in the picture
  * @param {string} opts.userId
  * @param {object} [opts.ai]       injectable aiService, for tests
  * @param {number} [opts.dailyCap]  this call's cap on the shared `transcribe` counter.
@@ -143,7 +173,9 @@ export async function transcribeSketch({ image, mediaType, source = 'sketch', us
             type: 'text',
             text: source === 'photo'
               ? 'Transcribe the handwriting on this photographed notebook page.'
-              : 'Transcribe the handwriting on this page.',
+              : source === 'form'
+                ? 'Transcribe the handwriting on this form.'
+                : 'Transcribe the handwriting on this page.',
           },
           { type: 'image', mediaType, data: image },
         ],
