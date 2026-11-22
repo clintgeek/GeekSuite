@@ -788,3 +788,18 @@ Chef: "across the board let's fix the transcribing when closed thing. Feels like
   is closed. Details and limits: `apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md`.
 - **Deploy order:** basegeek first, then the apps.
 
+## 2026-11-22 — Templates lock on the first mark; the form is read with the writing
+
+Chef: "We should probably somehow capture the writing on template pages. We'll lock the template
+on the first mark on the page, then we can safely process all of the writing and context."
+
+- **Lock (TEMPLATES_SPEC T4).** NoteGeek `setPaperTemplate` and GeekDay `setSheet` do nothing on
+  a page with ink; both menus disable the template choices and say why. Paper is not locked.
+- **Form reading (T6).** The whole-page export now includes the sheet when there is ink
+  (NoteGeek `exportPng` returns `form: true`; GeekDay `exportPage`). Gateway: source `form` and
+  `TRANSCRIBE_FORM_PROMPT`; `autoTranscribeSketch` picks it when the saved sketch has a sheet,
+  Convert and Send tasks pass `source: 'form'`. Section headings come back as "§ HEADING" lines,
+  left out of search text (`withoutFormHeadings`).
+- **Not checked against a real model.** The prompt is tested for its wording, not for what the
+  model does with a real 1:1 page. First real page: look at the transcript.
+

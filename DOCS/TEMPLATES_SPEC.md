@@ -46,17 +46,30 @@ T1. A template is a white sheet printed into the drawing itself: one object
 T2. The sheet is white with dark print in every theme and on every paper.
 T3. It is permanent while it is there: it cannot be erased, selected, moved
     or unlocked by any drawing tool, and "clear" leaves it.
-T4. It can be added at any time, swapped for another, and taken off, from
-    where the paper is chosen. Each is one Undo step.
+T4. *(Revised 2026-11-22, Chef: "We'll lock the template on the first mark
+    on the page, then we can safely process all of the writing and
+    context.")* On a page with no writing it can be added, swapped for
+    another, and taken off, from where the paper is chosen; each is one Undo
+    step. The first mark fixes it: on a page with writing the template
+    choices are disabled (the one it has stays shown), and a page with
+    writing and no template cannot be given one. Undoing back to a blank
+    page unlocks it. Paper is never locked.
 T5. Paper and template are separate. Choosing paper colour or lines never
     changes a template; placing or removing a template never changes the
     paper. The paper is drawn around and below the sheet. Dot grid and Grid
     are paper, not templates. A sketch with no template draws its paper
     exactly as before the first templates build (Chef's green grid).
 T6. Being part of the drawing, the sheet is in thumbnails, print and shared
-    images, and opens the same in the other app and on another device. It is
-    left out of any image sent to be read as handwriting (transcription,
-    circle-to-task), and a sheet alone does not count as ink.
+    images, and opens the same in the other app and on another device. A
+    sheet alone does not count as ink and is never sent to be read.
+    *(Revised 2026-11-22, same quote as T4: "capture the writing on template
+    pages".)* When the whole page is read (automatic transcription, the
+    background reader, Convert, Send tasks) the sheet goes WITH the writing,
+    and the reading names the section of the form each piece was written
+    in: a line of its own, "§ " and the printed heading ("§ ACTIONS").
+    Those lines are the form's words, not the writer's: they are kept in
+    the transcript and left out of search. Circle-to-task still reads the
+    circled ink alone.
 T7. *(Sage's wording.)* A new sheet goes at the page's top-left on a blank
     sketch, and on a sketch with ink where the writer is looking. A sketch
     with a sheet and no remembered view opens on the sheet. GeekDay always
