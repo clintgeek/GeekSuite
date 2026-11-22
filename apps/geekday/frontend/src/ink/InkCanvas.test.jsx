@@ -755,7 +755,7 @@ describe('InkCanvas (tldraw mocked)', () => {
     });
 
     it('a template chosen from the menu is printed into the drawing: one locked sheet at the top of the page, one undo step', () => {
-      const { editor } = mount({ content: snapshotWithMeta({ paperTemplate: 'grid' }, 'shape:a') });
+      const { editor } = mount({ content: snapshotWithMeta({ paperTemplate: 'grid' }) });
       openMenu();
       pickSheet('meeting');
       expect(sheet()).toBe('meeting');
@@ -800,8 +800,8 @@ describe('InkCanvas (tldraw mocked)', () => {
       expect(onChange).not.toHaveBeenCalled();
     });
 
-    it('"No template" takes the sheet off as one undo step and saves; the paper and the ink are untouched', () => {
-      const { editor, onChange } = mount({ content: snapshotWithSheet('schedule', { meta: { paperTemplate: 'dots' } }, 'shape:a') });
+    it('"No template" takes the sheet off a page with no writing as one undo step and saves; the paper is untouched', () => {
+      const { editor, onChange } = mount({ content: snapshotWithSheet('schedule', { meta: { paperTemplate: 'dots' } }) });
       expect(sheet()).toBe('schedule');
       expect(sheetState()).toBe('placed');
       openMenu();
@@ -809,7 +809,7 @@ describe('InkCanvas (tldraw mocked)', () => {
       pickSheet('none');
       expect(editor.mark).toHaveBeenCalledTimes(1);
       expect(sheet()).toBe('none');
-      expect(editor.shapes().map((sh) => sh.id)).toEqual(['shape:a']);
+      expect(editor.shapes()).toEqual([]);
       expect(paper()).toBe('dots');
       act(() => { vi.advanceTimersByTime(400); });
       expect(onChange).toHaveBeenCalledTimes(1);
@@ -819,7 +819,7 @@ describe('InkCanvas (tldraw mocked)', () => {
     });
 
     it('choosing another template replaces the sheet where it is; a paper change never touches it', () => {
-      const { editor } = mount({ content: snapshotWithSheet('cornell', { x: 60, y: 1500 }, 'shape:a') });
+      const { editor } = mount({ content: snapshotWithSheet('cornell', { x: 60, y: 1500 }) });
       openMenu();
       pickSheet('top3');
       expect(editor.getShape(SHEET_ID)).toMatchObject({ x: 60, y: 1500, isLocked: true, meta: { paperTemplate: 'top3' } });
@@ -828,6 +828,44 @@ describe('InkCanvas (tldraw mocked)', () => {
       pickPaper('grid');
       pickPaper('none');
       expect(editor.getShape(SHEET_ID)).toBe(before);
+    });
+
+    it('T4: the first mark fixes the template: on a page with writing it cannot be added, swapped or taken off', () => {
+      const { editor, onChange } = mount({ content: snapshotWithSheet('cornell', { x: 60, y: 1500 }, 'shape:a') });
+      openMenu();
+      for (const id of ['none', 'schedule', 'top3', 'meeting', 'oneonone', 'cornell']) {
+        expect(screen.getByTestId(`ink-sheet-${id}`)).toHaveAttribute('aria-disabled', 'true');
+      }
+      expect(screen.getByTestId('ink-sheet-cornell')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('ink-sheet-locked')).toHaveTextContent(/has writing on it, so its template stays/);
+      // The papers are not locked.
+      expect(screen.getByTestId('ink-page-grid')).not.toHaveAttribute('aria-disabled', 'true');
+      pickSheet('top3');
+      pickSheet('none');
+      expect(editor.getShape(SHEET_ID)).toMatchObject({ x: 60, y: 1500, meta: { paperTemplate: 'cornell' } });
+      expect(editor.mark).not.toHaveBeenCalled();
+      act(() => { vi.advanceTimersByTime(1000); });
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('T4: a page with writing and no template cannot be given one; a blank page can', () => {
+      const { editor } = mount({ content: snapshotWith('shape:a') });
+      openMenu();
+      expect(screen.getByTestId('ink-sheet-meeting')).toHaveAttribute('aria-disabled', 'true');
+      pickSheet('meeting');
+      expect(editor.getShape(SHEET_ID)).toBeUndefined();
+      expect(sheet()).toBe('none');
+    });
+
+    it('the first stroke locks the template the page has; the menu says so at once', () => {
+      const { editor } = mount();
+      openMenu();
+      pickSheet('meeting');
+      expect(screen.queryByTestId('ink-sheet-locked')).toBe(null);
+      act(() => { editor.draw('shape:a'); });
+      expect(screen.getByTestId('ink-sheet-locked')).toBeInTheDocument();
+      pickSheet('none');
+      expect(editor.getShape(SHEET_ID)).toMatchObject({ meta: { paperTemplate: 'meeting' } });
     });
 
     it('a saved page with a sheet opens with it, wherever NoteGeek put it, and is neither moved nor rewritten', () => {
@@ -977,7 +1015,7 @@ describe('InkCanvas (tldraw mocked)', () => {
     });
 
     it('"Use for new days" makes the paper and template on screen this device\'s default, and turns it off again', () => {
-      const { onChange } = mount({ content: snapshotWith('shape:a') });
+      const { onChange } = mount();
       openMenu();
       const toggle = screen.getByTestId('ink-page-default');
       expect(toggle).toHaveAttribute('aria-checked', 'true'); // Ruled, no template, is the default until something else is
@@ -1014,7 +1052,7 @@ describe('InkCanvas (tldraw mocked)', () => {
     });
 
     it('a page with a sheet is a light page in the dark theme: tldraw\'s light scheme and the light paper, so dark ink reads on the white sheet', () => {
-      const { editor } = mount({ content: snapshotWithSheet('meeting', {}, 'shape:a') }, { mode: 'dark' });
+      const { editor } = mount({ content: snapshotWithSheet('meeting') }, { mode: 'dark' });
       expect(canvasAttr('data-ink-light')).toBe('true');
       expect(editor.user.updateUserPreferences).toHaveBeenLastCalledWith({ colorScheme: 'light' });
       expect(screen.getByTestId('ink-paper').style.backgroundColor).toBe('rgb(255, 252, 245)'); // the diary's light paper

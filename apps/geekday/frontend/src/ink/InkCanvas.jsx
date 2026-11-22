@@ -671,6 +671,9 @@ export default function InkCanvas({
   const setSheet = useCallback((id) => {
     const ed = editorRef.current;
     if (!ed || readOnlyRef.current) return;
+    // T4 (Chef, 2026-11-22): the first mark fixes the template. The writing
+    // is read with the form it was written on (exportPage, below).
+    if (pageContent(ed).hasInk) return;
     const current = paperSheetOf(ed);
     if (id === NO_SHEET) {
       // On a blank day there is only a preview to put away; nothing is saved.
@@ -774,16 +777,16 @@ export default function InkCanvas({
     /** Has tldraw mounted and loaded the page? */
     isReady: () => Boolean(editorRef.current),
     /**
-     * The whole page's writing as the image a model reads (the background
-     * reader): never the template sheet, whose printed words are not the
-     * writer's. Null when there is no writing.
+     * The whole page as the image a model reads (the background reader):
+     * the writing, and the template sheet it was written on when there is
+     * one, so the reading can say which part of the form each line is in
+     * (TEMPLATES_SPEC T6). Null when there is no writing: a form alone is
+     * nothing to read.
      */
     exportPage: async () => {
       const ed = editorRef.current;
-      if (!ed) return null;
-      const ids = [...ed.getCurrentPageShapeIds()].filter((id) => !isPaperSheetShape(ed.getShape(id)));
-      if (!ids.length) return null;
-      return exportSketchPng(ed, { exportToBlob, ids });
+      if (!ed || !pageContent(ed).hasInk) return null;
+      return exportSketchPng(ed, { exportToBlob });
     },
     undo: () => { editorRef.current?.undo(); },
     redo: () => { editorRef.current?.redo(); },
@@ -901,6 +904,7 @@ export default function InkCanvas({
               penMode={!fingerCanDraw}
               paper={page.paper}
               sheet={sheetShown}
+              sheetLocked={page.hasInk}
               deviceDefault={deviceDefault}
               onPaper={setPaper}
               onSheet={setSheet}

@@ -15,7 +15,7 @@ import {
     readFingerDraws, writeFingerDraws, readPenSeen, writePenSeen,
 } from '../../utils/penPrefs';
 import { SKETCH_IMAGE_INPUT_MAX_BYTES, SKETCH_IMAGE_MAX_EDGE, sketchImageHandler } from '../../utils/sketchImages';
-import { isPaperSheetShape, isPaperSheetTemplate, placePaperSheet } from '@geeksuite/ui';
+import { isPaperSheetShape, isPaperSheetTemplate, paperSheetOf, placePaperSheet } from '@geeksuite/ui';
 import { paperFromMeta, readDevicePaper } from './paperModel';
 import { hasInk as pageHasInk, guardTemplateSheet, showTemplateSheet } from './usePaper';
 import { SketchPortalContext } from './sketchPortal';
@@ -278,7 +278,15 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         setIsLoading(false);
         if (sketchApiRef) {
             sketchApiRef.current = {
-                exportPng: () => exportSketchPng(editor, { exportToBlob }),
+                // The page as a model reads it. On a template the form goes
+                // with the writing (DOCS/TEMPLATES_SPEC.md T6): `form` tells
+                // the caller to ask for the form reading. A sheet with no
+                // writing is still nothing to read ("empty").
+                exportPng: async () => {
+                    const form = Boolean(paperSheetOf(editor)) && pageHasInk(editor);
+                    const page = await exportSketchPng(editor, { exportToBlob, sheet: form });
+                    return { ...page, form };
+                },
                 // Print / Save as PDF (utils/printNote.js): bigger, uncapped,
                 // one image per photographed page.
                 exportForPrint: () => exportSketchForPrint(editor, { exportToBlob }),

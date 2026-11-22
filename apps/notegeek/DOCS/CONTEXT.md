@@ -871,3 +871,10 @@ Full account: `AUTO_TRANSCRIBE_SPEC.md`, "Background reader". What to know befor
   proved by the gateway's own tests. The drawing is fetched `no-cache` on purpose. The reader's
   own mutation document is separate from `AUTO_TRANSCRIBE_SKETCH`, so the open sketch's read
   never depends on the gateway knowing `background`.
+
+- **Templates lock on the first mark, and the form is read with the writing (2026-11-22,
+  TEMPLATES_SPEC T4/T6).** `setPaperTemplate` does nothing once `hasInk`; `usePaper()` gives
+  `templateLocked`. `exportPng()` includes the sheet when there is ink and returns `form: true`;
+  Convert and Send tasks then send `source: 'form'`. The gateway picks the form prompt itself for
+  `autoTranscribeSketch`. Transcripts of such pages carry "§ HEADING" lines: keep them out of
+  anything that treats a line as the writer's.

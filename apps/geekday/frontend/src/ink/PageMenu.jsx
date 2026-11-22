@@ -38,16 +38,18 @@ const headingSx = {
   pt: 0.5,
 };
 
-function Choice({ choice, checked, testId, group, chip, onClick }) {
+function Choice({ choice, checked, testId, group, chip, onClick, disabled = false }) {
   return (
     <MenuItem
       role="menuitemradio"
       aria-checked={checked ? 'true' : 'false'}
       aria-label={`${group}: ${choice.label}. ${choice.description}`}
       selected={checked}
+      disabled={disabled}
       data-testid={testId}
       onClick={onClick}
-      sx={itemSx}
+      // The chosen one stays plain to read when the group is locked.
+      sx={disabled && checked ? { ...itemSx, '&.Mui-disabled': { opacity: 1 } } : itemSx}
     >
       {chip}
       <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -71,12 +73,13 @@ const pageName = (paper, sheet) => {
  * @param {() => void} props.onClose
  * @param {string} props.paper               the paper on screen (one of PAPER_CHOICES' ids)
  * @param {string} props.sheet               the template on screen, placed or previewed (one of SHEET_CHOICES' ids, or an id this build does not know)
+ * @param {boolean} [props.sheetLocked]      the page has writing: its template can no longer change (TEMPLATES_SPEC T4)
  * @param {{paper: string, sheet: string}} props.deviceDefault  this device's page for new days
  * @param {(id: string) => void} props.onPaper
  * @param {(id: string) => void} props.onSheet
  * @param {(page: {paper: string, sheet: string}) => void} props.onDeviceDefault
  */
-export default function PageMenu({ anchorEl, onClose, paper, sheet, deviceDefault, onPaper, onSheet, onDeviceDefault }) {
+export default function PageMenu({ anchorEl, onClose, paper, sheet, sheetLocked = false, deviceDefault, onPaper, onSheet, onDeviceDefault }) {
   // A template this build does not know cannot be a default.
   const knownSheet = sheetChoiceFor(sheet).id === sheet ? sheet : NO_SHEET;
   const isDefault = paper === deviceDefault.paper && knownSheet === deviceDefault.sheet;
@@ -113,9 +116,15 @@ export default function PageMenu({ anchorEl, onClose, paper, sheet, deviceDefaul
           checked={choice.id === (sheet || NO_SHEET)}
           testId={`ink-sheet-${choice.id}`}
           chip={<SheetChip id={choice.id} />}
+          disabled={sheetLocked}
           onClick={() => onSheet(choice.id)}
         />
       ))}
+      {sheetLocked ? (
+        <Typography component="li" role="presentation" data-testid="ink-sheet-locked" sx={{ px: 2, pb: 1, fontSize: '0.8125rem', lineHeight: 1.3, color: 'text.secondary' }}>
+          This page has writing on it, so its template stays. The writing is read together with the form.
+        </Typography>
+      ) : null}
       <Divider component="li" role="separator" />
       <MenuItem
         role="menuitemcheckbox"

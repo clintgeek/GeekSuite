@@ -19,12 +19,15 @@ export function usePaper() {
         const shape = paperSheetOf(editor);
         return shape ? (paperSheetTemplateOf(shape) || true) : null;
     }, [editor]);
+    const inked = useValue('page has ink', () => hasInk(editor), [editor]);
     const paper = paperFromMeta(meta, readDevicePaper());
     return {
         paper,
         look: resolvePaper(paper, theme.palette.mode, { sheet: Boolean(sheet) }),
         template: typeof sheet === 'string' ? sheet : null,
         hasSheet: Boolean(sheet),
+        // T4 (2026-11-22): once there is writing, the template stays as it is.
+        templateLocked: inked,
     };
 }
 
@@ -65,8 +68,15 @@ export function showTemplateSheet(editor) {
  * note like ink, and one Undo takes back the whole change. Choosing another
  * template swaps the sheet where it is. Nothing is written when the choice
  * is the one the sketch already has. Never a device default.
+ *
+ * Only on a page with no writing (T4, Chef 2026-11-22: "lock the template on
+ * the first mark on the page, then we can safely process all of the writing
+ * and context"). The writing is read WITH the form (T6), so the form it was
+ * written on must still be the one under it. Undoing back to a blank page
+ * unlocks it.
  */
 export function setPaperTemplate(editor, id) {
+    if (hasInk(editor)) return;
     const existing = paperSheetOf(editor);
     const current = paperSheetTemplateOf(existing);
     const next = id || null;
@@ -80,7 +90,7 @@ export function setPaperTemplate(editor, id) {
         }
         const at = existing
             ? { x: existing.x, y: existing.y }
-            : sheetPlacement({ hasInk: hasInk(editor), viewport: editor.getViewportPageBounds?.() });
+            : sheetPlacement({ hasInk: false, viewport: editor.getViewportPageBounds?.() });
         if (!placePaperSheet(editor, next, at)) return;
     } finally {
         changing.delete(editor);

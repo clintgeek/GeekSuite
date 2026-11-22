@@ -2476,6 +2476,15 @@ export const scenes = [
       await drag(60);
       const strokes = page.locator('.tl-shape[data-shape-type="draw"]');
       if ((await strokes.count()) !== 1) throw new Error(`drawing on the sheet made ${await strokes.count()} strokes`);
+      // T4 (2026-11-22): the first mark fixes the template. Every choice is disabled, the
+      // one the page has still shows, and the paper can still change.
+      await openPaper();
+      for (const name of ['None', 'Meeting', 'Cornell']) {
+        if (!(await group.getByRole('button', { name: `Template: ${name}` }).isDisabled())) throw new Error(`Template: ${name} can still be chosen on a page with writing`);
+      }
+      if ((await group.getByRole('button', { name: 'Template: Meeting' }).getAttribute('aria-pressed')) !== 'true') throw new Error('the locked list does not show the template the page has');
+      if (!(await menu.getByText(/has writing on it, so its template stays/).count())) throw new Error('the Paper menu does not say why the template is fixed');
+      await h.esc(300);
       await bar.getByRole('button', { name: 'Eraser', exact: true }).click();
       await h.settle(400);
       // Rub where the stroke IS now: the page can settle a few px after the first ink (the note is created).
@@ -2645,7 +2654,7 @@ export const scenes = [
     // The background reader (AUTO_TRANSCRIBE_SPEC.md, 2026-11-22): a sketch
     // nobody has open is drawn off-screen by the real editor and sent to be
     // read, from a page that is not a sketch at all. The sketch here is on a
-    // template sheet: the image a model reads has the ink and not the form.
+    // template sheet: the image a model reads is the writing on its form.
     name: '25a-background-read',
     viewports: ['tablet'],
     async setup(page, h) {
@@ -2683,8 +2692,8 @@ export const scenes = [
       }, image);
       if (facts.w < 200 || facts.h < 100) throw new Error(`the image is ${facts.w}x${facts.h}`);
       if (!facts.dark) throw new Error('the image that was sent has no ink in it');
-      // The 1000x1400 sheet is left out: the picture is the ink's box, not the form's.
-      if (facts.h / facts.w > 1.3) throw new Error(`the image is ${facts.w}x${facts.h}: the template sheet was sent with the ink`);
+      // The 1000x1400 sheet goes with the writing (TEMPLATES_SPEC T6): the picture is the form's shape.
+      if (facts.h / facts.w < 1.3) throw new Error(`the image is ${facts.w}x${facts.h}: the form was not sent with the writing`);
       await h.settle(400);
       if (await page.locator('[data-testid="background-reader"]').count()) throw new Error('the off-screen editor was left on the page');
       const focusAfter = await page.evaluate(() => document.activeElement?.tagName);

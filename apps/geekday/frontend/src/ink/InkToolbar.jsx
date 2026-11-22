@@ -89,7 +89,7 @@ const Divider = () => <Box aria-hidden sx={{ width: '1px', height: 24, bgcolor: 
  */
 export default function InkToolbar({
   tool, onTool, fingerDraws, onFingerDrawsChange, penMode,
-  paper, sheet, deviceDefault, onPaper, onSheet, onDeviceDefault, zoomed = false, onFit,
+  paper, sheet, sheetLocked = false, deviceDefault, onPaper, onSheet, onDeviceDefault, zoomed = false, onFit,
 }) {
   const [pageAnchor, setPageAnchor] = useState(null);
   const editor = useEditor();
@@ -190,6 +190,7 @@ export default function InkToolbar({
         onClose={() => setPageAnchor(null)}
         paper={paper}
         sheet={sheet}
+        sheetLocked={sheetLocked}
         deviceDefault={deviceDefault}
         onPaper={onPaper}
         onSheet={onSheet}

@@ -102,7 +102,7 @@ const TEMPLATE_CHOICES = [{ id: null, key: 'none', label: 'None' }, ...PAPER_SHE
 export function PaperPicker() {
     const editor = useEditor();
     const theme = useTheme();
-    const { paper, look, template, hasSheet } = usePaper();
+    const { paper, look, template, hasSheet, templateLocked } = usePaper();
     const [anchor, setAnchor] = useState(null);
     // Into the sketch's container (visible in fullscreen), opening away from the bar.
     const { container, position } = useSketchPortal();
@@ -186,8 +186,10 @@ export function PaperPicker() {
                                 aria-label={`Template: ${t.label}`}
                                 aria-pressed={on ? 'true' : 'false'}
                                 data-paper-template-choice={t.key}
+                                disabled={templateLocked}
                                 onClick={() => setPaperTemplate(editor, t.id)}
                                 sx={{
+                                    '&.Mui-disabled': { opacity: on ? 1 : 0.45 },
                                     justifyContent: 'flex-start',
                                     gap: 1,
                                     minHeight: 44,
@@ -210,7 +212,11 @@ export function PaperPicker() {
                     })}
                 </Box>
                 <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary', maxWidth: 252 }}>
-                    {hasSheet
+                    {templateLocked
+                        ? (hasSheet
+                            ? 'This page has writing on it, so its template stays. The writing is read together with the form.'
+                            : 'This page has writing on it. A template can only be chosen for a blank page.')
+                        : hasSheet
                         ? 'Printed into this sketch on a white sheet. Your paper carries on around it. None takes it off.'
                         : 'Prints a white sheet into this sketch. Your paper carries on around it.'}
                 </Typography>

@@ -176,21 +176,35 @@ describe('placing and removing', () => {
     expect(editor.zoomToBounds).toHaveBeenCalledWith({ x: 0, y: 0, w: 1000, h: 1400 }, { targetZoom: 1, inset: 16 });
   });
 
-  it('on a sketch with ink it lands where the writer is looking', () => {
+  it('T4: once the page has writing, a template cannot be added, swapped or taken off', () => {
     const editor = makeEditor();
     ink(editor);
     setPaperTemplate(editor, 'top3');
-    expect(sheetOf(editor)).toMatchObject({ x: 240, y: 911, isLocked: true });
+    expect(sheetOf(editor)).toBeUndefined();
+    expect(editor.mark).not.toHaveBeenCalled();
+
+    const onSheet = makeEditor();
+    setPaperTemplate(onSheet, 'top3');
+    ink(onSheet);
+    onSheet.mark.mockClear();
+    setPaperTemplate(onSheet, 'cornell');
+    expect(sheetOf(onSheet)).toMatchObject({ x: 0, y: 0, meta: { paperTemplate: 'top3' } });
+    setPaperTemplate(onSheet, null);
+    expect(sheetOf(onSheet)).toMatchObject({ meta: { paperTemplate: 'top3' } });
+    expect(onSheet.mark).not.toHaveBeenCalled();
+    // Undo back to a blank page and it can be changed again.
+    onSheet.shapes.delete('shape:ink');
+    setPaperTemplate(onSheet, 'cornell');
+    expect(sheetOf(onSheet)).toMatchObject({ meta: { paperTemplate: 'cornell' } });
   });
 
-  it('another template swaps the sheet where it is; the same one again does nothing', () => {
+  it('on a blank page another template swaps the sheet where it is; the same one again does nothing', () => {
     const editor = makeEditor();
-    ink(editor);
     setPaperTemplate(editor, 'top3');
     editor.getViewportPageBounds = vi.fn(() => ({ x: -5000, y: -5000, w: 390, h: 600 }));
     setPaperTemplate(editor, 'cornell');
-    expect(sheetOf(editor)).toMatchObject({ x: 240, y: 911, meta: { paperTemplate: 'cornell' } });
-    expect(editor.shapes.size).toBe(2);
+    expect(sheetOf(editor)).toMatchObject({ x: 0, y: 0, meta: { paperTemplate: 'cornell' } });
+    expect(editor.shapes.size).toBe(1);
     editor.mark.mockClear();
     editor.createShapes.mockClear();
     setPaperTemplate(editor, 'cornell');
@@ -198,16 +212,15 @@ describe('placing and removing', () => {
     expect(editor.createShapes).not.toHaveBeenCalled();
   });
 
-  it('T4: None takes it off, and only it; None on a sketch without one does nothing', () => {
+  it('T4: on a blank page None takes it off; None on a sketch without one does nothing', () => {
     const editor = makeEditor({ paperColor: 'green', paperPattern: 'graph' });
     setPaperTemplate(editor, null);
     expect(editor.mark).not.toHaveBeenCalled();
-    ink(editor);
     setPaperTemplate(editor, 'schedule');
     editor.zoomToBounds.mockClear();
     setPaperTemplate(editor, null);
     expect(sheetOf(editor)).toBeUndefined();
-    expect([...editor.shapes.keys()]).toEqual(['shape:ink']);
+    expect(editor.shapes.size).toBe(0);
     expect(editor.document.meta).toEqual({ paperColor: 'green', paperPattern: 'graph' });
     expect(editor.zoomToBounds).not.toHaveBeenCalled();
     // Its picture stays in the document, so Undo can show it (tldraw keeps assets out of undo).

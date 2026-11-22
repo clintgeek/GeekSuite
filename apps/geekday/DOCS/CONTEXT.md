@@ -188,3 +188,7 @@ it with `autoTranscribeSketch(background: true)`. `InkCanvas`'s API gained `isRe
 `exportPage()` (the writing without the template sheet). The schedule is shared with NoteGeek:
 `@geeksuite/api-client` `backgroundReader.js`. Full account:
 `apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md`, "Background reader". Harness: `40-background-read`.
+
+Templates lock on the first mark (2026-11-22, `DOCS/TEMPLATES_SPEC.md` T4): `setSheet` does
+nothing once the page has ink, and `PageMenu` takes `sheetLocked`. `exportPage()` sends the sheet
+with the writing (T6); the lasso still sends the circled ink alone.

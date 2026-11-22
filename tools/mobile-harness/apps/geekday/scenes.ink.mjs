@@ -345,8 +345,9 @@ export const scenes = [
     },
   },
   {
-    // "No template" takes the sheet off again (and out of the saved note); Undo puts it back in one
-    // step; choosing another template replaces it. The paper never changes.
+    // On a page with no writing: "No template" takes the sheet off again (and out of the saved
+    // note); Undo puts it back in one step; choosing another template replaces it. The paper never
+    // changes. Then the first mark fixes the template (T4, 2026-11-22): the choices are disabled.
     name: '33-template-removed',
     goto: '/',
     wait: 1800,
@@ -355,7 +356,6 @@ export const scenes = [
       const ops = watchOps(page);
       try {
         const box = await inkBox(page);
-        await stroke(page, box, word(0.3, 0.4));
         await chooseSheet(page, 'top3');
         await mustShowSheet(page, 'top3');
         await chooseSheet(page, 'cornell');
@@ -367,7 +367,6 @@ export const scenes = [
         await chooseSheet(page, 'none');
         await must(page, `${CANVAS}[data-ink-sheet="none"][data-ink-sheet-state="none"][data-ink-paper="none"]`, 'the page with no template');
         if ((await page.locator(SHEET).count()) !== 0) throw new Error('"No template" left the sheet in the drawing');
-        if ((await strokeCount(page)) !== 1) throw new Error('removing the template touched the ink');
         await page.waitForTimeout(700);
         await waitSaved(page);
         const after = savedRecords(ops);
@@ -385,6 +384,19 @@ export const scenes = [
         await page.waitForSelector(`${CANVAS}[data-ink-sheet="none"]`, { timeout: 4000 });
         if ((await page.locator(SHEET).count()) !== 0) throw new Error('Redo did not take the sheet off again');
         await must(page, '[data-testid="ink-rules"]', 'the ruled paper where the sheet was');
+
+        // T4: put a template on, write, and it is fixed. The choices are disabled and say why.
+        await chooseSheet(page, 'meeting');
+        await mustShowSheet(page, 'meeting');
+        await stroke(page, box, word(0.3, 0.4));
+        await openPageMenu(page);
+        for (const id of ['none', 'top3', 'meeting']) {
+          if ((await page.locator(`[data-testid="ink-sheet-${id}"]`).getAttribute('aria-disabled')) !== 'true') throw new Error(`"${id}" can still be chosen on a page with writing`);
+        }
+        if ((await page.locator('[data-testid="ink-sheet-meeting"]').getAttribute('aria-checked')) !== 'true') throw new Error('the locked list does not show the template the page has');
+        await must(page, '[data-testid="ink-sheet-locked"]', 'the line that says why the template is fixed');
+        if ((await page.locator('[data-testid="ink-page-grid"]').getAttribute('aria-disabled')) === 'true') throw new Error('the paper was locked with the template');
+        await mustShowSheet(page, 'meeting');
       } finally {
         ops.stop();
       }
@@ -667,7 +679,7 @@ export const scenes = [
     // The background reader: a page nobody is writing on (here, another
     // day's, on a Meeting sheet) is drawn off-screen and sent to be read, so
     // it is searchable in NoteGeek without ever being opened there. The image
-    // is the writing, without the printed form.
+    // is the writing on its printed form (TEMPLATES_SPEC T6).
     name: '40-background-read',
     goto: '/?__fixture=reader',
     wait: 1500,
@@ -693,7 +705,7 @@ export const scenes = [
           return { w: bmp.width, h: bmp.height, dark };
         }, image);
         if (!facts.dark) throw new Error('the image that was sent has no ink in it');
-        if (facts.h / facts.w > 1.3) throw new Error(`the image is ${facts.w}x${facts.h}: the template sheet was sent with the writing`);
+        if (facts.h / facts.w < 1.3) throw new Error(`the image is ${facts.w}x${facts.h}: the form was not sent with the writing`);
         await page.waitForTimeout(400);
         if (await page.locator('[data-testid="background-reader"]').count()) throw new Error('the off-screen canvas was left on the page');
         // Today's own page is untouched: still blank, still writable.

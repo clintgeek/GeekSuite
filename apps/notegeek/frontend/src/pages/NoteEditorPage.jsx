@@ -717,7 +717,7 @@ function NoteEditorPage({ editorKey } = {}) {
 
     try {
       const { data } = await transcribeSketchMutation({
-        variables: { image: exported.base64, mediaType: exported.mediaType, noteId: savedNoteIdRef.current || undefined },
+        variables: { image: exported.base64, mediaType: exported.mediaType, source: exported.form ? 'form' : undefined, noteId: savedNoteIdRef.current || undefined },
       });
       if (stale()) return;
       const result = data?.transcribeSketch;
@@ -809,7 +809,7 @@ function NoteEditorPage({ editorKey } = {}) {
       if (!api) throw new Error('The sketch is still loading. Try again in a moment.');
       const exported = await api.exportPng();
       const { data } = await transcribeSketchMutation({
-        variables: { image: exported.base64, mediaType: exported.mediaType, noteId: savedNoteIdRef.current || undefined },
+        variables: { image: exported.base64, mediaType: exported.mediaType, source: exported.form ? 'form' : undefined, noteId: savedNoteIdRef.current || undefined },
       });
       if (stale()) return;
       const text = data?.transcribeSketch?.text || '';
