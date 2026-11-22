@@ -737,3 +737,29 @@ done". The details are Sage's decisions, written as such in `DOCS/GEEKDAY_SPEC.m
   opens on its sheet at full width. Sketches without a template are unchanged.
 - **Not checked**: anything on the Lenovo (pen and palm while scrolling, dragging a task with
   a pen); a GeekDay page with a template opened in live NoteGeek.
+
+## 2026-11-21 (evening) — Templates reworked: a sheet in the drawing, not a kind of paper
+
+Chef, after testing the morning's build: "we broke how notegeek draws grids and lines ... the
+template should be separate than the paper type ... a permanent part of the page with a
+forced white paper under. also, i miss my green grid." His three answers are in
+`DOCS/TEMPLATES_SPEC.md` (§2a, T1–T10).
+
+- **What was wrong.** A template was a background that replaced the paper's lines and was
+  drawn in the paper's colours, and Dot grid / Grid were offered as templates beside the
+  paper's own Graph / Dot grid. Picking one took the green grid away.
+- **Now.** A template is one locked image shape in the sketch: a white 1000×1400 sheet with
+  the layout printed on it (`packages/ui/src/paper/sheet.js`, shared). Schedule, Top three,
+  Meeting, Cornell. The paper is drawn exactly as before templates existed, around and under
+  it. Add, swap and remove from the Paper menu (NoteGeek) or the Page menu (GeekDay), one Undo
+  step each. Not erasable; left out of transcription and circle-to-task images; in print and
+  shared images.
+- **GeekDay.** Page menu has two lists, Paper (Ruled, Dot grid, Grid) and Template. A blank
+  day previews the device default and prints the sheet on first ink. A page with a sheet is a
+  light page even in dark mode.
+- **Found on the way.** tldraw 2.4.6 keeps assets out of undo history, so the sheet's asset is
+  per template and never deleted. tldraw's context menu can unlock a locked shape; NoteGeek
+  refuses that for the sheet.
+- **Lost.** Pages templated with the morning build keep their ink and paper but show no
+  template until it is re-added (not converted on open).
+
