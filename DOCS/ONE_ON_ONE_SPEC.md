@@ -60,6 +60,7 @@ Proposed by Sage from the conversation, accepted by Chef as a starting point.
   (`sam-lee` → "Sam Lee").
 - Automatic transcription sends each page to the outside model, as for any sketch, and is
   capped at 30 pages a day.
-- A page is read about 90 seconds after the last stroke, and only while the note is open.
-  Close it sooner and it is not searchable until it is opened again (which schedules the
-  read) or "read now" is pressed on the status line. First tweak candidate: read on leaving.
+- A page is read about 90 seconds after the last stroke while it is open, a few seconds after
+  it is closed, and otherwise by the background reader the next time NoteGeek or GeekDay is open
+  on any device (apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md, "Background reader", 2026-11-22).
+  Until that date a page on a template sheet, which every 1:1 page is, was never read at all.

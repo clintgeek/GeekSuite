@@ -775,3 +775,16 @@ shape) but still needs the notes and logs, and already tags them `fd/1on1/<perso
 - Tasks sent from a 1:1 carry the person's tag; open ones show above the page.
 - Client only. Existing notes untouched. The toolbox import is deferred.
 
+## 2026-11-22 — Sketches are read when nobody has them open
+
+Chef: "across the board let's fix the transcribing when closed thing. Feels like a bug."
+
+- **Found on the way:** the gateway called a template sheet a photographed page, so every sketch
+  on a template (all 1:1 pages, any GeekDay page with a template) was never read. Fixed in
+  `sketchText.js`: a sheet is not in the hash, not a photo page, and alone is an empty page.
+- **Background reader.** Gateway `sketchesToTranscribe` and `autoTranscribeSketch(background:
+  true)` (20 a day). `@geeksuite/api-client` `createBackgroundReader`; NoteGeek and GeekDay each
+  draw waiting sketches off-screen and send them. NoteGeek reads a sketch a few seconds after it
+  is closed. Details and limits: `apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md`.
+- **Deploy order:** basegeek first, then the apps.
+
