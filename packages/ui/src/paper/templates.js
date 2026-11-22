@@ -228,9 +228,11 @@ export function isPaperTemplate(id) {
  * @param {string} [colors.accent]  the one accent (GeekDay's ribbon)
  * @param {number} [colors.height]  only for templates that tile (`tiles`):
  *   draw the pattern this many page units tall instead of one sheet
+ * @param {string} [colors.ground]  paint the sheet's own paper in this colour
+ *   (with a hairline edge) instead of leaving the ground transparent
  * @returns {string|null}
  */
-export function paperTemplateSvg(id, { ink, line, accent, height } = {}) {
+export function paperTemplateSvg(id, { ink, line, accent, height, ground } = {}) {
   if (!isPaperTemplate(id)) return null;
   const colors = {
     ink: color(ink, DEFAULT_COLORS.ink),
@@ -238,8 +240,16 @@ export function paperTemplateSvg(id, { ink, line, accent, height } = {}) {
     accent: color(accent, color(ink, DEFAULT_COLORS.accent)),
   };
   const tall = byId.get(id).tiles && Number.isFinite(height) && height > H ? Math.ceil(height) : H;
+  // An opaque sheet (paper/sheet.js): its own paper, and a hairline edge so
+  // a white sheet still has an outline on white paper.
+  const paper = color(ground, null);
+  const sheet = paper
+    ? `<rect width="${W}" height="${tall}" fill="${esc(paper)}"/>`
+      + `<rect x="0.5" y="0.5" width="${W - 1}" height="${tall - 1}" fill="none" stroke="${esc(colors.line)}" stroke-width="1" vector-effect="non-scaling-stroke"/>`
+    : '';
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${tall}" width="${W}" height="${tall}" font-family="${esc(FONT)}">`
+    + sheet
     + DRAW[id](colors, tall)
     + '</svg>'
   );

@@ -9,3 +9,17 @@ export {
   paperTemplateDataUri,
   paperTemplateSvg,
 } from './templates.js';
+export {
+  PAPER_SHEET_ASSET_ID,
+  PAPER_SHEET_COLORS,
+  PAPER_SHEET_SHAPE_ID,
+  PAPER_SHEET_TEMPLATES,
+  isPaperSheetShape,
+  isPaperSheetTemplate,
+  paperSheetAssetId,
+  paperSheetOf,
+  paperSheetRecords,
+  paperSheetTemplateOf,
+  placePaperSheet,
+  removePaperSheet,
+} from './sheet.js';
