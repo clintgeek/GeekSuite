@@ -40,6 +40,7 @@ export const PAPER_TEMPLATES = [
   { id: 'schedule', label: 'Schedule', description: 'The hours from 6 AM to 9 PM down the left, notes on the right', tiles: false },
   { id: 'top3', label: 'Top three', description: 'Three priorities to tick off, then ruled notes', tiles: false },
   { id: 'meeting', label: 'Meeting', description: 'Attendees and agenda, notes, and a column of actions to tick', tiles: false },
+  { id: 'oneonone', label: '1:1', description: 'Their topics and mine at the head, notes, and a column of actions to tick', tiles: false },
   { id: 'cornell', label: 'Cornell', description: 'A cue column, notes, and a summary at the foot', tiles: false },
   { id: 'dots', label: 'Dot grid', description: 'Dots every line, for lists, sketches and tables', tiles: true },
   { id: 'grid', label: 'Grid', description: 'Squares with a heavier line every fifth', tiles: true },
@@ -165,6 +166,27 @@ function meeting({ ink, line, accent }) {
   ].join('');
 }
 
+/** A 1:1: their topics and mine in a band at the head; notes; actions with a tick box per line. */
+function oneonone({ ink, line, accent }) {
+  const band = 7 * RULE; // foot of the topics band
+  const mid = W / 2;
+  const split = 660; // notes | actions
+  const tick = 26;
+  const headLines = [2, 3, 4, 5, 6].map((k) => k * RULE);
+  const bodyLines = range(band + 2 * RULE, H, RULE);
+  return [
+    label('THEIR TOPICS', L, 40, ink),
+    label('MY TOPICS', mid + 20, 40, ink),
+    stroke(headLines.map((y) => hline(y, L, mid - 20) + hline(y, mid + 20, R)).join(''), line),
+    stroke(hline(band), line, 2),
+    label('NOTES', L, band + 40, ink),
+    label('ACTIONS', split + 20, band + 40, accent),
+    stroke(vline(split, band, H - 8), line, 1.5),
+    stroke(bodyLines.map((y) => hline(y, L, split - 20) + hline(y, split + 20 + tick + 12, R)).join(''), line),
+    stroke(bodyLines.map((y) => box(split + 20, y - tick - 4, tick)).join(''), line, 1.5),
+  ].join('');
+}
+
 /** Cornell notes: cues on the left, notes on the right, a summary at the foot. */
 function cornell({ ink, line, accent }) {
   const head = 2 * RULE;
@@ -208,7 +230,7 @@ function grid({ line }, height) {
   return stroke(lines(false), line, 1, ' stroke-opacity="0.7"') + stroke(lines(true), line, 1.75);
 }
 
-const DRAW = { schedule, top3, meeting, cornell, dots, grid };
+const DRAW = { schedule, top3, meeting, oneonone, cornell, dots, grid };
 
 const byId = new Map(PAPER_TEMPLATES.map((t) => [t.id, t]));
 

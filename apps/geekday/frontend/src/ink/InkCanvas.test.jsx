@@ -624,9 +624,9 @@ describe('InkCanvas (tldraw mocked)', () => {
       const items = screen.getAllByRole('menuitemradio');
       expect(items.map((el) => el.getAttribute('data-testid'))).toEqual([
         'ink-page-none', 'ink-page-dots', 'ink-page-grid',
-        'ink-sheet-none', 'ink-sheet-schedule', 'ink-sheet-top3', 'ink-sheet-meeting', 'ink-sheet-cornell',
+        'ink-sheet-none', 'ink-sheet-schedule', 'ink-sheet-top3', 'ink-sheet-meeting', 'ink-sheet-oneonone', 'ink-sheet-cornell',
       ]);
-      expect(items.map((el) => el.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false', 'true', 'false', 'false', 'false', 'false']);
+      expect(items.map((el) => el.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false', 'true', 'false', 'false', 'false', 'false', 'false']);
       expect(screen.getByTestId('ink-page-none')).toHaveAccessibleName(/^Paper: Ruled/);
       expect(screen.getByTestId('ink-sheet-none')).toHaveAccessibleName(/^Template: No template/);
       expect(screen.getByTestId('ink-page-default')).toHaveAttribute('role', 'menuitemcheckbox');

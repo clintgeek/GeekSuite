@@ -278,7 +278,7 @@ export const scenes = [
       await inkBox(page);
       await openPageMenu(page);
       const items = await page.locator('[data-testid="ink-page-menu"] [role="menuitemradio"]').evaluateAll((nodes) => nodes.map((n) => [n.dataset.testid, n.getAttribute('aria-checked')]));
-      const want = ['ink-page-none', 'ink-page-dots', 'ink-page-grid', 'ink-sheet-none', 'ink-sheet-schedule', 'ink-sheet-top3', 'ink-sheet-meeting', 'ink-sheet-cornell'];
+      const want = ['ink-page-none', 'ink-page-dots', 'ink-page-grid', 'ink-sheet-none', 'ink-sheet-schedule', 'ink-sheet-top3', 'ink-sheet-meeting', 'ink-sheet-oneonone', 'ink-sheet-cornell'];
       if (items.map((i) => i[0]).join() !== want.join()) throw new Error(`the Page menu lists ${items.map((i) => i[0]).join(', ') || 'nothing'}`);
       const marked = items.filter((i) => i[1] === 'true').map((i) => i[0]).join();
       if (marked !== 'ink-page-none,ink-sheet-none') throw new Error(`a blank day should be Ruled with no template; marked: ${marked}`);

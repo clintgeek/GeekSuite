@@ -10,10 +10,10 @@ describe('the day page\'s paper and its template', () => {
   beforeEach(() => localStorage.clear());
   afterEach(() => vi.restoreAllMocks());
 
-  it('papers are Ruled, Dot grid and Grid; templates are the four layouts; neither list holds the other\'s', () => {
+  it('papers are Ruled, Dot grid and Grid; templates are the five layouts; neither list holds the other\'s', () => {
     expect(PAPER_CHOICES.map((c) => c.id)).toEqual(['none', 'dots', 'grid']);
     expect(PAPER_CHOICES[0].label).toBe('Ruled');
-    expect(SHEET_CHOICES.map((c) => c.id)).toEqual(['none', 'schedule', 'top3', 'meeting', 'cornell']);
+    expect(SHEET_CHOICES.map((c) => c.id)).toEqual(['none', 'schedule', 'top3', 'meeting', 'oneonone', 'cornell']);
     expect(SHEET_CHOICES[0].label).toBe('No template');
     expect(SHEET_CHOICES.slice(1).map((c) => c.label)).toEqual(PAPER_SHEET_TEMPLATES.map((t) => t.label));
     expect(isPaper('grid')).toBe(true);

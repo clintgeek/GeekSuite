@@ -54,7 +54,7 @@ function stubEditor() {
 
 describe('template sheets', () => {
   it('only the layouts are sheets: dot grid and grid are paper, not templates', () => {
-    expect(PAPER_SHEET_TEMPLATES.map((t) => t.id)).toEqual(['schedule', 'top3', 'meeting', 'cornell']);
+    expect(PAPER_SHEET_TEMPLATES.map((t) => t.id)).toEqual(['schedule', 'top3', 'meeting', 'oneonone', 'cornell']);
     expect(isPaperSheetTemplate('meeting')).toBe(true);
     for (const id of ['dots', 'grid', 'none', '', null, undefined, 7]) expect(isPaperSheetTemplate(id)).toBe(false);
     expect(paperSheetRecords('grid')).toBeNull();

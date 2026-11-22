@@ -17,14 +17,14 @@ import {
 } from '../paper/index.js';
 import * as ui from '../index.js';
 
-const IDS = ['schedule', 'top3', 'meeting', 'cornell', 'dots', 'grid'];
+const IDS = ['schedule', 'top3', 'meeting', 'oneonone', 'cornell', 'dots', 'grid'];
 const parse = (svg) => new DOMParser().parseFromString(svg, 'image/svg+xml');
 const texts = (doc) => [...doc.querySelectorAll('text')].map((t) => t.textContent);
 /** Every y a horizontal line is drawn at ("M x y H x2"). */
 const lineYs = (svg) => [...svg.matchAll(/M[\d.]+ ([\d.]+)H/g)].map((m) => Number(m[1]));
 
 describe('page templates', () => {
-  it('the sheet, the meta key and the six templates, in order', () => {
+  it('the sheet, the meta key and the seven templates, in order', () => {
     expect(PAPER_PAGE).toEqual({ width: 1000, height: 1400 });
     expect(PAPER_TEMPLATE_META_KEY).toBe('paperTemplate');
     expect(PAPER_TEMPLATES.map((t) => t.id)).toEqual(IDS);
