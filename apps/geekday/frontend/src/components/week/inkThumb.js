@@ -4,7 +4,9 @@
  * The note's content is tldraw's store snapshot (JSON). Nothing of tldraw is
  * loaded here: a `draw` record is turned into page points by
  * ink/lassoGeometry.js (imported directly — ink/index.js pulls in tldraw),
- * thinned, and written as SVG path data. Anything unexpected (bad JSON, no
+ * thinned, and written as SVG path data. Only strokes are drawn: a template
+ * sheet (an image shape printed into the drawing) is the page, not the day's
+ * writing, and a day with nothing but a sheet has no picture. Anything unexpected (bad JSON, no
  * strokes, another editor's format) is "no picture", never an error.
  */
 import { shapePagePoints } from '../../ink/lassoGeometry.js';

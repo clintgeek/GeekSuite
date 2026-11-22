@@ -91,6 +91,28 @@ vi.mock('@tldraw/tldraw', async () => {
       getCurrentPageShapes: vi.fn(() => editor.shapes()),
       getCurrentPageShapeIds: vi.fn(() => new Set(editor.shapes().map((s) => s.id))),
       getShapePageBounds: vi.fn((id) => { const s = editor.records.get(id); return s ? { x: s.x, y: s.y, w: 80, h: 10 } : undefined; }),
+      // What @geeksuite/ui's placePaperSheet / removePaperSheet call. As in tldraw 2.4.6:
+      // a locked shape ignores deleteShapes, and updateShapes may always unlock.
+      getShape: vi.fn((id) => { const r = editor.records.get(id); return r?.typeName === 'shape' ? r : undefined; }),
+      getAsset: vi.fn((id) => { const r = editor.records.get(id); return r?.typeName === 'asset' ? r : undefined; }),
+      batch: vi.fn((fn) => { fn(); return editor; }),
+      createAssets: vi.fn((assets) => { assets.forEach((a) => editor.records.set(a.id, a)); editor.emit(); return editor; }),
+      createShapes: vi.fn((shapes) => {
+        shapes.forEach((sh) => editor.records.set(sh.id, { typeName: 'shape', parentId: 'page:page', rotation: 0, isLocked: false, ...sh }));
+        editor.emit();
+        return editor;
+      }),
+      sendToBack: vi.fn(() => editor),
+      updateShapes: vi.fn((partials) => {
+        partials.forEach((part) => { const sh = editor.records.get(part.id); if (sh) editor.records.set(part.id, { ...sh, ...part }); });
+        editor.emit();
+        return editor;
+      }),
+      deleteShapes: vi.fn((ids) => {
+        ids.forEach((id) => { if (!editor.records.get(id)?.isLocked) editor.records.delete(id); });
+        editor.emit();
+        return editor;
+      }),
     };
     return editor;
   };
@@ -136,6 +158,7 @@ vi.mock('@tldraw/tldraw', async () => {
   };
 });
 
+import { paperSheetRecords } from '@geeksuite/ui';
 import { InkCanvas, LASSO_EMPTY_HINT, sketchHasShapes } from './index';
 
 const shapeRecord = (id, y = 300) => [id, { id, typeName: 'shape', type: 'draw', parentId: 'page:page', x: 300, y, rotation: 0, props: { segments: [{ type: 'free', points: [{ x: 0, y: 0 }, { x: 50, y: 0 }] }] } }];
@@ -558,16 +581,39 @@ describe('InkCanvas (tldraw mocked)', () => {
     expect(Number(box.getAttribute('width'))).toBeCloseTo(80 * z + 12);
   });
 
-  describe('page templates', () => {
+  describe('paper and templates', () => {
     const openMenu = () => fireEvent.click(screen.getByTestId('ink-page'));
-    const pick = (id) => fireEvent.click(screen.getByTestId(`ink-page-${id}`));
-    const shown = () => screen.getByTestId('ink-canvas').getAttribute('data-ink-template');
+    const pickPaper = (id) => fireEvent.click(screen.getByTestId(`ink-page-${id}`));
+    const pickSheet = (id) => fireEvent.click(screen.getByTestId(`ink-sheet-${id}`));
+    const canvasAttr = (name) => screen.getByTestId('ink-canvas').getAttribute(name);
+    const paper = () => canvasAttr('data-ink-paper');
+    const sheet = () => canvasAttr('data-ink-sheet');
+    const sheetState = () => canvasAttr('data-ink-sheet-state');
+    const SHEET_ID = 'shape:paper-template';
+    /** A saved page that already holds a template sheet (as NoteGeek or GeekDay saved it) and these strokes. */
+    const snapshotWithSheet = (templateId, { x = 0, y = 0, meta = {} } = {}, ...ids) => {
+      const { asset, shape } = paperSheetRecords(templateId, { x, y });
+      return JSON.stringify({
+        store: Object.fromEntries([
+          ['document:document', { id: 'document:document', typeName: 'document', meta }],
+          ['page:page', { id: 'page:page', typeName: 'page' }],
+          [asset.id, asset],
+          [shape.id, { ...shape, typeName: 'shape', parentId: 'page:page', rotation: 0, isLocked: true }],
+          ...ids.map((id) => shapeRecord(id)),
+        ]),
+        schema: { schemaVersion: 2 },
+      });
+    };
+    const storeOf = (body) => JSON.parse(body).store;
 
-    it('a blank day is Ruled: lines, no template image; the Page menu lists Ruled and the six templates', () => {
+    it('a blank day is Ruled with no template; the Page menu lists the papers and the templates separately', () => {
       mount();
-      expect(shown()).toBe('none');
+      expect(paper()).toBe('none');
+      expect(sheet()).toBe('none');
+      expect(sheetState()).toBe('none');
       expect(screen.getByTestId('ink-rules')).toBeInTheDocument();
-      expect(screen.queryByTestId('ink-template')).toBe(null);
+      expect(screen.queryByTestId('ink-pattern')).toBe(null);
+      expect(screen.queryByTestId('ink-sheet-preview')).toBe(null);
       const button = screen.getByTestId('ink-page');
       expect(button).toHaveAttribute('aria-label', 'Page');
       expect(button).toHaveAttribute('aria-haspopup', 'menu');
@@ -576,65 +622,58 @@ describe('InkCanvas (tldraw mocked)', () => {
       expect(button).toHaveAttribute('aria-expanded', 'true');
       expect(screen.getByRole('menu', { name: 'Page' })).toBeInTheDocument();
       const items = screen.getAllByRole('menuitemradio');
-      expect(items.map((el) => el.getAttribute('data-testid'))).toEqual(['none', 'schedule', 'top3', 'meeting', 'cornell', 'dots', 'grid'].map((id) => `ink-page-${id}`));
-      expect(items.map((el) => el.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false', 'false', 'false', 'false', 'false']);
+      expect(items.map((el) => el.getAttribute('data-testid'))).toEqual([
+        'ink-page-none', 'ink-page-dots', 'ink-page-grid',
+        'ink-sheet-none', 'ink-sheet-schedule', 'ink-sheet-top3', 'ink-sheet-meeting', 'ink-sheet-cornell',
+      ]);
+      expect(items.map((el) => el.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false', 'true', 'false', 'false', 'false', 'false']);
+      expect(screen.getByTestId('ink-page-none')).toHaveAccessibleName(/^Paper: Ruled/);
+      expect(screen.getByTestId('ink-sheet-none')).toHaveAccessibleName(/^Template: No template/);
       expect(screen.getByTestId('ink-page-default')).toHaveAttribute('role', 'menuitemcheckbox');
     });
 
-    it('choosing one draws it on the first sheet, behind the ink and hidden from assistive tech, with ruled lines below', () => {
+    it('a paper is a background all the way down the page: never a shape, hidden from assistive tech', () => {
       const { editor } = mount();
       openMenu();
-      pick('meeting');
-      expect(shown()).toBe('meeting');
-      expect(screen.getByTestId('ink-page-meeting')).toHaveAttribute('aria-checked', 'true');
-      expect(editor.getDocumentSettings().meta).toEqual({ paperTemplate: 'meeting' });
-      const img = screen.getByTestId('ink-template');
+      pickPaper('grid');
+      expect(paper()).toBe('grid');
+      expect(editor.getDocumentSettings().meta).toEqual({ paperTemplate: 'grid' });
+      const img = screen.getByTestId('ink-pattern');
       expect(img).toHaveAttribute('alt', '');
       expect(img).toHaveAttribute('aria-hidden', 'true');
-      expect(img.getAttribute('src')).toMatch(/^data:image\/svg\+xml;charset=utf-8,%3Csvg/);
-      expect(decodeURIComponent(img.getAttribute('src'))).toContain('ACTIONS');
       expect(img.style.width).toBe('800px'); // the page's 1000 units at zoom 0.8
-      expect(img.style.height).toBe('1120px'); // one sheet
+      expect(img.style.height).toBe(`${4200 * 0.8}px`); // the whole page, not one sheet
+      expect(decodeURIComponent(img.getAttribute('src'))).toContain('viewBox="0 0 1000 4200"');
       expect(img.closest('[data-testid="ink-paper"]')).toHaveAttribute('aria-hidden', 'true');
-      expect(screen.getByTestId('ink-rules').style.top).toBe('1120px'); // the ruling starts where the sheet ends
-      // It is paper, not ink: no shape was made.
+      expect(screen.queryByTestId('ink-rules')).toBe(null);
       expect(editor.shapes()).toEqual([]);
+      pickPaper('none');
+      expect(screen.getByTestId('ink-rules')).toBeInTheDocument();
     });
 
-    it('the template moves and scales with the page', () => {
+    it('the paper moves and scales with the page', () => {
       const { editor, rerender } = mount();
       openMenu();
-      pick('top3');
+      pickPaper('dots');
       fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
       wheel(screen.getByTestId('canvas'), { deltaY: 200 });
       rerender({}); // the mock's useValue is not reactive; real tldraw re-renders on the camera
-      expect(screen.getByTestId('ink-template').style.transform).toBe('translate(0px, -200px)');
-      expect(screen.getByTestId('ink-rules').style.top).toBe('920px');
+      expect(screen.getByTestId('ink-pattern').style.transform).toBe('translate(0px, -200px)');
       wheel(screen.getByTestId('canvas'), { deltaY: -100, ctrlKey: true, clientX: 0, clientY: 0 });
-      const z = editor.camera.z;
-      expect(screen.getByTestId('ink-template').style.width).toBe(`${1000 * z}px`);
+      expect(screen.getByTestId('ink-pattern').style.width).toBe(`${1000 * editor.camera.z}px`);
     });
 
-    it('dots and grid run the whole page instead of stopping after one sheet', () => {
-      mount();
-      openMenu();
-      pick('grid');
-      expect(screen.getByTestId('ink-template').style.height).toBe(`${4200 * 0.8}px`);
-      expect(decodeURIComponent(screen.getByTestId('ink-template').getAttribute('src'))).toContain('viewBox="0 0 1000 4200"');
-      expect(screen.queryByTestId('ink-rules')).toBe(null);
-    });
-
-    it('on a blank day a choice saves nothing by itself; it rides along with the first ink', () => {
+    it('a paper chosen on a blank day saves nothing by itself; it rides along with the first ink', () => {
       const { editor, onChange, apiRef } = mount();
       openMenu();
-      pick('schedule');
+      pickPaper('dots');
       act(() => { vi.advanceTimersByTime(1000); });
       expect(onChange).not.toHaveBeenCalled();
       expect(apiRef.current.flush()).toBe(null);
       act(() => { editor.draw('shape:a'); });
       act(() => { vi.advanceTimersByTime(400); });
       expect(onChange).toHaveBeenCalledTimes(1);
-      expect(metaOf(onChange.mock.calls[0][0])).toEqual({ paperTemplate: 'schedule' });
+      expect(metaOf(onChange.mock.calls[0][0])).toEqual({ paperTemplate: 'dots' });
     });
 
     it('a first stroke that is taken back on a blank day saves nothing either', () => {
@@ -645,104 +684,361 @@ describe('InkCanvas (tldraw mocked)', () => {
       expect(onChange).not.toHaveBeenCalled();
     });
 
-    it('on a page that already has a note, a choice is saved, beside the page\'s other meta', () => {
+    it('on a page that already has a note, a paper is saved beside the page\'s other meta', () => {
       const { onChange } = mount({ content: snapshotWithMeta({ paperColor: 'warm', paperPattern: 'lined' }, 'shape:a') });
       openMenu();
-      pick('cornell');
+      pickPaper('grid');
       act(() => { vi.advanceTimersByTime(400); });
       expect(onChange).toHaveBeenCalledTimes(1);
-      expect(metaOf(onChange.mock.calls[0][0])).toEqual({ paperColor: 'warm', paperPattern: 'lined', paperTemplate: 'cornell' });
-      pick('none'); // Ruled, on purpose
+      expect(metaOf(onChange.mock.calls[0][0])).toEqual({ paperColor: 'warm', paperPattern: 'lined', paperTemplate: 'grid' });
+      pickPaper('none'); // Ruled, on purpose
       act(() => { vi.advanceTimersByTime(400); });
       expect(metaOf(onChange.mock.calls[1][0]).paperTemplate).toBe('none');
-      expect(screen.queryByTestId('ink-template')).toBe(null);
+      expect(screen.queryByTestId('ink-pattern')).toBe(null);
     });
 
-    it('a page whose ink was all erased still has a note: a choice on it is saved', () => {
+    it('a page whose ink was all erased still has a note: a paper chosen on it is saved', () => {
       const { editor, onChange } = mount({ content: snapshotWith('shape:a') });
       act(() => { editor.store.remove(['shape:a']); vi.advanceTimersByTime(400); });
       expect(onChange).toHaveBeenCalledTimes(1);
       openMenu();
-      pick('dots');
+      pickPaper('dots');
       act(() => { vi.advanceTimersByTime(400); });
       expect(onChange).toHaveBeenCalledTimes(2);
       expect(metaOf(onChange.mock.calls[1][0])).toEqual({ paperTemplate: 'dots' });
     });
 
-    it('a saved page opens with its own template, whatever this device\'s default is, and is not rewritten', () => {
+    it('a saved page opens on its own paper, whatever this device\'s default is, and is not rewritten', () => {
       localStorage.setItem('geekday:pageTemplate', 'grid');
-      const { onChange } = mount({ content: snapshotWithMeta({ paperTemplate: 'top3' }, 'shape:a') });
-      expect(shown()).toBe('top3');
+      const { onChange } = mount({ content: snapshotWithMeta({ paperTemplate: 'dots' }, 'shape:a') });
+      expect(paper()).toBe('dots');
       act(() => { vi.advanceTimersByTime(1000); });
       expect(onChange).not.toHaveBeenCalled();
     });
 
-    it('an unknown template id opens as a plain ruled page and is left exactly as it was', () => {
-      localStorage.setItem('geekday:pageTemplate', 'grid');
-      const { editor, onChange } = mount({ content: snapshotWithMeta({ paperTemplate: 'weekly-from-the-future' }, 'shape:a') });
-      expect(shown()).toBe('none');
-      expect(screen.queryByTestId('ink-template')).toBe(null);
-      expect(screen.getByTestId('ink-rules')).toBeInTheDocument();
-      openMenu();
-      expect(screen.getByTestId('ink-page-none')).toHaveAttribute('aria-checked', 'true');
+    it.each(['schedule', 'top3', 'meeting', 'cornell', 'weekly-from-the-future'])(
+      'meta that says paperTemplate "%s" and no sheet (last night\'s build, or an unknown id): ruled, no template, and the key is left as it was',
+      (id) => {
+        localStorage.setItem('geekday:pageTemplate', 'grid');
+        localStorage.setItem('geekday:pageSheet', 'meeting');
+        const { editor, onChange } = mount({ content: snapshotWithMeta({ paperTemplate: id }, 'shape:a') });
+        expect(paper()).toBe('none');
+        expect(sheet()).toBe('none');
+        expect(canvasAttr('data-ink-light')).toBe('false');
+        expect(screen.getByTestId('ink-rules')).toBeInTheDocument();
+        expect(screen.queryByTestId('ink-pattern')).toBe(null);
+        expect(screen.queryByTestId('ink-sheet-preview')).toBe(null);
+        expect(editor.shapes().map((sh) => sh.id)).toEqual(['shape:a']); // no sheet was made for it
+        act(() => { vi.advanceTimersByTime(1000); });
+        expect(onChange).not.toHaveBeenCalled(); // not rewritten on open
+        openMenu();
+        expect(screen.getByTestId('ink-page-none')).toHaveAttribute('aria-checked', 'true');
+        expect(screen.getByTestId('ink-sheet-none')).toHaveAttribute('aria-checked', 'true');
+        pickPaper('none'); // already what is on screen: nothing to write
+        act(() => { editor.draw('shape:b'); });
+        act(() => { vi.advanceTimersByTime(400); });
+        expect(metaOf(onChange.mock.calls[0][0])).toEqual({ paperTemplate: id });
+      },
+    );
+
+    it('a page written before any of this (ink, nothing stored) stays ruled under any default, and gains no key and no sheet', () => {
+      localStorage.setItem('geekday:pageTemplate', 'dots');
+      localStorage.setItem('geekday:pageSheet', 'schedule');
+      const { editor, onChange } = mount({ content: snapshotWith('shape:a') });
+      expect(paper()).toBe('none');
+      expect(sheet()).toBe('none');
       act(() => { editor.draw('shape:b'); });
       act(() => { vi.advanceTimersByTime(400); });
-      expect(metaOf(onChange.mock.calls[0][0])).toEqual({ paperTemplate: 'weekly-from-the-future' });
+      const store = storeOf(onChange.mock.calls[0][0]);
+      expect(store['document:document']).toBeUndefined();
+      expect(Object.keys(store)).toEqual(['page:page', 'shape:a', 'shape:b']);
     });
 
-    it('a blank day uses this device\'s default, and its first ink keeps that template with the page', () => {
-      localStorage.setItem('geekday:pageTemplate', 'schedule');
-      const { editor, onChange } = mount();
-      expect(shown()).toBe('schedule');
-      expect(editor.getDocumentSettings().meta).toEqual({}); // shown, not yet stored
-      act(() => { vi.advanceTimersByTime(1000); });
-      expect(onChange).not.toHaveBeenCalled();
-      act(() => { editor.draw('shape:a'); });
-      expect(shown()).toBe('schedule');
+    it('a template chosen from the menu is printed into the drawing: one locked sheet at the top of the page, one undo step', () => {
+      const { editor } = mount({ content: snapshotWithMeta({ paperTemplate: 'grid' }, 'shape:a') });
+      openMenu();
+      pickSheet('meeting');
+      expect(sheet()).toBe('meeting');
+      expect(sheetState()).toBe('placed');
+      expect(screen.getByTestId('ink-sheet-meeting')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('ink-sheet-none')).toHaveAttribute('aria-checked', 'false');
+      const placed = editor.getShape(SHEET_ID);
+      expect(placed).toMatchObject({ type: 'image', x: 0, y: 0, isLocked: true, meta: { paperTemplate: 'meeting' }, props: { w: 1000, h: 1400 } });
+      expect(editor.getAsset(placed.props.assetId).props.src).toContain('ACTIONS');
+      expect(editor.sendToBack).toHaveBeenCalledWith([SHEET_ID]);
+      // One history mark, set before anything was changed.
+      expect(editor.mark).toHaveBeenCalledTimes(1);
+      expect(editor.mark.mock.invocationCallOrder[0]).toBeLessThan(editor.createShapes.mock.invocationCallOrder[0]);
+      // The paper is not touched, and is still drawn (it shows below the sheet).
+      expect(paper()).toBe('grid');
+      expect(editor.getDocumentSettings().meta).toEqual({ paperTemplate: 'grid' });
+      expect(screen.getByTestId('ink-pattern')).toBeInTheDocument();
+      expect(screen.queryByTestId('ink-sheet-preview')).toBe(null); // the sheet is tldraw's to draw now
+      pickSheet('meeting'); // already there: nothing happens
+      expect(editor.mark).toHaveBeenCalledTimes(1);
+    });
+
+    it('placing a template on a blank day is a choice: it is saved, though there is no ink', () => {
+      const { onChange, apiRef } = mount();
+      openMenu();
+      pickSheet('cornell');
+      expect(apiRef.current.hasShapes()).toBe(false); // a sheet is not writing
       act(() => { vi.advanceTimersByTime(400); });
       expect(onChange).toHaveBeenCalledTimes(1);
-      expect(metaOf(onChange.mock.calls[0][0])).toEqual({ paperTemplate: 'schedule' });
+      const store = storeOf(onChange.mock.calls[0][0]);
+      expect(store[SHEET_ID]).toMatchObject({ isLocked: true, meta: { paperTemplate: 'cornell' } });
+      expect(store[store[SHEET_ID].props.assetId].typeName).toBe('asset');
     });
 
-    it('a page written before templates (ink, nothing stored) stays ruled under any default, and gains no template key', () => {
-      localStorage.setItem('geekday:pageTemplate', 'schedule');
-      const { editor, onChange } = mount({ content: snapshotWith('shape:a') });
-      expect(shown()).toBe('none');
-      act(() => { editor.draw('shape:b'); });
+    it('a template placed and taken off again before it was saved leaves a blank day: nothing is saved', () => {
+      const { onChange, editor } = mount();
+      openMenu();
+      pickSheet('top3');
+      pickSheet('none');
+      expect(editor.getShape(SHEET_ID)).toBeUndefined();
+      act(() => { vi.advanceTimersByTime(1000); });
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('"No template" takes the sheet off as one undo step and saves; the paper and the ink are untouched', () => {
+      const { editor, onChange } = mount({ content: snapshotWithSheet('schedule', { meta: { paperTemplate: 'dots' } }, 'shape:a') });
+      expect(sheet()).toBe('schedule');
+      expect(sheetState()).toBe('placed');
+      openMenu();
+      expect(screen.getByTestId('ink-sheet-schedule')).toHaveAttribute('aria-checked', 'true');
+      pickSheet('none');
+      expect(editor.mark).toHaveBeenCalledTimes(1);
+      expect(sheet()).toBe('none');
+      expect(editor.shapes().map((sh) => sh.id)).toEqual(['shape:a']);
+      expect(paper()).toBe('dots');
       act(() => { vi.advanceTimersByTime(400); });
-      expect(JSON.parse(onChange.mock.calls[0][0]).store['document:document']).toBeUndefined();
+      expect(onChange).toHaveBeenCalledTimes(1);
+      const store = storeOf(onChange.mock.calls[0][0]);
+      expect(store[SHEET_ID]).toBeUndefined();
+      expect(store['document:document'].meta).toEqual({ paperTemplate: 'dots' });
     });
 
-    it('"Use for new days" makes the page on screen this device\'s default, and turns it off again', () => {
-      const { onChange } = mount();
+    it('choosing another template replaces the sheet where it is; a paper change never touches it', () => {
+      const { editor } = mount({ content: snapshotWithSheet('cornell', { x: 60, y: 1500 }, 'shape:a') });
+      openMenu();
+      pickSheet('top3');
+      expect(editor.getShape(SHEET_ID)).toMatchObject({ x: 60, y: 1500, isLocked: true, meta: { paperTemplate: 'top3' } });
+      expect(editor.shapes().filter((sh) => sh.type === 'image')).toHaveLength(1);
+      const before = editor.getShape(SHEET_ID);
+      pickPaper('grid');
+      pickPaper('none');
+      expect(editor.getShape(SHEET_ID)).toBe(before);
+    });
+
+    it('a saved page with a sheet opens with it, wherever NoteGeek put it, and is neither moved nor rewritten', () => {
+      localStorage.setItem('geekday:pageSheet', 'meeting');
+      const { editor, onChange, apiRef } = mount({ content: snapshotWithSheet('cornell', { x: 240, y: 5000 }) });
+      expect(sheet()).toBe('cornell');
+      expect(sheetState()).toBe('placed');
+      expect(editor.getShape(SHEET_ID)).toMatchObject({ x: 240, y: 5000 });
+      expect(apiRef.current.view().pageHeight).toBe(7000); // tall enough to reach it
+      expect(apiRef.current.hasShapes()).toBe(false);
+      act(() => { vi.advanceTimersByTime(1000); });
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('a sheet from a newer build (a template this one does not know) is still a sheet: shown, not ink, removable', () => {
+      const body = JSON.parse(snapshotWithSheet('cornell'));
+      body.store[SHEET_ID].meta = { paperTemplate: 'weekly-from-the-future' };
+      const { editor, apiRef } = mount({ content: JSON.stringify(body) });
+      expect(sheet()).toBe('weekly-from-the-future');
+      expect(canvasAttr('data-ink-light')).toBe('true');
+      expect(apiRef.current.hasShapes()).toBe(false);
+      openMenu();
+      expect(screen.getAllByRole('menuitemradio').filter((el) => el.getAttribute('aria-checked') === 'true').map((el) => el.dataset.testid)).toEqual(['ink-page-none']);
+      pickSheet('none');
+      expect(editor.getShape(SHEET_ID)).toBeUndefined();
+    });
+
+    it('the sheet is not ink: a page that has only a sheet takes its first stroke as first ink, and keeps its paper', () => {
+      localStorage.setItem('geekday:pageTemplate', 'dots');
+      const { editor, onChange, apiRef } = mount();
+      expect(paper()).toBe('dots'); // the device's paper, not yet stored
+      openMenu();
+      pickSheet('meeting');
+      // The page now has content: the paper it was made on is kept with it.
+      expect(editor.getDocumentSettings().meta).toEqual({ paperTemplate: 'dots' });
+      act(() => { editor.draw('shape:a'); });
+      expect(apiRef.current.hasShapes()).toBe(true);
+      expect(editor.shapes().filter((sh) => sh.type === 'image')).toHaveLength(1); // not placed twice
+      act(() => { vi.advanceTimersByTime(400); });
+      expect(Object.keys(storeOf(onChange.mock.calls.at(-1)[0]))).toEqual(expect.arrayContaining([SHEET_ID, 'shape:a']));
+    });
+
+    it('the lasso never picks the sheet: a loop over the whole page takes the writing only, and a tap on bare sheet takes nothing', async () => {
+      const { editor, onLasso } = mount({ content: snapshotWithSheet('meeting', {}, 'shape:a') }); // stroke at page 300..350, 300
+      fireEvent.click(screen.getByTestId('ink-tool-lasso'));
+      const layer = screen.getByTestId('ink-lasso-layer');
+      drag(layer, [[400, 400]]); // page (500, 500): on the sheet (the mock's bounds put its centre nowhere near)
+      expect(screen.getByTestId('ink-hint')).toHaveTextContent(LASSO_EMPTY_HINT);
+      // The sheet's own page bounds are never even asked for.
+      expect(editor.getShapePageBounds).not.toHaveBeenCalledWith(SHEET_ID);
+      drag(layer, [[0, 0], [790, 0], [790, 990], [0, 990]]); // round everything on screen
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(tl.exportSketchPng).toHaveBeenCalledTimes(1);
+      expect(tl.exportSketchPng).toHaveBeenCalledWith(editor, expect.objectContaining({ ids: ['shape:a'] }));
+      expect(onLasso).toHaveBeenCalledWith(expect.objectContaining({ shapeIds: ['shape:a'] }));
+    });
+
+    it('a sheet with nothing written on it cannot be circled at all', () => {
+      mount({ content: snapshotWithSheet('meeting') });
+      fireEvent.click(screen.getByTestId('ink-tool-lasso'));
+      drag(screen.getByTestId('ink-lasso-layer'), [[0, 0], [790, 0], [790, 990], [0, 990]]);
+      expect(screen.getByTestId('ink-hint')).toHaveTextContent(LASSO_EMPTY_HINT);
+      expect(tl.exportSketchPng).not.toHaveBeenCalled();
+    });
+
+    it('a blank day previews this device\'s template and paper, saves nothing, and the first ink prints the sheet for real', () => {
+      localStorage.setItem('geekday:pageTemplate', 'dots');
+      localStorage.setItem('geekday:pageSheet', 'schedule');
+      const { editor, onChange, apiRef, rerender } = mount();
+      rerender({}); // the mock's useValue is not reactive; real tldraw re-renders on the camera
+      expect(paper()).toBe('dots');
+      expect(sheet()).toBe('schedule');
+      expect(sheetState()).toBe('preview');
+      const preview = screen.getByTestId('ink-sheet-preview');
+      expect(preview).toHaveAttribute('alt', '');
+      expect(preview).toHaveAttribute('aria-hidden', 'true');
+      expect(preview.style.width).toBe('800px');
+      expect(preview.style.height).toBe('1120px'); // one sheet
+      const svg = decodeURIComponent(preview.getAttribute('src'));
+      expect(svg).toContain('<rect width="1000" height="1400" fill="#ffffff"/>'); // the white sheet, as it will be placed
+      expect(svg).toContain('6 AM');
+      // Shown, not stored: nothing in the document, nothing saved.
+      expect(editor.shapes()).toEqual([]);
+      expect(editor.getDocumentSettings().meta).toEqual({});
+      act(() => { vi.advanceTimersByTime(1000); });
+      expect(onChange).not.toHaveBeenCalled();
+      expect(apiRef.current.flush()).toBe(null);
+      openMenu();
+      expect(screen.getByTestId('ink-sheet-schedule')).toHaveAttribute('aria-checked', 'true');
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+
+      act(() => { editor.draw('shape:a'); });
+      expect(sheetState()).toBe('placed');
+      expect(sheet()).toBe('schedule');
+      expect(screen.queryByTestId('ink-sheet-preview')).toBe(null);
+      expect(editor.getShape(SHEET_ID)).toMatchObject({ x: 0, y: 0, isLocked: true, meta: { paperTemplate: 'schedule' } });
+      expect(editor.mark).not.toHaveBeenCalled(); // part of the stroke's own undo step
+      act(() => { vi.advanceTimersByTime(400); });
+      expect(onChange).toHaveBeenCalledTimes(1);
+      const store = storeOf(onChange.mock.calls[0][0]);
+      expect(store[SHEET_ID].meta).toEqual({ paperTemplate: 'schedule' });
+      expect(store['shape:a']).toBeDefined();
+      expect(store['document:document'].meta).toEqual({ paperTemplate: 'dots' });
+    });
+
+    it('"No template" on a previewed blank day puts the preview away, and still saves nothing', () => {
+      localStorage.setItem('geekday:pageSheet', 'meeting');
+      const { editor, onChange, rerender } = mount();
+      expect(sheetState()).toBe('preview');
+      openMenu();
+      pickSheet('none');
+      expect(sheetState()).toBe('none');
+      expect(screen.queryByTestId('ink-sheet-preview')).toBe(null);
+      act(() => { editor.draw('shape:a'); });
+      expect(editor.getShape(SHEET_ID)).toBeUndefined(); // the first ink prints nothing
+      act(() => { vi.advanceTimersByTime(400); });
+      expect(onChange).toHaveBeenCalledTimes(1);
+      // Another blank day gets the preview again.
+      rerender({ content: snapshotWith('shape:x') });
+      rerender({ content: null });
+      expect(sheetState()).toBe('preview');
+    });
+
+    it('choosing the previewed template from the menu places it for real', () => {
+      localStorage.setItem('geekday:pageSheet', 'meeting');
+      const { editor, onChange } = mount();
+      openMenu();
+      pickSheet('meeting');
+      expect(sheetState()).toBe('placed');
+      expect(editor.getShape(SHEET_ID)).toBeDefined();
+      act(() => { vi.advanceTimersByTime(400); });
+      expect(onChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('the device default never reaches a day that has a note: one with ink, one with a sheet, one erased bare', () => {
+      localStorage.setItem('geekday:pageSheet', 'meeting');
+      const { rerender, editor, onChange } = mount({ content: snapshotWith('shape:a') });
+      expect(sheet()).toBe('none');
+      rerender({ content: snapshotWithSheet('cornell') });
+      expect(sheet()).toBe('cornell');
+      rerender({ content: snapshotWith('shape:b') });
+      act(() => { editor.store.remove(['shape:b']); vi.advanceTimersByTime(400); }); // erased bare, and saved so
+      expect(sheet()).toBe('none');
+      expect(sheetState()).toBe('none');
+      expect(editor.getShape(SHEET_ID)).toBeUndefined();
+      expect(onChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('"Use for new days" makes the paper and template on screen this device\'s default, and turns it off again', () => {
+      const { onChange } = mount({ content: snapshotWith('shape:a') });
       openMenu();
       const toggle = screen.getByTestId('ink-page-default');
-      expect(toggle).toHaveAttribute('aria-checked', 'true'); // Ruled is the default until something else is
-      pick('meeting');
+      expect(toggle).toHaveAttribute('aria-checked', 'true'); // Ruled, no template, is the default until something else is
+      pickPaper('dots');
+      pickSheet('meeting');
       expect(toggle).toHaveAttribute('aria-checked', 'false');
+      expect(toggle).toHaveTextContent('Open new days as Meeting on Dot grid on this device');
       expect(localStorage.getItem('geekday:pageTemplate')).toBe(null);
+      expect(localStorage.getItem('geekday:pageSheet')).toBe(null);
+      act(() => { vi.advanceTimersByTime(400); });
+      const saves = onChange.mock.calls.length;
       fireEvent.click(toggle);
-      expect(localStorage.getItem('geekday:pageTemplate')).toBe('meeting');
+      expect(localStorage.getItem('geekday:pageTemplate')).toBe('dots');
+      expect(localStorage.getItem('geekday:pageSheet')).toBe('meeting');
       expect(toggle).toHaveAttribute('aria-checked', 'true');
       fireEvent.click(toggle);
       expect(localStorage.getItem('geekday:pageTemplate')).toBe(null);
+      expect(localStorage.getItem('geekday:pageSheet')).toBe('none');
       expect(toggle).toHaveAttribute('aria-checked', 'false');
-      expect(shown()).toBe('meeting'); // this page keeps its own choice
+      expect(paper()).toBe('dots'); // this page keeps its own choices
+      expect(sheet()).toBe('meeting');
       act(() => { vi.advanceTimersByTime(1000); });
-      expect(onChange).not.toHaveBeenCalled(); // the default is the device's, never the note's
+      expect(onChange).toHaveBeenCalledTimes(saves); // the default is the device's, never the note's
     });
 
-    it('a blank load forgets the previous page\'s template', () => {
-      const { rerender } = mount({ content: snapshotWithMeta({ paperTemplate: 'top3' }, 'shape:a') });
-      expect(shown()).toBe('top3');
+    it('a blank load forgets the previous page\'s paper and sheet', () => {
+      const { rerender, editor } = mount({ content: snapshotWithSheet('top3', { meta: { paperTemplate: 'grid' } }, 'shape:a') });
+      expect(paper()).toBe('grid');
+      expect(sheet()).toBe('top3');
       rerender({ content: null });
-      expect(shown()).toBe('none');
+      expect(paper()).toBe('none');
+      expect(sheet()).toBe('none');
+      expect([...editor.records.keys()].filter((id) => /^(shape|asset):/.test(id))).toEqual([]);
     });
 
-    it('readOnly: the page still shows its template', () => {
-      mount({ content: snapshotWithMeta({ paperTemplate: 'cornell' }, 'shape:a'), readOnly: true });
-      expect(shown()).toBe('cornell');
-      expect(screen.getByTestId('ink-template')).toBeInTheDocument();
+    it('a page with a sheet is a light page in the dark theme: tldraw\'s light scheme and the light paper, so dark ink reads on the white sheet', () => {
+      const { editor } = mount({ content: snapshotWithSheet('meeting', {}, 'shape:a') }, { mode: 'dark' });
+      expect(canvasAttr('data-ink-light')).toBe('true');
+      expect(editor.user.updateUserPreferences).toHaveBeenLastCalledWith({ colorScheme: 'light' });
+      expect(screen.getByTestId('ink-paper').style.backgroundColor).toBe('rgb(255, 252, 245)'); // the diary's light paper
+      // Without the sheet the same theme is a dark page again.
+      openMenu();
+      pickSheet('none');
+      expect(canvasAttr('data-ink-light')).toBe('false');
+      expect(editor.user.updateUserPreferences).toHaveBeenLastCalledWith({ colorScheme: 'dark' });
+      expect(screen.getByTestId('ink-paper').style.backgroundColor).not.toBe('rgb(255, 252, 245)');
+    });
+
+    it('a previewed blank day in the dark theme is already a light page', () => {
+      localStorage.setItem('geekday:pageSheet', 'top3');
+      const { editor } = mount({}, { mode: 'dark' });
+      expect(sheetState()).toBe('preview');
+      expect(canvasAttr('data-ink-light')).toBe('true');
+      expect(editor.user.updateUserPreferences).toHaveBeenLastCalledWith({ colorScheme: 'light' });
+    });
+
+    it('readOnly: the page still shows its paper and its sheet, and offers no menu', () => {
+      mount({ content: snapshotWithSheet('cornell', { meta: { paperTemplate: 'grid' } }, 'shape:a'), readOnly: true });
+      expect(paper()).toBe('grid');
+      expect(sheet()).toBe('cornell');
+      expect(screen.getByTestId('ink-pattern')).toBeInTheDocument();
       expect(screen.queryByTestId('ink-page')).toBe(null);
     });
   });

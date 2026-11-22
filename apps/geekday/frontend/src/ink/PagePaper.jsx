@@ -1,88 +1,78 @@
 /**
- * PagePaper.jsx — what the day page is printed on: the paper colour, the
- * ruled lines, and the page template (DOCS/TEMPLATES_SPEC.md P2, P6).
+ * PagePaper.jsx — what the day page is printed on: the paper colour and its
+ * ruling, dots or grid, all the way down the page.
  *
- * tldraw's `Background` component, so it is drawn behind the ink and is never
- * a shape: it cannot be selected, erased or lassoed and is in no export. It
- * is in PAGE space: the ruling and the template move and scale with the
- * camera. Decorative throughout (`aria-hidden`, empty alt).
+ * tldraw's `Background` component, so it is drawn behind everything and is
+ * never a shape: it cannot be selected, erased or lassoed and is in no export.
+ * It is in PAGE space: it moves and scales with the camera. Decorative
+ * throughout (`aria-hidden`, empty alt).
  *
- *   Ruled               ruled lines all the way down
- *   a template          the template on the first sheet, ruled lines below it
- *   Dot grid, Grid      the pattern all the way down
+ * A TEMPLATE is not drawn here: it is a locked image shape in the drawing
+ * (@geeksuite/ui `placePaperSheet`), which tldraw renders above this paper, so
+ * the paper carries on around and below the white sheet. The one exception is
+ * the PREVIEW: on a blank day that has never been saved, this device's
+ * template for new days is shown here, exactly where and how the real sheet
+ * will be, and becomes the real shape when the first ink lands.
  */
 import React, { useContext, useMemo } from 'react';
 import { useEditor, useValue } from '@tldraw/tldraw';
-import { paperTemplateDataUri } from '@geeksuite/ui';
+import { PAPER_SHEET_COLORS, paperTemplateDataUri } from '@geeksuite/ui';
 import { PAGE_WIDTH, SHEET_HEIGHT } from './pageCamera';
 import { InkPageContext, rulingStyle, usePaperColors } from './paperLook';
-import { RULED, choiceFor } from './pageTemplate';
+import { NO_SHEET, RULED } from './pageTemplate';
 
 const fill = { position: 'absolute', inset: 0 };
+
+const sheetStyle = (camera, height) => ({
+  position: 'absolute',
+  left: 0,
+  top: 0,
+  width: PAGE_WIDTH * camera.z,
+  height: height * camera.z,
+  maxWidth: 'none',
+  transform: `translate(${camera.x * camera.z}px, ${camera.y * camera.z}px)`,
+  pointerEvents: 'none',
+  userSelect: 'none',
+});
 
 export function PagePaper() {
   const editor = useEditor();
   const camera = useValue('camera', () => editor.getCamera(), [editor]);
-  const { template, pageHeight } = useContext(InkPageContext);
-  const colors = usePaperColors();
-  const printed = template !== RULED;
-  const tiles = choiceFor(template).tiles;
-  const height = tiles ? pageHeight : SHEET_HEIGHT;
-  const src = useMemo(
-    () => (printed ? paperTemplateDataUri(template, { ink: colors.ink, line: colors.line, accent: colors.accent, height }) : null),
-    [printed, template, colors, height],
+  const { paper, preview, light, pageHeight } = useContext(InkPageContext);
+  const colors = usePaperColors(light);
+  const ruled = paper === RULED;
+  const pattern = useMemo(
+    () => (ruled ? null : paperTemplateDataUri(paper, { line: colors.line, height: pageHeight })),
+    [ruled, paper, colors, pageHeight],
   );
-
-  const z = camera.z;
-  // The ruling starts where the template's sheet ends; a pattern that tiles has none.
-  const ruled = !printed || !tiles;
-  const rulesTop = printed ? Math.max(0, (SHEET_HEIGHT + camera.y) * z) : 0;
+  const sheet = useMemo(() => (preview ? paperTemplateDataUri(preview, PAPER_SHEET_COLORS) : null), [preview]);
 
   return (
     <div
       aria-hidden="true"
       data-testid="ink-paper"
-      data-template={template}
+      data-paper={paper}
       style={{ ...fill, overflow: 'hidden', backgroundColor: colors.paper }}
     >
-      {ruled ? (
-        <div
-          data-testid="ink-rules"
-          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: rulesTop, ...rulingStyle(camera, colors.line, rulesTop) }}
-        />
+      {ruled ? <div data-testid="ink-rules" style={{ ...fill, ...rulingStyle(camera, colors.line) }} /> : null}
+      {pattern ? (
+        <img alt="" aria-hidden="true" draggable={false} data-testid="ink-pattern" data-paper={paper} src={pattern} style={sheetStyle(camera, pageHeight)} />
       ) : null}
-      {src ? (
-        <img
-          alt=""
-          aria-hidden="true"
-          draggable={false}
-          data-testid="ink-template"
-          data-template={template}
-          src={src}
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            width: PAGE_WIDTH * z,
-            height: height * z,
-            maxWidth: 'none',
-            transform: `translate(${camera.x * z}px, ${camera.y * z}px)`,
-            pointerEvents: 'none',
-            userSelect: 'none',
-          }}
-        />
+      {sheet ? (
+        <img alt="" aria-hidden="true" draggable={false} data-testid="ink-sheet-preview" data-template={preview} src={sheet} style={sheetStyle(camera, SHEET_HEIGHT)} />
       ) : null}
     </div>
   );
 }
 
-/** A small corner of a page, for the Page menu. Decorative. */
-export function PageChip({ id, width = 44, height = 56 }) {
+const CHIP_SCALE = 0.13; // the top-left 340 x 430 page units
+
+/** A small corner of a paper, for the Page menu. Decorative. */
+export function PaperChip({ id, width = 44, height = 56 }) {
   const colors = usePaperColors();
-  const scale = 0.13; // the top-left 340 x 430 page units
   const src = useMemo(
-    // Lines in the words' colour: the page's own ruling is too faint to read this small.
-    () => (id === RULED ? null : paperTemplateDataUri(id, { ink: colors.ink, line: colors.ink, accent: colors.accent })),
+    // In the words' colour: the page's own ruling is too faint to read this small.
+    () => (id === RULED ? null : paperTemplateDataUri(id, { line: colors.ink })),
     [id, colors],
   );
   return (
@@ -98,16 +88,41 @@ export function PageChip({ id, width = 44, height = 56 }) {
         borderRadius: 4,
         backgroundColor: colors.paper,
         boxShadow: `0 0 0 1px ${colors.edge}`,
-        ...(src ? null : rulingStyle({ x: 0, y: 0, z: scale }, colors.line)),
+        ...(src ? null : rulingStyle({ x: 0, y: 0, z: CHIP_SCALE }, colors.line)),
       }}
     >
       {src ? (
-        <img
-          alt=""
-          draggable={false}
-          src={src}
-          style={{ position: 'absolute', left: 0, top: 0, width: PAGE_WIDTH * scale, height: SHEET_HEIGHT * scale, maxWidth: 'none', opacity: 0.7 }}
-        />
+        <img alt="" draggable={false} src={src} style={{ position: 'absolute', left: 0, top: 0, width: PAGE_WIDTH * CHIP_SCALE, height: SHEET_HEIGHT * CHIP_SCALE, maxWidth: 'none', opacity: 0.7 }} />
+      ) : null}
+    </span>
+  );
+}
+
+/** A small corner of a template's white sheet, for the Page menu; "No template" is the bare paper. Decorative. */
+export function SheetChip({ id, width = 44, height = 56 }) {
+  const colors = usePaperColors();
+  const none = id === NO_SHEET;
+  const src = useMemo(
+    () => (none ? null : paperTemplateDataUri(id, { ...PAPER_SHEET_COLORS, line: PAPER_SHEET_COLORS.ink })),
+    [id, none],
+  );
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: 'relative',
+        display: 'block',
+        flex: 'none',
+        width,
+        height,
+        overflow: 'hidden',
+        borderRadius: 4,
+        backgroundColor: none ? colors.paper : PAPER_SHEET_COLORS.ground,
+        boxShadow: `0 0 0 1px ${colors.edge}`,
+      }}
+    >
+      {src ? (
+        <img alt="" draggable={false} src={src} style={{ position: 'absolute', left: 0, top: 0, width: PAGE_WIDTH * CHIP_SCALE, height: SHEET_HEIGHT * CHIP_SCALE, maxWidth: 'none' }} />
       ) : null}
     </span>
   );

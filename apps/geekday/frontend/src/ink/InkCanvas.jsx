@@ -14,9 +14,13 @@
  *   - A tall page, not an infinite canvas (pageCamera.js): 1000 page units
  *     wide, at least three sheets tall, scrolled and zoomed by our own
  *     gestures (pageGestures.js) with tldraw's camera kept locked.
- *   - The paper: ruled lines and the page template, in page space
- *     (PagePaper.jsx, pageTemplate.js). The template id is kept in tldraw's
- *     document meta, as NoteGeek keeps a sketch's paper.
+ *   - The paper: ruled lines, dots or a grid, in page space (PagePaper.jsx,
+ *     pageTemplate.js). Its id is kept in tldraw's document meta, as NoteGeek
+ *     keeps a sketch's paper.
+ *   - The template: a layout printed INTO the drawing as one locked image
+ *     shape on a white sheet (@geeksuite/ui `placePaperSheet`, shared with
+ *     NoteGeek). It is part of the page, not ink: nothing here that asks
+ *     "is there writing?" counts it, and the lasso never picks it up.
  *   - Our own pointer rule instead of leaving tldraw's pen mode to itself: the
  *     pen and the mouse always draw; a finger draws only until a pen has been
  *     seen on this device, or when "Finger draws" is on.
@@ -35,7 +39,10 @@ import {
   exportToBlob, getPointerInfo, loadSnapshot as loadTldrawSnapshot, useEditor, useValue,
 } from '@tldraw/tldraw';
 import '@tldraw/tldraw/tldraw.css';
-import { PAPER_TEMPLATE_META_KEY } from '@geeksuite/ui';
+import {
+  PAPER_SHEET_SHAPE_ID, PAPER_TEMPLATE_META_KEY, isPaperSheetShape, isPaperSheetTemplate, paperSheetOf, paperSheetTemplateOf, placePaperSheet,
+  removePaperSheet,
+} from '@geeksuite/ui';
 import InkToolbar from './InkToolbar';
 import { INK_TOOLS } from './inkTools';
 import { createInkSaver } from './inkSaver';
@@ -50,9 +57,10 @@ import {
 } from './pageCamera';
 import { attachPageGestures } from './pageGestures';
 import { PagePaper } from './PagePaper';
-import { InkPageContext } from './paperLook';
+import { InkPageContext, usePaperColors } from './paperLook';
 import {
-  RULED, readDeviceTemplate, resolveTemplate, storedTemplate, templateToKeep, withTemplate, writeDeviceTemplate,
+  NO_SHEET, RULED, paperToKeep, previewSheet, readDevicePaper, readDeviceSheet, resolvePaper, storedTemplate, withPaper,
+  writeDevicePaper, writeDeviceSheet,
 } from './pageTemplate';
 import { lassoSelection, shapeSample, TAP_TOLERANCE } from './lassoGeometry';
 import { exportSketchPng, unionBounds, LASSO_MIN_SHORT_EDGE } from './sketchExport';
@@ -64,6 +72,9 @@ const HINT_MS = 3500;
 /** A lasso drag shorter than this many CSS px, end to end, is a tap. */
 const TAP_SLOP_PX = 10;
 const TOUCH_MARK = 'geekday ink touch';
+const SHEET_MARK = 'geekday template';
+/** A sheet whose shape carries no template id (it is still a sheet). */
+const UNKNOWN_SHEET = 'unknown';
 
 // tldraw 2.4's updateViewportScreenBounds takes a Box and calls .equals() on it.
 const screenBoundsOf = (el) => {
@@ -76,10 +87,15 @@ const screenBoundsOf = (el) => {
 const TLDRAW_OPTIONS = { maxPointsPerDrawShape: 200 };
 const TLDRAW_COMPONENTS = { Background: PagePaper };
 
-/** tldraw's colour scheme follows the app theme: black ink reads light on dark paper. */
-function ColorSchemeSync() {
+/**
+ * tldraw's colour scheme follows the app theme: black ink reads light on dark
+ * paper. `light`: the page has a template sheet, which is white, so the whole
+ * page is light (paperLook.js `usePaperColors`).
+ */
+function ColorSchemeSync({ light = false }) {
   const editor = useEditor();
-  const mode = useTheme().palette.mode === 'dark' ? 'dark' : 'light';
+  const dark = useTheme().palette.mode === 'dark';
+  const mode = dark && !light ? 'dark' : 'light';
   useEffect(() => {
     editor.user.updateUserPreferences({ colorScheme: mode });
   }, [editor, mode]);
@@ -90,12 +106,31 @@ const pathData = (points) => points.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed
 
 /** How often the page's height is re-measured while ink is changing. */
 const PAGE_SYNC_MS = 200;
-const BLANK_PAGE = { template: RULED, stored: null, hasInk: false, pageHeight: SHEET_HEIGHT * MIN_SHEETS };
+const BLANK_PAGE = { paper: RULED, stored: null, hasInk: false, sheet: null, preview: null, pageHeight: SHEET_HEIGHT * MIN_SHEETS };
 
-/** Everything on the page as lasso samples (lassoGeometry.js). */
+/** The template id of the page's sheet (the one `placePaperSheet` makes), or null. One lookup. */
+function sheetIdOf(editor) {
+  const shape = paperSheetOf(editor);
+  return shape ? paperSheetTemplateOf(shape) || UNKNOWN_SHEET : null;
+}
+
+/**
+ * What is on the page: whether it has INK (any shape that is not a template
+ * sheet), and its sheet's template id (null when it has none).
+ */
+function pageContent(editor) {
+  const shapes = editor.getCurrentPageShapes?.() || [];
+  const sheetShape = paperSheetOf(editor) || shapes.find(isPaperSheetShape) || null;
+  return {
+    hasInk: shapes.some((shape) => !isPaperSheetShape(shape)),
+    sheet: sheetShape ? paperSheetTemplateOf(sheetShape) || UNKNOWN_SHEET : null,
+  };
+}
+
+/** The writing on the page as lasso samples (lassoGeometry.js). Never the template sheet. */
 function pageSamples(editor) {
   const pageId = editor.getCurrentPageId?.();
-  return (editor.getCurrentPageShapes?.() || []).map((shape) => (
+  return (editor.getCurrentPageShapes?.() || []).filter((shape) => !isPaperSheetShape(shape)).map((shape) => (
     // A stroke directly on the page is its own points. Anything nested in a
     // group or frame (possible if the note was edited in NoteGeek), or any
     // other kind of shape, is the centre of its page bounds.
@@ -209,7 +244,7 @@ function LassoLayer({ active, canDraw, highlight, onFinish, onStart }) {
  * @param {object} props
  * @param {string|null} props.content  tldraw snapshot JSON; null or '' is a blank page
  * @param {(content: string) => void} [props.onChange]  debounced, user edits only
- * @param {{current: object|null}} [props.apiRef]  filled with { flush, hasShapes, undo, redo, setTool, clearLasso, setTemplate, fitPage, view }
+ * @param {{current: object|null}} [props.apiRef]  filled with { flush, hasShapes, undo, redo, setTool, clearLasso, setPaper, setSheet, fitPage, view }
  * @param {(lasso: {shapeIds: string[], image: {base64: string, mediaType: 'image/png'}}) => void} [props.onLasso]
  * @param {(message: string) => void} [props.onLassoError]
  * @param {(touchDraws: boolean) => void} [props.onTouchDrawsChange]
@@ -246,11 +281,13 @@ export default function InkCanvas({
   const viewportRef = useRef(null);
   const [zoomed, setZoomed] = useState(false);
   const zoomedRef = useRef(false);
-  // The page on screen: its template and its height (PagePaper, the Page menu).
+  // The page on screen: its paper, its template and its height (PagePaper, the Page menu).
   const [page, setPage] = useState(BLANK_PAGE);
   const pageRef = useRef(page);
-  const [deviceTemplate, setDeviceTemplateState] = useState(() => readDeviceTemplate());
-  const deviceTemplateRef = useRef(deviceTemplate);
+  const [deviceDefault, setDeviceDefaultState] = useState(() => ({ paper: readDevicePaper(), sheet: readDeviceSheet() }));
+  const deviceDefaultRef = useRef(deviceDefault);
+  /** "No template" was chosen on a blank day: the device's template is not previewed on it again. */
+  const previewOffRef = useRef(false);
   const pageSyncTimerRef = useRef(null);
   const [tool, setToolState] = useState('pen');
   const [highlight, setHighlight] = useState(null); // { ids, bounds } in page units
@@ -272,14 +309,17 @@ export default function InkCanvas({
   const saverRef = useRef(null);
   if (!saverRef.current) {
     saverRef.current = createInkSaver({
-      // A page that has never had a body and has no ink is still a blank day:
-      // a template chosen on it (or a stroke that was taken back) must not
-      // create a note. The choice is in the document and rides with the first ink.
-      serialize: () => (
-        editorRef.current.getCurrentPageShapeIds().size === 0 && !saverRef.current.hasBody()
+      // A page that has never had a body and has neither ink nor a template
+      // sheet is still a blank day: a paper chosen on it (or a stroke that was
+      // taken back) must not create a note. The paper is in the document and
+      // rides with the first ink. A template PLACED from the menu is in the
+      // drawing, so it is saved like ink.
+      serialize: () => {
+        const { hasInk, sheet } = pageContent(editorRef.current);
+        return !hasInk && !sheet && !saverRef.current.hasBody()
           ? ''
-          : JSON.stringify(editorRef.current.store.getStoreSnapshot())
-      ),
+          : JSON.stringify(editorRef.current.store.getStoreSnapshot());
+      },
       emit: (serialized) => onChangeRef.current?.(serialized),
     });
   }
@@ -309,26 +349,32 @@ export default function InkCanvas({
   }, [viewport]);
 
   /**
-   * Read the page back from the document: which template it has, whether it
-   * has ink, and how tall it is. The height only grows while a page is open
-   * (erasing must not pull the paper out from under the view); a load starts
-   * again (`fresh`).
+   * Read the page back from the document: its paper, its template sheet,
+   * whether it has ink, and how tall it is (a sheet counts for the height: it
+   * must be reachable wherever NoteGeek put it). The height only grows while a
+   * page is open (erasing must not pull the paper out from under the view); a
+   * load starts again (`fresh`). `changed`: the caller has already written to
+   * `pageRef`, so "same as before" proves nothing; render regardless.
    */
-  const syncPage = useCallback((ed, { fresh = false } = {}) => {
+  const syncPage = useCallback((ed, { fresh = false, changed = false } = {}) => {
     if (!ed || ed.isDisposed) return;
     const stored = storedTemplate(ed.getDocumentSettings?.()?.meta);
-    const hasInk = ed.getCurrentPageShapeIds().size > 0;
-    const bounds = hasInk ? ed.getCurrentPageBounds?.() : null;
+    const { hasInk, sheet } = pageContent(ed);
+    const bounds = hasInk || sheet ? ed.getCurrentPageBounds?.() : null;
     const inkBottom = bounds ? (bounds.maxY ?? (bounds.y || 0) + (bounds.h || 0)) : 0;
     const wanted = pageHeightFor(inkBottom, viewportRef.current);
     const prev = pageRef.current;
     const next = {
       stored,
       hasInk,
-      template: resolveTemplate({ stored, hasInk, deviceDefault: deviceTemplateRef.current }),
+      sheet,
+      preview: previewSheet({
+        hasInk, sheet, hasBody: saverRef.current.hasBody(), dismissed: previewOffRef.current, deviceDefault: deviceDefaultRef.current.sheet,
+      }),
+      paper: resolvePaper({ stored, hasContent: hasInk || Boolean(sheet), deviceDefault: deviceDefaultRef.current.paper }),
       pageHeight: fresh ? wanted : Math.max(prev.pageHeight, wanted),
     };
-    if (next.stored === prev.stored && next.hasInk === prev.hasInk && next.template === prev.template && next.pageHeight === prev.pageHeight) return;
+    if (!changed && Object.keys(next).every((key) => next[key] === prev[key])) return;
     pageRef.current = next;
     setPage(next);
   }, []);
@@ -359,7 +405,7 @@ export default function InkCanvas({
     const blank = () => {
       const ids = ed.store.allRecords().filter((r) => r.typeName === 'shape' || r.typeName === 'asset').map((r) => r.id);
       if (ids.length) ed.store.mergeRemoteChanges(() => ed.store.remove(ids));
-      // A blank page has no template of its own either.
+      // A blank page has no paper of its own either.
       const meta = ed.getDocumentSettings?.()?.meta;
       if (storedTemplate(meta)) {
         const { [PAPER_TEMPLATE_META_KEY]: _dropped, ...rest } = meta;
@@ -384,6 +430,7 @@ export default function InkCanvas({
     // Yesterday's strokes must not come back through Undo on today's page.
     ed.history?.clear?.();
     saver.loaded(body);
+    previewOffRef.current = false;
     clearLasso();
     clearTimeout(pageSyncTimerRef.current);
     pageSyncTimerRef.current = null;
@@ -415,15 +462,24 @@ export default function InkCanvas({
       saver.markDirty();
       const was = pageRef.current;
       if (!was.hasInk) {
-        // The first ink: the page keeps the template it was written on, so a
-        // later change of this device's default cannot change this day.
-        if (ed.getCurrentPageShapeIds().size > 0) {
+        const now = pageContent(ed);
+        const first = (now.hasInk || now.sheet) && !was.sheet;
+        if (first) {
+          // Marked first: these writes come straight back through this listener.
+          pageRef.current = { ...was, hasInk: now.hasInk, sheet: now.sheet || was.preview, preview: null };
+          // The first ink or template: the page keeps the paper it was made
+          // on, so a later change of this device's default cannot change it.
           const meta = ed.getDocumentSettings?.()?.meta || {};
-          const keep = templateToKeep({ stored: storedTemplate(meta), shown: was.template });
-          // Marked first: this write comes straight back through this listener.
-          pageRef.current = { ...was, hasInk: true };
-          if (keep) ed.updateDocumentSettings({ meta: withTemplate(meta, keep) });
+          const keep = paperToKeep({ stored: storedTemplate(meta), shown: was.paper });
+          if (keep) ed.updateDocumentSettings({ meta: withPaper(meta, keep) });
+          // The first ink on a previewed template: print it into the drawing
+          // for real, under the stroke, so the saved note has it. No history
+          // mark: it belongs to the stroke's own undo step.
+          if (now.hasInk && was.preview && !now.sheet) placePaperSheet(ed, was.preview, { x: 0, y: 0 });
         }
+        syncPage(ed, { changed: first });
+      } else if (sheetIdOf(ed) !== was.sheet) {
+        // The template came or went (Undo, Redo): the page changes with it at once.
         syncPage(ed);
       } else if (!pageSyncTimerRef.current) {
         // More ink: the page may need another sheet. Not on every point of a stroke.
@@ -564,6 +620,21 @@ export default function InkCanvas({
     });
   }, [editor, moveCamera, viewport]);
 
+  // tldraw gives an image shape's <img> no alt, so a screen reader would
+  // announce the sheet as an unnamed picture. It is printed stationery, not
+  // content: marked decorative, as the paper is.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !editor || !page.sheet) return undefined;
+    const mark = () => {
+      el.querySelectorAll(`[id="${PAPER_SHEET_SHAPE_ID}"] img:not([alt])`).forEach((img) => img.setAttribute('alt', ''));
+    };
+    mark();
+    const observer = new MutationObserver(mark);
+    observer.observe(el, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [editor, page.sheet]);
+
   const onPanStateChangeRef = useRef(onPanStateChange);
   onPanStateChangeRef.current = onPanStateChange;
   useEffect(() => {
@@ -576,22 +647,52 @@ export default function InkCanvas({
     moveCamera(fitCamera(ed.getCamera(), viewport(), pageRef.current.pageHeight));
   }, [moveCamera, viewport]);
 
-  /** Choose this page's template. Stored with the page, like NoteGeek's paper. */
-  const setTemplate = useCallback((id) => {
+  /** Choose this page's paper. Stored with the page, like NoteGeek's paper. Never touches a template. */
+  const setPaper = useCallback((id) => {
     const ed = editorRef.current;
     if (!ed || readOnlyRef.current) return;
-    const meta = ed.getDocumentSettings?.()?.meta || {};
-    const next = withTemplate(meta, id);
-    if (storedTemplate(meta) !== storedTemplate(next)) ed.updateDocumentSettings({ meta: next });
+    // Already the paper on screen (which may be how an id from another build
+    // is drawn): nothing to write.
+    if (id !== pageRef.current.paper || !pageRef.current.stored) {
+      const meta = ed.getDocumentSettings?.()?.meta || {};
+      const next = withPaper(meta, id);
+      if (storedTemplate(meta) !== storedTemplate(next)) ed.updateDocumentSettings({ meta: next });
+    }
     syncPage(ed);
   }, [syncPage]);
 
-  /** This device's page for new days (and for this one, if it is blank and never chose). */
-  const setDeviceTemplate = useCallback((id) => {
-    writeDeviceTemplate(id);
-    const now = readDeviceTemplate();
-    deviceTemplateRef.current = now;
-    setDeviceTemplateState(now);
+  /**
+   * Choose this page's template: print its sheet into the drawing, or (for
+   * NO_SHEET) take the sheet off. One undo step, saved like ink. A sheet that
+   * is replaced keeps its place; a new one is the first sheet of the page.
+   */
+  const setSheet = useCallback((id) => {
+    const ed = editorRef.current;
+    if (!ed || readOnlyRef.current) return;
+    const current = paperSheetOf(ed);
+    if (id === NO_SHEET) {
+      // On a blank day there is only a preview to put away; nothing is saved.
+      previewOffRef.current = true;
+      if (current) {
+        try { ed.complete?.(); } catch { /* nothing in progress */ }
+        ed.mark(SHEET_MARK);
+        removePaperSheet(ed);
+      }
+    } else if (isPaperSheetTemplate(id) && paperSheetTemplateOf(current) !== id) {
+      try { ed.complete?.(); } catch { /* nothing in progress */ }
+      ed.mark(SHEET_MARK);
+      placePaperSheet(ed, id, current ? { x: current.x, y: current.y } : { x: 0, y: 0 });
+    }
+    syncPage(ed);
+  }, [syncPage]);
+
+  /** This device's page for new days (and for this one, while it is blank and never chose). */
+  const setDeviceDefault = useCallback(({ paper, sheet }) => {
+    writeDevicePaper(paper);
+    writeDeviceSheet(sheet);
+    const now = { paper: readDevicePaper(), sheet: readDeviceSheet() };
+    deviceDefaultRef.current = now;
+    setDeviceDefaultState(now);
     syncPage(editorRef.current);
   }, [syncPage]);
 
@@ -631,6 +732,8 @@ export default function InkCanvas({
     const camera = ed.getCamera();
     const z = camera.z || 1;
     const path = points.map((p) => ({ x: p.x / z - camera.x, y: p.y / z - camera.y }));
+    // The template sheet is not among the samples, so it is never circled,
+    // never tapped, and never in the crop that is sent to be read.
     const ids = lassoSelection(pageSamples(ed), path, {
       tapSlop: TAP_SLOP_PX / z,
       tapTolerance: Math.max(TAP_TOLERANCE, 16 / z),
@@ -664,19 +767,21 @@ export default function InkCanvas({
   const api = useMemo(() => ({
     /** Serialise pending ink now. Calls onChange with it AND returns it; null when nothing was pending. */
     flush: () => (editorRef.current ? saver.flush() : null),
-    hasShapes: () => Boolean(editorRef.current && editorRef.current.getCurrentPageShapeIds().size > 0),
+    /** Is there any writing? A template sheet is not writing. */
+    hasShapes: () => Boolean(editorRef.current && pageContent(editorRef.current).hasInk),
     undo: () => { editorRef.current?.undo(); },
     redo: () => { editorRef.current?.redo(); },
     setTool,
     clearLasso,
-    setTemplate,
+    setPaper,
+    setSheet,
     fitPage,
     /** Where the page is: `{ x, y, z, zoomed, pageHeight }` (page units; see pageCamera.js). */
     view: () => {
       const camera = editorRef.current?.getCamera();
       return camera ? { x: camera.x, y: camera.y, z: camera.z, zoomed: zoomedRef.current, pageHeight: pageRef.current.pageHeight } : null;
     },
-  }), [saver, setTool, clearLasso, setTemplate, fitPage]);
+  }), [saver, setTool, clearLasso, setPaper, setSheet, fitPage]);
 
   useEffect(() => {
     if (!apiRef) return undefined;
@@ -700,7 +805,14 @@ export default function InkCanvas({
     };
   }, [saver]);
 
-  const pageContext = useMemo(() => ({ template: page.template, pageHeight: page.pageHeight }), [page.template, page.pageHeight]);
+  // The template on screen, placed or previewed; and with one, the page is light (paperLook.js).
+  const sheetShown = page.sheet || page.preview || NO_SHEET;
+  const light = sheetShown !== NO_SHEET;
+  const paperColors = usePaperColors(light);
+  const pageContext = useMemo(
+    () => ({ paper: page.paper, preview: page.preview, light, pageHeight: page.pageHeight }),
+    [page.paper, page.preview, light, page.pageHeight],
+  );
 
   return (
     <Box
@@ -711,19 +823,22 @@ export default function InkCanvas({
       data-ink-tool={tool}
       data-ink-ready={editor ? 'true' : 'false'}
       data-ink-zoomed={zoomed ? 'true' : 'false'}
-      data-ink-template={page.template}
+      data-ink-paper={page.paper}
+      data-ink-sheet={sheetShown}
+      data-ink-sheet-state={page.sheet ? 'placed' : page.preview ? 'preview' : 'none'}
+      data-ink-light={light ? 'true' : 'false'}
       sx={{
         position: 'absolute',
         inset: 0,
         overflow: 'hidden',
         touchAction: 'none',
-        bgcolor: (t) => t.palette.day?.page ?? t.palette.background.paper,
+        bgcolor: paperColors.paper,
         '& .tl-container': { position: 'absolute !important', inset: '0 !important' },
       }}
     >
       <InkPageContext.Provider value={pageContext}>
       <Tldraw onMount={handleMount} hideUi components={TLDRAW_COMPONENTS} options={TLDRAW_OPTIONS}>
-        <ColorSchemeSync />
+        <ColorSchemeSync light={light} />
         {!readOnly && editor ? (
           <>
             <LassoLayer
@@ -768,10 +883,12 @@ export default function InkCanvas({
               fingerDraws={fingerDraws}
               onFingerDrawsChange={setFingerDraws}
               penMode={!fingerCanDraw}
-              template={page.template}
-              deviceTemplate={deviceTemplate}
-              onTemplate={setTemplate}
-              onDeviceTemplate={setDeviceTemplate}
+              paper={page.paper}
+              sheet={sheetShown}
+              deviceDefault={deviceDefault}
+              onPaper={setPaper}
+              onSheet={setSheet}
+              onDeviceDefault={setDeviceDefault}
               zoomed={zoomed}
               onFit={fitPage}
             />

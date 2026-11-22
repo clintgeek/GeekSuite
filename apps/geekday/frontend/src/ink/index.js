@@ -20,8 +20,8 @@ export {
   panCamera, zoomCamera, fitCamera, cameraAfterResize, isZoomedIn, topOfPage, clientToPage, pageBoxToPane,
 } from './pageCamera';
 export {
-  RULED, PAGE_CHOICES, TEMPLATE_PREF_KEY, readDeviceTemplate, writeDeviceTemplate, storedTemplate, resolveTemplate,
-  withTemplate, templateToKeep,
+  RULED, NO_SHEET, PAPER_CHOICES, SHEET_CHOICES, TEMPLATE_PREF_KEY, SHEET_PREF_KEY, readDevicePaper, writeDevicePaper,
+  readDeviceSheet, writeDeviceSheet, storedTemplate, resolvePaper, withPaper, paperToKeep, previewSheet,
 } from './pageTemplate';
 export { createInkSaver, SAVE_DEBOUNCE_MS, ECHOES_KEPT } from './inkSaver';
 export { readPenSeen, writePenSeen, readFingerDraws, writeFingerDraws, touchDraws, PEN_PREF_KEYS } from './penPrefs';

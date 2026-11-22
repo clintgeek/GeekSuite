@@ -6,8 +6,10 @@ stored in NoteGeek. What it must do is `DOCS/GEEKDAY_SPEC.md` (signed off
 
 **Status (2026-11-21): deployed** at `geekday.clintgeek.com` (port 1840, Vite dev
 port 1841). The week spread, the scrolling page and page templates were added
-the night of 2026-11-20 (spec §6, `DOCS/TEMPLATES_SPEC.md`). Nothing has been
-run on the Lenovo.
+the night of 2026-11-20 (spec §6, `DOCS/TEMPLATES_SPEC.md`). Templates were
+reworked on 2026-11-21 (paper and template are now separate; see "Paper and
+templates" below); that rework is not deployed. Nothing has been run on the
+Lenovo.
 
 ## Shape
 
@@ -29,7 +31,7 @@ Every operation it sends is in `frontend/src/graphql/documents.js`.
 | `components/InkPane.jsx` | Hosts the canvas; shows saving, saved, not saved, conflict |
 | `components/ConfirmTaskDialog.jsx` | Circle to task: read, correct, create |
 | `components/DockedView.jsx` | The idle clock face |
-| `ink/` | The canvas: tldraw 2.4.6, trimmed from NoteGeek's sketch editor, plus the lasso, the scrolling page (`pageCamera.js`, `pageGestures.js`) and page templates (`pageTemplate.js`, `PagePaper.jsx`, `PageMenu.jsx`) |
+| `ink/` | The canvas: tldraw 2.4.6, trimmed from NoteGeek's sketch editor, plus the lasso, the scrolling page (`pageCamera.js`, `pageGestures.js`), and the paper and templates (`pageTemplate.js`, `PagePaper.jsx`, `paperLook.js`, `PageMenu.jsx`) |
 | `store/dayNoteStore.js` | Finding, creating and saving a day's note; retries; conflicts |
 | `hooks/useDayTasks.js` | A day's tasks with optimistic tick / move / add |
 | `lib/tasks.js`, `lib/days.js`, `lib/capture.js` | Pure rules: grouping, day keys, text → task |
@@ -81,13 +83,53 @@ an unlocked camera lets a palm beside the pen register as a pinch. A touch
 that lands while the pen is down, or within 300 ms of a pen event, never moves
 the page.
 
-**Page templates** are printed backgrounds from `@geeksuite/ui`
-(`packages/ui/src/paper/`), shared with NoteGeek. The id is stored in the
-sketch's tldraw document meta as `paperTemplate`, beside NoteGeek's
-`paperColor` / `paperPattern`. The device default (`geekday:pageTemplate`)
-applies to blank days only; a page that already has ink and no stored
-template is Ruled. A template is never a shape: it is not erasable and not in
-a lasso crop. A blank day saves nothing until it has ink.
+**Paper and templates** are two separate things (Chef, 2026-11-21), both
+chosen from the Page menu on the ink toolbar.
+
+- *Paper* is the background: Ruled, Dot grid or Grid, all the way down the
+  page in GeekDay's own paper colour (`PagePaper.jsx`, tldraw's `Background`).
+  Its id is stored in the sketch's tldraw document meta as `paperTemplate`
+  (`'none' | 'dots' | 'grid'`), beside NoteGeek's `paperColor` /
+  `paperPattern`. It is never a shape. Chosen on a blank day it saves nothing
+  and rides with the first ink.
+- A *template* (Schedule, Top three, Meeting, Cornell) is printed into the
+  drawing: ONE locked tldraw `image` shape, id `shape:paper-template`, a white
+  1000 x 1400 sheet with an inline SVG asset (`asset:paper-template-<id>`) and
+  `meta.paperTemplate = <id>`. It is made and removed only by
+  `placePaperSheet` / `removePaperSheet` from `@geeksuite/ui`
+  (`packages/ui/src/paper/sheet.js`), the contract shared with NoteGeek. The
+  menu places it at page (0, 0), or where the sheet it replaces was; "No
+  template" removes it. Each is one undo step and saves like ink. Paper
+  settings never touch it, and the paper shows around and below it. A sheet
+  NoteGeek put elsewhere is drawn where it is.
+- The sheet is not ink. `pageContent()` in `InkCanvas.jsx` is the one place
+  that says what counts: `hasShapes`, the first-ink rule, the lasso (never
+  circled, tapped, or in the crop sent to `transcribeSketch`) and the week
+  thumbnails all leave it out. It does count for the page's height. tldraw's
+  eraser skips it because it is locked.
+- A template placed from the menu on a blank day IS saved (the note is
+  created with only the sheet in it): placing one is a choice.
+- "Use for new days" stores the paper and the template on screen together,
+  per device: `geekday:pageTemplate` (paper) and `geekday:pageSheet`
+  (template). On a day that has no ink, no sheet and no note, the device's
+  template is shown as a preview (an `<img>` in `PagePaper.jsx`, not a shape)
+  and nothing is saved; the first ink places the real sheet in the same undo
+  step as the stroke. "No template" on such a day only puts the preview away
+  for that visit. A day that has a note is never changed by the default.
+- A page with a sheet (placed or previewed) is a light page in the dark
+  theme: tldraw's light colour scheme and the diary's light paper for the
+  whole page, because the sheet is always white and tldraw's dark scheme
+  draws ink near-white. The sheet is never tinted.
+- Pages from the build of 2026-11-20 whose meta says `paperTemplate:
+  'schedule' | 'top3' | 'meeting' | 'cornell'` (and any unknown id) draw as
+  Ruled with no template; the key is left as stored. A layout left in
+  `geekday:pageTemplate` by that build is read as the device's template
+  default.
+- tldraw keeps assets out of undo history, so a sheet's asset is never
+  deleted: a note may carry the asset of a template it no longer shows. After
+  a change of template the new picture appears about half a second later
+  (tldraw's own asset delay). tldraw's `<img>` has no alt; `InkCanvas.jsx`
+  sets `alt=""` on the sheet's image.
 
 **The week spread** reads `weeklyTasks` (Monday to Sunday) for the seven cells
 and `dailyTasks(today)` for "Not scheduled"; in a week with a clock change it

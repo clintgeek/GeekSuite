@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { paperSheetRecords } from '@geeksuite/ui';
 import { inkThumbFor, parseInkThumb } from '../../components/week/inkThumb.js';
 
 const draw = (id, x, y, points, extra = {}) => ({
@@ -34,6 +35,14 @@ describe('parseInkThumb: a day’s ink as polylines, without tldraw', () => {
       snapshot([draw('dot', 5, 5, [{ x: 0, y: 0 }]), { id: 'shape:geo', typeName: 'shape', type: 'geo', x: 0, y: 0, props: {} }])
     );
     expect(thumb.paths).toEqual(['M5 5l0.01 0']);
+  });
+
+  it('ignores a template sheet: a day with only a sheet has no picture, and with writing shows the writing alone', () => {
+    const { asset, shape } = paperSheetRecords('meeting', { x: 0, y: 0 });
+    const sheet = { ...shape, typeName: 'shape', parentId: 'page:page', rotation: 0, isLocked: true };
+    expect(parseInkThumb(snapshot([asset, sheet]))).toBe(null);
+    const thumb = parseInkThumb(snapshot([asset, sheet, draw('a', 100, 900, [{ x: 0, y: 0 }, { x: 10, y: 5 }])]));
+    expect(thumb).toEqual({ paths: ['M100 900L110 905'], top: 860 }); // framed on the ink, not on the sheet's top
   });
 
   it('thins a long stroke: a thumbnail does not need every point', () => {

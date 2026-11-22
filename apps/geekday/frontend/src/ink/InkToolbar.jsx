@@ -2,8 +2,8 @@
  * InkToolbar.jsx — the day page's own small toolbar (tldraw's UI is hidden).
  *
  * Cut down from apps/notegeek/frontend/src/components/editors/DrawingToolbar.jsx:
- * Pen, Eraser, Lasso, Undo, Redo, "Finger draws", and Page (the page
- * template, PageMenu.jsx); "Fit" appears only while the page is zoomed in.
+ * Pen, Eraser, Lasso, Undo, Redo, "Finger draws", and Page (the paper and
+ * the template, PageMenu.jsx); "Fit" appears only while the page is zoomed in.
  * The Lenovo pen never reports a held button, so every tool is a button here.
  * Palm rejection is NoteGeek's (palmTouch.js).
  *
@@ -78,16 +78,18 @@ const Divider = () => <Box aria-hidden sx={{ width: '1px', height: 24, bgcolor: 
  * @param {boolean} props.fingerDraws        the writer's override is on
  * @param {(on: boolean) => void} props.onFingerDrawsChange
  * @param {boolean} props.penMode            fingers do not draw right now (palm rejection applies)
- * @param {string} props.template            the page on screen (pageTemplate.js PAGE_CHOICES)
- * @param {string} props.deviceTemplate      this device's page for new days
- * @param {(id: string) => void} props.onTemplate
- * @param {(id: string) => void} props.onDeviceTemplate
+ * @param {string} props.paper               the paper on screen (pageTemplate.js PAPER_CHOICES)
+ * @param {string} props.sheet               the template on screen, placed or previewed (SHEET_CHOICES)
+ * @param {{paper: string, sheet: string}} props.deviceDefault  this device's page for new days
+ * @param {(id: string) => void} props.onPaper
+ * @param {(id: string) => void} props.onSheet
+ * @param {(page: {paper: string, sheet: string}) => void} props.onDeviceDefault
  * @param {boolean} props.zoomed             the page is zoomed in
  * @param {() => void} props.onFit           back to the whole width
  */
 export default function InkToolbar({
   tool, onTool, fingerDraws, onFingerDrawsChange, penMode,
-  template, deviceTemplate, onTemplate, onDeviceTemplate, zoomed = false, onFit,
+  paper, sheet, deviceDefault, onPaper, onSheet, onDeviceDefault, zoomed = false, onFit,
 }) {
   const [pageAnchor, setPageAnchor] = useState(null);
   const editor = useEditor();
@@ -186,10 +188,12 @@ export default function InkToolbar({
       <PageMenu
         anchorEl={pageAnchor}
         onClose={() => setPageAnchor(null)}
-        template={template}
-        deviceDefault={deviceTemplate}
-        onTemplate={onTemplate}
-        onDeviceDefault={onDeviceTemplate}
+        paper={paper}
+        sheet={sheet}
+        deviceDefault={deviceDefault}
+        onPaper={onPaper}
+        onSheet={onSheet}
+        onDeviceDefault={onDeviceDefault}
       />
     </Box>
   );
