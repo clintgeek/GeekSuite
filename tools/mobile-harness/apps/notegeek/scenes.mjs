@@ -136,7 +136,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, ARCHIVED, DELETED, NOTES, conflictAnswer, transcriptState, notesPage, listRow, NOTE_COMPOSED, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_SKETCH_TEMPLATE, SKETCH_TEMPLATE_META, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
+import { OPS, ARCHIVED, DELETED, NOTES, conflictAnswer, transcriptState, notesPage, listRow, NOTE_COMPOSED, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_SKETCH_TEMPLATE, NOTE_SKETCH_LEGACY_TEMPLATE, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
 
 // ── Fold-in helpers (scenes 19a-19e) ────────────────────────────────────────
 // The gateway is stubbed with the proposal the real model made for this note
@@ -2362,10 +2362,12 @@ export const scenes = [
     },
   },
   {
-    // P5: a sketch's template is chosen where its paper is: the Paper menu,
-    // under Colour and Lines. Picking Meeting draws the sheet behind the
-    // toolbar — and the snapshot the real editor then saves carries the id
-    // in its document meta (P3), and nothing new among its shapes (P2).
+    // T1–T5: a template is not paper. Picking Meeting from the Paper menu
+    // prints a white sheet INTO the sketch as one locked image shape, under
+    // the ink; the paper (here Engineering green, Graph: Chef's "green
+    // grid") is untouched and still drawn around it. The eraser cannot take
+    // it; None takes it off; Undo brings it back. Read from the real editor
+    // and from the snapshot it saves.
     name: '23c-sketch-template-menu',
     async setup(page, h) {
       await bootstrapChef(page);
@@ -2377,23 +2379,38 @@ export const scenes = [
       });
       await page.goto(h.base + '/notes/new?type=handwritten', { waitUntil: 'networkidle' });
       await h.settle(2500);
-      // A new sketch has no template (P5).
-      if (await page.locator('[data-paper-template-sheet]').count()) throw new Error('a NEW sketch already shows a template');
+      const sheetShape = page.locator('.tl-shape[data-shape-type="image"]');
+      if (await sheetShape.count()) throw new Error('a NEW sketch already has a template sheet');
       const bar = page.getByRole('toolbar', { name: 'Drawing tools' });
-      if (await bar.getByRole('button', { name: 'Paper', exact: true }).count()) {
-        await bar.getByRole('button', { name: 'Paper', exact: true }).click();
-      } else {
-        // The tight bar (a narrow phone): Paper is in More.
-        await bar.getByRole('button', { name: 'More', exact: true }).click();
-        await h.settle(300);
-        await page.getByRole('dialog', { name: 'More' }).getByRole('button', { name: 'Paper', exact: true }).click();
-      }
-      await h.settle(400);
+      const openPaper = async () => {
+        if (await bar.getByRole('button', { name: 'Paper', exact: true }).count()) {
+          await bar.getByRole('button', { name: 'Paper', exact: true }).click();
+        } else {
+          // The tight bar (a narrow phone): Paper is in More.
+          await bar.getByRole('button', { name: 'More', exact: true }).click();
+          await h.settle(300);
+          await page.getByRole('dialog', { name: 'More' }).getByRole('button', { name: 'Paper', exact: true }).click();
+        }
+        await h.settle(400);
+      };
+      const background = () => page.locator('.tl-background').evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return { ground: cs.backgroundColor, ruling: cs.backgroundImage, kids: el.children.length };
+      });
+      await openPaper();
       const menu = page.getByRole('dialog', { name: 'Paper' });
+      // The green grid first: the paper.
+      await menu.getByRole('button', { name: 'Paper: Engineering green' }).click();
+      await menu.getByRole('button', { name: 'Lines: Graph' }).click();
+      await h.settle(200);
+      const before = await background();
+      if (before.ground !== 'rgb(225, 235, 214)' || before.ruling === 'none') throw new Error(`the green grid is not drawn: ${JSON.stringify(before)}`);
+
       const group = menu.getByRole('group', { name: 'Paper template' });
       if (!(await group.count())) throw new Error('the Paper menu has no Template choice');
       const names = await group.getByRole('button').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
-      const want = ['None', 'Schedule', 'Top three', 'Meeting', 'Cornell', 'Dot grid', 'Grid'].map((n) => `Template: ${n}`);
+      // Dot grid and Grid are paper (Lines, above), not templates.
+      const want = ['None', 'Schedule', 'Top three', 'Meeting', 'Cornell'].map((n) => `Template: ${n}`);
       if (names.join('|') !== want.join('|')) throw new Error(`the Template choices are ${names.join(', ')}`);
       if ((await group.getByRole('button', { name: 'Template: None' }).getAttribute('aria-pressed')) !== 'true') throw new Error('a new sketch does not show None as chosen');
       for (const name of want) {
@@ -2401,25 +2418,97 @@ export const scenes = [
         if (!box || box.height < 44 || box.width < 44) throw new Error(`"${name}" is ${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : 'not on screen'}`);
       }
       await group.getByRole('button', { name: 'Template: Meeting' }).click();
-      await h.settle(500);
+      await h.settle(600);
       if ((await group.getByRole('button', { name: 'Template: Meeting' }).getAttribute('aria-pressed')) !== 'true') throw new Error('Meeting is not shown as chosen');
-      const sheet = page.locator('img[data-paper-template-sheet="meeting"]');
-      if (!(await sheet.count())) throw new Error('picking Meeting did not draw the template');
-      // The whole menu fits on screen (it grew by a section).
+      if ((await sheetShape.count()) !== 1) throw new Error(`picking Meeting put ${await sheetShape.count()} image shapes in the sketch, not one sheet`);
+      const img = sheetShape.locator('img').first();
+      await img.waitFor({ state: 'attached', timeout: 5000 });
+      const loaded = await img.evaluate((el) => new Promise((resolve) => {
+        const done = () => resolve({ ok: el.naturalWidth > 0, src: el.currentSrc.slice(0, 24) });
+        if (el.complete) done(); else { el.onload = done; el.onerror = done; }
+      }));
+      if (!loaded.ok) throw new Error(`the sheet's image did not load (${loaded.src})`);
+      // The paper did not change: same green, same grid, and nothing drawn into the background.
+      const after = await background();
+      if (after.ground !== before.ground || after.ruling === 'none' || after.kids !== 0) throw new Error(`placing a template changed the paper: ${JSON.stringify(after)}`);
+      // The whole menu fits on screen.
       const paper = await menu.boundingBox();
       const vp = page.viewportSize();
       if (!paper || paper.y < 0 || paper.y + paper.height > vp.height + 1) throw new Error(`the Paper menu runs off the screen (${paper && Math.round(paper.y)}..${paper && Math.round(paper.y + paper.height)} of ${vp.height})`);
-      // It saves with the note, like the paper: wait out the sketch's 400 ms
-      // and the page's 2 s, then read what the real editor serialised.
-      for (let i = 0; i < 20 && !saved.length; i += 1) await h.settle(250);
-      if (!saved.length) throw new Error('choosing a template was never saved');
-      const snapshot = JSON.parse(saved.at(-1).content);
+
+      // What the real editor saves.
+      const lastSnapshot = async (from) => {
+        for (let i = 0; i < 24 && saved.length <= from; i += 1) await h.settle(250);
+        if (saved.length <= from) throw new Error('the change was never saved');
+        return JSON.parse(saved.at(-1).content);
+      };
+      let snapshot = await lastSnapshot(0);
+      const sheet = snapshot.store['shape:paper-template'];
+      const asset = snapshot.store['asset:paper-template-meeting'];
+      if (!sheet || !asset) throw new Error(`the saved sketch has no sheet: ${Object.keys(snapshot.store).join(', ')}`);
+      if (sheet.type !== 'image' || sheet.isLocked !== true) throw new Error(`the sheet is ${sheet.type}, locked=${sheet.isLocked}`);
+      if (sheet.x !== 0 || sheet.y !== 0 || sheet.props.w !== 1000 || sheet.props.h !== 1400) throw new Error(`the sheet is at ${sheet.x},${sheet.y} size ${sheet.props.w}x${sheet.props.h}`);
+      if (sheet.meta?.paperTemplate !== 'meeting') throw new Error(`the sheet's mark is ${JSON.stringify(sheet.meta)}`);
+      if (!String(asset.props?.src || '').startsWith('data:image/svg+xml') || !decodeURIComponent(asset.props.src).includes('fill="#ffffff"')) throw new Error('the sheet is not an inline SVG on white');
       const meta = snapshot.store['document:document']?.meta || {};
-      if (meta.paperTemplate !== 'meeting') throw new Error(`the saved sketch's document meta is ${JSON.stringify(meta)}`);
-      const shapes = Object.keys(snapshot.store).filter((k) => k.startsWith('shape:') || k.startsWith('asset:'));
-      if (shapes.length) throw new Error(`the template was saved as part of the drawing: ${shapes.join(', ')}`);
+      if ('paperTemplate' in meta) throw new Error(`the template was written to the paper's meta: ${JSON.stringify(meta)}`);
+      if (meta.paperColor !== 'green' || meta.paperPattern !== 'graph') throw new Error(`the paper in the saved sketch is ${JSON.stringify(meta)}`);
       const device = await page.evaluate(() => Object.keys(localStorage).filter((k) => /template/i.test(k)));
       if (device.length) throw new Error(`a template was stored as a device default: ${device.join(', ')}`);
+
+      // Write a stroke on the sheet, then rub the eraser across both: the ink goes, the sheet stays.
+      await h.esc(300);
+      const box = await sheetShape.boundingBox();
+      const canvas = await page.locator('.tl-container').boundingBox();
+      const cx = Math.min(canvas.x + canvas.width - 40, Math.max(canvas.x + 40, box.x + box.width / 2));
+      const cy = canvas.y + canvas.height * 0.55;
+      const drag = async (dx, x = cx, y = cy) => {
+        await page.mouse.move(x - dx, y);
+        await page.mouse.down();
+        await page.mouse.move(x, y + 6, { steps: 8 });
+        await page.mouse.move(x + dx, y, { steps: 8 });
+        await page.mouse.up();
+        await h.settle(300);
+      };
+      // Escape (closing the menu) also drops tldraw to its select tool: pick Write again.
+      await bar.getByRole('button', { name: 'Write', exact: true }).click();
+      await h.settle(300);
+      await drag(60);
+      const strokes = page.locator('.tl-shape[data-shape-type="draw"]');
+      if ((await strokes.count()) !== 1) throw new Error(`drawing on the sheet made ${await strokes.count()} strokes`);
+      await bar.getByRole('button', { name: 'Eraser', exact: true }).click();
+      await h.settle(400);
+      // Rub where the stroke IS now: the page can settle a few px after the first ink (the note is created).
+      const mark = await strokes.first().boundingBox();
+      // Straight DOWN through it: a rub along the stroke runs parallel and never crosses it.
+      const mx = mark.x + mark.width / 2;
+      const my = mark.y + mark.height / 2;
+      await page.mouse.move(mx, my - 40);
+      await page.mouse.down();
+      await page.mouse.move(mx, my + 40, { steps: 10 });
+      await page.mouse.up();
+      await h.settle(400);
+      if (await strokes.count()) throw new Error('the eraser did not erase the ink (so this scene proves nothing about the sheet)');
+      if ((await sheetShape.count()) !== 1) throw new Error('the eraser removed the template sheet');
+
+      // None takes it off; Undo puts it back.
+      const savedBefore = saved.length;
+      await openPaper();
+      await group.getByRole('button', { name: 'Template: None' }).click();
+      await h.settle(500);
+      if (await sheetShape.count()) throw new Error('None did not take the sheet off');
+      snapshot = await lastSnapshot(savedBefore);
+      if (snapshot.store['shape:paper-template']) throw new Error('the sheet is still in the saved sketch after None');
+      await h.esc(300);
+      await bar.getByRole('button', { name: 'Undo', exact: true }).click();
+      await h.settle(500);
+      if ((await sheetShape.count()) !== 1) throw new Error('Undo did not bring the sheet back');
+      // With its picture: tldraw keeps assets out of undo, so a sheet could come back blank.
+      const back = await sheetShape.locator('img').first().evaluate((el) => new Promise((resolve) => {
+        const done = () => resolve(el.naturalWidth > 0);
+        if (el.complete) done(); else { el.onload = done; el.onerror = done; }
+      })).catch(() => false);
+      if (!back) throw new Error('Undo brought the sheet back without its picture');
     },
     teardown: async (page, h) => {
       await h.esc(300);
@@ -2427,54 +2516,64 @@ export const scenes = [
     },
   },
   {
-    // P2, P3, P6: a saved sketch that carries a template (a GeekDay day
-    // page, tagged `daily`) shows it here: one picture of the sheet, behind
-    // the ink, on the paper's colour — and not a shape, not text.
+    // T1, T2, T7: a saved sketch that has a template sheet (as a GeekDay day
+    // page does) opens with it: a white sheet in the drawing, under the ink,
+    // with the sketch's own paper (warm, lined) still ruled around it.
     name: '23d-sketch-template',
     async setup(page, h) {
       await openNote(page, h, NOTE_SKETCH_TEMPLATE, '/notes/n3t');
       await h.settle(900);
       if (await page.locator('.tl-error-boundary').count()) throw new Error('tldraw rendered its own error screen');
       if (await page.getByText(/something went wrong/i).count()) throw new Error('the sketch rendered the error boundary');
-      const sheet = page.locator(`img[data-paper-template-sheet="${SKETCH_TEMPLATE_META.paperTemplate}"]`);
-      if ((await sheet.count()) !== 1) throw new Error(`the template is drawn ${await sheet.count()} times, not once`);
-      const facts = await sheet.evaluate((img) => {
-        const bg = img.closest('.tl-background');
-        const r = img.getBoundingClientRect();
-        const firstShape = document.querySelector('.tl-shape');
+      const sheet = page.locator('.tl-shape[data-shape-type="image"]');
+      if ((await sheet.count()) !== 1) throw new Error(`the sketch shows ${await sheet.count()} image shapes, not its one sheet`);
+      const img = sheet.locator('img').first();
+      const facts = await img.evaluate(async (el) => {
+        if (!el.complete) await new Promise((r) => { el.onload = r; el.onerror = r; });
+        const bg = document.querySelector('.tl-background');
+        const shapes = [...document.querySelectorAll('.tl-shape')];
+        const r = el.getBoundingClientRect();
+        const z = (node) => Number(getComputedStyle(node).zIndex) || 0;
+        const sheetEl = el.closest('.tl-shape');
         return {
-          inBackground: Boolean(bg),
-          ground: bg ? getComputedStyle(bg).backgroundColor : null,
-          ruling: bg ? getComputedStyle(bg).backgroundImage : null,
-          ariaHidden: img.getAttribute('aria-hidden'),
-          alt: img.getAttribute('alt'),
-          pointer: getComputedStyle(img).pointerEvents,
-          loaded: img.complete && img.naturalWidth > 0,
+          loaded: el.naturalWidth > 0,
+          ground: getComputedStyle(bg).backgroundColor,
+          ruling: getComputedStyle(bg).backgroundImage,
+          inBackground: bg.children.length,
           ratio: r.width ? r.height / r.width : 0,
           width: r.width,
-          insideAShape: Boolean(img.closest('.tl-shape, .tl-shapes')),
-          shapes: document.querySelectorAll('.tl-shape').length,
-          // Behind the ink: the background comes before the shapes' layer.
-          behind: firstShape ? Boolean(bg.compareDocumentPosition(firstShape) & Node.DOCUMENT_POSITION_FOLLOWING) : null,
-          words: document.querySelector('.tl-container')?.innerText.match(/ATTENDEES|AGENDA|ACTIONS/g) || [],
+          shapes: shapes.length,
+          lowest: shapes.every((s) => s === sheetEl || z(s) > z(sheetEl)),
         };
       });
-      if (!facts.loaded) throw new Error('the template image did not load');
-      if (!facts.inBackground || facts.insideAShape) throw new Error('the template is not in the background layer');
-      if (facts.behind === false) throw new Error('the template is not behind the ink');
-      if (facts.ground !== 'rgb(244, 238, 223)') throw new Error(`the paper under the template is ${facts.ground}, not warm`);
-      if (facts.ruling !== 'none') throw new Error('the ruling is still drawn under the template');
-      if (facts.ariaHidden !== 'true' || facts.alt !== '') throw new Error('the template is not hidden from assistive tech');
-      if (facts.pointer !== 'none') throw new Error('the template takes pointer events');
+      if (!facts.loaded) throw new Error('the sheet image did not load');
+      if (facts.ground !== 'rgb(244, 238, 223)') throw new Error(`the paper is ${facts.ground}, not warm`);
+      if (facts.ruling === 'none') throw new Error('the paper lost its lines because the sketch has a template');
+      if (facts.inBackground) throw new Error('something is drawn into the paper background: a template belongs in the drawing');
       if (Math.abs(facts.ratio - 1.4) > 0.01) throw new Error(`the sheet is ${facts.ratio.toFixed(3)} tall per wide, not 1.4`);
       if (facts.width < 200) throw new Error(`the sheet is only ${Math.round(facts.width)}px wide`);
-      if (facts.shapes !== 6) throw new Error(`the sketch has ${facts.shapes} shapes on screen, not its own 6`);
-      if (facts.words.length) throw new Error(`the template's words are page text: ${facts.words.join(', ')}`);
+      if (facts.shapes !== 7) throw new Error(`the sketch has ${facts.shapes} shapes on screen, not its own 6 and the sheet`);
+      if (!facts.lowest) throw new Error('the sheet is not under the ink');
       // The first view: the sheet's full width, from its top.
       const box = await sheet.boundingBox();
       const canvas = await page.locator('.tl-container').boundingBox();
       if (box.x < canvas.x - 1 || box.x + box.width > canvas.x + canvas.width + 1) throw new Error('the sheet is not fully in view side to side');
       if (box.y < canvas.y - 1) throw new Error('the top of the sheet is off screen');
+    },
+  },
+  {
+    // A sketch made with the build of 2026-11-20, whose template was only an
+    // id in the paper's meta: it opens as a plain sketch on its own paper.
+    // Nothing is drawn for the id and the stored document is left alone.
+    name: '23e-sketch-template-legacy-meta',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_SKETCH_LEGACY_TEMPLATE, '/notes/n3l');
+      await h.settle(900);
+      if (await page.locator('.tl-error-boundary').count()) throw new Error('tldraw rendered its own error screen');
+      if (await page.locator('.tl-shape[data-shape-type="image"]').count()) throw new Error('a sheet was made from the old meta on open');
+      const bg = await page.locator('.tl-background').evaluate((el) => ({ ground: getComputedStyle(el).backgroundColor, ruling: getComputedStyle(el).backgroundImage, kids: el.children.length }));
+      if (bg.ground !== 'rgb(244, 238, 223)' || bg.ruling === 'none' || bg.kids) throw new Error(`the sketch's own paper is not drawn: ${JSON.stringify(bg)}`);
+      if ((await page.locator('.tl-shape').count()) !== 6) throw new Error('the sketch does not show its own 6 shapes');
     },
   },
 
@@ -2602,7 +2701,8 @@ export const scenes = [
 // an empty list is the goal, not a permanent parking lot.
 export const waivers = [
   {
-    // tldraw's image shape (a photo sketch note's pages, HANDWRITING.md §3)
+    // tldraw's image shape (a photo sketch note's pages, HANDWRITING.md §3,
+    // and a template sheet, TEMPLATES_SPEC.md T1)
     // renders <img class="tl-image"> with no alt. 2.4.6 has no alt-text prop
     // for images, and a replacement `image` shape util is refused
     // ("defined more than once"), so the only fix from outside is patching
@@ -2611,7 +2711,7 @@ export const waivers = [
     // shape has `altText`.
     rule: 'image-alt',
     match: 'tl-image',
-    scenes: ['13d-photo-note'],
+    scenes: ['13d-photo-note', '23c-sketch-template-menu', '23d-sketch-template'],
     reason: 'tldraw 2.4 image shape <img> has no alt and no way to set one (third-party UI)',
   },
 ];

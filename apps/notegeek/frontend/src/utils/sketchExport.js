@@ -17,7 +17,12 @@
  * `exportToBlob` is passed in rather than imported, so this module does not
  * pull tldraw into the editor page's chunk: HandwrittenEditor (lazy-loaded)
  * owns the tldraw import and hands its editor and export function here.
+ *
+ * A template sheet (DOCS/TEMPLATES_SPEC.md T6) is a shape, so it is in the
+ * picture a person gets (share, print) and is left OUT of the picture a
+ * model reads: its printed words are not the writer's handwriting.
  */
+import { isPaperSheetShape } from '@geeksuite/ui';
 
 /** The longest edge of the exported image, in pixels. */
 export const EXPORT_MAX_EDGE = 2000;
@@ -162,6 +167,9 @@ export async function blobToBase64(blob) {
  * @param {object} deps
  * @param {Function} deps.exportToBlob  tldraw's `exportToBlob`
  * @param {Array} [deps.ids]        only these shapes (default: the whole page)
+ * @param {boolean} [deps.sheet=false]  with the template sheet, if the sketch
+ *   has one: true for a picture a person will look at, false (the default)
+ *   for one a model will read. Ignored when `ids` is given.
  * @param {number} [deps.maxEdge]   longest edge in pixels (print asks for more)
  * @param {number} [deps.maxBytes]  refused past this; `Infinity` for print,
  *   which never leaves the device
@@ -174,15 +182,20 @@ export async function exportSketchPng(editor, {
   flatten = flattenOnWhite,
   toBase64 = blobToBase64,
   ids: only = null,
+  sheet = false,
   maxEdge = EXPORT_MAX_EDGE,
   maxBytes = EXPORT_MAX_BYTES,
   base64 = true,
 } = {}) {
-  const ids = only ? [...only] : [...(editor.getCurrentPageShapeIds?.() || [])];
+  const all = [...(editor.getCurrentPageShapeIds?.() || [])];
+  const ids = only ? [...only] : (sheet ? all : all.filter((id) => !isPaperSheetShape(editor.getShape?.(id))));
   if (!ids.length) {
     throw new SketchExportError('empty', 'This sketch is empty. Write something first.');
   }
-  const bounds = only ? unionBounds(ids.map((id) => editor.getShapePageBounds?.(id))) : editor.getCurrentPageBounds?.();
+  // The whole page's bounds only when the whole page is exported.
+  const bounds = only || ids.length !== all.length
+    ? unionBounds(ids.map((id) => editor.getShapePageBounds?.(id)))
+    : editor.getCurrentPageBounds?.();
   const opts = sketchExportOptions(bounds, maxEdge);
 
   let raw;
@@ -245,7 +258,8 @@ export async function exportSketchForPrint(editor, { exportToBlob, flatten = fla
   const once = (ids) => exportSketchPng(editor, {
     exportToBlob, flatten, ids, maxEdge: PRINT_MAX_EDGE, maxBytes: Infinity, base64: false,
   });
-  const photos = shapes.filter((s) => s.type === 'image');
+  // A template sheet is an image shape too, but it is not a photographed page.
+  const photos = shapes.filter((s) => s.type === 'image' && !isPaperSheetShape(s));
   if (!photos.length) return [await once(shapes.map((s) => s.id))];
 
   const boundsOf = (s) => editor.getShapePageBounds?.(s.id) || null;
@@ -256,6 +270,7 @@ export async function exportSketchForPrint(editor, { exportToBlob, flatten = fla
   const out = [];
   for (const { shape, b } of photoBounds) {
     const ink = shapes.filter((s) => s.type !== 'image' && overlaps(boundsOf(s), b));
+    // (A template sheet under a photo stays with the loose ink below.)
     ink.forEach((s) => claimed.add(s.id));
     out.push(await once([shape.id, ...ink.map((s) => s.id)]));
   }

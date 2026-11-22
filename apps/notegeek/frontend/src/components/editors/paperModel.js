@@ -8,15 +8,14 @@
  * light and puts tldraw in its light scheme, so the default black ink stays
  * black.
  *
- * A sketch may also carry a page TEMPLATE (DOCS/TEMPLATES_SPEC.md P1–P7): a
- * printed layout from the suite's shared set (`@geeksuite/ui`, the same one
- * GeekDay's day page uses), kept in the same document meta under
- * `PAPER_TEMPLATE_META_KEY`. Per sketch only — there is no device default,
- * so a sketch never has a template unless someone chose one for it.
+ * A sketch may also have a TEMPLATE (DOCS/TEMPLATES_SPEC.md T1–T8). That is
+ * not paper and is not kept here: it is a white sheet printed into the
+ * drawing as a locked shape (`@geeksuite/ui`, paper/sheet.js). Paper colour
+ * and lines never change it, and it never changes them.
  *
  * Pure helpers only; the components are in Paper.jsx.
  */
-import { PAPER_PAGE, PAPER_RULE, PAPER_TEMPLATE_META_KEY, PAPER_TEMPLATE_NONE, isPaperTemplate } from '@geeksuite/ui';
+import { PAPER_RULE } from '@geeksuite/ui';
 
 export const PAPER_COLORS = [
     // Today's look: tldraw's own ground, light or dark with the app.
@@ -76,13 +75,17 @@ export function paperFromMeta(meta, devicePaper) {
 
 /**
  * What to paint: the ground colour (null = tldraw's own), tldraw's colour
- * scheme, and the ruling's colour.
+ * scheme, and the ruling's colour. `sheet`: the sketch has a template sheet.
  */
-export function resolvePaper({ color, pattern }, themeMode) {
+export function resolvePaper({ color, pattern }, themeMode, { sheet = false } = {}) {
     const c = PAPER_COLORS.find((p) => p.id === color) || PAPER_COLORS[0];
     return {
         background: c.background,
-        colorScheme: c.background ? 'light' : (themeMode === 'dark' ? 'dark' : 'light'),
+        // A template sheet is white whatever the theme, and tldraw's dark
+        // scheme draws "black" ink near-white: it would vanish on the sheet.
+        // So a sketch with a sheet is always in the light scheme, as it is
+        // on every paper but "Match theme".
+        colorScheme: c.background || sheet ? 'light' : (themeMode === 'dark' ? 'dark' : 'light'),
         line: c.line,
         pattern: patternIds.has(pattern) ? pattern : 'plain',
     };
@@ -147,73 +150,30 @@ export function rulingStyle(pattern, line, camera) {
     return {};
 }
 
-// ── Page templates ───────────────────────────────────────────────────────
+// ── Template sheets ──────────────────────────────────────────────────────
+// A template is not paper. It is a white sheet printed into the drawing as
+// one locked shape (`@geeksuite/ui` paper/sheet.js; DOCS/TEMPLATES_SPEC.md
+// T1–T8). The paper above is untouched by it and carries on around it. All
+// this file knows about a sheet is where to put it and how to look at it.
 
 /**
- * The sketch's template id, or null. Null for a sketch that never chose, for
- * "none", and for an id this build does not know (P7: a newer or removed
- * template opens as a plain page; the stored value is never touched here).
+ * The page box to bring into view so a sheet's full width shows, from its
+ * top: as much of its height as the viewport's shape allows.
+ * @param {{x:number,y:number,w:number,h:number}} sheet  the sheet's page bounds
  */
-export function templateFromMeta(meta) {
-    const id = meta?.[PAPER_TEMPLATE_META_KEY];
-    return isPaperTemplate(id) ? id : null;
+export function sheetViewBox(sheet, viewport) {
+    const w = viewport?.w > 0 ? viewport.w : sheet.w;
+    const h = viewport?.h > 0 ? viewport.h : sheet.h;
+    const tall = Math.min(sheet.h, Math.max(PAPER_RULE * 4, (sheet.w * h) / w));
+    return { x: sheet.x, y: sheet.y, w: sheet.w, h: tall };
 }
 
 /**
- * The document meta after choosing `id` (a template id, or null for None),
- * or null when there is nothing to write. Every other key — paper colour,
- * ruling, anything another app keeps there — is carried over as it is.
- *
- * None is written as PAPER_TEMPLATE_NONE, not by deleting the key: GeekDay
- * reads a missing key as "never chose" and may apply its own default.
- * None on a sketch with no KNOWN template is not a change: nothing is
- * written, so an untouched sketch stays untouched and an unknown id (P7)
- * survives someone opening the menu.
+ * Where a new sheet goes: page (0, 0) on a sketch with nothing drawn; on one
+ * that has ink, the top-left of what is on screen, so it lands where the
+ * writer is looking (and under what they wrote there).
  */
-export function metaWithTemplate(meta, id) {
-    const current = templateFromMeta(meta);
-    const next = isPaperTemplate(id) ? id : null;
-    if (next === current) return null;
-    return { ...(meta || {}), [PAPER_TEMPLATE_META_KEY]: next || PAPER_TEMPLATE_NONE };
-}
-
-/** Printed words on a light paper / on tldraw's dark ground ("Match theme" at night). */
-export const TEMPLATE_INK = { light: '#595d66', dark: '#a4a9b3' };
-
-/**
- * The template's colours for a resolved paper (`resolvePaper`): its rules in
- * the paper's own line colour, a step stronger than the ruling (they are a
- * layout, not a texture), and its words in a grey that reads on every paper.
- * NoteGeek has no second accent, so the accent is the ink.
- */
-export function templateColors(look) {
-    const ink = look?.colorScheme === 'dark' ? TEMPLATE_INK.dark : TEMPLATE_INK.light;
-    return { ink, line: stronger(look?.line || PAPER_COLORS[0].line), accent: ink };
-}
-
-/**
- * Where the template's sheet is on screen, from tldraw's camera: its top-left
- * at page (0, 0), PAPER_PAGE wide and tall, moving and scaling like the
- * ruling. Null when zoomed so far out that it would be a grey smudge.
- */
-export function templateSheetBox(camera) {
-    const z = camera?.z || 1;
-    if (PAPER_RULE * z < MIN_SCREEN_GAP) return null;
-    return {
-        left: (camera?.x || 0) * z,
-        top: (camera?.y || 0) * z,
-        width: PAPER_PAGE.width * z,
-        height: PAPER_PAGE.height * z,
-    };
-}
-
-/**
- * The page box to bring into view so the sheet's full width shows, from its
- * top: as much of the sheet's height as the viewport's shape allows.
- */
-export function templateViewBox(viewport) {
-    const w = viewport?.w > 0 ? viewport.w : PAPER_PAGE.width;
-    const h = viewport?.h > 0 ? viewport.h : PAPER_PAGE.height;
-    const tall = Math.min(PAPER_PAGE.height, Math.max(PAPER_RULE * 4, (PAPER_PAGE.width * h) / w));
-    return { x: 0, y: 0, w: PAPER_PAGE.width, h: tall };
+export function sheetPlacement({ hasInk, viewport }) {
+    if (!hasInk || !viewport) return { x: 0, y: 0 };
+    return { x: Math.round(viewport.x || 0), y: Math.round(viewport.y || 0) };
 }

@@ -3,21 +3,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
-import {
-  PAPER_PAGE, PAPER_TEMPLATES, PAPER_TEMPLATE_META_KEY, PAPER_TEMPLATE_NONE, paperTemplateDataUri,
-} from '@geeksuite/ui';
+import { PAPER_SHEET_SHAPE_ID, paperSheetRecords } from '@geeksuite/ui';
 import { createNoteTheme } from '../../../theme/createAppTheme';
-import {
-  PAPER_COLORS, TEMPLATE_INK, metaWithTemplate, resolvePaper, templateColors, templateFromMeta,
-  templateSheetBox, templateViewBox,
-} from '../../../components/editors/paperModel';
+import { resolvePaper, sheetPlacement, sheetViewBox } from '../../../components/editors/paperModel';
 
 /**
- * Page templates in a sketch (DOCS/TEMPLATES_SPEC.md P2, P3, P5, P6, P7):
- * the model, the background that draws the sheet, and the Paper menu's
- * Template choice. tldraw is a small fake here — an editor with a document
- * record and a camera — because the template is never a shape: everything
- * under test reads and writes document meta only.
+ * Templates in a sketch (DOCS/TEMPLATES_SPEC.md T1–T8). Chef, 2026-11-21:
+ * "the template should be separate than the paper type ... a permanent part
+ * of the page with a forced white paper under."
+ *
+ * A template is one locked image shape in the drawing; the paper (colour and
+ * lines, document meta) is a different thing and neither touches the other.
+ * tldraw is a small fake here: a document record, shapes, assets and a
+ * camera, with tldraw's own rule that a locked shape ignores changes and
+ * deletes. The real editor is exercised by the harness (scenes 23c–23e).
  */
 
 const tl = vi.hoisted(() => ({ editor: null }));
@@ -29,211 +28,226 @@ vi.mock('@tldraw/tldraw', () => ({
 }));
 
 import { PaperBackground, PaperPicker } from '../../../components/editors/Paper';
-import { setPaper, setPaperTemplate } from '../../../components/editors/usePaper';
+import { guardTemplateSheet, hasInk, setPaper, setPaperTemplate, showTemplateSheet } from '../../../components/editors/usePaper';
 
 const makeEditor = (meta = {}, camera = { x: 0, y: 0, z: 1 }) => {
+  const shapes = new Map();
+  const assets = new Map();
+  const guards = [];
   const editor = {
+    shapes,
+    assets,
     document: { id: 'document:document', name: '', gridSize: 10, meta },
     camera,
     getDocumentSettings: vi.fn(() => editor.document),
     updateDocumentSettings: vi.fn((settings) => { editor.document = { ...editor.document, ...settings }; }),
     getCamera: vi.fn(() => editor.camera),
     getViewportScreenBounds: vi.fn(() => ({ x: 0, y: 0, w: 390, h: 600 })),
+    getViewportPageBounds: vi.fn(() => ({ x: 240.4, y: 910.6, w: 390, h: 600 })),
     zoomToBounds: vi.fn(),
     isDisposed: false,
+    mark: vi.fn(),
+    batch: (fn) => fn(),
+    getShape: (id) => shapes.get(id),
+    getAsset: (id) => assets.get(id),
+    getCurrentPageShapeIds: () => new Set(shapes.keys()),
+    getShapePageBounds: (s) => {
+      const shape = typeof s === 'string' ? shapes.get(s) : s;
+      return shape ? { x: shape.x, y: shape.y, w: shape.props?.w ?? 10, h: shape.props?.h ?? 10 } : undefined;
+    },
+    createAssets: vi.fn((list) => list.forEach((a) => assets.set(a.id, a))),
+    deleteAssets: vi.fn((ids) => ids.forEach((id) => assets.delete(id))),
+    createShapes: vi.fn((list) => list.forEach((s) => shapes.set(s.id, { isLocked: false, ...s }))),
+    updateShapes: vi.fn((list) => list.forEach((p) => {
+      const prev = shapes.get(p.id);
+      if (!prev) return;
+      if (prev.isLocked && p.isLocked !== false) return; // tldraw: a locked shape only takes an unlock
+      let next = { ...prev, ...p };
+      for (const g of guards) next = g(prev, next);
+      shapes.set(p.id, next);
+    })),
+    deleteShapes: vi.fn((ids) => ids.forEach((id) => { if (!shapes.get(id)?.isLocked) shapes.delete(id); })),
+    sendToBack: vi.fn(),
+    sideEffects: {
+      registerBeforeChangeHandler: vi.fn((typeName, handler) => {
+        if (typeName === 'shape') guards.push(handler);
+        return () => guards.splice(guards.indexOf(handler), 1);
+      }),
+    },
   };
   return editor;
 };
+const ink = (editor, id = 'shape:ink', at = { x: 300, y: 950 }) => editor.shapes.set(id, { id, type: 'draw', isLocked: false, ...at, props: {} });
+const sheetOf = (editor) => editor.shapes.get(PAPER_SHEET_SHAPE_ID);
 
 const wrap = (ui, mode = 'light') => render(<ThemeProvider theme={createNoteTheme(mode)}>{ui}</ThemeProvider>);
 const background = (container) => container.querySelector('.tl-background');
-const sheet = (container) => container.querySelector('img[data-paper-template-sheet]');
 
 beforeEach(() => { localStorage.removeItem('notegeek:sketchPaper'); });
 afterEach(() => { localStorage.removeItem('notegeek:sketchPaper'); tl.editor = null; });
 
-// ── WCAG contrast, for P6 ────────────────────────────────────────────────
-const channel = (v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
-const luminance = (hex) => {
-  const n = parseInt(hex.slice(1), 16);
-  return 0.2126 * channel((n >> 16) & 255) + 0.7152 * channel((n >> 8) & 255) + 0.0722 * channel(n & 255);
-};
-const contrast = (a, b) => {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
-};
-// tldraw 2.4's own grounds (editor.css `--color-background`), for "Match theme".
-const TLDRAW_GROUND = { light: '#f9fafb', dark: '#101011' };
-
 describe('the model', () => {
-  it('reads a known template from the sketch\'s document meta, and nothing else', () => {
-    expect(PAPER_TEMPLATE_META_KEY).toBe('paperTemplate');
-    for (const t of PAPER_TEMPLATES) expect(templateFromMeta({ paperTemplate: t.id })).toBe(t.id);
-    expect(templateFromMeta({})).toBeNull();
-    expect(templateFromMeta(undefined)).toBeNull();
-    expect(templateFromMeta({ paperTemplate: PAPER_TEMPLATE_NONE })).toBeNull();
-    // P7: a newer or removed template is a plain page.
-    expect(templateFromMeta({ paperTemplate: 'hexagons-from-2031' })).toBeNull();
-    expect(templateFromMeta({ paperTemplate: 42 })).toBeNull();
+  it('a new sheet goes to page (0, 0) on a blank sketch, and to what is on screen on one with ink', () => {
+    expect(sheetPlacement({ hasInk: false, viewport: { x: 500, y: 900 } })).toEqual({ x: 0, y: 0 });
+    expect(sheetPlacement({ hasInk: true, viewport: { x: 240.4, y: 910.6 } })).toEqual({ x: 240, y: 911 });
+    expect(sheetPlacement({ hasInk: true, viewport: null })).toEqual({ x: 0, y: 0 });
   });
 
-  it('choosing a template writes only its key; everything else in the meta is carried over', () => {
-    const meta = { paperColor: 'warm', paperPattern: 'lined', geekdayDate: '2026-11-20' };
-    expect(metaWithTemplate(meta, 'cornell')).toEqual({ ...meta, paperTemplate: 'cornell' });
-    expect(metaWithTemplate({ ...meta, paperTemplate: 'cornell' }, 'grid')).toEqual({ ...meta, paperTemplate: 'grid' });
-    expect(metaWithTemplate(undefined, 'dots')).toEqual({ paperTemplate: 'dots' });
-    // The input is never mutated.
-    expect(meta).toEqual({ paperColor: 'warm', paperPattern: 'lined', geekdayDate: '2026-11-20' });
+  it('bringing the sheet into view asks for its full width, from its top, wherever it is', () => {
+    const sheet = { x: 240, y: 911, w: 1000, h: 1400 };
+    expect(sheetViewBox(sheet, { w: 800, h: 1000 })).toEqual({ x: 240, y: 911, w: 1000, h: 1250 });
+    expect(sheetViewBox(sheet, { w: 390, h: 600 })).toEqual({ x: 240, y: 911, w: 1000, h: 1400 });
+    expect(sheetViewBox(sheet, { w: 1280, h: 80 }).h).toBe(192);
   });
 
-  it('None on a sketch with a template is written as "none", so GeekDay does not read it as "never chose"', () => {
-    expect(metaWithTemplate({ paperTemplate: 'meeting' }, null)).toEqual({ paperTemplate: PAPER_TEMPLATE_NONE });
+  it('T8: a sketch with a sheet is in the light scheme even on "Match theme" at night, so black ink is black on the white sheet', () => {
+    expect(resolvePaper({ color: 'auto', pattern: 'plain' }, 'dark').colorScheme).toBe('dark');
+    expect(resolvePaper({ color: 'auto', pattern: 'plain' }, 'dark', { sheet: true }).colorScheme).toBe('light');
+    // Nothing else about the paper changes.
+    const plain = resolvePaper({ color: 'green', pattern: 'graph' }, 'dark');
+    expect(resolvePaper({ color: 'green', pattern: 'graph' }, 'dark', { sheet: true })).toEqual(plain);
   });
 
-  it('nothing is written when nothing changes: None on an untouched sketch, the same template twice', () => {
-    expect(metaWithTemplate({}, null)).toBeNull();
-    expect(metaWithTemplate({ paperColor: 'grey' }, null)).toBeNull();
-    expect(metaWithTemplate({ paperTemplate: PAPER_TEMPLATE_NONE }, null)).toBeNull();
-    expect(metaWithTemplate({ paperTemplate: 'top3' }, 'top3')).toBeNull();
-    // An id that is not a template is not a choice.
-    expect(metaWithTemplate({}, 'not-a-template')).toBeNull();
-  });
-
-  it('P7: None never erases an id this build does not know', () => {
-    expect(metaWithTemplate({ paperTemplate: 'hexagons-from-2031' }, null)).toBeNull();
-  });
-
-  it('the sheet sits at page (0, 0), one sheet in size, and follows the camera like the ruling', () => {
-    expect(templateSheetBox({ x: 0, y: 0, z: 1 })).toEqual({ left: 0, top: 0, width: PAPER_PAGE.width, height: PAPER_PAGE.height });
-    // A page point p is drawn at (p + camera) * z.
-    expect(templateSheetBox({ x: -120, y: 40, z: 0.5 })).toEqual({ left: -60, top: 20, width: 500, height: 700 });
-    expect(templateSheetBox({ x: 10, y: 10, z: 2 })).toEqual({ left: 20, top: 20, width: 2000, height: 2800 });
-    // Zoomed far out it would be a smudge: left out, like the ruling.
-    expect(templateSheetBox({ x: 0, y: 0, z: 0.1 })).toBeNull();
-    expect(templateSheetBox({ x: 0, y: 0, z: 0.13 })).not.toBeNull();
-  });
-
-  it('bringing the sheet into view asks for its full width, from the top', () => {
-    expect(templateViewBox({ w: 390, h: 600 })).toEqual({ x: 0, y: 0, w: 1000, h: 1400 });
-    expect(templateViewBox({ w: 1280, h: 800 })).toEqual({ x: 0, y: 0, w: 1000, h: 625 });
-    expect(templateViewBox(undefined)).toEqual({ x: 0, y: 0, w: 1000, h: 1400 });
-  });
-
-  it('P6: the printed words clear 4.5:1 on every paper, by day and at night', () => {
-    for (const mode of ['light', 'dark']) {
-      for (const paper of PAPER_COLORS) {
-        const look = resolvePaper({ color: paper.id, pattern: 'plain' }, mode);
-        const { ink, line, accent } = templateColors(look);
-        const ground = look.background || TLDRAW_GROUND[look.colorScheme];
-        expect(contrast(ink, ground), `${paper.id} in ${mode}`).toBeGreaterThanOrEqual(4.5);
-        expect(accent).toBe(ink);
-        // The rules are the paper's own line colour, a step stronger than the ruling.
-        const alpha = (rgba) => Number(rgba.match(/([\d.]+)\)$/)[1]);
-        expect(line.replace(/[\d.]+\)$/, '')).toBe(paper.line.replace(/[\d.]+\)$/, ''));
-        expect(alpha(line)).toBeGreaterThan(alpha(paper.line));
-      }
-    }
-    expect(templateColors(resolvePaper({ color: 'auto', pattern: 'plain' }, 'dark')).ink).toBe(TEMPLATE_INK.dark);
-    // Every coloured paper is light, even at night: the words stay dark.
-    expect(templateColors(resolvePaper({ color: 'warm', pattern: 'plain' }, 'dark')).ink).toBe(TEMPLATE_INK.light);
+  it('a sheet alone is not ink', () => {
+    const editor = makeEditor();
+    expect(hasInk(editor)).toBe(false);
+    setPaperTemplate(editor, 'cornell');
+    expect(hasInk(editor)).toBe(false);
+    ink(editor);
+    expect(hasInk(editor)).toBe(true);
   });
 });
 
-describe('the background', () => {
-  it('P5: a sketch with no template is exactly the element it always was', () => {
-    tl.editor = makeEditor({ paperColor: 'warm', paperPattern: 'lined' });
-    const { container } = wrap(<PaperBackground />);
-    const el = background(container);
-    expect(el.outerHTML).toBe(
-      '<div class="tl-background" data-paper-pattern="lined" style="background-color: rgb(244, 238, 223); '
-      // (jsdom drops the gradient's default `to bottom`.)
-      + 'background-image: linear-gradient(rgba(130, 95, 50, 0.22) 1px, transparent 1px); '
-      + 'background-size: 100% 32px; background-position: 0px 0px;"></div>',
-    );
-  });
+describe('the paper is only paper', () => {
+  it('T5: the background draws colour and lines, and nothing for a template — with or without a sheet', () => {
+    tl.editor = makeEditor({ paperColor: 'green', paperPattern: 'graph' });
+    const plain = wrap(<PaperBackground />);
+    const before = background(plain.container).getAttribute('style');
+    expect(before).toContain('linear-gradient');
+    expect(background(plain.container).style.backgroundColor).toBe('rgb(225, 235, 214)');
+    plain.unmount();
 
-  it.each([
-    ['never chose', {}],
-    ['chose None', { paperTemplate: 'none' }],
-    ['P7: an id this build does not know', { paperTemplate: 'hexagons-from-2031' }],
-  ])('%s: no sheet is drawn and the ruling is as before', (_name, extra) => {
-    tl.editor = makeEditor({ paperColor: 'white', paperPattern: 'graph', ...extra });
+    setPaperTemplate(tl.editor, 'meeting');
     const { container } = wrap(<PaperBackground />);
-    expect(sheet(container)).toBeNull();
+    const bg = background(container);
+    expect(bg.getAttribute('style')).toBe(before);
+    expect(bg.children).toHaveLength(0);
+    expect(bg).toHaveAttribute('data-paper-pattern', 'graph');
     expect(container.querySelector('img')).toBeNull();
-    expect(background(container).hasAttribute('data-paper-template')).toBe(false);
-    expect(background(container).style.backgroundImage).toContain('linear-gradient');
-    expect(background(container).childElementCount).toBe(0);
   });
 
-  it('a template is one picture of the sheet at page (0, 0), in the paper\'s colours', () => {
-    tl.editor = makeEditor({ paperColor: 'green', paperPattern: 'plain', paperTemplate: 'meeting' });
+  it('the id last night\'s build left in the paper\'s meta draws nothing and is left as it is', () => {
+    tl.editor = makeEditor({ paperColor: 'warm', paperPattern: 'lined', paperTemplate: 'meeting' });
     const { container } = wrap(<PaperBackground />);
-    const img = sheet(container);
-    expect(img).not.toBeNull();
-    expect(container.querySelectorAll('img')).toHaveLength(1);
-    expect(background(container).getAttribute('data-paper-template')).toBe('meeting');
-    expect(background(container).style.backgroundColor).toBe('rgb(225, 235, 214)');
-    const look = resolvePaper({ color: 'green', pattern: 'plain' }, 'light');
-    expect(img.getAttribute('src')).toBe(paperTemplateDataUri('meeting', templateColors(look)));
-    expect(img.style.width).toBe('1000px');
-    expect(img.style.height).toBe('1400px');
-    expect(img.style.transform).toBe('translate(0px, 0px)');
-  });
-
-  it('P2, P6: it is decoration — hidden from assistive tech, deaf to the pointer, and inside the background', () => {
-    tl.editor = makeEditor({ paperTemplate: 'schedule' });
-    const { container } = wrap(<PaperBackground />);
-    const img = sheet(container);
-    expect(img.getAttribute('aria-hidden')).toBe('true');
-    expect(img.getAttribute('alt')).toBe('');
-    expect(img.style.pointerEvents).toBe('none');
-    expect(img.getAttribute('draggable')).toBe('false');
-    expect(img.parentElement).toBe(background(container));
-    // Its words are in the picture only: nothing on the page says them.
-    expect(container.textContent).toBe('');
-    expect(screen.queryByRole('img')).toBeNull();
-  });
-
-  it('it moves and scales with the camera', () => {
-    tl.editor = makeEditor({ paperTemplate: 'cornell' }, { x: -120, y: 40, z: 0.5 });
-    const { container, rerender } = wrap(<PaperBackground />);
-    expect(sheet(container).style.width).toBe('500px');
-    expect(sheet(container).style.height).toBe('700px');
-    expect(sheet(container).style.transform).toBe('translate(-60px, 20px)');
-    tl.editor.camera = { x: 0, y: 0, z: 0.1 };
-    rerender(<ThemeProvider theme={createNoteTheme('light')}><PaperBackground /></ThemeProvider>);
-    // Too far out to read: the paper colour only.
-    expect(sheet(container)).toBeNull();
-    expect(background(container).getAttribute('data-paper-template')).toBe('cornell');
-  });
-
-  it('a template takes the place of the ruling; the sketch keeps its lines for later', () => {
-    tl.editor = makeEditor({ paperColor: 'warm', paperPattern: 'lined', paperTemplate: 'top3' });
-    const { container } = wrap(<PaperBackground />);
-    expect(background(container).style.backgroundImage).toBe('');
-    expect(background(container).getAttribute('data-paper-pattern')).toBe('lined');
+    expect(background(container).children).toHaveLength(0);
+    expect(background(container).getAttribute('style')).toContain('linear-gradient');
     expect(tl.editor.updateDocumentSettings).not.toHaveBeenCalled();
+    expect(tl.editor.shapes.size).toBe(0);
   });
 
-  it('P6: on "Match theme" at night the words are light; on a coloured paper they stay dark', () => {
-    tl.editor = makeEditor({ paperColor: 'auto', paperTemplate: 'meeting' });
-    const night = wrap(<PaperBackground />, 'dark');
-    expect(decodeURIComponent(sheet(night.container).getAttribute('src'))).toContain(`fill="${TEMPLATE_INK.dark}"`);
-    night.unmount();
-    tl.editor = makeEditor({ paperColor: 'warm', paperTemplate: 'meeting' });
-    const warm = wrap(<PaperBackground />, 'dark');
-    expect(decodeURIComponent(sheet(warm.container).getAttribute('src'))).toContain(`fill="${TEMPLATE_INK.light}"`);
+  it('T5: choosing colour or lines never touches the sheet; placing a sheet never touches the paper or the device default', () => {
+    tl.editor = makeEditor({});
+    act(() => setPaperTemplate(tl.editor, 'schedule'));
+    const sheet = sheetOf(tl.editor);
+    act(() => setPaper(tl.editor, { color: 'green' }));
+    act(() => setPaper(tl.editor, { pattern: 'graph' }));
+    expect(sheetOf(tl.editor)).toBe(sheet);
+    expect(tl.editor.document.meta).toEqual({ paperColor: 'green', paperPattern: 'graph' });
+    expect(JSON.parse(localStorage.getItem('notegeek:sketchPaper'))).toEqual({ color: 'green', pattern: 'graph' });
+    act(() => setPaperTemplate(tl.editor, 'meeting'));
+    expect(tl.editor.document.meta).toEqual({ paperColor: 'green', paperPattern: 'graph' });
+    expect(JSON.parse(localStorage.getItem('notegeek:sketchPaper'))).toEqual({ color: 'green', pattern: 'graph' });
+    expect(Object.keys(localStorage).filter((k) => /template/i.test(k))).toEqual([]);
+  });
+});
+
+describe('placing and removing', () => {
+  it('T1–T3: one locked image shape on white, under the ink, as one undo step', () => {
+    const editor = makeEditor();
+    setPaperTemplate(editor, 'meeting');
+    expect(editor.mark).toHaveBeenCalledTimes(1);
+    const sheet = sheetOf(editor);
+    expect(sheet).toMatchObject({ type: 'image', isLocked: true, x: 0, y: 0, meta: { paperTemplate: 'meeting' } });
+    expect(sheet.props).toMatchObject({ w: 1000, h: 1400, assetId: 'asset:paper-template-meeting' });
+    expect(decodeURIComponent(editor.assets.get('asset:paper-template-meeting').props.src)).toContain('fill="#ffffff"');
+    expect(editor.sendToBack).toHaveBeenCalledWith([PAPER_SHEET_SHAPE_ID]);
+    expect(editor.updateDocumentSettings).not.toHaveBeenCalled();
+    // The camera goes to it.
+    expect(editor.zoomToBounds).toHaveBeenCalledWith({ x: 0, y: 0, w: 1000, h: 1400 }, { targetZoom: 1, inset: 16 });
   });
 
-  it('rendering never writes to the sketch', () => {
-    for (const meta of [{}, { paperTemplate: 'grid' }, { paperTemplate: 'hexagons-from-2031' }]) {
-      tl.editor = makeEditor(meta);
-      const { unmount } = wrap(<PaperBackground />);
-      expect(tl.editor.updateDocumentSettings).not.toHaveBeenCalled();
-      expect(tl.editor.zoomToBounds).not.toHaveBeenCalled();
-      unmount();
-    }
+  it('on a sketch with ink it lands where the writer is looking', () => {
+    const editor = makeEditor();
+    ink(editor);
+    setPaperTemplate(editor, 'top3');
+    expect(sheetOf(editor)).toMatchObject({ x: 240, y: 911, isLocked: true });
+  });
+
+  it('another template swaps the sheet where it is; the same one again does nothing', () => {
+    const editor = makeEditor();
+    ink(editor);
+    setPaperTemplate(editor, 'top3');
+    editor.getViewportPageBounds = vi.fn(() => ({ x: -5000, y: -5000, w: 390, h: 600 }));
+    setPaperTemplate(editor, 'cornell');
+    expect(sheetOf(editor)).toMatchObject({ x: 240, y: 911, meta: { paperTemplate: 'cornell' } });
+    expect(editor.shapes.size).toBe(2);
+    editor.mark.mockClear();
+    editor.createShapes.mockClear();
+    setPaperTemplate(editor, 'cornell');
+    expect(editor.mark).not.toHaveBeenCalled();
+    expect(editor.createShapes).not.toHaveBeenCalled();
+  });
+
+  it('T4: None takes it off, and only it; None on a sketch without one does nothing', () => {
+    const editor = makeEditor({ paperColor: 'green', paperPattern: 'graph' });
+    setPaperTemplate(editor, null);
+    expect(editor.mark).not.toHaveBeenCalled();
+    ink(editor);
+    setPaperTemplate(editor, 'schedule');
+    editor.zoomToBounds.mockClear();
+    setPaperTemplate(editor, null);
+    expect(sheetOf(editor)).toBeUndefined();
+    expect([...editor.shapes.keys()]).toEqual(['shape:ink']);
+    expect(editor.document.meta).toEqual({ paperColor: 'green', paperPattern: 'graph' });
+    expect(editor.zoomToBounds).not.toHaveBeenCalled();
+    // Its picture stays in the document, so Undo can show it (tldraw keeps assets out of undo).
+    expect(editor.assets.has('asset:paper-template-schedule')).toBe(true);
+  });
+
+  it('T3: the eraser, Delete and tldraw\'s own Unlock cannot take or free it; the Paper menu still can', () => {
+    const editor = makeEditor();
+    const off = guardTemplateSheet(editor);
+    setPaperTemplate(editor, 'meeting');
+    editor.deleteShapes([PAPER_SHEET_SHAPE_ID]); // what the eraser and Delete call
+    expect(sheetOf(editor)).toBeDefined();
+    editor.updateShapes([{ id: PAPER_SHEET_SHAPE_ID, type: 'image', isLocked: false }]); // tldraw's context menu
+    expect(sheetOf(editor).isLocked).toBe(true);
+    editor.updateShapes([{ id: PAPER_SHEET_SHAPE_ID, type: 'image', x: 99 }]);
+    expect(sheetOf(editor).x).toBe(0);
+    setPaperTemplate(editor, 'cornell');
+    expect(sheetOf(editor)).toMatchObject({ isLocked: true, meta: { paperTemplate: 'cornell' } });
+    setPaperTemplate(editor, null);
+    expect(sheetOf(editor)).toBeUndefined();
+    expect(typeof off).toBe('function');
+  });
+
+  it('the guard leaves every other shape alone, a photo included', () => {
+    const editor = makeEditor();
+    guardTemplateSheet(editor);
+    editor.shapes.set('shape:photo', { id: 'shape:photo', type: 'image', isLocked: true, x: 0, y: 0, meta: {}, props: {} });
+    editor.updateShapes([{ id: 'shape:photo', type: 'image', isLocked: false }]);
+    expect(editor.shapes.get('shape:photo').isLocked).toBe(false);
+  });
+
+  it('showing the sheet is the camera\'s business only, and false when there is none', () => {
+    const editor = makeEditor();
+    expect(showTemplateSheet(editor)).toBe(false);
+    const { shape } = paperSheetRecords('schedule', { x: 50, y: 60 });
+    editor.shapes.set(shape.id, { ...shape, isLocked: true });
+    expect(showTemplateSheet(editor)).toBe(true);
+    expect(editor.zoomToBounds).toHaveBeenCalledWith({ x: 50, y: 60, w: 1000, h: 1400 }, { targetZoom: 1, inset: 16 });
+    expect(editor.updateDocumentSettings).not.toHaveBeenCalled();
+    expect(showTemplateSheet({ ...editor, isDisposed: true })).toBe(false);
   });
 });
 
@@ -244,89 +258,59 @@ describe('the Paper menu\'s Template choice', () => {
   };
   const rerenderPicker = (view) => view.rerender(<ThemeProvider theme={createNoteTheme('light')}><PaperPicker /></ThemeProvider>);
 
-  it('P1, P5: sits beside colour and lines, offering None and the six', async () => {
+  it('sits apart from colour and lines, offering None and the four layouts; dot grid and grid are Lines, not templates', async () => {
     const user = userEvent.setup();
     tl.editor = makeEditor();
     wrap(<PaperPicker />);
     const group = await open(user);
     expect(within(group).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Template: None', 'Template: Schedule', 'Template: Top three', 'Template: Meeting',
-      'Template: Cornell', 'Template: Dot grid', 'Template: Grid',
+      'Template: None', 'Template: Schedule', 'Template: Top three', 'Template: Meeting', 'Template: Cornell',
     ]);
-    // A new sketch has none, and says so.
     expect(within(group).getByRole('button', { name: 'Template: None' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(group).getAllByRole('button', { pressed: true })).toHaveLength(1);
     const menu = screen.getByRole('dialog', { name: 'Paper' });
     expect(within(menu).getByRole('group', { name: 'Paper colour' })).toBeInTheDocument();
-    expect(within(menu).getByRole('group', { name: 'Paper lines' })).toBeInTheDocument();
+    const lines = within(menu).getByRole('group', { name: 'Paper lines' });
+    expect(within(lines).getByRole('button', { name: 'Lines: Graph' })).toBeInTheDocument();
+    expect(within(lines).getByRole('button', { name: 'Lines: Dot grid' })).toBeInTheDocument();
+    expect(screen.getByText(/Prints a white sheet into this sketch/)).toBeInTheDocument();
   });
 
-  it('P3: picking one writes it to the sketch\'s document meta, beside the paper, and nowhere else', async () => {
+  it('picking one prints the sheet; the menu shows it chosen and says how to take it off', async () => {
     const user = userEvent.setup();
-    tl.editor = makeEditor({ paperColor: 'grey', paperPattern: 'dots' });
+    tl.editor = makeEditor({ paperColor: 'green', paperPattern: 'graph' });
     const view = wrap(<PaperPicker />);
     const group = await open(user);
     await user.click(within(group).getByRole('button', { name: 'Template: Cornell' }));
-    expect(tl.editor.updateDocumentSettings).toHaveBeenCalledTimes(1);
-    expect(tl.editor.updateDocumentSettings).toHaveBeenCalledWith({
-      meta: { paperColor: 'grey', paperPattern: 'dots', paperTemplate: 'cornell' },
-    });
-    // P5: per sketch only — a template is never this device's default.
-    expect(localStorage.getItem('notegeek:sketchPaper')).toBeNull();
-    expect(Object.keys(localStorage).filter((k) => /template/i.test(k))).toEqual([]);
+    expect(sheetOf(tl.editor)).toMatchObject({ isLocked: true, meta: { paperTemplate: 'cornell' } });
+    expect(tl.editor.updateDocumentSettings).not.toHaveBeenCalled();
     rerenderPicker(view);
     expect(within(group).getByRole('button', { name: 'Template: Cornell' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(group).getByRole('button', { name: 'Template: None' })).toHaveAttribute('aria-pressed', 'false');
-    // The sheet is brought into view (camera only).
-    expect(tl.editor.zoomToBounds).toHaveBeenCalledWith({ x: 0, y: 0, w: 1000, h: 1400 }, { targetZoom: 1, inset: 16 });
+    // The paper is still shown as it was.
+    expect(screen.getByRole('button', { name: 'Paper: Engineering green' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Lines: Graph' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/None takes it off/)).toBeInTheDocument();
+
+    await user.click(within(group).getByRole('button', { name: 'Template: None' }));
+    expect(sheetOf(tl.editor)).toBeUndefined();
   });
 
-  it('None takes it off again, and the paper is untouched', async () => {
+  it('a sheet from a template this build does not know shows no choice pressed, and None still takes it off', async () => {
     const user = userEvent.setup();
-    tl.editor = makeEditor({ paperColor: 'grey', paperPattern: 'dots', paperTemplate: 'grid' });
+    tl.editor = makeEditor();
+    const { shape } = paperSheetRecords('meeting');
+    tl.editor.shapes.set(shape.id, { ...shape, isLocked: true, meta: { paperTemplate: 'hexagons-from-2031' } });
     wrap(<PaperPicker />);
     const group = await open(user);
-    expect(within(group).getByRole('button', { name: 'Template: Grid' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(group).queryAllByRole('button', { pressed: true })).toHaveLength(0);
     await user.click(within(group).getByRole('button', { name: 'Template: None' }));
-    expect(tl.editor.document.meta).toEqual({ paperColor: 'grey', paperPattern: 'dots', paperTemplate: 'none' });
-    expect(tl.editor.zoomToBounds).not.toHaveBeenCalled();
+    expect(sheetOf(tl.editor)).toBeUndefined();
   });
 
-  it('None on a sketch that has none writes nothing: opening the menu never dirties a sketch', async () => {
+  it('every choice is a 44px button with a name and a glyph', async () => {
     const user = userEvent.setup();
-    tl.editor = makeEditor({});
-    wrap(<PaperPicker />);
-    const group = await open(user);
-    await user.click(within(group).getByRole('button', { name: 'Template: None' }));
-    expect(tl.editor.updateDocumentSettings).not.toHaveBeenCalled();
-  });
-
-  it('P7: an unknown id shows as None and survives; choosing paper keeps it too', async () => {
-    const user = userEvent.setup();
-    tl.editor = makeEditor({ paperTemplate: 'hexagons-from-2031' });
-    wrap(<PaperPicker />);
-    const group = await open(user);
-    expect(within(group).getByRole('button', { name: 'Template: None' })).toHaveAttribute('aria-pressed', 'true');
-    await user.click(within(group).getByRole('button', { name: 'Template: None' }));
-    expect(tl.editor.updateDocumentSettings).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Paper: White' }));
-    expect(tl.editor.document.meta.paperTemplate).toBe('hexagons-from-2031');
-    expect(tl.editor.document.meta.paperColor).toBe('white');
-  });
-
-  it('choosing paper colour or lines never drops the template (and still sets the device paper)', () => {
-    tl.editor = makeEditor({ paperTemplate: 'schedule' });
-    act(() => setPaper(tl.editor, { color: 'green' }));
-    act(() => setPaper(tl.editor, { pattern: 'graph' }));
-    expect(tl.editor.document.meta).toEqual({ paperTemplate: 'schedule', paperColor: 'green', paperPattern: 'graph' });
-    expect(JSON.parse(localStorage.getItem('notegeek:sketchPaper'))).toEqual({ color: 'green', pattern: 'graph' });
-    act(() => setPaperTemplate(tl.editor, 'meeting'));
-    expect(JSON.parse(localStorage.getItem('notegeek:sketchPaper'))).toEqual({ color: 'green', pattern: 'graph' });
-  });
-
-  it('every choice is a 44px button with a name, and says a template replaces the lines once one is set', async () => {
-    const user = userEvent.setup();
-    tl.editor = makeEditor({ paperTemplate: 'dots' });
+    tl.editor = makeEditor();
     wrap(<PaperPicker />);
     const group = await open(user);
     for (const b of within(group).getAllByRole('button')) {
@@ -334,6 +318,5 @@ describe('the Paper menu\'s Template choice', () => {
       expect(getComputedStyle(b).minHeight).toBe('44px');
       expect(b.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     }
-    expect(screen.getByText('A template takes the place of the lines.')).toBeInTheDocument();
   });
 });

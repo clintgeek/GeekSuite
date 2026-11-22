@@ -794,22 +794,34 @@ Spec: `DOCS/TEMPLATES_SPEC.md` (repo root). No gateway operation, schema or stor
   on a new note nobody typed in: nothing is created or drafted until the first edit or an explicit save
   (Ctrl/Cmd+S, "Save now"). Save, draft, conflict and autosave code is unchanged. An unknown id is a plain new
   note; `?title=` still wins the title.
-- **Page templates in a sketch (P1–P3, P5–P7).** The suite's shared set (`@geeksuite/ui`: `PAPER_TEMPLATES`,
-  `paperTemplateDataUri`, …; the same one GeekDay uses) is chosen in the Paper menu under Colour and Lines
-  (`Paper.jsx`), and kept in tldraw DOCUMENT META as `paperTemplate`, beside `paperColor` / `paperPattern` and
-  written the same way (`usePaper.js#setPaperTemplate` → `updateDocumentSettings`; like the paper it is saved
-  with the note and is not on tldraw's undo stack). Per sketch only: no device default, and choosing paper
-  never drops it. "None" is written as `'none'` (GeekDay reads a missing key as "never chose") and only when a
-  known template is being taken off.
-- **Drawing it.** `PaperBackground` (tldraw's `Background`) draws one `<img alt="" aria-hidden>` of the sheet
-  with its top-left at page (0,0), 1000×1400 page units, following the camera; colours come from the resolved
-  paper (`paperModel.js#templateColors`). A template REPLACES the ruling while it is set (the stored
-  `paperPattern` is kept). It is not a shape: nothing selects, erases or exports it (`utils/sketchExport.js`
-  asks tldraw for shape ids with `background: false`). An id this build does not know draws nothing and is
-  never rewritten. A sketch with a known template and no remembered camera opens on its sheet (full width,
-  from the top); choosing one moves the camera there too. With no template the background element is
-  byte-for-byte what it was.
+- **Templates in a sketch (T1–T10; reworked 2026-11-21 on Chef's test).** A template is NOT paper. It is a
+  white sheet printed into the drawing: ONE locked tldraw `image` shape, fixed id `shape:paper-template`,
+  1000×1400 page units, `meta.paperTemplate = <id>`, with an inline SVG asset `asset:paper-template-<id>`
+  (white ground, fixed dark print). All of it is `@geeksuite/ui` `paper/sheet.js` (`placePaperSheet`,
+  `removePaperSheet`, `paperSheetOf`, `isPaperSheetShape`), shared with GeekDay. Layouts only: Schedule, Top
+  three, Meeting, Cornell. Dot grid and Grid are paper (Lines).
+- **Paper is untouched.** `PaperBackground` draws colour and lines only, exactly as before templates existed.
+  `paperColor` / `paperPattern` in document meta and the device default work as they always did, around and
+  under the sheet. `setPaper` never touches the sheet; `setPaperTemplate` never touches meta.
+- **Menu.** Paper menu > Template (`Paper.jsx`): None + the four. `usePaper.js#setPaperTemplate` sets a history
+  mark, then places / swaps (same spot) / removes: one Undo step each. New sheet at page (0,0) on a blank
+  sketch, else at the viewport's top-left; the camera then shows it full width.
+- **Locked for real.** tldraw's eraser, Delete and `deleteShapes` skip locked shapes, but its context menu can
+  unlock one. `guardTemplateSheet` (a `beforeChange` side effect, registered in `handleMount`) refuses any
+  unlock of the sheet that does not come from `setPaperTemplate`.
+- **tldraw keeps assets out of undo history.** So the asset id is per template and an asset is never deleted
+  or rewritten: Undo after Remove or after a swap must find the right picture. A sketch can carry a few kB of
+  unused sheet assets.
+- **Not ink.** `usePaper.js#hasInk` and `sketchApi.hasShapes()` ignore the sheet; `exportSketchPng` leaves it out
+  by default (transcription) and includes it with `sheet: true` (Share as image); print includes it and does not
+  treat it as a photographed page (`firstPhotoShape`, `exportSketchForPrint` check `isPaperSheetShape`).
+- **Light scheme.** `resolvePaper(paper, mode, { sheet })`: a sketch with a sheet is in tldraw's light scheme
+  even on "Match theme" at night, or black ink would be drawn near-white on the white sheet.
+- **Old meta.** The 2026-11-20 build stored `paperTemplate` in document meta. It is ignored now: nothing is
+  drawn for it, nothing converts it, the key is left in place.
+- **a11y.** tldraw 2.4's `<img class="tl-image">` has no alt; the harness waiver for photo notes now also names
+  scenes `23c` and `23d`.
 - **Tests / harness.** `__tests__/utils/noteTemplates.test.jsx`, `pages/noteEditorTemplate.test.jsx` (N3),
   `components/new/templatePicker.test.jsx`, `components/editors/paperTemplate.test.jsx`, plus cases in
-  `HandwrittenEditor.test.jsx` and `sketchExport.test.js`. Harness scenes `23a`–`23d`.
-- **Not done.** List thumbnails and the print copy do not show a template (print is the ink only, by P2).
+  `HandwrittenEditor.test.jsx` and `sketchExport.test.js`. Harness scenes `23a`–`23e` (`23c` places, erases over, removes and undoes a sheet in the real editor).
+- **Not done.** The list thumbnail shows a sheet as its outline only, not its print.

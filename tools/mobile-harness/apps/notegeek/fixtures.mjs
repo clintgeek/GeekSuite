@@ -3,6 +3,7 @@
 // session check goes through the shared session routes.
 import { readFileSync } from 'node:fs';
 import { sessionRoutes, graphqlRoute } from '../../lib/net.mjs';
+import { paperSheetRecords } from '../../../../packages/ui/src/paper/sheet.js';
 
 // Full timestamps, not bare dates: a date-only ISO string parses as UTC
 // midnight, which is "yesterday" evening in every zone west of Greenwich —
@@ -70,12 +71,13 @@ export const NOTE_CODE = note('n6', 'debounce.js', 'code', ['dev', 'dev/frontend
 export const NOTE_MINDMAP = note('n4', 'Mind map: GeekSuite apps', 'mindmap', ['meta'], MINDMAP_CONTENT, daysAgo(3));
 export const NOTE_SKETCH = note('n3', 'Sketch: onboarding flow', 'handwritten', ['product'], SKETCH_CONTENT, daysAgo(1));
 
-// The same real snapshot with a page template chosen (DOCS/TEMPLATES_SPEC.md
-// P3, P5): the id sits in tldraw's document record, in `meta`, beside the
-// paper — exactly where the Paper menu writes it (scene '23c' picks one in
-// the real editor and checks the snapshot it then saves has this shape). It
-// is tagged `daily`, as a GeekDay day page is: such a page shows its
-// template here too. Derived, not hand-written, so it stays in step with the
+// The same real snapshot with a template (DOCS/TEMPLATES_SPEC.md T1–T3): a
+// white sheet printed into the drawing as ONE locked image shape with an
+// inline SVG asset, under the ink, built by the same code the apps use
+// (packages/ui/src/paper/sheet.js; scene '23c' places one in the real editor
+// and checks the snapshot it saves has this shape). The paper (warm, lined)
+// is separate and sits in the document meta. Tagged `daily`, as a GeekDay
+// day page is. Derived, not hand-written, so it stays in step with the
 // fixture's schema.
 const withDocumentMeta = (serialized, meta) => {
   const snapshot = JSON.parse(serialized);
@@ -83,10 +85,28 @@ const withDocumentMeta = (serialized, meta) => {
   snapshot.store['document:document'] = { ...doc, meta: { ...doc.meta, ...meta } };
   return JSON.stringify(snapshot);
 };
-export const SKETCH_TEMPLATE_META = { paperColor: 'warm', paperPattern: 'lined', paperTemplate: 'meeting' };
+const withTemplateSheet = (serialized, templateId) => {
+  const snapshot = JSON.parse(serialized);
+  const { asset, shape } = paperSheetRecords(templateId);
+  snapshot.store[asset.id] = asset;
+  snapshot.store[shape.id] = {
+    x: shape.x, y: shape.y, rotation: 0, isLocked: true, opacity: 1, meta: shape.meta,
+    id: shape.id, type: 'image',
+    props: { ...shape.props, playing: true, url: '', crop: null, flipX: false, flipY: false },
+    parentId: 'page:page', index: 'a0', typeName: 'shape',
+  };
+  return JSON.stringify(snapshot);
+};
+const SKETCH_PAPER = { paperColor: 'warm', paperPattern: 'lined' };
 export const NOTE_SKETCH_TEMPLATE = note(
   'n3t', 'Fri 20 Nov', 'handwritten', ['daily'],
-  withDocumentMeta(SKETCH_CONTENT, SKETCH_TEMPLATE_META), daysAgo(1),
+  withTemplateSheet(withDocumentMeta(SKETCH_CONTENT, SKETCH_PAPER), 'meeting'), daysAgo(1),
+);
+// As the build of 2026-11-20 saved a template: an id in the paper's meta and
+// nothing in the drawing. No longer drawn (scene '23e').
+export const NOTE_SKETCH_LEGACY_TEMPLATE = note(
+  'n3l', 'Thu 19 Nov', 'handwritten', ['daily'],
+  withDocumentMeta(SKETCH_CONTENT, { ...SKETCH_PAPER, paperTemplate: 'meeting' }), daysAgo(2),
 );
 
 // A markdown note the size of Chef's real ones (most are markdown reference

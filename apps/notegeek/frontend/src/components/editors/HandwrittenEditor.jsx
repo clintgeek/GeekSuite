@@ -15,8 +15,9 @@ import {
     readFingerDraws, writeFingerDraws, readPenSeen, writePenSeen,
 } from '../../utils/penPrefs';
 import { SKETCH_IMAGE_INPUT_MAX_BYTES, SKETCH_IMAGE_MAX_EDGE, sketchImageHandler } from '../../utils/sketchImages';
+import { isPaperSheetShape } from '@geeksuite/ui';
 import { paperFromMeta, readDevicePaper } from './paperModel';
-import { showTemplateSheet } from './usePaper';
+import { hasInk as pageHasInk, guardTemplateSheet, showTemplateSheet } from './usePaper';
 import { SketchPortalContext } from './sketchPortal';
 
 // tldraw 2.4's updateViewportScreenBounds takes a Box and calls .equals() on
@@ -75,7 +76,8 @@ const HIDDEN_TLDRAW_COMPONENTS = {
  * arrive (seen in the harness). So loading only marks the fit as pending, and
  * the bounds update performs it, once.
  */
-const firstPhotoShape = (editor) => (editor.getCurrentPageShapesSorted?.() || []).find((s) => s.type === 'image');
+// A template sheet is an image shape too, and is not a photo.
+const firstPhotoShape = (editor) => (editor.getCurrentPageShapesSorted?.() || []).find((s) => s.type === 'image' && !isPaperSheetShape(s));
 
 function fitFirstPhotoPage(editor) {
     if (!editor || editor.isDisposed) return false;
@@ -100,8 +102,8 @@ function applyFirstView(editor, noteId) {
         return;
     }
     if (fitFirstPhotoPage(editor)) return;
-    // A sketch with a page template (DOCS/TEMPLATES_SPEC.md P5) opens on its
-    // sheet, full width from the top, not zoomed in on the ink alone.
+    // A sketch with a template sheet (DOCS/TEMPLATES_SPEC.md T7) opens on
+    // it, full width from the top, not zoomed in on the ink alone.
     if (showTemplateSheet(editor)) return;
     const bounds = editor.getCurrentPageBounds?.();
     if (bounds) editor.zoomToBounds?.(bounds, { targetZoom: 1, inset: 32 });
@@ -247,7 +249,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         const editor = editorRef.current;
         if (!editor) return;
         try {
-            const { blob } = await exportSketchPng(editor, { exportToBlob, maxEdge: PRINT_MAX_EDGE, maxBytes: Infinity, base64: false });
+            const { blob } = await exportSketchPng(editor, { exportToBlob, sheet: true, maxEdge: PRINT_MAX_EDGE, maxBytes: Infinity, base64: false });
             const file = typeof File === 'function' ? new File([blob], 'sketch.png', { type: 'image/png' }) : null;
             if (file && navigator.canShare?.({ files: [file] }) && navigator.share) {
                 await navigator.share({ files: [file], title: 'Sketch' });
@@ -276,7 +278,8 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                 // Print / Save as PDF (utils/printNote.js): bigger, uncapped,
                 // one image per photographed page.
                 exportForPrint: () => exportSketchForPrint(editor, { exportToBlob }),
-                hasShapes: () => editor.getCurrentPageShapeIds().size > 0,
+                // Ink, not a template sheet alone: there is nothing to read on a blank form.
+                hasShapes: () => pageHasInk(editor),
                 flush,
             };
         }
@@ -288,7 +291,10 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
             fineHandlerOffRef.current = null;
         }
         if (!readOnly) {
-            fineHandlerOffRef.current = editor.sideEffects.registerBeforeCreateHandler('shape', fineStrokeHandler(editor, fineRef));
+            const fineOff = editor.sideEffects.registerBeforeCreateHandler('shape', fineStrokeHandler(editor, fineRef));
+            // A template sheet stays locked (DOCS/TEMPLATES_SPEC.md T3).
+            const sheetOff = guardTemplateSheet(editor);
+            fineHandlerOffRef.current = () => { fineOff(); sheetOff(); };
             // An inserted or pasted image is shrunk, and refused by name if
             // it would make the sketch unsaveable (review 1.18).
             editor.registerExternalAssetHandler?.('file', sketchImageHandler({
@@ -305,7 +311,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         let hasInk = false;
         if (content) {
             loadSnapshot(content, editor);
-            hasInk = editor.getCurrentPageShapeIds?.().size > 0;
+            hasInk = pageHasInk(editor);
             // Done by the bounds update below, once the viewport is measured.
             firstViewPendingRef.current = true;
         }
