@@ -389,3 +389,51 @@ mechanics are also in `CONTEXT.md` §17. These change or add to the section abov
   need a gateway change (for example `images: [String!]`, read each, join).
 - **Tests:** gateway `notegeekTranscriptIntegrity.test.js` (15); NoteGeek `useAutoTranscribe`
   (+6), `TranscriptStatus`, the sketch-transcribe page test (Convert waits for the save).
+
+## Background reader (2026-11-22)
+
+**Why.** Chef, 2026-11-22, about a page staying unread until it is reopened: "across the board
+let's fix the transcribing when closed thing. Feels like a bug." Option A's gap (a sketch left
+within 90 s, or a tablet closed at the end of a meeting, waits until it is next opened) was the
+agreed trade in "Decisions" above; it is now closed without Option B's server renderer.
+
+**Also found and fixed: template sheets switched reading off.** The gateway's `hasPhotoPages`
+called any image shape a photographed page, and a template sheet (TEMPLATES_SPEC.md, live since
+2026-11-21) is an image shape. Every sketch on a template, which includes every 1:1 page and any
+GeekDay page with a template, was `off` and never read. The harness stubs the gateway, so nothing
+caught it.
+
+**What it does.**
+- Gateway: `sketchesToTranscribe(limit)` lists the caller's sketches that are `waiting` and have
+  not changed for 90 s (`QUIET_MS`), newest first. Mongo rules out everything whose remembered
+  hash says it is settled without loading a drawing; the rest are judged by the same
+  `transcriptView` the open sketch uses. Empty when the setting is off.
+- Gateway: `autoTranscribeSketch(..., background: true)` stops at 20 of the day's reads
+  (`BACKGROUND_DAILY_CAP`), the open sketch still at 30, Convert at 40. A backlog of old pages
+  cannot use up the reads the page written on today needs.
+- Gateway: a template sheet is left out of the content hash, is not a photo page, and alone is an
+  empty page (`sketchText.js`). `sketchHash` gains `v` (`HASH_VERSION` 2) and `photo`. A hash
+  remembered under the old rule is recomputed only for a sketch that has a sheet, so no other
+  sketch is read again.
+- Clients: `@geeksuite/api-client` `createBackgroundReader({ client, render })`. NoteGeek and
+  GeekDay each mount a `BackgroundReader` once signed in. It asks 15 s after the app opens, 5 s
+  after it comes back to the front, and every 2 min while open; reads up to 3 sketches a pass,
+  one at a time, each drawn off-screen in the app's own editor (read-only, `inert`,
+  `autoFocus={false}`) with the same exporter; carries straight on while a full batch was read;
+  stops the pass on `retry` (the cap or an outage).
+- NoteGeek: closing a sketch calls `sketchClosed(id)`; it is read about 6 s later if it is still
+  `waiting`, without the 90 s. The open sketch is never read by the reader (`setOpenSketch`).
+- GeekDay: a day page is read once it has been unchanged for 90 s, open or not.
+
+**Limits.**
+- Some app has to be open on some device. A tablet closed straight after writing is read the next
+  time NoteGeek or GeekDay is opened anywhere, within about 15 s.
+- A backlog drains at 20 pages a day, newest first.
+- A page a client cannot draw (over the size limit) is skipped until that app is reloaded.
+
+**Deploy order:** the gateway first. An older gateway refuses the new query; the reader then does
+nothing and asks again later.
+
+**Tests:** gateway `notegeekBackgroundReader.test.js` (11); `packages/api-client`
+`backgroundReader.test.js` (11); NoteGeek `BackgroundReader.test.jsx` (4); harness scenes
+notegeek `25a-background-read` and geekday `40-background-read`, both with the real tldraw.

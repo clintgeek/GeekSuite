@@ -177,3 +177,14 @@ on the box holds no secrets. The nginx vhost is
 Do not name a source folder `data/`: the repo's `.gitignore` ignores it, the
 files never reach the image, and the build fails on the import (it happened
 on the first deploy; the store is `src/store/` for that reason).
+
+## Background reader (2026-11-22)
+
+A day's page is a NoteGeek sketch, and it used to be read (made searchable) only when opened in
+NoteGeek. `components/BackgroundReader.jsx`, mounted in `App` once signed in, asks the gateway
+which sketches are waiting (`sketchesToTranscribe`: unread and unchanged for 90 s), draws each
+one off-screen in a read-only `InkCanvas` (`autoFocus={false}`, inside an `inert` box) and sends
+it with `autoTranscribeSketch(background: true)`. `InkCanvas`'s API gained `isReady()` and
+`exportPage()` (the writing without the template sheet). The schedule is shared with NoteGeek:
+`@geeksuite/api-client` `backgroundReader.js`. Full account:
+`apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md`, "Background reader". Harness: `40-background-read`.

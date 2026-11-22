@@ -4,6 +4,7 @@
 //   ?__fixture=legacy-schedule   today's page as the build of 2026-11-20 saved it: writing, and
 //                                `paperTemplate: "schedule"` in the document meta. No sheet.
 //   ?__fixture=sheet-meeting     a saved page whose drawing holds a Meeting template sheet, with writing
+//   ?__fixture=reader            today is blank; an older page is waiting to be read (background reader)
 //   ?__fixture=sheet-elsewhere   a saved page with a Cornell sheet at page (60, 1500), as NoteGeek
 //                                (an endless canvas) may leave one
 //
@@ -57,6 +58,12 @@ const fixtureOf = (route) => {
 
 export function extend(base) {
   return {
+    // The background reader (apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md):
+    // nothing is waiting, except under ?__fixture=reader, where an older
+    // page (a Meeting sheet with writing) has never been read.
+    SketchesToTranscribe: (_vars, route) => ({ sketchesToTranscribe: fixtureOf(route) === 'reader' ? ['note-unread'] : [] }),
+    SketchToRead: (vars) => ({ note: { __typename: 'Note', id: vars.id, type: 'handwritten', content: PAGES['sheet-meeting'] } }),
+    BackgroundTranscribeSketch: () => ({ autoTranscribeSketch: { __typename: 'SketchTranscriptState', status: 'searchable', retryAt: null } }),
     FindDayNote: (vars, route) => {
       const content = PAGES[fixtureOf(route)];
       if (!content) return base.FindDayNote(vars, route);

@@ -633,6 +633,11 @@ export const OPS = {
   SuggestForNote: { suggestForNote: { __typename: 'NoteSuggestions', tags: [], related: [], provenance: { ...AI_PROVENANCE, source: 'none' } } },
   // Automatic sketch transcription: the open sketch has been read.
   SketchTranscript: () => ({ sketchTranscript: transcriptState() }),
+  // The background reader (AUTO_TRANSCRIBE_SPEC.md): nothing is waiting by
+  // default; scene 25a overrides these.
+  SketchesToTranscribe: () => ({ sketchesToTranscribe: [] }),
+  SketchToRead: (vars) => ({ note: null, id: vars?.id }),
+  BackgroundTranscribeSketch: () => ({ autoTranscribeSketch: { status: 'searchable', retryAt: null } }),
   AutoTranscribeSketch: () => ({ autoTranscribeSketch: transcriptState({ at: new Date().toISOString() }) }),
   SaveSketchTranscriptEdit: (vars) => ({
     saveSketchTranscriptEdit: transcriptState({ text: vars.text, edited: true, source: 'user', contentHash: vars.forHash || 'h-sketch-1', at: new Date().toISOString() }),

@@ -365,3 +365,6 @@ export function GeekSuiteApolloProvider({ children, appName }) {
     const client = React.useMemo(() => createApolloClient(appName), [appName]);
     return React.createElement(ApolloProvider, { client }, children);
 }
+
+// Reading sketches nobody has open (backgroundReader.js).
+export { createBackgroundReader, setOpenSketch, getOpenSketch, sketchClosed } from './backgroundReader.js';

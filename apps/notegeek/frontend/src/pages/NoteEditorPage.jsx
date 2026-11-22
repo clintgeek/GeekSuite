@@ -18,6 +18,7 @@ import ConflictDialog from '../components/notes/ConflictDialog';
 import RestoreDraftBanner from '../components/notes/RestoreDraftBanner';
 import DeletedBanner from '../components/notes/DeletedBanner';
 import { useAutoTranscribe } from '../hooks/useAutoTranscribe';
+import { setOpenSketch, sketchClosed } from '@geeksuite/api-client';
 import TranscriptStatus from '../components/notes/TranscriptStatus';
 import ComposeDialog from '../components/editors/ComposeDialog';
 import TranscribeDialog from '../components/editors/TranscribeDialog';
@@ -604,6 +605,16 @@ function NoteEditorPage({ editorKey } = {}) {
   });
   const transcriptViewRef = useRef(transcriptView);
   transcriptViewRef.current = transcriptView;
+
+  // The background reader (@geeksuite/api-client) leaves the open sketch
+  // to the hook above, and reads it a few seconds after it is closed if the
+  // 90 s had not run out (the page used to wait until it was opened again).
+  const openSketchId = isHandwritten ? savedNoteId : null;
+  useEffect(() => {
+    if (!openSketchId) return undefined;
+    setOpenSketch(openSketchId);
+    return () => sketchClosed(openSketchId);
+  }, [openSketchId]);
 
   /**
    * The sketch's transcript state as the server sees it NOW — after a save

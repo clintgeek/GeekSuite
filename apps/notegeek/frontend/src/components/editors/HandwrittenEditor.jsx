@@ -136,7 +136,8 @@ function PenModeSync({ fingerDraws }) {
  *
  * `noteId` (optional): the camera is remembered per sketch on this device.
  */
-const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null, onInkEdit = null, noteId = null, startSheet = null }) => {
+const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null, onInkEdit = null, noteId = null, startSheet = null, autoFocus = true }) => {
+    // `autoFocus={false}`: a sketch drawn off-screen to be read (BackgroundReader) must never take the keyboard.
     // The sheet a brand-new sketch starts on (a 1:1, DOCS/ONE_ON_ONE_SPEC.md req 2).
     const startSheetRef = useRef(startSheet);
     startSheetRef.current = startSheet;
@@ -556,6 +557,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                     <Tldraw
                         onMount={handleMount}
                         readOnly={readOnly}
+                        autoFocus={autoFocus}
                         components={HIDDEN_TLDRAW_COMPONENTS}
                         options={TLDRAW_OPTIONS}
                         maxImageDimension={SKETCH_IMAGE_MAX_EDGE}

@@ -663,4 +663,45 @@ export const scenes = [
       });
     },
   },
+  {
+    // The background reader: a page nobody is writing on (here, another
+    // day's, on a Meeting sheet) is drawn off-screen and sent to be read, so
+    // it is searchable in NoteGeek without ever being opened there. The image
+    // is the writing, without the printed form.
+    name: '40-background-read',
+    goto: '/?__fixture=reader',
+    wait: 1500,
+    viewports: tablet,
+    async setup(page) {
+      const ops = watchOps(page);
+      try {
+        const deadline = Date.now() + 45000;
+        while (!ops.last('BackgroundTranscribeSketch') && Date.now() < deadline) await page.waitForTimeout(500);
+        const sent = ops.last('BackgroundTranscribeSketch');
+        if (!sent) throw new Error('no page was sent to be read within 45 s of opening the app');
+        const { noteId, image, mediaType } = sent.vars;
+        if (noteId !== 'note-unread' || mediaType !== 'image/png') throw new Error(`sent ${noteId} as ${mediaType}`);
+        const facts = await page.evaluate(async (b64) => {
+          const bmp = await createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob());
+          const c = document.createElement('canvas');
+          c.width = bmp.width; c.height = bmp.height;
+          const ctx = c.getContext('2d');
+          ctx.drawImage(bmp, 0, 0);
+          const px = ctx.getImageData(0, 0, c.width, c.height).data;
+          let dark = 0;
+          for (let i = 0; i < px.length; i += 4) if (px[i] + px[i + 1] + px[i + 2] < 300) dark += 1;
+          return { w: bmp.width, h: bmp.height, dark };
+        }, image);
+        if (!facts.dark) throw new Error('the image that was sent has no ink in it');
+        if (facts.h / facts.w > 1.3) throw new Error(`the image is ${facts.w}x${facts.h}: the template sheet was sent with the writing`);
+        await page.waitForTimeout(400);
+        if (await page.locator('[data-testid="background-reader"]').count()) throw new Error('the off-screen canvas was left on the page');
+        // Today's own page is untouched: still blank, still writable.
+        await inkBox(page);
+        if (ops.seen.some((r) => r.op === 'CreateDayNote' || r.op === 'SaveDayNote')) throw new Error('reading another page saved something');
+      } finally {
+        ops.stop();
+      }
+    },
+  },
 ];

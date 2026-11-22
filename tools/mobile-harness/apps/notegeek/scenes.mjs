@@ -2642,6 +2642,57 @@ export const scenes = [
     },
   },
   {
+    // The background reader (AUTO_TRANSCRIBE_SPEC.md, 2026-11-22): a sketch
+    // nobody has open is drawn off-screen by the real editor and sent to be
+    // read, from a page that is not a sketch at all. The sketch here is on a
+    // template sheet: the image a model reads has the ink and not the form.
+    name: '25a-background-read',
+    viewports: ['tablet'],
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const sent = [];
+      await graphqlRoute(page, {
+        ...OPS,
+        SketchesToTranscribe: () => ({ sketchesToTranscribe: sent.length ? [] : ['n3t'] }),
+        SketchToRead: () => ({ note: { id: 'n3t', type: 'handwritten', content: NOTE_SKETCH_TEMPLATE.content } }),
+        BackgroundTranscribeSketch: (vars) => { sent.push(vars); return OPS.BackgroundTranscribeSketch(vars); },
+      });
+      await page.goto(`${h.base}/`, { waitUntil: 'networkidle' });
+      await h.settle(600);
+      const search = page.getByRole('searchbox').or(page.getByRole('textbox')).first();
+      const hasBox = await search.count();
+      if (hasBox) await search.focus();
+      const focusBefore = await page.evaluate(() => document.activeElement?.tagName);
+      // The first pass is 15 s after the app opens.
+      const deadline = Date.now() + 45000;
+      while (!sent.length && Date.now() < deadline) await page.waitForTimeout(500);
+      if (!sent.length) throw new Error('no sketch was sent to be read within 45 s of opening the app');
+      const [{ noteId, image, mediaType }] = sent;
+      if (noteId !== 'n3t' || mediaType !== 'image/png') throw new Error(`sent ${noteId} as ${mediaType}`);
+      const facts = await page.evaluate(async (b64) => {
+        const blob = await (await fetch(`data:image/png;base64,${b64}`)).blob();
+        const bmp = await createImageBitmap(blob);
+        const c = document.createElement('canvas');
+        c.width = bmp.width; c.height = bmp.height;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(bmp, 0, 0);
+        const px = ctx.getImageData(0, 0, c.width, c.height).data;
+        let dark = 0;
+        for (let i = 0; i < px.length; i += 4) if (px[i] + px[i + 1] + px[i + 2] < 300) dark += 1;
+        return { w: bmp.width, h: bmp.height, dark, share: dark / (px.length / 4) };
+      }, image);
+      if (facts.w < 200 || facts.h < 100) throw new Error(`the image is ${facts.w}x${facts.h}`);
+      if (!facts.dark) throw new Error('the image that was sent has no ink in it');
+      // The 1000x1400 sheet is left out: the picture is the ink's box, not the form's.
+      if (facts.h / facts.w > 1.3) throw new Error(`the image is ${facts.w}x${facts.h}: the template sheet was sent with the ink`);
+      await h.settle(400);
+      if (await page.locator('[data-testid="background-reader"]').count()) throw new Error('the off-screen editor was left on the page');
+      const focusAfter = await page.evaluate(() => document.activeElement?.tagName);
+      if (focusAfter !== focusBefore) throw new Error(`the keyboard focus moved from ${focusBefore} to ${focusAfter}`);
+      if (sent.length !== 1) throw new Error(`the sketch was sent ${sent.length} times`);
+    },
+  },
+  {
     // Reqs 1-3: New 1:1 from the person picker: a handwritten page, titled
     // date-first and tagged for the person, on the 1:1 sheet, with what is
     // open above it; and nothing is saved until there is ink.

@@ -244,12 +244,13 @@ function LassoLayer({ active, canDraw, highlight, onFinish, onStart }) {
  * @param {object} props
  * @param {string|null} props.content  tldraw snapshot JSON; null or '' is a blank page
  * @param {(content: string) => void} [props.onChange]  debounced, user edits only
- * @param {{current: object|null}} [props.apiRef]  filled with { flush, hasShapes, undo, redo, setTool, clearLasso, setPaper, setSheet, fitPage, view }
+ * @param {{current: object|null}} [props.apiRef]  filled with { flush, hasShapes, isReady, exportPage, undo, redo, setTool, clearLasso, setPaper, setSheet, fitPage, view }
  * @param {(lasso: {shapeIds: string[], image: {base64: string, mediaType: 'image/png'}}) => void} [props.onLasso]
  * @param {(message: string) => void} [props.onLassoError]
  * @param {(touchDraws: boolean) => void} [props.onTouchDrawsChange]
  * @param {(state: {zoomed: boolean}) => void} [props.onPanStateChange]  the page is zoomed in (a finger pans it sideways)
  * @param {boolean} [props.readOnly]
+ * @param {boolean} [props.autoFocus]  false for a page drawn off-screen to be read (BackgroundReader): it must never take the keyboard
  * @param {string} [props.ariaLabel]
  */
 export default function InkCanvas({
@@ -261,6 +262,7 @@ export default function InkCanvas({
   onTouchDrawsChange = null,
   onPanStateChange = null,
   readOnly = false,
+  autoFocus = true,
   ariaLabel = 'Handwriting page',
 }) {
   // Read live by long-lived listeners, so a new callback never rebuilds anything.
@@ -769,6 +771,20 @@ export default function InkCanvas({
     flush: () => (editorRef.current ? saver.flush() : null),
     /** Is there any writing? A template sheet is not writing. */
     hasShapes: () => Boolean(editorRef.current && pageContent(editorRef.current).hasInk),
+    /** Has tldraw mounted and loaded the page? */
+    isReady: () => Boolean(editorRef.current),
+    /**
+     * The whole page's writing as the image a model reads (the background
+     * reader): never the template sheet, whose printed words are not the
+     * writer's. Null when there is no writing.
+     */
+    exportPage: async () => {
+      const ed = editorRef.current;
+      if (!ed) return null;
+      const ids = [...ed.getCurrentPageShapeIds()].filter((id) => !isPaperSheetShape(ed.getShape(id)));
+      if (!ids.length) return null;
+      return exportSketchPng(ed, { exportToBlob, ids });
+    },
     undo: () => { editorRef.current?.undo(); },
     redo: () => { editorRef.current?.redo(); },
     setTool,
@@ -837,7 +853,7 @@ export default function InkCanvas({
       }}
     >
       <InkPageContext.Provider value={pageContext}>
-      <Tldraw onMount={handleMount} hideUi components={TLDRAW_COMPONENTS} options={TLDRAW_OPTIONS}>
+      <Tldraw onMount={handleMount} hideUi autoFocus={autoFocus} components={TLDRAW_COMPONENTS} options={TLDRAW_OPTIONS}>
         <ColorSchemeSync light={light} />
         {!readOnly && editor ? (
           <>

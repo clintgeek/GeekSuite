@@ -19,6 +19,7 @@ import DayPage from './pages/DayPage.jsx';
 import WeekPage from './pages/WeekPage.jsx';
 import { resetDayNoteStores } from './store/dayNoteStore.js';
 import { DISPLAY_FONT } from './theme/theme.js';
+import BackgroundReader from './components/BackgroundReader.jsx';
 
 export const APP_ID = 'geekday';
 
@@ -117,6 +118,8 @@ export default function App() {
 
   return (
     <GeekToastProvider>
+      {/* Reads pages nobody is writing on, so they are searchable in NoteGeek. */}
+      <BackgroundReader />
       <Routes>
         <Route path="/" element={<DayPage onSignOut={handleSignOut} />} />
         <Route path="/day/:dayKey" element={<DayPage onSignOut={handleSignOut} />} />

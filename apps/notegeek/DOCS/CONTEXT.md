@@ -851,3 +851,23 @@ What: `DOCS/ONE_ON_ONE_SPEC.md`. No gateway change, no new stored field.
   Template list.
 - **Harness.** Scenes `24a`–`24c`; fixtures `ONE_ON_ONE_NOTES` are kept out of `NOTES`/`TAGS`
   so no other scene changes.
+
+## 21. Background reader (gateway + clients, 2026-11-22)
+
+Full account: `AUTO_TRANSCRIBE_SPEC.md`, "Background reader". What to know before touching it:
+
+- **A template sheet is not writing to the gateway** (`sketchText.js` `pageRecords`): not in the
+  content hash, not a "photo page", and alone an empty page. Before this, every sketch on a
+  template was `off` and never read.
+- **`sketchesToTranscribe(limit)`** lists sketches that are `waiting` and unchanged for 90 s.
+  **`autoTranscribeSketch(background: true)`** is the reader's read, capped at 20 a day.
+- **`components/BackgroundReader.jsx`** (mounted in `Layout` when signed in) mounts
+  `HandwrittenEditor` off-screen, read-only, `autoFocus={false}`, inside an `inert` box, one
+  sketch at a time. The schedule is `@geeksuite/api-client` `backgroundReader.js`, shared with
+  GeekDay.
+- **`NoteEditorPage`** calls `setOpenSketch(id)` while a sketch is open and `sketchClosed(id)`
+  when it closes. The reader never reads the open sketch; `useAutoTranscribe` still does.
+- **Landmines.** The harness stubs the gateway: a gateway rule (like the sheet one) is only
+  proved by the gateway's own tests. The drawing is fetched `no-cache` on purpose. The reader's
+  own mutation document is separate from `AUTO_TRANSCRIBE_SKETCH`, so the open sketch's read
+  never depends on the gateway knowing `background`.

@@ -13,6 +13,7 @@ import NoteImporter from './new/NoteImporter';
 import { useNotePrimaryNav } from './PrimaryNav';
 import { CurrentNoteContext, useNoteFormFactor } from '../hooks/useNoteFormFactor';
 import OneOnOnePicker from './oneOnOne/OneOnOnePicker';
+import BackgroundReader from './BackgroundReader';
 
 /**
  * The paths that are one note: `/notes/new`, `/notes/:id`, `/notes/:id/edit`
@@ -171,6 +172,8 @@ function Layout({ children }) {
                 )}
                 {sheets}
                 {isAuthenticated ? <OneOnOnePicker /> : null}
+                {/* Reads sketches nobody has open, so they are searchable (AUTO_TRANSCRIBE_SPEC.md). */}
+                {isAuthenticated ? <BackgroundReader /> : null}
             </GeekToastProvider>
         </GeekShell>
     );
