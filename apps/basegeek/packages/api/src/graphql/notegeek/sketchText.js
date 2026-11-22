@@ -46,7 +46,21 @@ export function stable(value) {
   return JSON.stringify(value ?? null);
 }
 
-/** The tldraw records that make up what is ON the page: shapes and their assets. */
+/**
+ * A template sheet (DOCS/TEMPLATES_SPEC.md): the printed form under the ink,
+ * one locked image shape and its asset. It is paper, not writing — never part
+ * of the hash (placing or moving it is no reason to read the page), never a
+ * "photographed page" (that switched automatic reading OFF for every sketch
+ * on a template until 2026-11-22), and a page with nothing else is empty.
+ * Same test as `isPaperSheetShape` in @geeksuite/ui.
+ */
+export const PAPER_SHEET_SHAPE_ID = 'shape:paper-template';
+const isSheetRecord = (r) => r.id === PAPER_SHEET_SHAPE_ID || typeof r.meta?.paperTemplate === 'string';
+const SHEET_ID_TEXT = `"id":"${PAPER_SHEET_SHAPE_ID}"`;
+/** Does this snapshot carry a template sheet? A text scan, not a parse. */
+export const hasPaperSheet = (content) => typeof content === 'string' && content.includes(SHEET_ID_TEXT);
+
+/** The tldraw records that make up what is WRITTEN on the page: shapes and their assets, never a template sheet. */
 function pageRecords(content) {
   let parsed;
   try {
@@ -56,7 +70,7 @@ function pageRecords(content) {
   }
   const store = parsed?.store && typeof parsed.store === 'object' ? parsed.store : {};
   return Object.values(store)
-    .filter((r) => r && (r.typeName === 'shape' || r.typeName === 'asset'))
+    .filter((r) => r && (r.typeName === 'shape' || r.typeName === 'asset') && !isSheetRecord(r))
     .sort((a, b) => String(a.id).localeCompare(String(b.id)));
 }
 
@@ -85,10 +99,14 @@ export function hasPhotoPages(content) {
 /**
  * Does a tldraw snapshot have anything drawn on it? A text scan, not a parse:
  * cheap enough to run on every sketch save (a 6 MB snapshot in well under a
- * millisecond when it has shapes).
+ * millisecond when it has shapes). A template sheet alone is not "drawn".
  */
 export function hasAnyShape(content) {
-  return /"typeName"\s*:\s*"shape"/.test(String(content ?? ''));
+  const text = String(content ?? '');
+  const shape = /"typeName"\s*:\s*"shape"/g;
+  if (!shape.test(text)) return false;
+  // A template sheet is one shape record: with a sheet, it takes a second.
+  return hasPaperSheet(text) ? shape.test(text) : true;
 }
 
 /**

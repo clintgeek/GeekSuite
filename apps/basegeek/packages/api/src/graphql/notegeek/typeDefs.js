@@ -412,6 +412,14 @@ export const typeDefs = gql`
     """A sketch's automatic transcript state (AUTO_TRANSCRIBE_SPEC.md)."""
     sketchTranscript(noteId: ID!): SketchTranscriptState!
     """
+    The ids of the caller's sketches that are waiting to be read and have not
+    changed for 90 seconds, newest first (limit 1-10, default 3). For the
+    background reader: any open app draws them off-screen and sends each to
+    autoTranscribeSketch(background: true). Empty when automatic
+    transcription is switched off.
+    """
+    sketchesToTranscribe(limit: Int): [ID!]!
+    """
     The note list. tag = exactly that tag; prefix = any tag starting with
     the string; under = the nested-tag view, the tag itself or anything
     beneath it (house -> house, house/garage; never houseboat). Sent
@@ -522,8 +530,10 @@ export const typeDefs = gql`
     The client calls it 90 s after the last pen stroke; the server skips
     unchanged content, runs one request per sketch, and reports failures in
     the returned status rather than as errors. Uses at most 30 of the day's 40
-    transcriptions; Convert keeps the rest."""
-    autoTranscribeSketch(noteId: ID!, image: String!, mediaType: String!): SketchTranscriptState!
+    transcriptions; Convert keeps the rest. background: true (a page nobody has
+    open, read by the background reader) stops at 20, so a backlog never uses
+    up the reads today's open page needs."""
+    autoTranscribeSketch(noteId: ID!, image: String!, mediaType: String!, background: Boolean): SketchTranscriptState!
     """Keep the user's corrections to a sketch's transcript (from Convert's
     review, or a photo note's reviewed pages), for the content hash they were
     made against — the sketch as saved now when forHash is absent."""

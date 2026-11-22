@@ -35,7 +35,7 @@ import { composeNote, composeNotes } from './compose.js';
 import { transcribeSketch } from './transcribe.js';
 import {
   autoTranscribeSketch, getSketchTranscript, rememberConvertReading, saveSketchTranscriptEdit,
-  recordSketchTasksSent, transcriptForCreate,
+  recordSketchTasksSent, transcriptForCreate, sketchesToTranscribe,
 } from './sketchTranscript.js';
 import { foldInPreview, planOperations, applyPlan, refusalFor } from './foldin.js';
 import NoteVersion from './models/NoteVersion.js';
@@ -319,6 +319,12 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       return await getSketchTranscript({ noteId, userId });
+    },
+    /** Sketches waiting to be read that nobody is writing on (sketchTranscript.js). */
+    sketchesToTranscribe: async (_, { limit }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return await sketchesToTranscribe({ userId, limit: limit ?? undefined });
     },
     /** A note's history, newest first. Content omitted — see versions.js. */
     noteVersions: async (_, { noteId }, context) => {
@@ -999,6 +1005,7 @@ export const resolvers = {
         userId,
         image: rawArgs.image,
         mediaType: rawArgs.mediaType,
+        background: rawArgs.background === true,
         validate: ({ image, mediaType }) => validateTranscribeSketch({ image, mediaType }),
       });
     },

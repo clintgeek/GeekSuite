@@ -125,6 +125,10 @@ const NoteSchema = new mongoose.Schema(
         value: { type: String, default: null },
         len: { type: Number, default: null },
         at: { type: Date, default: null },
+        // The hash rule it was computed under (sketchTranscript.js HASH_VERSION).
+        v: { type: Number, default: null },
+        // The content has photographed pages: never read automatically.
+        photo: { type: Boolean, default: null },
       }, { _id: false }),
       default: undefined,
     },

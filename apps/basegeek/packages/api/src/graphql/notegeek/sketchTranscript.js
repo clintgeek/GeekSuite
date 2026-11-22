@@ -30,13 +30,23 @@ import mongoose from 'mongoose';
 import logger from '../../lib/logger.js';
 import Note, { staleIndexFields } from './models/Note.js';
 import { transcribeSketch as defaultTranscribe } from './transcribe.js';
-import { sketchContentHash, hasPhotoPages, sketchSearchText, hasAnyShape, correctionsStillApply } from './sketchText.js';
+import { sketchContentHash, hasPhotoPages, sketchSearchText, hasAnyShape, hasPaperSheet, correctionsStillApply } from './sketchText.js';
 import { previewFor, DERIVED_VERSION } from './noteDerived.js';
 
 export { sketchContentHash, hasPhotoPages, sketchSearchText };
 
 /** Automatic runs stop at 30 of the day's 40; Convert keeps the last 10. */
 export const AUTO_TRANSCRIBE_DAILY_CAP = 30;
+/**
+ * Reads asked for by the background reader (`sketchesToTranscribe`: pages
+ * nobody has open) stop at 20, so a backlog of old pages can never use up the
+ * reads the page being written on today needs.
+ */
+export const BACKGROUND_DAILY_CAP = 20;
+/** A page is left alone until it has been unchanged this long (the same 90 s the open sketch waits). */
+export const QUIET_MS = 90 * 1000;
+/** The hash rule: 2 leaves a template sheet out (2026-11-22). */
+export const HASH_VERSION = 2;
 /** A claim older than this was abandoned (a crashed gateway); it can be retaken. */
 export const CLAIM_STALE_MS = 2 * 60 * 1000;
 /** Transient failures back off 2 min → 4 → 8 … capped at an hour. */
@@ -76,6 +86,8 @@ export function rememberedHash(note) {
   const h = note?.sketchHash;
   if (!h || !note?.updatedAt || !h.at || typeof note.content !== 'string') return undefined;
   if (h.len !== note.content.length || new Date(h.at).getTime() !== new Date(note.updatedAt).getTime()) return undefined;
+  // Computed when a template sheet still counted as drawing: only wrong for a page that has one.
+  if (h.v !== HASH_VERSION && hasPaperSheet(note.content)) return undefined;
   return h.value ?? null;
 }
 
@@ -94,7 +106,7 @@ export async function contentHashOf(note) {
     try {
       await Note.updateOne(
         { _id: note._id, updatedAt: note.updatedAt },
-        { $set: { sketchHash: { value, len: note.content.length, at: note.updatedAt } } },
+        { $set: { sketchHash: { value, len: note.content.length, at: note.updatedAt, v: HASH_VERSION, photo: value ? hasPhotoPages(note.content) : false } } },
         { timestamps: false },
       );
     } catch (err) {
@@ -255,7 +267,7 @@ async function storeReading({ noteId, userId, hash, text, provenance, source, fi
  * reported in it (status `retry` / `failed`), never thrown, so the client's
  * background work can't surface as an error.
  */
-export async function autoTranscribeSketch({ noteId, userId, image, mediaType, now = Date.now(), transcribe = defaultTranscribe, validate = null }) {
+export async function autoTranscribeSketch({ noteId, userId, image, mediaType, background = false, now = Date.now(), transcribe = defaultTranscribe, validate = null }) {
   if (!mongoose.isValidObjectId(noteId)) throw notFound();
   const note = await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean();
   if (!note) throw notFound();
@@ -289,7 +301,7 @@ export async function autoTranscribeSketch({ noteId, userId, image, mediaType, n
   const ours = { 'sketchTranscript.submittedHash': hash, 'sketchTranscript.status': 'processing' };
 
   try {
-    const { text, provenance } = await transcribe({ image, mediaType, source: 'sketch', userId, dailyCap: AUTO_TRANSCRIBE_DAILY_CAP });
+    const { text, provenance } = await transcribe({ image, mediaType, source: 'sketch', userId, dailyCap: background ? BACKGROUND_DAILY_CAP : AUTO_TRANSCRIBE_DAILY_CAP });
     await storeReading({ noteId, userId, hash, text, provenance, source: 'auto', filter: ours, now });
   } catch (err) {
     const code = err?.extensions?.code || null;
@@ -325,6 +337,77 @@ export async function autoTranscribeSketch({ noteId, userId, image, mediaType, n
     );
   }
   return readView(noteId, userId, { now, autoEnabled });
+}
+
+/**
+ * The caller's sketches that are waiting to be read and that nobody is
+ * writing on: newest first, at most `limit` ids.
+ *
+ * Only a browser can draw a page (AUTO_TRANSCRIBE_SPEC.md), and until
+ * 2026-11-22 only the browser that had the sketch OPEN did: a page left
+ * within 90 s, a tablet closed at the end of a meeting, or a GeekDay page
+ * (never opened in NoteGeek at all) stayed unsearchable until somebody opened
+ * it there. Now any open app asks this, draws each page off-screen and sends
+ * it to `autoTranscribeSketch(background: true)`.
+ *
+ * Mongo rules out, without loading a drawing, everything whose remembered
+ * hash says it is settled (read, corrected, given up on, empty, photo pages),
+ * everything locked, deleted or backing off, and everything changed in the
+ * last QUIET_MS. What is left is loaded and judged by the same `transcriptView`
+ * the open sketch uses, which also remembers its hash, so a settled sketch is
+ * loaded here once.
+ */
+export async function sketchesToTranscribe({ userId, limit = 3, now = Date.now(), quietMs = QUIET_MS }) {
+  if (!userId || !mongoose.isValidObjectId(userId)) return [];
+  if (!(await isAutoTranscribeOn(userId))) return [];
+  const want = Math.min(10, Math.max(1, Math.floor(Number(limit)) || 3));
+  const hash = '$sketchHash.value';
+  const settled = {
+    $and: [
+      { $eq: ['$sketchHash.at', '$updatedAt'] },
+      {
+        $or: [
+          { $eq: [{ $ifNull: [hash, null] }, null] },
+          { $eq: ['$sketchHash.photo', true] },
+          { $eq: ['$sketchTranscript.hash', hash] },
+          { $eq: ['$sketchTranscript.edited.hash', hash] },
+          { $eq: ['$sketchTranscript.failedHash', hash] },
+        ],
+      },
+    ],
+  };
+  const candidates = await Note.find(
+    {
+      userId,
+      type: 'handwritten',
+      deletedAt: null,
+      isLocked: { $ne: true },
+      isEncrypted: { $ne: true },
+      updatedAt: { $lt: new Date(now - quietMs) },
+      'sketchTranscript.retryAt': { $not: { $gt: new Date(now) } },
+      $expr: { $not: [settled] },
+    },
+    { _id: 1 },
+  ).sort({ updatedAt: -1 }).limit(want * 4).lean();
+
+  const ids = [];
+  for (const { _id } of candidates) {
+    if (ids.length >= want) break;
+    // One drawing in memory at a time: they run to megabytes.
+    // eslint-disable-next-line no-await-in-loop
+    const note = await Note.findOne({ _id, userId }, NOTE_FIELDS).lean();
+    if (!note) continue;
+    // eslint-disable-next-line no-await-in-loop
+    const view = await viewOf(note, { now, autoEnabled: true });
+    if (view.status === 'waiting') ids.push(String(_id));
+    else if (view.status === 'off' && note.sketchHash?.photo !== true) {
+      // A hash remembered before `photo` was: say so, or it is loaded every time.
+      // eslint-disable-next-line no-await-in-loop
+      await Note.updateOne({ _id, updatedAt: note.updatedAt, 'sketchHash.at': note.updatedAt }, { $set: { 'sketchHash.photo': true } }, { timestamps: false })
+        .catch((err) => log.warn({ err: err?.message }, 'could not mark a photo sketch'));
+    }
+  }
+  return ids;
 }
 
 /**
