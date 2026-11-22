@@ -94,11 +94,11 @@ export const getTagsApi = async () => {
 // gateway's `Folder` type, resolvers and model were removed the same day (R127).
 
 // Search
-export const searchNotesApi = async (query) => {
+export const searchNotesApi = async (query, under = null) => {
     try {
         // Hybrid: keyword hits plus meaning hits, fused on the gateway. It
         // degrades to keyword-only by itself when the embeddings are down.
-        const { data } = await apolloClient.query({ query: SEARCH_NOTES, variables: { q: query, hybrid: true }, fetchPolicy: 'network-only' });
+        const { data } = await apolloClient.query({ query: SEARCH_NOTES, variables: under ? { q: query, hybrid: true, under } : { q: query, hybrid: true }, fetchPolicy: 'network-only' });
         return { data: data.searchNotes };
     } catch (error) {
         console.error('Search failed:', error.message);

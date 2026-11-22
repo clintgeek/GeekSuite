@@ -15,7 +15,7 @@ import {
     readFingerDraws, writeFingerDraws, readPenSeen, writePenSeen,
 } from '../../utils/penPrefs';
 import { SKETCH_IMAGE_INPUT_MAX_BYTES, SKETCH_IMAGE_MAX_EDGE, sketchImageHandler } from '../../utils/sketchImages';
-import { isPaperSheetShape } from '@geeksuite/ui';
+import { isPaperSheetShape, isPaperSheetTemplate, placePaperSheet } from '@geeksuite/ui';
 import { paperFromMeta, readDevicePaper } from './paperModel';
 import { hasInk as pageHasInk, guardTemplateSheet, showTemplateSheet } from './usePaper';
 import { SketchPortalContext } from './sketchPortal';
@@ -136,7 +136,10 @@ function PenModeSync({ fingerDraws }) {
  *
  * `noteId` (optional): the camera is remembered per sketch on this device.
  */
-const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null, onInkEdit = null, noteId = null }) => {
+const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null, onInkEdit = null, noteId = null, startSheet = null }) => {
+    // The sheet a brand-new sketch starts on (a 1:1, DOCS/ONE_ON_ONE_SPEC.md req 2).
+    const startSheetRef = useRef(startSheet);
+    startSheetRef.current = startSheet;
     // Read live by the store listener, so a new callback never rebuilds anything.
     const onInkEditRef = useRef(onInkEdit);
     onInkEditRef.current = onInkEdit;
@@ -314,6 +317,17 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
             hasInk = pageHasInk(editor);
             // Done by the bounds update below, once the viewport is measured.
             firstViewPendingRef.current = true;
+        } else if (!readOnly && isPaperSheetTemplate(startSheetRef.current)) {
+            // A new sketch that starts on a sheet. Placed as a REMOTE change,
+            // like a load: it is not a save (leaving without writing creates
+            // no note) and not an undo step. The first stroke saves it with
+            // the page.
+            try {
+                editor.store.mergeRemoteChanges(() => placePaperSheet(editor, startSheetRef.current, { x: 0, y: 0 }));
+                firstViewPendingRef.current = true;
+            } catch (error) {
+                console.warn('HandwrittenEditor - could not place the starting sheet.', error);
+            }
         }
 
         // A saved sketch opens to be read, an empty one to be written on.

@@ -16,6 +16,9 @@ import { graphiteTokens } from '../theme/tokens';
 import { tagTree as buildTagTree } from '@geeksuite/tags';
 import { tagHref } from '../utils/tagPath';
 import { useListWidth } from './notes/ListColumn';
+import { isPersonTag } from '../utils/oneOnOne';
+import { useOneOnOneRoot } from './oneOnOne/useOneOnOne';
+import { PeopleOverview, PersonHeader } from './oneOnOne/OneOnOneHeader';
 
 // The same documents the sidebar's tag tree reads (Sidebar.jsx), so the
 // sub-tag counts here come out of the same cache entry and always agree with
@@ -135,6 +138,11 @@ const TagNotesList = ({ tag: tagProp } = {}) => {
     const theme = useTheme();
     const listWidth = useListWidth();
     const decodedTag = tag ? decodeURIComponent(tag) : '';
+    // 1:1s (DOCS/ONE_ON_ONE_SPEC.md): the 1:1 tag lists its people, and a
+    // person's tag heads their log. Every other tag is as it always was.
+    const oneOnOneRoot = useOneOnOneRoot();
+    const isPeople = decodedTag === oneOnOneRoot;
+    const isPerson = isPersonTag(decodedTag, oneOnOneRoot);
 
     const { data: tagData } = useQuery(GET_TAGS, { fetchPolicy: 'cache-first', skip: !tag });
     const { data: countData } = useQuery(GET_TAG_COUNTS, { fetchPolicy: 'cache-first', skip: !tag });
@@ -213,7 +221,8 @@ const TagNotesList = ({ tag: tagProp } = {}) => {
                 ))}
             </Breadcrumbs>
 
-            <SubTagRow node={node} />
+            {isPeople ? <PeopleOverview /> : <SubTagRow node={node} />}
+            {isPerson ? <PersonHeader tag={decodedTag} root={oneOnOneRoot} /> : null}
 
             <NoteList under={decodedTag} />
         </Box>

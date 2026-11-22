@@ -50,6 +50,8 @@ import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
 import { applyInlineTags } from '../utils/inlineTags';
 import { containsNoteLink, insertLink, noteLinkMarkup, supportsLinkInsertion } from '../utils/noteLinks';
 import { buildNoteFromTemplate } from '../utils/noteTemplates';
+import { buildOneOnOne, oneOnOneRoot, personName, personOfNote, personTag } from '../utils/oneOnOne';
+import OpenItems from '../components/oneOnOne/OpenItems';
 
 /**
  * NoteEditorPage - Unified page for creating and editing notes
@@ -182,6 +184,12 @@ function NoteEditorPage({ editorKey } = {}) {
   // model, so switching it off is not merely a client-side courtesy).
   const { preferences: appPrefs } = useAppPreferences('notegeek');
   const suggestEnabled = appPrefs?.suggestOnSave === true;
+  // 1:1s: the tag people live under, and the person this note belongs to.
+  const oneOnOneTag = oneOnOneRoot(appPrefs);
+  const oneOnOneTagRef = useRef(oneOnOneTag);
+  oneOnOneTagRef.current = oneOnOneTag;
+  const [startSheet, setStartSheet] = useState(null);
+  const oneOnOnePerson = personOfNote(tags, oneOnOneTag);
 
   // Where the caret was in the body's textarea the last time it moved. Markdown
   // and code notes are plain textareas, so a related-note link can land where
@@ -282,6 +290,16 @@ function NoteEditorPage({ editorKey } = {}) {
         setContent(template.content);
         setTags(template.tags);
       }
+      // `?oneOnOne=<person>` — a new 1:1 (DOCS/ONE_ON_ONE_SPEC.md req 1, 2):
+      // a handwritten page, titled and tagged for the person, on the 1:1
+      // sheet. Seeded like a template: nothing is saved until the first ink.
+      const oneOnOne = buildOneOnOne(params.get('oneOnOne'), oneOnOneTagRef.current);
+      if (oneOnOne) {
+        setNoteType(NOTE_TYPES.HANDWRITTEN);
+        setTitle(oneOnOne.title);
+        setTags(oneOnOne.tags);
+      }
+      setStartSheet(oneOnOne ? oneOnOne.sheet : null);
       const seededTitle = params.get('title');
       if (seededTitle) setTitle(seededTitle.trim().slice(0, 500));
       setPinnedOverride(null);
@@ -843,7 +861,12 @@ function NoteEditorPage({ editorKey } = {}) {
     let failed = 0;
     // One at a time, in page order: TodoGeek lists them in the order they arrive.
     for (const row of chosen) {
-      const input = taskInputFor(row, { now, today: new Date(), sketch: sketchId ? { id: sketchId, title } : null, origin: window.location.origin });
+      // A 1:1's tasks carry the person's tag, so they show as open with them (req 3).
+      const person = personOfNote(tagsRef.current, oneOnOneTagRef.current);
+      const input = taskInputFor(row, {
+        now, today: new Date(), sketch: sketchId ? { id: sketchId, title } : null, origin: window.location.origin,
+        tags: person ? [personTag(oneOnOneTagRef.current, person)] : [],
+      });
       if (!input) { failed += 1; continue; }
       try {
         // C1: the same line of the same sketch always carries the same
@@ -1634,7 +1657,7 @@ function NoteEditorPage({ editorKey } = {}) {
             // Mounted only when the writer has switched suggestions on: the
             // strip owns a lazy query, and a feature that is off should cost
             // the editor nothing at all, not even a hook.
-            belowMeta={archived || suggestEnabled || draftOffer || deletedAt ? (
+            belowMeta={archived || suggestEnabled || draftOffer || deletedAt || oneOnOnePerson ? (
               <>
               {deletedAt && savedNoteId ? (
                 <DeletedBanner noteId={savedNoteId} deletedAt={deletedAt} sx={{ mt: '8px' }} />
@@ -1654,6 +1677,16 @@ function NoteEditorPage({ editorKey } = {}) {
                   busy={isArchiving}
                   sx={{ mt: '8px' }}
                 />
+              ) : null}
+              {oneOnOnePerson && !archived ? (
+                <Box sx={{ mt: '8px' }}>
+                  <OpenItems
+                    strip
+                    tag={personTag(oneOnOneTag, oneOnOnePerson)}
+                    name={personName(oneOnOnePerson)}
+                    defaultOpen={isNewNote}
+                  />
+                </Box>
               ) : null}
               {suggestEnabled ? (
               <SuggestionStrip
@@ -1721,7 +1754,7 @@ function NoteEditorPage({ editorKey } = {}) {
             onChange={handleContentChange}
             readOnly={readOnlyMeta}
             isLoading={isLoadingSelected}
-            {...(isHandwritten ? { sketchApiRef, onInkEdit, noteId: savedNoteId } : {})}
+            {...(isHandwritten ? { sketchApiRef, onInkEdit, noteId: savedNoteId, startSheet: isNewNote ? startSheet : null } : {})}
           />
         </Box>
       </NoteShell>

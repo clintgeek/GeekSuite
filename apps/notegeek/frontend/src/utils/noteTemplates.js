@@ -47,6 +47,13 @@ export function templateWeekStart(now = new Date()) {
 
 const lines = (...rows) => `${rows.join('\n')}\n`;
 
+/**
+ * The template the New surfaces hand to the 1:1 person picker instead of
+ * opening as a typed note (DOCS/ONE_ON_ONE_SPEC.md req 1). Its Markdown body
+ * is still what `/notes/new?template=one-to-one` opens.
+ */
+export const ONE_ON_ONE_TEMPLATE = 'one-to-one';
+
 export const NOTE_TEMPLATES = [
   {
     id: 'meeting',
@@ -81,8 +88,8 @@ export const NOTE_TEMPLATES = [
   },
   {
     id: 'one-to-one',
-    label: 'One-to-one',
-    description: 'Wins, blockers, feedback both ways, career, actions',
+    label: '1:1',
+    description: 'Pick a person: a handwritten page with what is still open',
     tags: ['one-to-one'],
     title: (now) => `One-to-one — ${templateDay(now)}`,
     body: (now) => lines(

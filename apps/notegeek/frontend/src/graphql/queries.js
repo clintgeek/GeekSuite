@@ -128,8 +128,8 @@ export const NOTE_TAG_USAGE = gql`
  * and `bestMatch` the one from 2026-10-01.
  */
 export const SEARCH_NOTES = gql`
-    query SearchNotes($q: String!, $hybrid: Boolean) {
-        searchNotes(q: $q, hybrid: $hybrid) {
+    query SearchNotes($q: String!, $hybrid: Boolean, $under: String) {
+        searchNotes(q: $q, hybrid: $hybrid, under: $under) {
             _id
             title
             type

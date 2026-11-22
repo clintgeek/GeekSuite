@@ -9,6 +9,7 @@ import {
     ListItemText,
     Slider,
     Switch,
+    TextField,
     Button,
     useTheme,
     alpha,
@@ -25,6 +26,8 @@ import FontSizeIcon from '@mui/icons-material/TextFields';
 import SuggestIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import SketchIcon from '@mui/icons-material/GestureOutlined';
 import { useAppPreferences, useUser } from '@geeksuite/user';
+import { normalizeTag } from '@geeksuite/tags';
+import { DEFAULT_ONE_ON_ONE_TAG, oneOnOneRoot } from '../utils/oneOnOne';
 import useAuthStore from '../store/authStore';
 import { useThemeMode } from '../theme/ThemeModeProvider';
 
@@ -118,6 +121,15 @@ function Settings() {
     const autoTranscribe = appPrefs?.autoTranscribeSketches !== false;
     const handleAutoTranscribeToggle = async (event) => {
         await updateAppPreferences({ autoTranscribeSketches: event.target.checked });
+    };
+
+    // Where 1:1s live (DOCS/ONE_ON_ONE_SPEC.md req 6). An empty or unusable
+    // value goes back to the default; existing notes are never re-tagged.
+    const oneOnOneTag = oneOnOneRoot(appPrefs);
+    const handleOneOnOneTag = async (event) => {
+        const next = normalizeTag(event.target.value) || DEFAULT_ONE_ON_ONE_TAG;
+        event.target.value = next;
+        if (next !== oneOnOneTag) await updateAppPreferences({ oneOnOneTag: next });
     };
 
     const handleSuggestToggle = async (event) => {
@@ -250,6 +262,26 @@ function Settings() {
                                     backgroundColor: 'primary.main',
                                 },
                             }}
+                        />
+                    }
+                    divider={false}
+                />
+            </SettingsSection>
+
+            <SettingsSection title="1:1s">
+                <SettingsRow
+                    icon={<SketchIcon sx={{ fontSize: 20, color: 'text.secondary' }} />}
+                    primary="1:1 tag"
+                    secondary="Each person is a tag under this one, and their 1:1s carry it"
+                    action={
+                        <TextField
+                            size="small"
+                            defaultValue={oneOnOneTag}
+                            key={oneOnOneTag}
+                            onBlur={handleOneOnOneTag}
+                            onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                            inputProps={{ 'aria-label': '1:1 tag', 'data-testid': 'one-on-one-tag', maxLength: 80, autoCapitalize: 'none', spellCheck: false }}
+                            sx={{ width: 160 }}
                         />
                     }
                     divider={false}

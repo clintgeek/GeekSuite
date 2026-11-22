@@ -38,7 +38,7 @@ const renderBody = (body) => render(
 describe('N1 — the eight templates', () => {
   it('are exactly these, in this order', () => {
     expect(NOTE_TEMPLATES.map((t) => t.label)).toEqual([
-      'Meeting notes', 'One-to-one', 'Weekly review', 'Project brief',
+      'Meeting notes', '1:1', 'Weekly review', 'Project brief',
       'Decision record', 'Troubleshooting log', 'Packing list', 'Recipe',
     ]);
     expect(new Set(NOTE_TEMPLATES.map((t) => t.id)).size).toBe(8);

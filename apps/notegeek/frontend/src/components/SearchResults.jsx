@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useId } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
     Box,
+    Button,
     TextField,
     Typography,
     InputAdornment,
@@ -92,6 +93,9 @@ function BestMatch({ note, query, selection }) {
 function SearchResults() {
     const [searchParams, setSearchParams] = useSearchParams();
     const query = searchParams.get('q') || '';
+    // `?under=` limits the search to one tag and everything beneath it: a
+    // person's 1:1s (DOCS/ONE_ON_ONE_SPEC.md req 4). It stays while you type.
+    const under = searchParams.get('under') || '';
     const [searchTerm, setSearchTerm] = useState(query);
     const { searchNotes, searchResults, isSearching, searchError, clearSearchResults } = useNoteStore();
     const inputRef = useRef(null);
@@ -112,22 +116,23 @@ function SearchResults() {
     // results for a term the user had just backspaced away.
     useEffect(() => {
         const timeoutId = setTimeout(() => {
-            setSearchParams(searchTerm ? { q: searchTerm } : {}, { replace: true });
+            setSearchParams({ ...(searchTerm ? { q: searchTerm } : {}), ...(under ? { under } : {}) }, { replace: true });
         }, 300);
         return () => clearTimeout(timeoutId);
-    }, [searchTerm, setSearchParams]);
+    }, [searchTerm, under, setSearchParams]);
 
     useEffect(() => {
         if (query) {
-            searchNotes(query);
+            if (under) searchNotes(query, under);
+            else searchNotes(query);
         } else {
             clearSearchResults();
         }
-    }, [query, searchNotes, clearSearchResults]);
+    }, [query, under, searchNotes, clearSearchResults]);
 
     const handleClear = () => {
         setSearchTerm('');
-        setSearchParams({}, { replace: true });
+        setSearchParams(under ? { under } : {}, { replace: true });
         clearSearchResults();
         inputRef.current?.focus();
     };
@@ -146,7 +151,7 @@ function SearchResults() {
                 // The page's own search outranks the header's on this route.
                 {...slashFocusProps(20)}
                 size="small"
-                sx={{ mb: 2.5 }}
+                sx={{ mb: under ? 1 : 2.5 }}
                 InputProps={{
                     startAdornment: (
                         <InputAdornment position="start">
@@ -172,6 +177,19 @@ function SearchResults() {
                     ),
                 }}
             />
+
+            {under ? (
+                <Box data-testid="search-under" sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2, px: 0.5 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Only in {under}</Typography>
+                    <Button
+                        size="small"
+                        onClick={() => setSearchParams(searchTerm ? { q: searchTerm } : {}, { replace: true })}
+                        sx={{ minHeight: 44 }}
+                    >
+                        Search all notes
+                    </Button>
+                </Box>
+            ) : null}
 
             {/* Results. While a newer search is in flight the previous results
                 stay on screen (with a quiet "Searching…"): results update as

@@ -33,7 +33,7 @@ describe('the template list', () => {
   it('offers exactly the eight, each with its one-line description', () => {
     wrap(<TemplateList onPick={() => {}} />);
     expect(rowNames()).toEqual([
-      'Meeting notes', 'One-to-one', 'Weekly review', 'Project brief',
+      'Meeting notes', '1:1', 'Weekly review', 'Project brief',
       'Decision record', 'Troubleshooting log', 'Packing list', 'Recipe',
     ]);
     for (const t of NOTE_TEMPLATES) {

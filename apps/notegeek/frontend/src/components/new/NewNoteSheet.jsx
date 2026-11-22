@@ -8,7 +8,8 @@ import { GeekSheet } from '@geeksuite/ui';
 import { NEW_FRONT, NEW_MORE, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
 import { graphiteTokens } from '../../theme/tokens';
 import { openImportPicker } from '../../store/importStore';
-import { noteTemplatePath } from '../../utils/noteTemplates';
+import { openOneOnOnePicker } from '../../store/oneOnOneStore';
+import { ONE_ON_ONE_TEMPLATE, noteTemplatePath } from '../../utils/noteTemplates';
 import { TemplateList } from './TemplateList';
 
 /**
@@ -78,7 +79,12 @@ function NewNoteSheet({ open, onClose }) {
   }
 
   const close = () => { setMore(false); onClose(); };
-  const pickTemplate = (id) => { close(); navigate(noteTemplatePath(id)); };
+  const pickTemplate = (id) => {
+    close();
+    // A 1:1 is a handwritten page for one person: ask who (DOCS/ONE_ON_ONE_SPEC.md req 1).
+    if (id === ONE_ON_ONE_TEMPLATE) { openOneOnOnePicker(); return; }
+    navigate(noteTemplatePath(id));
+  };
 
   const pick = (key) => {
     if (key === 'template') { setView('templates'); return; }

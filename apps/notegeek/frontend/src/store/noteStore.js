@@ -17,6 +17,8 @@ const useNoteStore = create((set, get) => {
     // The last query searched, so a list-membership change (archive /
     // restore) can re-run it. Cleared with the results.
     let lastSearchQuery = '';
+    // ...and the tag it was limited to (a person's 1:1s), if any.
+    let lastSearchUnder = null;
     // The filters Home last listed with, for the same reason.
     let lastListFilters = null;
 
@@ -202,12 +204,13 @@ const useNoteStore = create((set, get) => {
          * "ab" could land on top of results for "abc" and stay there. The
          * sequence number makes a stale response a no-op.
          */
-        searchNotes: async (query) => {
+        searchNotes: async (query, under = null) => {
             const seq = ++searchSeq;
             lastSearchQuery = query;
+            lastSearchUnder = under;
             set({ isSearching: true, searchError: null });
             try {
-                const response = await searchNotesApi(query);
+                const response = under ? await searchNotesApi(query, under) : await searchNotesApi(query);
                 if (seq !== searchSeq) return;
                 set({ searchResults: response.data, isSearching: false });
             } catch (error) {
@@ -248,7 +251,7 @@ const useNoteStore = create((set, get) => {
          */
         refreshLists: () => {
             if (lastListFilters) get().fetchNotes(lastListFilters);
-            if (lastSearchQuery) get().searchNotes(lastSearchQuery);
+            if (lastSearchQuery) get().searchNotes(lastSearchQuery, lastSearchUnder);
         }
     };
 });

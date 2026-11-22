@@ -258,13 +258,13 @@ describe('the Paper menu\'s Template choice', () => {
   };
   const rerenderPicker = (view) => view.rerender(<ThemeProvider theme={createNoteTheme('light')}><PaperPicker /></ThemeProvider>);
 
-  it('sits apart from colour and lines, offering None and the four layouts; dot grid and grid are Lines, not templates', async () => {
+  it('sits apart from colour and lines, offering None and the five layouts; dot grid and grid are Lines, not templates', async () => {
     const user = userEvent.setup();
     tl.editor = makeEditor();
     wrap(<PaperPicker />);
     const group = await open(user);
     expect(within(group).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Template: None', 'Template: Schedule', 'Template: Top three', 'Template: Meeting', 'Template: Cornell',
+      'Template: None', 'Template: Schedule', 'Template: Top three', 'Template: Meeting', 'Template: 1:1', 'Template: Cornell',
     ]);
     expect(within(group).getByRole('button', { name: 'Template: None' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(group).getAllByRole('button', { pressed: true })).toHaveLength(1);

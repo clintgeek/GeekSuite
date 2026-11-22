@@ -2410,7 +2410,7 @@ export const scenes = [
       if (!(await group.count())) throw new Error('the Paper menu has no Template choice');
       const names = await group.getByRole('button').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
       // Dot grid and Grid are paper (Lines, above), not templates.
-      const want = ['None', 'Schedule', 'Top three', 'Meeting', 'Cornell'].map((n) => `Template: ${n}`);
+      const want = ['None', 'Schedule', 'Top three', 'Meeting', '1:1', 'Cornell'].map((n) => `Template: ${n}`);
       if (names.join('|') !== want.join('|')) throw new Error(`the Template choices are ${names.join(', ')}`);
       if ((await group.getByRole('button', { name: 'Template: None' }).getAttribute('aria-pressed')) !== 'true') throw new Error('a new sketch does not show None as chosen');
       for (const name of want) {
@@ -2577,6 +2577,122 @@ export const scenes = [
     },
   },
 
+  // ── 1:1s (DOCS/ONE_ON_ONE_SPEC.md) ────────────────────────────────────────
+  {
+    // Req 5: the 1:1 tag's page lists the people, longest-unmet first, each
+    // with when you last met; and offers New 1:1.
+    name: '24a-one-on-one-people',
+    goto: `/tags/${encodeURIComponent('fd/1on1')}`,
+    wait: 1200,
+    async setup(page, h) {
+      const people = page.locator('[data-testid="one-on-one-people"]');
+      if (!(await people.count())) throw new Error('the 1:1 tag page has no People list');
+      const order = await people.locator('[data-person]').evaluateAll((els) => els.map((e) => e.getAttribute('data-person')));
+      if (order.join(',') !== 'sam-lee,alex') throw new Error(`people are ordered "${order.join(',')}", not longest-unmet first`);
+      const sam = await people.locator('[data-person="sam-lee"]').innerText();
+      if (!/Sam Lee/.test(sam) || !/weeks ago/.test(sam)) throw new Error(`Sam's row does not say who and when: "${sam}"`);
+      const box = await people.locator('[data-person="alex"]').boundingBox();
+      if (!box || box.height < 44) throw new Error('a person row is under 44px');
+      if (!(await people.locator('[data-testid="one-on-one-new"]').count())) throw new Error('no New 1:1 on the people page');
+      if ((await page.locator('[data-note-row]').count()) < 3) throw new Error('the notes under the 1:1 tag are not listed below');
+      await h.settle(200);
+    },
+  },
+  {
+    // Req 4: a person's page: last met, what is open (TodoGeek), New 1:1 and
+    // a search of just their notes; then their notes. Ticking an item marks
+    // it done.
+    name: '24b-one-on-one-person',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const done = [];
+      let open = null;
+      await graphqlRoute(page, {
+        ...OPS,
+        GetOneOnOneOpenItems: (vars) => {
+          const all = OPS.GetOneOnOneOpenItems(vars).tasks;
+          open = all.filter((t) => !done.includes(t.id));
+          return { tasks: open };
+        },
+        CompleteOneOnOneItem: (vars) => { done.push(vars.id); return OPS.CompleteOneOnOneItem(vars); },
+      });
+      await page.goto(`${h.base}/tags/${encodeURIComponent('fd/1on1/alex')}`, { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      const head = page.locator('[data-testid="one-on-one-person"]');
+      if (!(await head.count())) throw new Error("Alex's tag page has no 1:1 header");
+      const last = await head.locator('[data-testid="one-on-one-last"]').innerText();
+      if (!/Last 1:1 4 days ago/.test(last)) throw new Error(`last met reads "${last}"`);
+      const items = head.locator('[data-open-item]');
+      if ((await items.count()) !== 2) throw new Error(`open items: ${await items.count()}, not 2`);
+      if ((await page.locator('[data-note-row]').count()) !== 2) throw new Error("Alex's two 1:1s are not listed");
+      if (await page.locator('[data-testid="one-on-one-people"]').count()) throw new Error("the people list is on a person's page");
+      await head.getByRole('checkbox', { name: /Done — Ask about the promo packet/ }).click();
+      await h.settle(900);
+      if (done.join(',') !== 't-a2') throw new Error(`ticking an item completed "${done.join(',')}"`);
+      if ((await items.count()) !== 1) throw new Error('the ticked item is still listed');
+      // The search goes to Search, limited to this person.
+      await head.locator('[data-testid="one-on-one-search"]').fill('rotation');
+      await page.keyboard.press('Enter');
+      await h.settle(900);
+      const url = new URL(page.url());
+      if (url.pathname !== '/search' || url.searchParams.get('under') !== 'fd/1on1/alex' || url.searchParams.get('q') !== 'rotation') throw new Error(`the person search went to ${page.url()}`);
+      if (!(await page.locator('[data-testid="search-under"]').count())) throw new Error('Search does not say it is limited to the person');
+      await page.goBack();
+      await h.settle(900);
+    },
+  },
+  {
+    // Reqs 1-3: New 1:1 from the person picker: a handwritten page, titled
+    // date-first and tagged for the person, on the 1:1 sheet, with what is
+    // open above it; and nothing is saved until there is ink.
+    name: '24c-one-on-one-new',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const calls = { create: [] };
+      await graphqlRoute(page, {
+        ...OPS,
+        CreateNote: (vars) => { calls.create.push(vars); return OPS.CreateNote(vars); },
+      });
+      await page.goto(`${h.base}/tags/${encodeURIComponent('fd/1on1')}`, { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      await page.locator('[data-testid="one-on-one-new"]').click();
+      await h.settle(700);
+      const picker = page.getByRole('dialog', { name: 'New 1:1' });
+      if (!(await picker.count())) throw new Error('New 1:1 did not open the person picker');
+      if (!(await picker.locator('[data-testid="one-on-one-new-name"]').count())) throw new Error('the picker has no box for someone new');
+      const row = picker.locator('[data-person="alex"]');
+      const box = await row.boundingBox();
+      if (!box || box.height < 44) throw new Error('a picker row is under 44px');
+      await row.click();
+      await page.waitForSelector('.tl-container', { timeout: 20000 });
+      await h.settle(1500);
+      if (!/\/notes\/new\?type=handwritten&oneOnOne=alex$/.test(page.url())) throw new Error(`picking Alex went to ${page.url()}`);
+      if (await page.locator('.tl-error-boundary').count()) throw new Error('tldraw rendered its own error screen');
+      const title = await page.getByRole('textbox', { name: 'Note title' }).inputValue();
+      if (!/^\d{4}-\d{2}-\d{2} Alex 1:1$/.test(title)) throw new Error(`the title is "${title}"`);
+      const sheet = page.locator('.tl-shape[data-shape-type="image"]');
+      if ((await sheet.count()) !== 1) throw new Error(`the page has ${await sheet.count()} sheets, not the 1:1 sheet`);
+      const strip = page.locator('[data-testid="one-on-one-open"]');
+      if (!(await strip.count()) || (await strip.getAttribute('data-open-count')) !== '2') throw new Error('the open items are not above the page');
+      if ((await strip.locator('[data-open-item]').count()) !== 2) throw new Error('the open items are not listed on a new 1:1');
+      await h.settle(2600);
+      if (calls.create.length) throw new Error('opening a new 1:1 created a note before any ink');
+      // Ink saves it: one note, handwritten, tagged for Alex, sheet included.
+      const canvas = await page.locator('.tl-canvas').boundingBox();
+      const y = canvas.y + canvas.height * 0.62;
+      await page.mouse.move(canvas.x + canvas.width * 0.25, y);
+      await page.mouse.down();
+      await page.mouse.move(canvas.x + canvas.width * 0.4, y + 24, { steps: 8 });
+      await page.mouse.move(canvas.x + canvas.width * 0.5, y - 10, { steps: 8 });
+      await page.mouse.up();
+      await h.settle(4500);
+      if (calls.create.length !== 1) throw new Error(`ink on a new 1:1 made ${calls.create.length} notes`);
+      const made = calls.create[0];
+      if (made.type !== 'handwritten' || (made.tags || []).join(',') !== 'fd/1on1/alex') throw new Error(`the note was saved as ${made.type} with tags "${(made.tags || []).join(',')}"`);
+      if (!String(made.content || '').includes('shape:paper-template')) throw new Error('the saved sketch does not carry the 1:1 sheet');
+    },
+  },
+
   // ── Tablet wave (2026-11-16): rail, capped list, portrait editor, two panes ──
   {
     // The rail replaces the phone's bottom bar on a tablet, portrait and
@@ -2711,7 +2827,7 @@ export const waivers = [
     // shape has `altText`.
     rule: 'image-alt',
     match: 'tl-image',
-    scenes: ['13d-photo-note', '23c-sketch-template-menu', '23d-sketch-template'],
+    scenes: ['13d-photo-note', '23c-sketch-template-menu', '23d-sketch-template', '24c-one-on-one-new'],
     reason: 'tldraw 2.4 image shape <img> has no alt and no way to set one (third-party UI)',
   },
 ];

@@ -4,9 +4,10 @@ import { Box, Button, Divider, ListItemIcon, ListItemText, Menu, MenuItem, useTh
 import AddIcon from '@mui/icons-material/Add';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import { IMPORT_ENTRY, NEW_FRONT, NEW_MORE, TEMPLATE_ENTRY, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
-import { noteTemplatePath } from '../../utils/noteTemplates';
+import { ONE_ON_ONE_TEMPLATE, noteTemplatePath } from '../../utils/noteTemplates';
 import { TemplatePicker } from './TemplateList';
 import { openImportPicker } from '../../store/importStore';
+import { openOneOnOnePicker } from '../../store/oneOnOneStore';
 import { graphiteTokens } from '../../theme/tokens';
 
 /**
@@ -104,7 +105,11 @@ function NewNoteMenu() {
       <TemplatePicker
         open={templatesOpen}
         onClose={() => setTemplatesOpen(false)}
-        onPick={(id) => { setTemplatesOpen(false); navigate(noteTemplatePath(id)); }}
+        onPick={(id) => {
+          setTemplatesOpen(false);
+          if (id === ONE_ON_ONE_TEMPLATE) { openOneOnOnePicker(); return; }
+          navigate(noteTemplatePath(id));
+        }}
       />
     </Box>
   );

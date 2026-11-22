@@ -12,6 +12,7 @@ import useNavStore from '../store/navStore';
 import NoteImporter from './new/NoteImporter';
 import { useNotePrimaryNav } from './PrimaryNav';
 import { CurrentNoteContext, useNoteFormFactor } from '../hooks/useNoteFormFactor';
+import OneOnOnePicker from './oneOnOne/OneOnOnePicker';
 
 /**
  * The paths that are one note: `/notes/new`, `/notes/:id`, `/notes/:id/edit`
@@ -169,6 +170,7 @@ function Layout({ children }) {
                     </GeekAppFrame>
                 )}
                 {sheets}
+                {isAuthenticated ? <OneOnOnePicker /> : null}
             </GeekToastProvider>
         </GeekShell>
     );

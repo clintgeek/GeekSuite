@@ -258,6 +258,20 @@ export const NOTES = [
   ...HOUSE_NOTES,
 ];
 
+// 1:1s (DOCS/ONE_ON_ONE_SPEC.md): two people under `fd/1on1`. Kept OUT of
+// NOTES and TAGS so no other scene's list or tag tree changes; the list stubs
+// add them only when asked for something under `fd/1on1`.
+export const ONE_ON_ONE_NOTES = [
+  { ...note('o1', '2026-11-18 Alex 1:1', 'handwritten', ['fd/1on1/alex'], '', daysAgo(4)), createdAt: daysAgo(4) },
+  { ...note('o2', '2026-11-04 Alex 1:1', 'handwritten', ['fd/1on1/alex'], '', daysAgo(18)), createdAt: daysAgo(18) },
+  { ...note('o3', '2026-10-21 Sam Lee 1:1', 'handwritten', ['fd/1on1/sam-lee'], '', daysAgo(32)), createdAt: daysAgo(32) },
+];
+export const ONE_ON_ONE_OPEN = [
+  { __typename: 'Task', id: 't-a1', content: 'Send Alex the on-call rotation draft', status: 'pending', dueDate: daysAgo(-2) },
+  { __typename: 'Task', id: 't-a2', content: 'Ask about the promo packet timeline', status: 'pending', dueDate: null },
+];
+const withOneOnOnes = (vars) => (String(vars?.under || '').startsWith('fd/1on1') ? [...ONE_ON_ONE_NOTES, ...NOTES] : NOTES);
+
 // Enough tags (with a nested path) that the sidebar's tree must scroll — the
 // last ones sat hidden below a 40vh cap until 2026-09-24.
 export const TAGS = [
@@ -570,10 +584,16 @@ export const conflictAnswer = (serverNote) => ({
 export const OPS = {
   // Home's few rows: same filters, a limit, list rows (no bodies).
   GetNotes: (vars) => ({
-    notes: sortNotes(filterNotes(NOTES, vars), vars?.sort).slice(0, vars?.limit || 200).map(listRow),
+    notes: sortNotes(filterNotes(withOneOnOnes(vars), vars), vars?.sort).slice(0, vars?.limit || 200).map(listRow),
   }),
+  // 1:1s: who, how many, when last; and what is open with one person.
+  GetOneOnOneNotes: (vars) => ({
+    notes: filterNotes(ONE_ON_ONE_NOTES, vars).map(({ id, tags, createdAt }) => ({ __typename: 'Note', id, tags, createdAt })),
+  }),
+  GetOneOnOneOpenItems: (vars) => ({ tasks: (vars?.tags || []).includes('fd/1on1/alex') ? ONE_ON_ONE_OPEN : [] }),
+  CompleteOneOnOneItem: (vars) => ({ updateTaskStatus: { __typename: 'Task', id: vars.id, status: 'completed' } }),
   // The Notes page and every tag view, a page at a time.
-  GetNotesPage: (vars) => notesPage(NOTES, vars),
+  GetNotesPage: (vars) => notesPage(withOneOnOnes(vars), vars),
   // A list row's thumbnail fetches its own note's body once it is in view.
   NoteThumbContent: (vars) => {
     const hit = byId(vars.id);

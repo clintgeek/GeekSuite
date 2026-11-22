@@ -170,10 +170,10 @@ export function understand(text, { now = new Date() } = {}) {
  * TodoGeek's add box: an undated line is "do it now-ish", not overdue.
  *
  * @param {{ kind: string, text: string }} entry
- * @param {{ now?: Date, today?: Date, sketch?: { id?: string, title?: string }, origin?: string }} [o]
+ * @param {{ now?: Date, today?: Date, sketch?: { id?: string, title?: string }, origin?: string, tags?: string[] }} [o]
  * @returns {object|null} null when there are no words left to make a task of
  */
-export function taskInputFor(entry, { now = new Date(), today = now, sketch = null, origin = '' } = {}) {
+export function taskInputFor(entry, { now = new Date(), today = now, sketch = null, origin = '', tags = [] } = {}) {
   const parsed = understand(entry.text, { now });
   const { input } = toCreateInput(parsed, { today });
   if (!input) return null;
@@ -182,6 +182,8 @@ export function taskInputFor(entry, { now = new Date(), today = now, sketch = nu
   // with one of TodoGeek's typed signifiers ("* @ dentist" is an event).
   input.signifier = entry.kind === 'task' && parsed.signifier && parsed.signifier !== '*' ? parsed.signifier : kind.signifier;
   if (kind.status) input.status = kind.status;
+  // Tags the page itself gives every task (a 1:1's person), after the line's own.
+  if (tags.length) input.tags = [...new Set([...(input.tags || []), ...tags])];
   if (sketch?.id) {
     const where = `From sketch: ${String(sketch.title || '').trim() || 'Untitled sketch'} — ${origin}/notes/${sketch.id}`;
     input.note = input.note ? `${input.note}\n${where}` : where;
