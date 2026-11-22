@@ -825,3 +825,29 @@ Spec: `DOCS/TEMPLATES_SPEC.md` (repo root). No gateway operation, schema or stor
   `components/new/templatePicker.test.jsx`, `components/editors/paperTemplate.test.jsx`, plus cases in
   `HandwrittenEditor.test.jsx` and `sketchExport.test.js`. Harness scenes `23a`–`23e` (`23c` places, erases over, removes and undoes a sheet in the real editor).
 - **Not done.** The list thumbnail shows a sheet as its outline only, not its print.
+
+## 20. 1:1 notes (client only, 2026-11-22)
+
+What: `DOCS/ONE_ON_ONE_SPEC.md`. No gateway change, no new stored field.
+
+- **Model.** A person is a tag one level under the 1:1 tag (app preference `oneOnOneTag`,
+  default `fd/1on1`; Settings → 1:1s). A 1:1 is a handwritten note with that tag. Helpers:
+  `utils/oneOnOne.js` (pure). Hooks: `components/oneOnOne/useOneOnOne.js`.
+- **New 1:1.** `/notes/new?type=handwritten&oneOnOne=<slug>` seeds title, tag and
+  `startSheet` (NoteEditorPage). `HandwrittenEditor` places the sheet with
+  `store.mergeRemoteChanges`, so it is neither a save nor an undo step; the first stroke
+  saves note and sheet together. The picker (`OneOnOnePicker`, mounted in Layout, opened via
+  `store/oneOnOneStore.js`) is reached from "New 1:1" on the tag pages and from the template
+  list's "1:1" row (which no longer opens the Markdown one-to-one template; that body still
+  exists at `?template=one-to-one`).
+- **Tag pages.** `TagNotesList` shows `PeopleOverview` on the 1:1 tag (in place of the
+  sub-tag pills) and `PersonHeader` on a person's tag. Other tags are untouched.
+- **Open items.** `OpenItems` reads TodoGeek `tasks(status:"pending", tags:[personTag])` and
+  completes with `updateTaskStatus`. This is NoteGeek's first READ of TodoGeek data.
+  `taskInputFor(..., { tags })` adds the person's tag to tasks sent from a 1:1.
+- **Search.** `/search?under=<tag>` limits a search to a tag's subtree (`searchNotes(under:)`
+  already existed on the gateway).
+- **Sheet.** `oneonone` in `packages/ui/src/paper/templates.js`; it also appears in GeekDay's
+  Template list.
+- **Harness.** Scenes `24a`–`24c`; fixtures `ONE_ON_ONE_NOTES` are kept out of `NOTES`/`TAGS`
+  so no other scene changes.

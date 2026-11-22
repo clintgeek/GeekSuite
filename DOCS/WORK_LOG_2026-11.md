@@ -763,3 +763,15 @@ forced white paper under. also, i miss my green grid." His three answers are in
 - **Lost.** Pages templated with the morning build keep their ink and paper but show no
   template until it is re-added (not converted on open).
 
+## 2026-11-22 — 1:1 notes in NoteGeek
+
+Chef no longer uses manager-toolbox (too cumbersome: live notes had to be rewritten into its
+shape) but still needs the notes and logs, and already tags them `fd/1on1/<person>`. Spec:
+`DOCS/ONE_ON_ONE_SPEC.md`; how: `apps/notegeek/DOCS/CONTEXT.md` §20.
+
+- New 1:1 → person picker → a handwritten page, titled and tagged, on a new "1:1" sheet.
+- A person's tag page is their log: last met, open TodoGeek items, New 1:1, search of their
+  notes. The 1:1 tag's page lists people, longest-unmet first.
+- Tasks sent from a 1:1 carry the person's tag; open ones show above the page.
+- Client only. Existing notes untouched. The toolbox import is deferred.
+
