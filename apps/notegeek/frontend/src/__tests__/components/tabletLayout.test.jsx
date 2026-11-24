@@ -127,7 +127,7 @@ describe('NoteGeek navigation by device', () => {
         setViewport(vp);
         renderAt('/');
         expect(chrome()).toEqual({ rail: true, bottom: false, sidebar: false, hamburger: false });
-        expect(railItems()).toEqual(['home', 'search', 'new', 'notes', 'tags']);
+        expect(railItems()).toEqual(['home', 'search', 'new', 'notes', 'one-on-one', 'meeting', 'tags']);
         expect($('[data-geek-nav-rail-item="home"]').getAttribute('aria-current')).toBe('page');
     });
 

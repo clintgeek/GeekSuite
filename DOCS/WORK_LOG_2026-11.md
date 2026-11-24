@@ -831,3 +831,12 @@ spent $0.27", then chose "both, doubled".
   (`transcribe.js`, `sketchTranscript.js`). NoteGeek's Settings line says 60.
 - **Money ceiling** (`apps/basegeek/.env.production`, not in git): `AI_PAID_PER_DAY_USD`
   0.50 → 1.00, `AI_PAID_PER_CALL_USD` 0.05 → 0.10. Takes effect when the gateway restarts.
+
+## 2026-11-24 — NoteGeek: 1:1 and Meeting on the tablet rail
+
+Chef: "I don't see the 1:1 and Meetings on the left nav bar on the tablet."
+The rows shipped on 11-23 live in `TagsPanel`, which a tablet only shows inside
+the rail's Tags sheet; the scene that proved them was desktop-only. The rail
+(`buildNavItems`, `rail` only) now reads Home, Search, New, Notes, 1:1,
+Meeting, Tags. The phone bar is unchanged. Harness `40a-tablet-rail` checks the
+order, that all seven fit on screen, and that 1:1 opens the picker.

@@ -10,10 +10,14 @@ import AutoStoriesOutlinedIcon from '@mui/icons-material/AutoStoriesOutlined';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
 import LocalOffer from '@mui/icons-material/LocalOffer';
+import ForumOutlined from '@mui/icons-material/ForumOutlined';
+import GroupsOutlined from '@mui/icons-material/GroupsOutlined';
 import { GeekSheet, useGeekNavMode, useGeekNavSlots } from '@geeksuite/ui';
 import NewNoteSheet from './new/NewNoteSheet';
 import Sidebar, { TagsPanel, TAGS_SHEET_HEADER_SX } from './Sidebar';
 import { graphiteTokens } from '../theme/tokens';
+import { openOneOnOnePicker } from '../store/oneOnOneStore';
+import { MEETING_PATH } from '../utils/oneOnOne';
 
 /**
  * NoteGeek's primary navigation — ONE items array, three surfaces
@@ -21,14 +25,16 @@ import { graphiteTokens } from '../theme/tokens';
  *
  *   phone   — the bottom bar: Home, Search, New, Notes (unchanged: Graphite's
  *             one set of paths; the tag tree opens from the Notes page)
- *   tablet  — the rail: the same four plus Tags, which opens the tag tree
- *             (with All notes, Archived, Recently deleted) in a sheet — the
+ *   tablet  — the rail: the same four, then 1:1 and Meeting (the two
+ *             templates used every day, one tap each — the tablet is where
+ *             they are written), then Tags, which opens the tag tree (with
+ *             All notes, Archived, Recently deleted) in a sheet — the
  *             sidebar's contents, reachable without a sidebar
  *   desktop — the sidebar (Sidebar.jsx: brand, Home, the tag tree); New and
  *             search live in the top bar there (Header.jsx)
  *
  * New is an action on the bar and the rail (it opens the New sheet), never
- * "current"; Tags is an action on the rail.
+ * "current"; so are 1:1 and Meeting. Tags is an action on the rail.
  */
 
 /** Which bar/rail item a path belongs to. The rail has Tags; the phone does not. */
@@ -86,8 +92,8 @@ function NavIcon({ active, children, action = false }) {
 const ICON = { fontSize: 21 };
 
 /**
- * The one items array. `rail` adds the Tags item (a rail has no sidebar to
- * hold the tree); everything else is shared.
+ * The one items array. `rail` adds 1:1, Meeting and the Tags item (a rail
+ * has no sidebar to hold them); everything else is shared.
  */
 export function buildNavItems({ value, rail, navigate, onNew, onTags }) {
   const item = (id, label, Outline, Filled, onClick) => ({
@@ -111,7 +117,14 @@ export function buildNavItems({ value, rail, navigate, onNew, onTags }) {
     },
     item('notes', 'Notes', AutoStoriesOutlinedIcon, AutoStoriesIcon, () => navigate('/notes')),
   ];
-  if (rail) items.push(item('tags', 'Tags', LocalOfferOutlined, LocalOffer, onTags));
+  if (rail) {
+    // Actions, like New: they start a note, so they are never "current".
+    items.push(
+      { id: 'one-on-one', label: '1:1', icon: <NavIcon><ForumOutlined sx={ICON} /></NavIcon>, onClick: openOneOnOnePicker },
+      { id: 'meeting', label: 'Meeting', icon: <NavIcon><GroupsOutlined sx={ICON} /></NavIcon>, onClick: () => navigate(MEETING_PATH) },
+      item('tags', 'Tags', LocalOfferOutlined, LocalOffer, onTags),
+    );
+  }
   return items;
 }
 

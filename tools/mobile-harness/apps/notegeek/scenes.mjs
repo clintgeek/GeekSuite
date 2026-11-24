@@ -2820,7 +2820,16 @@ export const scenes = [
       if (await page.locator('[data-geek-bottom-nav]').count()) throw new Error('the tablet still draws the phone bottom bar');
       if (await page.locator('[data-geek-topbar="menu"]').count()) throw new Error('the tablet still has a hamburger');
       const ids = await page.locator('[data-geek-nav-rail-item]').evaluateAll((els) => els.map((e) => e.getAttribute('data-geek-nav-rail-item')));
-      if (ids.join(',') !== 'home,search,new,notes,tags') throw new Error(`rail items are ${ids.join(',')}`);
+      if (ids.join(',') !== 'home,search,new,notes,one-on-one,meeting,tags') throw new Error(`rail items are ${ids.join(',')}`);
+      // Every item fits on the rail: nothing is pushed off the bottom.
+      const last = await page.locator('[data-geek-nav-rail-item="tags"]').boundingBox();
+      if (last.y + last.height > h.height) throw new Error(`the rail's last item ends at ${Math.round(last.y + last.height)}px, below the ${h.height}px screen`);
+      // 1:1 opens the person picker; it starts a note, so it is never current.
+      await page.locator('[data-geek-nav-rail-item="one-on-one"]').click();
+      await h.settle(600);
+      if (!(await page.getByRole('dialog', { name: 'New 1:1' }).count())) throw new Error('1:1 on the rail did not open the person picker');
+      await page.keyboard.press('Escape');
+      await h.settle(400);
       if ((await page.locator('[data-geek-nav-rail-item="notes"]').getAttribute('aria-current')) !== 'page') throw new Error('Notes is not current on /notes');
       const row = await page.locator('[data-note-row]').first().boundingBox();
       if (!row) throw new Error('no note rows');
