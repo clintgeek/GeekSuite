@@ -821,3 +821,13 @@ to scroll."
   unchanged. Sheets already placed keep their size (the size is stored on the shape).
 - **Watch:** a two-sheet form is sent to the reader at about half the pixels per line of a
   one-sheet form (longest edge is capped at 2000 px). Still above the app's own "readable" floor.
+
+## 2026-11-23 — Spending limits doubled
+
+Chef: "We can loosen spending limits a bit. In all the time I've been using this, I've only
+spent $0.27", then chose "both, doubled".
+
+- **Handwriting reads a day:** Convert 40 → 80, automatic 30 → 60, background 20 → 40
+  (`transcribe.js`, `sketchTranscript.js`). NoteGeek's Settings line says 60.
+- **Money ceiling** (`apps/basegeek/.env.production`, not in git): `AI_PAID_PER_DAY_USD`
+  0.50 → 1.00, `AI_PAID_PER_CALL_USD` 0.05 → 0.10. Takes effect when the gateway restarts.

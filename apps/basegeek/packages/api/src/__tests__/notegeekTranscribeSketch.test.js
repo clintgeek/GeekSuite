@@ -3,7 +3,7 @@
  *
  * What must not quietly change:
  *   - validation runs BEFORE any model is asked or the cap counts;
- *   - the daily cap is 40 per user;
+ *   - the daily cap is 80 per user;
  *   - the call asks for `vision+prose:balanced`, never a model id;
  *   - the prompt forbids inventing, summarising and tidying (Compose's job);
  *   - a failure is an error with a readable message, never an empty text.
@@ -122,20 +122,20 @@ describe('transcribeSketch routing', () => {
     expect(result.provenance.source).toBe('model');
   });
 
-  test('the cap is 40 a day per user, and the 41st call never reaches a model', async () => {
+  test('the cap is 80 a day per user, and the 81st call never reaches a model', async () => {
     const ai = fakeAI(async () => 'a line');
-    for (let i = 0; i < 40; i += 1) {
+    for (let i = 0; i < 80; i += 1) {
       await transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u-cap', ai });
     }
-    expect(TRANSCRIBE_DAILY_CAP).toBe(40);
+    expect(TRANSCRIBE_DAILY_CAP).toBe(80);
     const err = await rejection(transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u-cap', ai }));
     expect(err.extensions.code).toBe('AI_CAP');
-    expect(err.extensions.details[0].message).toMatch(/40/);
-    expect(ai.callAI).toHaveBeenCalledTimes(40);
+    expect(err.extensions.details[0].message).toMatch(/80/);
+    expect(ai.callAI).toHaveBeenCalledTimes(80);
 
     // Someone else's cap is their own.
     await transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u-other', ai });
-    expect(ai.callAI).toHaveBeenCalledTimes(41);
+    expect(ai.callAI).toHaveBeenCalledTimes(81);
   });
 });
 
@@ -250,17 +250,17 @@ describe('transcribeSketch source', () => {
     expect(systems[2]).toEqual({ role: 'system', content: TRANSCRIBE_PROMPT });
   });
 
-  test('a photo counts against the same cap of 40, and asks the same need', async () => {
+  test('a photo counts against the same cap of 80, and asks the same need', async () => {
     const resolveNeedCandidates = jest.fn(async () => [{ provider: 'openrouter', modelId: 'openai/gpt-4.1-mini' }]);
     const ai = fakeAI(async () => 'a line', { resolveNeedCandidates });
-    for (let i = 0; i < 20; i += 1) {
+    for (let i = 0; i < 40; i += 1) {
       await transcribeSketch({ image: JPEG, mediaType: 'image/jpeg', source: 'photo', userId: 'u-mix', ai });
       await transcribeSketch({ image: PNG, mediaType: 'image/png', source: 'sketch', userId: 'u-mix', ai });
     }
     expect(resolveNeedCandidates).toHaveBeenCalledWith('vision+prose:balanced');
     const err = await rejection(transcribeSketch({ image: JPEG, mediaType: 'image/jpeg', source: 'photo', userId: 'u-mix', ai }));
     expect(err.extensions.code).toBe('AI_CAP');
-    expect(ai.callAI).toHaveBeenCalledTimes(40);
+    expect(ai.callAI).toHaveBeenCalledTimes(80);
   });
 });
 

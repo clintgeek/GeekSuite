@@ -860,7 +860,7 @@ Full account: `AUTO_TRANSCRIBE_SPEC.md`, "Background reader". What to know befor
   content hash, not a "photo page", and alone an empty page. Before this, every sketch on a
   template was `off` and never read.
 - **`sketchesToTranscribe(limit)`** lists sketches that are `waiting` and unchanged for 90 s.
-  **`autoTranscribeSketch(background: true)`** is the reader's read, capped at 20 a day.
+  **`autoTranscribeSketch(background: true)`** is the reader's read, capped at 40 a day.
 - **`components/BackgroundReader.jsx`** (mounted in `Layout` when signed in) mounts
   `HandwrittenEditor` off-screen, read-only, `autoFocus={false}`, inside an `inert` box, one
   sketch at a time. The schedule is `@geeksuite/api-client` `backgroundReader.js`, shared with

@@ -84,12 +84,12 @@ describe('autoTranscribeSketch', () => {
     expect(chunkNote(after)[0]).toMatch(/Standup[\s\S]*buy milk/);
   });
 
-  test('uses at most 30 of the shared transcribe cap, so Convert keeps 10', async () => {
+  test('uses at most 60 of the shared transcribe cap, so Convert keeps 20', async () => {
     const id = await sketch();
     const transcribe = reading();
     await run(id, transcribe);
     expect(transcribe.mock.calls[0][0]).toMatchObject({ dailyCap: AUTO_TRANSCRIBE_DAILY_CAP, source: 'sketch' });
-    expect(AUTO_TRANSCRIBE_DAILY_CAP).toBe(30);
+    expect(AUTO_TRANSCRIBE_DAILY_CAP).toBe(60);
   });
 
   test('unchanged content is not transcribed again', async () => {

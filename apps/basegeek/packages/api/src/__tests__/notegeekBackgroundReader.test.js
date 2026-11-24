@@ -161,7 +161,7 @@ describe('sketchesToTranscribe', () => {
   });
 });
 
-test('a background read stops at 20 of the day, the open page at 30', async () => {
+test('a background read stops at 40 of the day, the open page at 60', async () => {
   const a = await sketch();
   const b = await sketch(snapshot([stroke('b')]));
   const transcribe = reading();
@@ -169,7 +169,7 @@ test('a background read stops at 20 of the day, the open page at 30', async () =
   await run(b, transcribe);
   expect(transcribe.mock.calls[0][0].dailyCap).toBe(BACKGROUND_DAILY_CAP);
   expect(transcribe.mock.calls[1][0].dailyCap).toBe(AUTO_TRANSCRIBE_DAILY_CAP);
-  expect(BACKGROUND_DAILY_CAP).toBeLessThan(AUTO_TRANSCRIBE_DAILY_CAP);
+  expect([BACKGROUND_DAILY_CAP, AUTO_TRANSCRIBE_DAILY_CAP]).toEqual([40, 60]);
 });
 
 describe('a sketch on a template is read as a form (TEMPLATES_SPEC T6, 2026-11-22)', () => {

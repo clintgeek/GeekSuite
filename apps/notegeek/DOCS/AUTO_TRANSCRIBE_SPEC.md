@@ -269,7 +269,8 @@ a day**, leaving 10 for Convert. A sketch that hits the cap waits for the next U
    the sketch is next opened is acceptable.
 2. **Default ON**, with a Settings toggle. External processing is visible. OpenRouter is
    fine for this.
-3. **Quota**: automatic runs get at most 30 a day; 10 are reserved for manual Convert.
+3. **Quota**: automatic runs get at most 60 a day; 20 are reserved for manual Convert.
+   (Doubled 2026-11-23 from 30 / 10, on Chef's "We can loosen spending limits a bit".)
 4. **Convert reuse**: yes. Show the stored transcript when the content hasn't changed, with
    an explicit **Transcribe again** button.
 5. **Word search**: stop indexing raw sketch JSON; index the title and the recognised
@@ -408,7 +409,7 @@ caught it.
   not changed for 90 s (`QUIET_MS`), newest first. Mongo rules out everything whose remembered
   hash says it is settled without loading a drawing; the rest are judged by the same
   `transcriptView` the open sketch uses. Empty when the setting is off.
-- Gateway: `autoTranscribeSketch(..., background: true)` stops at 20 of the day's reads
+- Gateway: `autoTranscribeSketch(..., background: true)` stops at 40 of the day's reads
   (`BACKGROUND_DAILY_CAP`), the open sketch still at 30, Convert at 40. A backlog of old pages
   cannot use up the reads the page written on today needs.
 - Gateway: a template sheet is left out of the content hash, is not a photo page, and alone is an

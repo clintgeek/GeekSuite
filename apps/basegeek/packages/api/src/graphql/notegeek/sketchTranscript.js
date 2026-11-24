@@ -22,7 +22,7 @@
  * the old corrections and the new machine reading stay searchable.
  *
  * Quota: automatic runs share Convert's `transcribe` counter but pass a cap
- * of 30, so they stop once 30 of the day's 40 are used — the last 10 are
+ * of 60, so they stop once 60 of the day's 80 are used — the last 20 are
  * always Convert's (aiFeatureRunner's claim is `count < cap`).
  */
 
@@ -35,14 +35,14 @@ import { previewFor, DERIVED_VERSION } from './noteDerived.js';
 
 export { sketchContentHash, hasPhotoPages, sketchSearchText };
 
-/** Automatic runs stop at 30 of the day's 40; Convert keeps the last 10. */
-export const AUTO_TRANSCRIBE_DAILY_CAP = 30;
+/** Automatic runs stop at 60 of the day's 80; Convert keeps the last 20. */
+export const AUTO_TRANSCRIBE_DAILY_CAP = 60;
 /**
  * Reads asked for by the background reader (`sketchesToTranscribe`: pages
- * nobody has open) stop at 20, so a backlog of old pages can never use up the
+ * nobody has open) stop at 40, so a backlog of old pages can never use up the
  * reads the page being written on today needs.
  */
-export const BACKGROUND_DAILY_CAP = 20;
+export const BACKGROUND_DAILY_CAP = 40;
 /** A page is left alone until it has been unchanged this long (the same 90 s the open sketch waits). */
 export const QUIET_MS = 90 * 1000;
 /** The hash rule: 2 leaves a template sheet out (2026-11-22). */

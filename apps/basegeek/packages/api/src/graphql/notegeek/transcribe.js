@@ -48,8 +48,11 @@ import { looksDegenerate } from './compose.js';
  */
 export const TRANSCRIBE_NEED = 'vision+prose:balanced';
 
-/** Per user, per UTC day. A page is one call; forty pages is a busy day. */
-export const TRANSCRIBE_DAILY_CAP = 40;
+/**
+ * Per user, per UTC day. A page is one call. Doubled from 40 on 2026-11-23
+ * (Chef: "We can loosen spending limits a bit": $0.27 spent in total so far).
+ */
+export const TRANSCRIBE_DAILY_CAP = 80;
 
 /** One vision call on a 2000px page. Compose allows 25s for text alone. */
 export const TRANSCRIBE_TIMEOUT_MS = 45000;
@@ -155,7 +158,7 @@ const stripOuterFence = (text) => {
  * @param {string} opts.userId
  * @param {object} [opts.ai]       injectable aiService, for tests
  * @param {number} [opts.dailyCap]  this call's cap on the shared `transcribe` counter.
- *        Convert uses 40; automatic runs pass 30 so the last 10 stay Convert's
+ *        Convert uses 80; automatic runs pass 60 so the last 20 stay Convert's
  *        (sketchTranscript.js).
  * @returns {Promise<{ text: string, provenance: object }>}
  */

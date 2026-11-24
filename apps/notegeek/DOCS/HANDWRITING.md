@@ -274,7 +274,7 @@ page' and have it process the same way it will the sketch->text?"
      ink only; ignore ruled lines, margins, page edges, holes, shadows, the desk, and
      anything **printed** on the notebook (headers, dates, logos); cope with slight skew.
    - Pages go **one call each**, in order, with progress ("Page 2 of 4"). Every page counts
-     against the daily cap of 40.
+     against the daily cap of 80.
 5. **Review:** the same review step. A strip of page images sits beside one editable
    transcript, with `--- page N ---` markers.
 6. **Result:**
@@ -307,7 +307,7 @@ would push the snapshot over the ceiling, say so before creating anything.
   plain `String` (so the input-object parity count is unchanged), validated by zod as
   `sketch | photo` ("source must be sketch or photo."), and `null` or absent means
   `sketch`. Validation still runs before any model is asked or the cap counts, and a
-  photo page counts against the same 40 a day.
+  photo page counts against the same 80 a day.
 - The seven sketch rules are one shared constant (`TRANSCRIBE_RULES`), so the photo
   prompt cannot drift from them. `TRANSCRIBE_PROMPT` is byte-identical to the §2 prompt.
   `TRANSCRIBE_PHOTO_PROMPT` has its own first line ("a photograph of a page from a paper
