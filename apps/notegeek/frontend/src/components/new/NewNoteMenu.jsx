@@ -4,7 +4,8 @@ import { Box, Button, Divider, ListItemIcon, ListItemText, Menu, MenuItem, useTh
 import AddIcon from '@mui/icons-material/Add';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import { IMPORT_ENTRY, NEW_FRONT, NEW_MORE, TEMPLATE_ENTRY, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
-import { ONE_ON_ONE_TEMPLATE, noteTemplatePath } from '../../utils/noteTemplates';
+import { MEETING_TEMPLATE, ONE_ON_ONE_TEMPLATE, noteTemplatePath } from '../../utils/noteTemplates';
+import { MEETING_PATH } from '../../utils/oneOnOne';
 import { TemplatePicker } from './TemplateList';
 import { openImportPicker } from '../../store/importStore';
 import { openOneOnOnePicker } from '../../store/oneOnOneStore';
@@ -108,6 +109,7 @@ function NewNoteMenu() {
         onPick={(id) => {
           setTemplatesOpen(false);
           if (id === ONE_ON_ONE_TEMPLATE) { openOneOnOnePicker(); return; }
+          if (id === MEETING_TEMPLATE) { navigate(MEETING_PATH); return; }
           navigate(noteTemplatePath(id));
         }}
       />

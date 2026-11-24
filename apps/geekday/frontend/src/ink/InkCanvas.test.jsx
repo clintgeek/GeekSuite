@@ -763,7 +763,7 @@ describe('InkCanvas (tldraw mocked)', () => {
       expect(screen.getByTestId('ink-sheet-meeting')).toHaveAttribute('aria-checked', 'true');
       expect(screen.getByTestId('ink-sheet-none')).toHaveAttribute('aria-checked', 'false');
       const placed = editor.getShape(SHEET_ID);
-      expect(placed).toMatchObject({ type: 'image', x: 0, y: 0, isLocked: true, meta: { paperTemplate: 'meeting' }, props: { w: 1000, h: 1400 } });
+      expect(placed).toMatchObject({ type: 'image', x: 0, y: 0, isLocked: true, meta: { paperTemplate: 'meeting' }, props: { w: 1000, h: 2800 } });
       expect(editor.getAsset(placed.props.assetId).props.src).toContain('ACTIONS');
       expect(editor.sendToBack).toHaveBeenCalledWith([SHEET_ID]);
       // One history mark, set before anything was changed.

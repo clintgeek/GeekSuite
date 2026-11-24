@@ -14,6 +14,7 @@ import {
   isPaperTemplate,
   paperTemplateDataUri,
   paperTemplateSvg,
+  paperTemplateHeight,
 } from '../paper/index.js';
 import * as ui from '../index.js';
 
@@ -60,7 +61,7 @@ describe('page templates', () => {
     expect(doc.querySelector('parsererror')).toBe(null);
     const root = doc.documentElement;
     expect(root.nodeName).toBe('svg');
-    expect(root.getAttribute('viewBox')).toBe(`0 0 ${PAPER_PAGE.width} ${PAPER_PAGE.height}`);
+    expect(root.getAttribute('viewBox')).toBe(`0 0 ${PAPER_PAGE.width} ${paperTemplateHeight(id)}`);
     expect(root.querySelectorAll('path').length).toBeGreaterThan(0);
     // Transparent: nothing paints the whole sheet.
     expect(root.querySelector('rect')).toBe(null);
@@ -149,9 +150,21 @@ describe('page templates', () => {
     const ys = lineYs(svg);
     expect(ys.every((y) => y % PAPER_RULE === 0)).toBe(true);
     const boxes = (svg.match(/h26v26h-26z/g) || []).length;
-    const actionLines = new Set(ys.filter((y) => y > 5 * PAPER_RULE)).size;
-    expect(boxes).toBeGreaterThanOrEqual(20);
+    const actionLines = new Set(ys.filter((y) => y > 7 * PAPER_RULE)).size;
+    expect(boxes).toBeGreaterThanOrEqual(45);
     expect(boxes).toBe(actionLines);
+  });
+
+  it('the forms written on for a whole conversation are two sheets long; the fixed forms are one', () => {
+    expect(['top3', 'meeting', 'oneonone'].map(paperTemplateHeight)).toEqual([2800, 2800, 2800]);
+    expect(['schedule', 'cornell', 'dots', 'grid', 'nope', null].map(paperTemplateHeight)).toEqual([1400, 1400, 1400, 1400, 1400, 1400]);
+    for (const id of ['top3', 'meeting', 'oneonone']) {
+      const ys = lineYs(paperTemplateSvg(id));
+      expect(Math.max(...ys)).toBe(2784); // the last rule of the second sheet
+    }
+    // Room at the head: five lines each for attendees and agenda, seven for the topics.
+    expect(new Set(lineYs(paperTemplateSvg('meeting')).filter((y) => y < 7 * PAPER_RULE)).size).toBe(5);
+    expect(new Set(lineYs(paperTemplateSvg('oneonone')).filter((y) => y < 9 * PAPER_RULE)).size).toBe(7);
   });
 
   it('cornell: cues, notes and a summary, all on the 48 ruling', () => {
@@ -176,7 +189,7 @@ describe('page templates', () => {
     const heavy = parse(paperTemplateSvg('grid')).querySelectorAll('path')[1];
     expect(heavy.getAttribute('stroke-width')).toBe('1.75');
     expect(lineYs(heavy.getAttribute('d'))).toEqual([240, 480, 720, 960, 1200]);
-    // A template with a top and a bottom stays one sheet whatever is asked.
+    // A template with a top and a bottom stays its own height whatever is asked.
     expect(paperTemplateSvg('meeting', { height: 4200 })).toBe(paperTemplateSvg('meeting'));
   });
 

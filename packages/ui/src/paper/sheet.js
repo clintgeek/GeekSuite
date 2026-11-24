@@ -7,8 +7,8 @@
  * white paper under."
  *
  * So a template is not a background and not a paper setting. Choosing one
- * places ONE locked image shape in the sketch: a white sheet, PAPER_PAGE in
- * size, with the template printed on it in fixed colours. Because it is an
+ * places ONE locked image shape in the sketch: a white sheet, PAPER_PAGE wide
+ * and `paperTemplateHeight` tall, with the template printed on it in fixed colours. Because it is an
  * ordinary tldraw image shape with an inline SVG asset:
  *   - it saves with the note and opens the same in NoteGeek, in GeekDay and
  *     in any older build (no custom shape type to be missing);
@@ -26,7 +26,7 @@
  * that take an editor use only its public methods, so this file is testable
  * with a stub and adds nothing to a bundle that has no tldraw.
  */
-import { PAPER_PAGE, PAPER_TEMPLATES, PAPER_TEMPLATE_META_KEY, paperTemplateDataUri } from './templates.js';
+import { PAPER_PAGE, PAPER_TEMPLATES, PAPER_TEMPLATE_META_KEY, paperTemplateDataUri, paperTemplateHeight } from './templates.js';
 
 /** One sheet per sketch, so its shape has a fixed id. */
 export const PAPER_SHEET_SHAPE_ID = 'shape:paper-template';
@@ -80,7 +80,8 @@ export function paperSheetTemplateOf(shape) {
  */
 export function paperSheetRecords(templateId, { x = 0, y = 0 } = {}) {
   if (!isPaperSheetTemplate(templateId)) return null;
-  const { width: w, height: h } = PAPER_PAGE;
+  const w = PAPER_PAGE.width;
+  const h = paperTemplateHeight(templateId);
   const label = PAPER_SHEET_TEMPLATES.find((t) => t.id === templateId).label;
   const assetId = paperSheetAssetId(templateId);
   return {

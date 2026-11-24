@@ -35,12 +35,17 @@ export const PAPER_TEMPLATE_NONE = 'none';
  * `tiles`: the pattern has no top or bottom, so an app with a page taller
  * than one sheet may ask for it at that height (`{ height }`) instead of
  * stopping after the first sheet.
+ *
+ * `sheets`: how many PAPER_PAGE heights the template's own sheet is (default
+ * 1). The forms written on for a whole conversation are two, so there is
+ * room to keep writing; the page scrolls (Chef, 2026-11-23: "they could be
+ * bigger/longer even if they need to scroll"). Read with `paperTemplateHeight`.
  */
 export const PAPER_TEMPLATES = [
   { id: 'schedule', label: 'Schedule', description: 'The hours from 6 AM to 9 PM down the left, notes on the right', tiles: false },
-  { id: 'top3', label: 'Top three', description: 'Three priorities to tick off, then ruled notes', tiles: false },
-  { id: 'meeting', label: 'Meeting', description: 'Attendees and agenda, notes, and a column of actions to tick', tiles: false },
-  { id: 'oneonone', label: '1:1', description: 'Their topics and mine at the head, notes, and a column of actions to tick', tiles: false },
+  { id: 'top3', label: 'Top three', description: 'Three priorities to tick off, then ruled notes', tiles: false, sheets: 2 },
+  { id: 'meeting', label: 'Meeting', description: 'Attendees and agenda, notes, and a column of actions to tick', tiles: false, sheets: 2 },
+  { id: 'oneonone', label: '1:1', description: 'Their topics and mine at the head, notes, and a column of actions to tick', tiles: false, sheets: 2 },
   { id: 'cornell', label: 'Cornell', description: 'A cue column, notes, and a summary at the foot', tiles: false },
   { id: 'dots', label: 'Dot grid', description: 'Dots every line, for lists, sketches and tables', tiles: true },
   { id: 'grid', label: 'Grid', description: 'Squares with a heavier line every fifth', tiles: true },
@@ -131,7 +136,7 @@ function schedule({ ink, line, accent }) {
 }
 
 /** "Top three": three numbered lines with a tick box each, then ruled notes. */
-function top3({ ink, line, accent }) {
+function top3({ ink, line, accent }, height) {
   const rows = [3, 5, 7].map((k) => k * RULE); // two rules each: room to write large
   const tick = 36;
   const notesFrom = 10 * RULE;
@@ -141,18 +146,18 @@ function top3({ ink, line, accent }) {
     stroke(rows.map((y) => box(R - tick, y - tick - 6, tick)).join(''), line, 1.5),
     rows.map((y, i) => label(String(i + 1), L + 4, y - 10, accent, { size: 44, weight: 700, spacing: 0 })).join(''),
     label('NOTES', L, notesFrom - RULE - 12, ink),
-    stroke(range(notesFrom, H, RULE).map((y) => hline(y)).join(''), line),
+    stroke(range(notesFrom, height, RULE).map((y) => hline(y)).join(''), line),
   ].join('');
 }
 
 /** Attendees and agenda in a band at the head; notes; actions with a tick box per line. */
-function meeting({ ink, line, accent }) {
-  const band = 5 * RULE; // foot of the header band
+function meeting({ ink, line, accent }, height) {
+  const band = 7 * RULE; // foot of the header band
   const mid = W / 2;
   const split = 660; // notes | actions
   const tick = 26;
-  const headLines = [2, 3, 4].map((k) => k * RULE);
-  const bodyLines = range(band + 2 * RULE, H, RULE);
+  const headLines = [2, 3, 4, 5, 6].map((k) => k * RULE);
+  const bodyLines = range(band + 2 * RULE, height, RULE);
   return [
     label('ATTENDEES', L, 40, ink),
     label('AGENDA', mid + 20, 40, ink),
@@ -160,20 +165,20 @@ function meeting({ ink, line, accent }) {
     stroke(hline(band), line, 2),
     label('NOTES', L, band + 40, ink),
     label('ACTIONS', split + 20, band + 40, accent),
-    stroke(vline(split, band, H - 8), line, 1.5),
+    stroke(vline(split, band, height - 8), line, 1.5),
     stroke(bodyLines.map((y) => hline(y, L, split - 20) + hline(y, split + 20 + tick + 12, R)).join(''), line),
     stroke(bodyLines.map((y) => box(split + 20, y - tick - 4, tick)).join(''), line, 1.5),
   ].join('');
 }
 
 /** A 1:1: their topics and mine in a band at the head; notes; actions with a tick box per line. */
-function oneonone({ ink, line, accent }) {
-  const band = 7 * RULE; // foot of the topics band
+function oneonone({ ink, line, accent }, height) {
+  const band = 9 * RULE; // foot of the topics band
   const mid = W / 2;
   const split = 660; // notes | actions
   const tick = 26;
-  const headLines = [2, 3, 4, 5, 6].map((k) => k * RULE);
-  const bodyLines = range(band + 2 * RULE, H, RULE);
+  const headLines = [2, 3, 4, 5, 6, 7, 8].map((k) => k * RULE);
+  const bodyLines = range(band + 2 * RULE, height, RULE);
   return [
     label('THEIR TOPICS', L, 40, ink),
     label('MY TOPICS', mid + 20, 40, ink),
@@ -181,7 +186,7 @@ function oneonone({ ink, line, accent }) {
     stroke(hline(band), line, 2),
     label('NOTES', L, band + 40, ink),
     label('ACTIONS', split + 20, band + 40, accent),
-    stroke(vline(split, band, H - 8), line, 1.5),
+    stroke(vline(split, band, height - 8), line, 1.5),
     stroke(bodyLines.map((y) => hline(y, L, split - 20) + hline(y, split + 20 + tick + 12, R)).join(''), line),
     stroke(bodyLines.map((y) => box(split + 20, y - tick - 4, tick)).join(''), line, 1.5),
   ].join('');
@@ -234,13 +239,19 @@ const DRAW = { schedule, top3, meeting, oneonone, cornell, dots, grid };
 
 const byId = new Map(PAPER_TEMPLATES.map((t) => [t.id, t]));
 
+/** How tall a template's own sheet is, in page units: PAPER_PAGE.height for an unknown id. */
+export function paperTemplateHeight(id) {
+  const sheets = byId.get(id)?.sheets;
+  return H * (Number.isInteger(sheets) && sheets > 0 ? sheets : 1);
+}
+
 /** Is `id` one of the templates this library can draw? */
 export function isPaperTemplate(id) {
   return typeof id === 'string' && byId.has(id);
 }
 
 /**
- * One sheet of a template as a complete SVG document, or null for an id this
+ * A template's sheet (`paperTemplateHeight` tall) as a complete SVG document, or null for an id this
  * library does not know.
  *
  * @param {string} id
@@ -261,7 +272,8 @@ export function paperTemplateSvg(id, { ink, line, accent, height, ground } = {})
     line: color(line, DEFAULT_COLORS.line),
     accent: color(accent, color(ink, DEFAULT_COLORS.accent)),
   };
-  const tall = byId.get(id).tiles && Number.isFinite(height) && height > H ? Math.ceil(height) : H;
+  const own = paperTemplateHeight(id);
+  const tall = byId.get(id).tiles && Number.isFinite(height) && height > own ? Math.ceil(height) : own;
   // An opaque sheet (paper/sheet.js): its own paper, and a hairline edge so
   // a white sheet still has an outline on white paper.
   const paper = color(ground, null);

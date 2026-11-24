@@ -43,6 +43,12 @@ Two kinds, because the two apps hold two kinds of page:
 T1. A template is a white sheet printed into the drawing itself: one object
     in the sketch, with the layout printed on it. Templates: Schedule, Top
     three, Meeting, Cornell.
+T1a. *(2026-11-23, Chef: "I love the templates for the written notes but
+    they could be bigger/longer even if they need to scroll.")* Meeting, 1:1
+    and Top three are two sheets long (1000 x 2800), and the head of Meeting
+    and 1:1 has more lines (five and seven). *(Sage's choice:)* Schedule and
+    Cornell stay one sheet: a day's hours and a page with a summary at its
+    foot are whole forms. A sheet placed before this keeps its size.
 T2. The sheet is white with dark print in every theme and on every paper.
 T3. It is permanent while it is there: it cannot be erased, selected, moved
     or unlocked by any drawing tool, and "clear" leaves it.
@@ -93,6 +99,12 @@ replaced the lines, in the paper's colours, never in an export).
 N1. Starting a new note offers "From a template" with these: Meeting notes,
     One-to-one, Weekly review, Project brief, Decision record,
     Troubleshooting log, Packing list, Recipe.
+N1a. *(2026-11-23, Chef: "The Meeting notes should be handwritten. I'm not
+    going to be typing during a meeting.")* Meeting notes opens a handwritten
+    page on the Meeting sheet, titled "<yyyy-MM-dd> Meeting" and tagged
+    `meeting`; like a 1:1, nothing is saved until the first ink. The desktop
+    sidebar and the Tags sheet carry "New 1:1" and "New meeting" straight
+    under All notes (Chef: "two templates that I'll use constantly").
 N2. Choosing one opens the ordinary editor on a new note with that template's
     title, tags and body filled in. It is an ordinary note from then on.
 N3. Nothing is saved until the user edits or saves, as with any new note

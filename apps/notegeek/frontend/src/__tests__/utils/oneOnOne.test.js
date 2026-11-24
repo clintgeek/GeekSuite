@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_ONE_ON_ONE_TAG, buildOneOnOne, isPersonTag, oneOnOnePath, oneOnOneRoot, oneOnOneTitle, peopleFrom,
+  DEFAULT_ONE_ON_ONE_TAG, MEETING_PATH, buildMeeting, buildOneOnOne, isPersonTag, oneOnOnePath, oneOnOneRoot, oneOnOneTitle, peopleFrom,
   personName, personOfNote, personOfTag, personSlug, sinceLabel,
 } from '../../utils/oneOnOne';
 import { taskInputFor } from '../../utils/journalLines';
@@ -71,5 +71,11 @@ describe('1:1s (DOCS/ONE_ON_ONE_SPEC.md)', () => {
     expect(tagged.tags).toEqual(['infra', 'fd/1on1/alex']);
     const plain = taskInputFor({ kind: 'task', text: 'send the doc #infra' }, { now });
     expect(plain.tags).toEqual(['infra']);
+  });
+
+  it('a new meeting is a dated page, tagged meeting, on the Meeting sheet', () => {
+    expect(MEETING_PATH).toBe('/notes/new?type=handwritten&meeting=1');
+    expect(buildMeeting(null)).toBeNull();
+    expect(buildMeeting('1', new Date(2026, 10, 23, 23, 30))).toEqual({ title: '2026-11-23 Meeting', tags: ['meeting'], sheet: 'meeting' });
   });
 });

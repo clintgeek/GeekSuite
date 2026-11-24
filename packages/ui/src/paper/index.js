@@ -8,6 +8,7 @@ export {
   isPaperTemplate,
   paperTemplateDataUri,
   paperTemplateSvg,
+  paperTemplateHeight,
 } from './templates.js';
 export {
   PAPER_SHEET_ASSET_ID,

@@ -117,6 +117,7 @@ export {
   isPaperTemplate,
   paperTemplateDataUri,
   paperTemplateSvg,
+  paperTemplateHeight,
   PAPER_SHEET_ASSET_ID,
   PAPER_SHEET_COLORS,
   PAPER_SHEET_SHAPE_ID,

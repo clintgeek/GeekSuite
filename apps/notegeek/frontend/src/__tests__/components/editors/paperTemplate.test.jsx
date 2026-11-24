@@ -168,12 +168,15 @@ describe('placing and removing', () => {
     expect(editor.mark).toHaveBeenCalledTimes(1);
     const sheet = sheetOf(editor);
     expect(sheet).toMatchObject({ type: 'image', isLocked: true, x: 0, y: 0, meta: { paperTemplate: 'meeting' } });
-    expect(sheet.props).toMatchObject({ w: 1000, h: 1400, assetId: 'asset:paper-template-meeting' });
+    expect(sheet.props).toMatchObject({ w: 1000, h: 2800, assetId: 'asset:paper-template-meeting' });
     expect(decodeURIComponent(editor.assets.get('asset:paper-template-meeting').props.src)).toContain('fill="#ffffff"');
     expect(editor.sendToBack).toHaveBeenCalledWith([PAPER_SHEET_SHAPE_ID]);
     expect(editor.updateDocumentSettings).not.toHaveBeenCalled();
-    // The camera goes to it.
-    expect(editor.zoomToBounds).toHaveBeenCalledWith({ x: 0, y: 0, w: 1000, h: 1400 }, { targetZoom: 1, inset: 16 });
+    // The camera goes to its top, full width: a two-sheet form is not shrunk to fit.
+    const [box, how] = editor.zoomToBounds.mock.calls.at(-1);
+    expect(box).toMatchObject({ x: 0, y: 0, w: 1000 });
+    expect(box.h).toBeLessThan(2800);
+    expect(how).toEqual({ targetZoom: 1, inset: 16 });
   });
 
   it('T4: once the page has writing, a template cannot be added, swapped or taken off', () => {

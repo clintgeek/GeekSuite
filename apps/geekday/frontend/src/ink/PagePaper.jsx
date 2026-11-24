@@ -16,7 +16,7 @@
  */
 import React, { useContext, useMemo } from 'react';
 import { useEditor, useValue } from '@tldraw/tldraw';
-import { PAPER_SHEET_COLORS, paperTemplateDataUri } from '@geeksuite/ui';
+import { PAPER_SHEET_COLORS, paperTemplateDataUri, paperTemplateHeight } from '@geeksuite/ui';
 import { PAGE_WIDTH, SHEET_HEIGHT } from './pageCamera';
 import { InkPageContext, rulingStyle, usePaperColors } from './paperLook';
 import { NO_SHEET, RULED } from './pageTemplate';
@@ -59,7 +59,7 @@ export function PagePaper() {
         <img alt="" aria-hidden="true" draggable={false} data-testid="ink-pattern" data-paper={paper} src={pattern} style={sheetStyle(camera, pageHeight)} />
       ) : null}
       {sheet ? (
-        <img alt="" aria-hidden="true" draggable={false} data-testid="ink-sheet-preview" data-template={preview} src={sheet} style={sheetStyle(camera, SHEET_HEIGHT)} />
+        <img alt="" aria-hidden="true" draggable={false} data-testid="ink-sheet-preview" data-template={preview} src={sheet} style={sheetStyle(camera, paperTemplateHeight(preview))} />
       ) : null}
     </div>
   );
@@ -122,7 +122,7 @@ export function SheetChip({ id, width = 44, height = 56 }) {
       }}
     >
       {src ? (
-        <img alt="" draggable={false} src={src} style={{ position: 'absolute', left: 0, top: 0, width: PAGE_WIDTH * CHIP_SCALE, height: SHEET_HEIGHT * CHIP_SCALE, maxWidth: 'none' }} />
+        <img alt="" draggable={false} src={src} style={{ position: 'absolute', left: 0, top: 0, width: PAGE_WIDTH * CHIP_SCALE, height: paperTemplateHeight(id) * CHIP_SCALE, maxWidth: 'none' }} />
       ) : null}
     </span>
   );

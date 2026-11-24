@@ -8,6 +8,7 @@ import { lightTheme } from '../testUtils';
 import Sidebar from '../../components/Sidebar';
 import useAuthStore from '../../store/authStore';
 import useNoteStore from '../../store/noteStore';
+import useOneOnOneStore from '../../store/oneOnOneStore';
 
 const GET_TAGS = gql`
   query GetNoteTags {
@@ -96,6 +97,18 @@ describe('Sidebar', () => {
         // top bar's box, so the sidebar repeats neither.
         expect(screen.queryByText('New Note')).toBeNull();
         expect(screen.queryByText('Search')).toBeNull();
+    });
+
+    it('offers New 1:1 and New meeting straight under All notes', () => {
+        useOneOnOneStore.setState({ open: false });
+        render(<Sidebar />, { wrapper: SidebarTestWrapper });
+        const labels = screen.getAllByRole('listitem').map((li) => li.textContent);
+        const at = labels.findIndex((l) => l.startsWith('All notes'));
+        expect(labels.slice(at + 1, at + 4)).toEqual(['New 1:1', 'New meeting', 'Archived']);
+        // A meeting is a link to a sketch on the Meeting sheet; a 1:1 opens the person picker.
+        expect(screen.getByRole('link', { name: 'New meeting' })).toHaveAttribute('href', '/notes/new?type=handwritten&meeting=1');
+        fireEvent.click(screen.getByRole('button', { name: 'New 1:1' }));
+        expect(useOneOnOneStore.getState().open).toBe(true);
     });
 
     it('renders tags hierarchically', async () => {

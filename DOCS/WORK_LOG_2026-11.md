@@ -803,3 +803,21 @@ on the first mark on the page, then we can safely process all of the writing and
 - **Not checked against a real model.** The prompt is tested for its wording, not for what the
   model does with a real 1:1 page. First real page: look at the transcript.
 
+## 2026-11-23 — New 1:1 and New meeting in the sidebar; longer sheets
+
+Chef: "There are two templates that I'll use constantly: 1:1, and Meeting Notes. I'd just like
+both of those as shortcuts in the left margin menu." Then: "The Meeting notes should be
+handwritten ... the templates for the written notes ... could be bigger/longer even if they need
+to scroll."
+
+- **Shortcuts.** `TagsPanel` (`Sidebar.jsx`) has "New 1:1" (the person picker) and "New meeting"
+  under All notes; so the tablet's Tags sheet has them too.
+- **Meeting notes is handwritten (TEMPLATES_SPEC N1a).** `/notes/new?type=handwritten&meeting=1`
+  (`utils/oneOnOne.js` `MEETING_PATH`, `buildMeeting`): the Meeting sheet, "<date> Meeting",
+  tagged `meeting`. The template picker's Meeting notes goes there too. The typed body still
+  opens at `?template=meeting`.
+- **Longer sheets (T1a).** `packages/ui` `PAPER_TEMPLATES[].sheets` and `paperTemplateHeight`:
+  Meeting, 1:1 and Top three are 1000 x 2800 with more lines at the head. Schedule and Cornell
+  unchanged. Sheets already placed keep their size (the size is stored on the shape).
+- **Watch:** a two-sheet form is sent to the reader at about half the pixels per line of a
+  one-sheet form (longest edge is capped at 2000 px). Still above the app's own "readable" floor.

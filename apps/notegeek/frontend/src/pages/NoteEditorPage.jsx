@@ -51,7 +51,7 @@ import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
 import { applyInlineTags } from '../utils/inlineTags';
 import { containsNoteLink, insertLink, noteLinkMarkup, supportsLinkInsertion } from '../utils/noteLinks';
 import { buildNoteFromTemplate } from '../utils/noteTemplates';
-import { buildOneOnOne, oneOnOneRoot, personName, personOfNote, personTag } from '../utils/oneOnOne';
+import { buildMeeting, buildOneOnOne, oneOnOneRoot, personName, personOfNote, personTag } from '../utils/oneOnOne';
 import OpenItems from '../components/oneOnOne/OpenItems';
 
 /**
@@ -300,7 +300,15 @@ function NoteEditorPage({ editorKey } = {}) {
         setTitle(oneOnOne.title);
         setTags(oneOnOne.tags);
       }
-      setStartSheet(oneOnOne ? oneOnOne.sheet : null);
+      // `?meeting=1` — "New meeting": the same kind of page on the Meeting
+      // sheet, dated and tagged `meeting`.
+      const meeting = oneOnOne ? null : buildMeeting(params.get('meeting'));
+      if (meeting) {
+        setNoteType(NOTE_TYPES.HANDWRITTEN);
+        setTitle(meeting.title);
+        setTags(meeting.tags);
+      }
+      setStartSheet((oneOnOne || meeting)?.sheet ?? null);
       const seededTitle = params.get('title');
       if (seededTitle) setTitle(seededTitle.trim().slice(0, 500));
       setPinnedOverride(null);

@@ -54,11 +54,18 @@ const lines = (...rows) => `${rows.join('\n')}\n`;
  */
 export const ONE_ON_ONE_TEMPLATE = 'one-to-one';
 
+/**
+ * The template the New surfaces open as a handwritten page on the Meeting
+ * sheet (utils/oneOnOne.js MEETING_PATH) instead of a typed note. Its
+ * Markdown body is still what `/notes/new?template=meeting` opens.
+ */
+export const MEETING_TEMPLATE = 'meeting';
+
 export const NOTE_TEMPLATES = [
   {
     id: 'meeting',
     label: 'Meeting notes',
-    description: 'Attendees, agenda, decisions and action items',
+    description: 'A handwritten page: attendees, agenda, notes and actions',
     tags: ['meeting'],
     title: (now) => `Meeting — ${templateDay(now)}`,
     body: (now) => lines(

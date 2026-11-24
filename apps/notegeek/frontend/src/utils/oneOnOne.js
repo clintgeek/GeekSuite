@@ -69,6 +69,23 @@ export const oneOnOneTitle = (slug, now = new Date()) => `${isoDay(now)} ${perso
 /** Where "New 1:1" goes: the ordinary new-note route, as a sketch. */
 export const oneOnOnePath = (slug) => `/notes/new?type=handwritten&oneOnOne=${encodeURIComponent(slug)}`;
 
+/** The paper sheet and tag of a new meeting page ("New meeting", the Meeting notes template). */
+export const MEETING_SHEET = 'meeting';
+export const MEETING_TAG = 'meeting';
+
+/**
+ * Where "New meeting" goes: a sketch on the Meeting sheet. Chef, 2026-11-23:
+ * "The Meeting notes should be handwritten. I'm not going to be typing
+ * during a meeting."
+ */
+export const MEETING_PATH = '/notes/new?type=handwritten&meeting=1';
+
+/** What `?meeting=1` seeds: "2026-11-22 Meeting", tagged, on the Meeting sheet. Null without the flag. */
+export function buildMeeting(flag, now = new Date()) {
+  if (!flag) return null;
+  return { title: `${isoDay(now)} Meeting`, tags: [MEETING_TAG], sheet: MEETING_SHEET };
+}
+
 /**
  * What a new 1:1 is seeded with, from `?oneOnOne=<slug>`: title, tags and the
  * sheet. Null when the slug is not a usable tag segment.

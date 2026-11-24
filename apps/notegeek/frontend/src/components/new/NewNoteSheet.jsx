@@ -9,7 +9,8 @@ import { NEW_FRONT, NEW_MORE, newNotePath, noteTypeMeta } from '../notes/noteTyp
 import { graphiteTokens } from '../../theme/tokens';
 import { openImportPicker } from '../../store/importStore';
 import { openOneOnOnePicker } from '../../store/oneOnOneStore';
-import { ONE_ON_ONE_TEMPLATE, noteTemplatePath } from '../../utils/noteTemplates';
+import { MEETING_TEMPLATE, ONE_ON_ONE_TEMPLATE, noteTemplatePath } from '../../utils/noteTemplates';
+import { MEETING_PATH } from '../../utils/oneOnOne';
 import { TemplateList } from './TemplateList';
 
 /**
@@ -83,6 +84,7 @@ function NewNoteSheet({ open, onClose }) {
     close();
     // A 1:1 is a handwritten page for one person: ask who (DOCS/ONE_ON_ONE_SPEC.md req 1).
     if (id === ONE_ON_ONE_TEMPLATE) { openOneOnOnePicker(); return; }
+    if (id === MEETING_TEMPLATE) { navigate(MEETING_PATH); return; }
     navigate(noteTemplatePath(id));
   };
 

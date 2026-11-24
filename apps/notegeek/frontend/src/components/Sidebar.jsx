@@ -24,6 +24,8 @@ import TagIcon from '@mui/icons-material/LocalOffer';
 import AllNotesIcon from '@mui/icons-material/AutoStoriesOutlined';
 import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
+import ForumOutlined from '@mui/icons-material/ForumOutlined';
+import GroupsOutlined from '@mui/icons-material/GroupsOutlined';
 import MoreIcon from '@mui/icons-material/MoreHoriz';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { GeekSidebar, geekLayout, geekMedia, geekTarget, useGeekShell } from '@geeksuite/ui';
@@ -32,6 +34,8 @@ import { gql, useQuery } from '@apollo/client';
 import { graphiteTokens } from '../theme/tokens';
 import { tagTree as buildTagTree, filterTagTree } from '@geeksuite/tags';
 import { navSections, activeNavId } from './navConfig';
+import { openOneOnOnePicker } from '../store/oneOnOneStore';
+import { MEETING_PATH } from '../utils/oneOnOne';
 
 const GET_TAGS = gql`
   query GetNoteTags {
@@ -508,6 +512,35 @@ export function TagsPanel({ onNavigate, stickyBg = 'background.paper' }) {
                                 {countNotes.length}
                             </Typography>
                         )}
+                    </ListItemButton>
+                    </ListItem>
+                    {/* The two templates used every day, one click each, straight
+                        under All notes: a 1:1 (the person picker,
+                        DOCS/ONE_ON_ONE_SPEC.md req 1) and Meeting notes, a
+                        handwritten page on the Meeting sheet. */}
+                    <ListItem disablePadding>
+                    <ListItemButton
+                        onClick={() => { openOneOnOnePicker(); onNavigate?.(); }}
+                        aria-haspopup="dialog"
+                        data-nav-new="one-on-one"
+                    >
+                        <ListItemIcon sx={{ minWidth: 26 }}>
+                            <ForumOutlined sx={{ fontSize: 17, color: 'text.secondary' }} />
+                        </ListItemIcon>
+                        <ListItemText primary="New 1:1" primaryTypographyProps={{ fontSize: '0.8125rem' }} />
+                    </ListItemButton>
+                    </ListItem>
+                    <ListItem disablePadding>
+                    <ListItemButton
+                        component={Link}
+                        to={MEETING_PATH}
+                        onClick={onNavigate}
+                        data-nav-new="meeting"
+                    >
+                        <ListItemIcon sx={{ minWidth: 26 }}>
+                            <GroupsOutlined sx={{ fontSize: 17, color: 'text.secondary' }} />
+                        </ListItemIcon>
+                        <ListItemText primary="New meeting" primaryTypographyProps={{ fontSize: '0.8125rem' }} />
                     </ListItemButton>
                     </ListItem>
                     {/* Archived (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U7): a

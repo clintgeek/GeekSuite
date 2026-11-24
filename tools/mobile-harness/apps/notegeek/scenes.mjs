@@ -2286,8 +2286,9 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
-    // N2, N3, N5: Meeting notes, opened from the picker — by keyboard alone
-    // on desktop. The ordinary editor, filled in; and nothing has been sent
+    // N2, N3, N5: Weekly review, opened from the picker — by keyboard alone
+    // on desktop. (The first two templates, Meeting notes and 1:1, open
+    // handwritten pages: scenes 24c and 24d.) The ordinary editor, filled in; and nothing has been sent
     // to the gateway or kept on the device, three seconds on (the autosave
     // is two).
     name: '23b-template-note',
@@ -2318,29 +2319,33 @@ export const scenes = [
         await page.keyboard.press('ArrowDown');
         await page.keyboard.press('ArrowUp');
         if (!(await first.evaluate((el) => el === document.activeElement))) throw new Error('the arrow keys do not move between templates');
+        const third = page.getByRole('dialog', { name: 'From a template' }).locator('[data-template="weekly-review"]');
+        for (let i = 0; i < 4 && !(await third.evaluate((el) => el === document.activeElement)); i += 1) await page.keyboard.press('ArrowDown');
+        if (!(await third.evaluate((el) => el === document.activeElement))) throw new Error('the arrow keys never reach Weekly review');
         await page.keyboard.press('Enter');
       } else {
         const dialog = await openTemplatePicker(page, h);
-        await dialog.locator('[data-template="meeting"]').click();
+        await dialog.locator('[data-template="weekly-review"]').click();
       }
       await h.settle(1200);
-      if (!/\/notes\/new\?template=meeting$/.test(page.url())) throw new Error(`picking Meeting notes went to ${page.url()}`);
+      if (!/\/notes\/new\?template=weekly-review$/.test(page.url())) throw new Error(`picking Weekly review went to ${page.url()}`);
       // (A closed bottom sheet stays mounted, hidden: visible is the question.)
       if (await page.locator('[data-template-list]:visible').count()) throw new Error('the picker is still open over the editor');
       const title = await page.getByRole('textbox', { name: 'Note title' }).inputValue();
-      if (!/^Meeting — [A-Z][a-z]{2} \d{1,2}, \d{4}$/.test(title)) throw new Error(`the title is "${title}", not "Meeting — <date>"`);
-      // N4: the local day, as this browser sees it.
-      const today = await page.evaluate(() => {
-        const d = new Date();
+      if (!/^Weekly review — week of [A-Z][a-z]{2} \d{1,2}, \d{4}$/.test(title)) throw new Error(`the title is "${title}", not "Weekly review — week of <date>"`);
+      // N4: the Monday of the local week, as this browser sees it.
+      const monday = await page.evaluate(() => {
+        const now = new Date();
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7), 12);
         return `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
       });
-      if (title !== `Meeting — ${today}`) throw new Error(`the title is "${title}" but the local day is ${today}`);
+      if (title !== `Weekly review — week of ${monday}`) throw new Error(`the title is "${title}" but the local week starts ${monday}`);
       const body = await page.getByRole('textbox', { name: 'Note body' }).inputValue();
-      for (const heading of ['## Attendees', '## Agenda', '## Decisions', '## Action items']) {
+      for (const heading of ['## What got done', '## What slipped, and why', '## Open loops', '## Keep, stop, start']) {
         if (!body.includes(heading)) throw new Error(`the body has no "${heading}"`);
       }
-      if (!/- \[ \] /.test(body)) throw new Error('the action items are not a checklist');
-      if (!(await page.getByText('meeting', { exact: true }).count())) throw new Error('the note is not tagged "meeting"');
+      if (!/- \[ \] /.test(body)) throw new Error('the open loops are not a checklist');
+      if (!(await page.getByText('review', { exact: true }).count())) throw new Error('the note is not tagged "review"');
       if (!(await page.getByRole('toolbar', { name: 'Markdown formatting' }).count())) throw new Error('this is not the ordinary Markdown editor');
       // N3: like a new note nobody has typed in.
       await h.settle(3000);
@@ -2447,7 +2452,7 @@ export const scenes = [
       const asset = snapshot.store['asset:paper-template-meeting'];
       if (!sheet || !asset) throw new Error(`the saved sketch has no sheet: ${Object.keys(snapshot.store).join(', ')}`);
       if (sheet.type !== 'image' || sheet.isLocked !== true) throw new Error(`the sheet is ${sheet.type}, locked=${sheet.isLocked}`);
-      if (sheet.x !== 0 || sheet.y !== 0 || sheet.props.w !== 1000 || sheet.props.h !== 1400) throw new Error(`the sheet is at ${sheet.x},${sheet.y} size ${sheet.props.w}x${sheet.props.h}`);
+      if (sheet.x !== 0 || sheet.y !== 0 || sheet.props.w !== 1000 || sheet.props.h !== 2800) throw new Error(`the sheet is at ${sheet.x},${sheet.y} size ${sheet.props.w}x${sheet.props.h}`);
       if (sheet.meta?.paperTemplate !== 'meeting') throw new Error(`the sheet's mark is ${JSON.stringify(sheet.meta)}`);
       if (!String(asset.props?.src || '').startsWith('data:image/svg+xml') || !decodeURIComponent(asset.props.src).includes('fill="#ffffff"')) throw new Error('the sheet is not an inline SVG on white');
       const meta = snapshot.store['document:document']?.meta || {};
@@ -2559,7 +2564,7 @@ export const scenes = [
       if (facts.ground !== 'rgb(244, 238, 223)') throw new Error(`the paper is ${facts.ground}, not warm`);
       if (facts.ruling === 'none') throw new Error('the paper lost its lines because the sketch has a template');
       if (facts.inBackground) throw new Error('something is drawn into the paper background: a template belongs in the drawing');
-      if (Math.abs(facts.ratio - 1.4) > 0.01) throw new Error(`the sheet is ${facts.ratio.toFixed(3)} tall per wide, not 1.4`);
+      if (Math.abs(facts.ratio - 2.8) > 0.01) throw new Error(`the sheet is ${facts.ratio.toFixed(3)} tall per wide, not 2.8 (a Meeting sheet is two pages long)`);
       if (facts.width < 200) throw new Error(`the sheet is only ${Math.round(facts.width)}px wide`);
       if (facts.shapes !== 7) throw new Error(`the sketch has ${facts.shapes} shapes on screen, not its own 6 and the sheet`);
       if (!facts.lowest) throw new Error('the sheet is not under the ink');
@@ -2752,6 +2757,52 @@ export const scenes = [
       if (!String(made.content || '').includes('shape:paper-template')) throw new Error('the saved sketch does not carry the 1:1 sheet');
     },
   },
+  {
+    // The sidebar's one-click starts, under All notes: New 1:1 opens the
+    // person picker; New meeting opens a handwritten page on the Meeting
+    // sheet (two pages long), dated and tagged, and saves nothing until
+    // there is ink. The template picker's Meeting notes goes to the same page.
+    name: '24d-sidebar-quick-new',
+    viewports: ['desktop'],
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const calls = { create: [] };
+      await graphqlRoute(page, {
+        ...OPS,
+        CreateNote: (vars) => { calls.create.push(vars); return OPS.CreateNote(vars); },
+      });
+      await page.goto(`${h.base}/notes`, { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      const order = (await page.locator('li:has([data-nav-new]), li:has(a[href="/notes"]), li:has([data-nav-archived])').allInnerTexts()).map((t) => t.split('\n')[0].trim());
+      if (order.join('|') !== 'All notes|New 1:1|New meeting|Archived') throw new Error(`the rows under All notes read ${order.join('|')}`);
+      await page.locator('[data-nav-new="one-on-one"]').click();
+      await h.settle(600);
+      const picker = page.getByRole('dialog', { name: 'New 1:1' });
+      if (!(await picker.count())) throw new Error('New 1:1 in the sidebar did not open the person picker');
+      await page.keyboard.press('Escape');
+      await h.settle(400);
+      await page.locator('[data-nav-new="meeting"]').click();
+      await page.waitForSelector('.tl-container', { timeout: 20000 });
+      await h.settle(1500);
+      if (!/\/notes\/new\?type=handwritten&meeting=1$/.test(page.url())) throw new Error(`New meeting went to ${page.url()}`);
+      const title = await page.getByRole('textbox', { name: 'Note title' }).inputValue();
+      if (!/^\d{4}-\d{2}-\d{2} Meeting$/.test(title)) throw new Error(`the title is "${title}"`);
+      const sheet = page.locator('.tl-shape[data-shape-type="image"]');
+      if ((await sheet.count()) !== 1) throw new Error(`the page has ${await sheet.count()} sheets, not the Meeting sheet`);
+      // The Meeting sheet is two pages long: there is room to keep writing.
+      const size = await sheet.evaluate((el) => ({ w: parseFloat(el.style.width), h: parseFloat(el.style.height) }));
+      if (Math.round((size.h / size.w) * 10) !== 28) throw new Error(`the sheet is ${size.w} x ${size.h}, not two pages long`);
+      await h.settle(2600);
+      if (calls.create.length) throw new Error('opening a new meeting created a note before any ink');
+      // The template picker's "Meeting notes" opens the same page.
+      await page.getByRole('button', { name: 'More kinds of note' }).click();
+      await page.getByRole('menuitem', { name: /from a template/i }).click();
+      await h.settle(600);
+      await page.getByRole('dialog', { name: 'From a template' }).locator('[data-template="meeting"]').click();
+      await h.settle(1200);
+      if (!/\/notes\/new\?type=handwritten&meeting=1$/.test(page.url())) throw new Error(`Meeting notes in the picker went to ${page.url()}`);
+    },
+  },
 
   // ── Tablet wave (2026-11-16): rail, capped list, portrait editor, two panes ──
   {
@@ -2887,7 +2938,7 @@ export const waivers = [
     // shape has `altText`.
     rule: 'image-alt',
     match: 'tl-image',
-    scenes: ['13d-photo-note', '23c-sketch-template-menu', '23d-sketch-template', '24c-one-on-one-new'],
+    scenes: ['13d-photo-note', '23c-sketch-template-menu', '23d-sketch-template', '24c-one-on-one-new', '24d-sidebar-quick-new'],
     reason: 'tldraw 2.4 image shape <img> has no alt and no way to set one (third-party UI)',
   },
 ];

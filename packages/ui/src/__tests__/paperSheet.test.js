@@ -73,11 +73,13 @@ describe('template sheets', () => {
     const { asset, shape } = paperSheetRecords('meeting', { x: 12.4, y: -3.6 });
     expect(asset).toMatchObject({ id: 'asset:paper-template-meeting', typeName: 'asset', type: 'image' });
     expect(paperSheetAssetId('meeting')).toBe(`${PAPER_SHEET_ASSET_ID}-meeting`);
-    expect(asset.props).toMatchObject({ w: 1000, h: 1400, mimeType: 'image/svg+xml', isAnimated: false });
+    expect(asset.props).toMatchObject({ w: 1000, h: 2800, mimeType: 'image/svg+xml', isAnimated: false });
     expect(asset.props.src.startsWith('data:image/svg+xml')).toBe(true);
     expect(decodeURIComponent(asset.props.src)).toContain('ACTIONS');
     expect(shape).toMatchObject({ id: PAPER_SHEET_SHAPE_ID, type: 'image', x: 12, y: -4 });
-    expect(shape.props).toEqual({ w: 1000, h: 1400, assetId: 'asset:paper-template-meeting' });
+    expect(shape.props).toEqual({ w: 1000, h: 2800, assetId: 'asset:paper-template-meeting' });
+    // A fixed form stays one sheet.
+    expect(paperSheetRecords('cornell').shape.props).toMatchObject({ w: 1000, h: 1400 });
     expect(shape.meta).toEqual({ paperTemplate: 'meeting' });
   });
 

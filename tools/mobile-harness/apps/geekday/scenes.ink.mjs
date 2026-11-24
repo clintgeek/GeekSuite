@@ -110,6 +110,9 @@ function savedRecords(ops) {
   return JSON.parse(save.vars.content).store;
 }
 
+/** Page units tall: the forms for a whole conversation are two sheets (packages/ui `paperTemplateHeight`). */
+const sheetHeight = (id) => (['top3', 'meeting', 'oneonone'].includes(id) ? 2800 : 1400);
+
 /** The saved page holds the template as ONE locked image shape with its asset, marked with `id`. */
 function mustHaveSavedSheet(records, id) {
   const shape = records['shape:paper-template'];
@@ -121,9 +124,9 @@ function mustHaveSavedSheet(records, id) {
   if (shape.isLocked !== true) throw new Error('the saved template sheet is not locked');
   if (shape.props?.assetId !== asset.id) throw new Error(`the saved sheet's picture is ${shape.props?.assetId}, not ${asset.id}`);
   if (shape.meta?.paperTemplate !== id) throw new Error(`the saved sheet is marked ${JSON.stringify(shape.meta)}, not ${id}`);
-  if (shape.props?.w !== 1000 || shape.props?.h !== 1400) throw new Error(`the saved sheet is ${shape.props?.w} x ${shape.props?.h}, not 1000 x 1400`);
+  if (shape.props?.w !== 1000 || shape.props?.h !== sheetHeight(id)) throw new Error(`the saved sheet is ${shape.props?.w} x ${shape.props?.h}, not 1000 x ${sheetHeight(id)}`);
   const svg = decodeURIComponent(String(asset.props?.src || ''));
-  if (!svg.includes('<rect width="1000" height="1400" fill="#ffffff"/>')) throw new Error('the saved sheet is not printed on white paper');
+  if (!svg.includes(`<rect width="1000" height="${sheetHeight(id)}" fill="#ffffff"/>`)) throw new Error('the saved sheet is not printed on white paper');
   return shape;
 }
 
@@ -194,8 +197,8 @@ async function mustShowSheet(page, id, { x = 0, y = 0 } = {}) {
     };
   });
   const z = facts.paneWidth / 1000;
-  if (!facts.src.includes('<rect width="1000" height="1400" fill="#ffffff"/>')) throw new Error(`the ${id} template is not printed on white paper`);
-  if (Math.abs(facts.width - 1000 * z) > 1.5 || Math.abs(facts.height - 1400 * z) > 1.5) throw new Error(`the ${id} sheet is not one sheet in size: ${JSON.stringify(facts)}`);
+  if (!facts.src.includes(`<rect width="1000" height="${sheetHeight(id)}" fill="#ffffff"/>`)) throw new Error(`the ${id} template is not printed on white paper`);
+  if (Math.abs(facts.width - 1000 * z) > 1.5 || Math.abs(facts.height - sheetHeight(id) * z) > 1.5) throw new Error(`the ${id} sheet is not its own size: ${JSON.stringify(facts)}`);
   if (facts.light !== 'true' || !/tl-theme__light/.test(facts.scheme) || /tl-theme__dark/.test(facts.scheme)) {
     throw new Error(`a page with a template must be a light page (white sheet, dark ink): light=${facts.light}, tldraw "${facts.scheme}"`);
   }
@@ -210,8 +213,31 @@ async function mustShowSheet(page, id, { x = 0, y = 0 } = {}) {
  * own paper (not white) carries on, ruled.
  */
 async function mustShowPaperBelow(page, box) {
-  const foot = box.top + box.height;
-  if (foot + 120 > box.paneHeight) throw new Error(`the foot of the sheet (${Math.round(foot)}px) is not on screen with room below it`);
+  // A two-sheet form runs off the screen: scroll its foot into view, look, and go back to the top.
+  const pane = await page.locator('[data-testid="ink-canvas"]').boundingBox();
+  const topNow = () => page.locator(SHEET).evaluate((node) => {
+    const p = node.closest('[data-testid="ink-canvas"]').getBoundingClientRect();
+    return node.querySelector('img.tl-image').getBoundingClientRect().top - p.top;
+  });
+  let top = box.top;
+  let scrolled = false;
+  for (let i = 0; i < 20 && top + box.height + 120 > box.paneHeight; i += 1) {
+    await wheel(page, pane, 600);
+    top = await topNow();
+    scrolled = true;
+  }
+  const foot = top + box.height;
+  if (foot + 120 > box.paneHeight) throw new Error(`the foot of the sheet (${Math.round(foot)}px) cannot be brought on screen with room below it`);
+  try {
+    await paperBelow(page, box, foot);
+  } finally {
+    if (scrolled) {
+      for (let i = 0; i < 20 && Math.abs((await topNow()) - box.top) > 1.5; i += 1) await wheel(page, pane, -1200);
+    }
+  }
+}
+
+async function paperBelow(page, box, foot) {
   // A strip 20 page units in from the left edge: inside the sheet's margin, clear of anything printed.
   const x = Math.round(box.paneLeft + box.left + 20 * box.z);
   const onSheet = await stripColours(page, { x, y: Math.round(box.paneTop + foot - 80), width: 4, height: 60 });
