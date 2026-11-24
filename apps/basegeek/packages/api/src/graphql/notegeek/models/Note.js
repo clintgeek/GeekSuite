@@ -156,6 +156,8 @@ const NoteSchema = new mongoose.Schema(
         retryAt: { type: Date, default: null },
         failedHash: { type: String, default: null },  // given up on for this content
         error: { type: String, default: null },
+        // Why the last attempt failed ('AI_BUDGET', 'AI_CAP', 'AI_UNAVAILABLE', ...).
+        errorCode: { type: String, default: null },
         // Whether `edited` (made for an older drawing) still describes the
         // page: false once a newer reading shows that drawing erased or
         // rewritten (sketchText.js). Absent = true.

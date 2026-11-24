@@ -3,7 +3,7 @@
  *
  * What must not quietly change:
  *   - validation runs BEFORE any model is asked or the cap counts;
- *   - the daily cap is 80 per user;
+ *   - the counter is a runaway bound (2000), and today's spending limit is AI_BUDGET;
  *   - the call asks for `vision+prose:balanced`, never a model id;
  *   - the prompt forbids inventing, summarising and tidying (Compose's job);
  *   - a failure is an error with a readable message, never an empty text.
@@ -122,20 +122,57 @@ describe('transcribeSketch routing', () => {
     expect(result.provenance.source).toBe('model');
   });
 
-  test('the cap is 80 a day per user, and the 81st call never reaches a model', async () => {
+  test('the counter is a runaway bound, not a ration: 2000 a day per user', async () => {
+    expect(TRANSCRIBE_DAILY_CAP).toBe(2000);
     const ai = fakeAI(async () => 'a line');
-    for (let i = 0; i < 80; i += 1) {
-      await transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u-cap', ai });
+    // The bound itself, lowered so the test does not read 2000 pages.
+    for (let i = 0; i < 3; i += 1) {
+      await transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u-cap', ai, dailyCap: 3 });
     }
-    expect(TRANSCRIBE_DAILY_CAP).toBe(80);
-    const err = await rejection(transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u-cap', ai }));
+    const err = await rejection(transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u-cap', ai, dailyCap: 3 }));
     expect(err.extensions.code).toBe('AI_CAP');
-    expect(err.extensions.details[0].message).toMatch(/80/);
-    expect(ai.callAI).toHaveBeenCalledTimes(80);
+    expect(ai.callAI).toHaveBeenCalledTimes(3);
 
-    // Someone else's cap is their own.
-    await transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u-other', ai });
-    expect(ai.callAI).toHaveBeenCalledTimes(81);
+    // Someone else's count is their own.
+    await transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u-other', ai, dailyCap: 3 });
+    expect(ai.callAI).toHaveBeenCalledTimes(4);
+  });
+
+  describe("today's spending limit (the one limit, 2026-11-24)", () => {
+    const down = async () => { throw new Error('No free-tier model is available'); };
+    const paid = { paidFirstFor: async () => ({ provider: 'openrouter', model: 'openai/gpt-4.1-mini' }) };
+
+    test('no model answered and the governor says the day is spent: AI_BUDGET, said in words', async () => {
+      const paidGovernorVerdict = jest.fn(async () => ({ ok: false, reason: 'paid_budget_per_day' }));
+      const ai = fakeAI(down, { ...paid, paidGovernorVerdict });
+      const err = await rejection(transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u-budget', ai }));
+      expect(err.extensions.code).toBe('AI_BUDGET');
+      expect(err.extensions.details[0].message).toMatch(/spending limit is used up/);
+      // Asked without reserving anything.
+      expect(paidGovernorVerdict.mock.calls.at(-1)[0].reserve).toBeUndefined();
+    });
+
+    test('an outage is still an outage: money left, a per-call refusal, no paid model, or a governor that throws', async () => {
+      const cases = [
+        { ...paid, paidGovernorVerdict: async () => ({ ok: true, reason: null }) },
+        { ...paid, paidGovernorVerdict: async () => ({ ok: false, reason: 'paid_budget_per_call' }) },
+        { paidFirstFor: async () => null, paidGovernorVerdict: async () => ({ ok: false, reason: 'paid_budget_per_day' }) },
+        { ...paid, paidGovernorVerdict: async () => { throw new Error('ledger down'); } },
+        {},
+      ];
+      for (const [i, extra] of cases.entries()) {
+        const err = await rejection(transcribeSketch({ image: PNG, mediaType: 'image/png', userId: `u-out-${i}`, ai: fakeAI(down, extra) }));
+        expect(err.extensions.code).toBe('AI_UNAVAILABLE');
+      }
+    });
+
+    test('a page that was read is never held up by the limit', async () => {
+      const paidGovernorVerdict = jest.fn(async () => ({ ok: false, reason: 'paid_budget_per_day' }));
+      const ai = fakeAI(async () => 'a line', { ...paid, paidGovernorVerdict });
+      const result = await transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u-free', ai });
+      expect(result.text).toBe('a line');
+      expect(paidGovernorVerdict).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -250,17 +287,17 @@ describe('transcribeSketch source', () => {
     expect(systems[2]).toEqual({ role: 'system', content: TRANSCRIBE_PROMPT });
   });
 
-  test('a photo counts against the same cap of 80, and asks the same need', async () => {
+  test('a photo counts on the same counter as a sketch, and asks the same need', async () => {
     const resolveNeedCandidates = jest.fn(async () => [{ provider: 'openrouter', modelId: 'openai/gpt-4.1-mini' }]);
     const ai = fakeAI(async () => 'a line', { resolveNeedCandidates });
-    for (let i = 0; i < 40; i += 1) {
-      await transcribeSketch({ image: JPEG, mediaType: 'image/jpeg', source: 'photo', userId: 'u-mix', ai });
-      await transcribeSketch({ image: PNG, mediaType: 'image/png', source: 'sketch', userId: 'u-mix', ai });
+    for (let i = 0; i < 2; i += 1) {
+      await transcribeSketch({ image: JPEG, mediaType: 'image/jpeg', source: 'photo', userId: 'u-mix', ai, dailyCap: 4 });
+      await transcribeSketch({ image: PNG, mediaType: 'image/png', source: 'sketch', userId: 'u-mix', ai, dailyCap: 4 });
     }
     expect(resolveNeedCandidates).toHaveBeenCalledWith('vision+prose:balanced');
-    const err = await rejection(transcribeSketch({ image: JPEG, mediaType: 'image/jpeg', source: 'photo', userId: 'u-mix', ai }));
+    const err = await rejection(transcribeSketch({ image: JPEG, mediaType: 'image/jpeg', source: 'photo', userId: 'u-mix', ai, dailyCap: 4 }));
     expect(err.extensions.code).toBe('AI_CAP');
-    expect(ai.callAI).toHaveBeenCalledTimes(80);
+    expect(ai.callAI).toHaveBeenCalledTimes(4);
   });
 });
 

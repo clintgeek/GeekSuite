@@ -29,6 +29,7 @@
 
 import { GraphQLError } from 'graphql';
 import { runAIFeature } from '../../services/aiFeatureRunner.js';
+import defaultAi from '../../services/aiService.js';
 import { looksDegenerate } from './compose.js';
 
 // Argument validation (media type, size, base64, magic bytes) is
@@ -49,10 +50,21 @@ import { looksDegenerate } from './compose.js';
 export const TRANSCRIBE_NEED = 'vision+prose:balanced';
 
 /**
- * Per user, per UTC day. A page is one call. Doubled from 40 on 2026-11-23
- * (Chef: "We can loosen spending limits a bit": $0.27 spent in total so far).
+ * Not a ration (Chef, 2026-11-24: "I don't care about limiting spend on AI ...
+ * keep one daily limit with a notification if something fails because of
+ * it"). The one limit is money: the gateway's daily dollar ceiling
+ * (`AI_PAID_PER_DAY_USD`). This number only stops a loop that reads the same
+ * page all day; nobody writes 2,000 pages. Convert, the open sketch and the
+ * background reader all count against it alike (the separate 80 / 60 / 40
+ * are gone).
  */
-export const TRANSCRIBE_DAILY_CAP = 80;
+export const TRANSCRIBE_DAILY_CAP = 2000;
+
+/**
+ * What a page costs to send, for asking the governor "is today's money
+ * gone?" after a read failed. A 2000px page is well under this.
+ */
+export const PAGE_PROMPT_TOKENS = 3000;
 
 /** One vision call on a 2000px page. Compose allows 25s for text alone. */
 export const TRANSCRIBE_TIMEOUT_MS = 45000;
@@ -148,6 +160,28 @@ const stripOuterFence = (text) => {
 };
 
 /**
+ * Would the governor refuse a page right now because the DAY's ceiling is
+ * reached? Asked only after a read has already failed, with the app's own
+ * paid model, and without reserving anything. Any doubt is "no": an outage
+ * must not be reported as a spending limit.
+ */
+export async function dailyBudgetSpent(ai) {
+  try {
+    const paid = await ai?.paidFirstFor?.('notegeek');
+    if (!paid || typeof ai.paidGovernorVerdict !== 'function') return false;
+    const verdict = await ai.paidGovernorVerdict({
+      provider: paid.provider,
+      modelId: paid.model,
+      promptTokens: PAGE_PROMPT_TOKENS,
+      maxTokens: TRANSCRIBE_MAX_TOKENS,
+    });
+    return verdict?.ok === false && verdict.reason === 'paid_budget_per_day';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Read a page of handwriting.
  *
  * @param {object} opts
@@ -157,9 +191,7 @@ const stripOuterFence = (text) => {
  *        'form': a sketch on a template sheet, sent with the sheet in the picture
  * @param {string} opts.userId
  * @param {object} [opts.ai]       injectable aiService, for tests
- * @param {number} [opts.dailyCap]  this call's cap on the shared `transcribe` counter.
- *        Convert uses 80; automatic runs pass 60 so the last 20 stay Convert's
- *        (sketchTranscript.js).
+ * @param {number} [opts.dailyCap]  the runaway bound on the `transcribe` counter (tests lower it)
  * @returns {Promise<{ text: string, provenance: object }>}
  */
 export async function transcribeSketch({ image, mediaType, source = 'sketch', userId, ai = undefined, dailyCap = TRANSCRIBE_DAILY_CAP }) {
@@ -207,6 +239,15 @@ export async function transcribeSketch({ image, mediaType, source = 'sketch', us
     }
     if (prov.reason === 'empty') {
       throw transcribeError('The model read nothing back from that page. Try again.', 'AI_EMPTY');
+    }
+    // No model answered. If that is because today's money is gone, say so:
+    // it is the one limit, and "unavailable, try again in a minute" would
+    // send the writer round in circles until midnight.
+    if (await dailyBudgetSpent(ai || defaultAi)) {
+      throw transcribeError(
+        "Today's AI spending limit is used up, so handwriting is not being read. It resets at midnight UTC.",
+        'AI_BUDGET'
+      );
     }
     throw transcribeError(
       'Handwriting conversion is unavailable right now. Your sketch is unchanged; try again in a minute.',

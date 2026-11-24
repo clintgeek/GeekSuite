@@ -21,9 +21,11 @@
  * An automatic run never touches them; when the sketch changes later, both
  * the old corrections and the new machine reading stay searchable.
  *
- * Quota: automatic runs share Convert's `transcribe` counter but pass a cap
- * of 60, so they stop once 60 of the day's 80 are used — the last 20 are
- * always Convert's (aiFeatureRunner's claim is `count < cap`).
+ * Quota: none of its own (2026-11-24). Automatic and background reads count
+ * on Convert's `transcribe` counter, whose bound only stops a runaway loop.
+ * The one real limit is the gateway's daily dollar ceiling; a read that fails
+ * because of it is `retry` until midnight UTC with `errorCode: 'AI_BUDGET'`,
+ * which is what the apps notify on.
  */
 
 import mongoose from 'mongoose';
@@ -35,14 +37,6 @@ import { previewFor, DERIVED_VERSION } from './noteDerived.js';
 
 export { sketchContentHash, hasPhotoPages, sketchSearchText };
 
-/** Automatic runs stop at 60 of the day's 80; Convert keeps the last 20. */
-export const AUTO_TRANSCRIBE_DAILY_CAP = 60;
-/**
- * Reads asked for by the background reader (`sketchesToTranscribe`: pages
- * nobody has open) stop at 40, so a backlog of old pages can never use up the
- * reads the page being written on today needs.
- */
-export const BACKGROUND_DAILY_CAP = 40;
 /** A page is left alone until it has been unchanged this long (the same 90 s the open sketch waits). */
 export const QUIET_MS = 90 * 1000;
 /** The hash rule: 2 leaves a template sheet out (2026-11-22). */
@@ -61,7 +55,9 @@ export const RETRY_MAX_MS = 60 * 60 * 1000;
  */
 export const MAX_ATTEMPTS = 6;
 /** Failures that are about the service or the day, not the page. */
-export const NOT_THE_PAGE = new Set(['AI_UNAVAILABLE', 'AI_CAP']);
+export const NOT_THE_PAGE = new Set(['AI_UNAVAILABLE', 'AI_CAP', 'AI_BUDGET']);
+/** The day's limit, in either form: nothing more is read until midnight UTC. */
+export const UNTIL_TOMORROW = new Set(['AI_CAP', 'AI_BUDGET']);
 /** The preference key notegeek's Settings page writes (User.appPreferences.notegeek). */
 export const AUTO_PREF_KEY = 'autoTranscribeSketches';
 
@@ -152,6 +148,9 @@ export function transcriptView(note, { now = Date.now(), autoEnabled = true, con
     at: t.at ? new Date(t.at).toISOString() : null,
     retryAt: status === 'retry' && t.retryAt ? new Date(t.retryAt).toISOString() : null,
     error: status === 'retry' || status === 'failed' ? (t.error || null) : null,
+    // Why, for a client that acts on it: 'AI_BUDGET' (today's spending limit)
+    // and 'AI_CAP' are the ones the apps tell the writer about.
+    errorCode: status === 'retry' || status === 'failed' ? (t.errorCode || null) : null,
     sentTaskKeys: Array.isArray(t.sentTaskKeys) ? t.sentTaskKeys : [],
     sentTaskTexts: Array.isArray(t.sentTaskTexts) ? t.sentTaskTexts : [],
     autoEnabled,
@@ -246,6 +245,7 @@ async function storeReading({ noteId, userId, hash, text, provenance, source, fi
     at: new Date(now),
     status: stillCurrent ? 'searchable' : 'stale',
     error: null,
+    errorCode: null,
     attempts: 0,
     retries: 0,
     retryAt: null,
@@ -267,7 +267,7 @@ async function storeReading({ noteId, userId, hash, text, provenance, source, fi
  * reported in it (status `retry` / `failed`), never thrown, so the client's
  * background work can't surface as an error.
  */
-export async function autoTranscribeSketch({ noteId, userId, image, mediaType, background = false, now = Date.now(), transcribe = defaultTranscribe, validate = null }) {
+export async function autoTranscribeSketch({ noteId, userId, image, mediaType, now = Date.now(), transcribe = defaultTranscribe, validate = null }) {
   if (!mongoose.isValidObjectId(noteId)) throw notFound();
   const note = await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean();
   if (!note) throw notFound();
@@ -302,7 +302,7 @@ export async function autoTranscribeSketch({ noteId, userId, image, mediaType, b
 
   try {
     // On a template sheet, the client sends the form with the writing (T6).
-    const { text, provenance } = await transcribe({ image, mediaType, source: hasPaperSheet(note.content) ? 'form' : 'sketch', userId, dailyCap: background ? BACKGROUND_DAILY_CAP : AUTO_TRANSCRIBE_DAILY_CAP });
+    const { text, provenance } = await transcribe({ image, mediaType, source: hasPaperSheet(note.content) ? 'form' : 'sketch', userId });
     await storeReading({ noteId, userId, hash, text, provenance, source: 'auto', filter: ours, now });
   } catch (err) {
     const code = err?.extensions?.code || null;
@@ -318,7 +318,7 @@ export async function autoTranscribeSketch({ noteId, userId, image, mediaType, b
     // answer.
     const permanent = code === 'AI_DEGENERATE' || code === 'AI_EMPTY' || code === 'BAD_USER_INPUT' || attempts >= MAX_ATTEMPTS;
     const retryAt = permanent ? null
-      : code === 'AI_CAP' ? nextUtcMidnight(now)
+      : UNTIL_TOMORROW.has(code) ? nextUtcMidnight(now)
         : new Date(now + Math.min(RETRY_BASE_MS * 2 ** (retries - 1), RETRY_MAX_MS));
     log.info({ noteId: String(noteId), code, attempts, retries, permanent }, 'automatic transcription did not succeed');
     await Note.updateOne(
@@ -331,6 +331,7 @@ export async function autoTranscribeSketch({ noteId, userId, image, mediaType, b
           'sketchTranscript.attempts': attempts,
           'sketchTranscript.retries': retries,
           'sketchTranscript.error': String(err?.message || 'Transcription failed').slice(0, 300),
+          'sketchTranscript.errorCode': code,
           'sketchTranscript.claimedAt': null,
         },
       },

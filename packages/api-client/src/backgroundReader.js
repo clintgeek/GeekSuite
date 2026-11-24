@@ -55,17 +55,85 @@ export const SKETCH_READ_STATE = gql`
 `;
 
 /**
- * The read itself. `background: true`: a page nobody has open stops at 20 of
- * the day's reads, so a backlog never uses up the open page's.
+ * The read itself. `background: true` marks a page nobody has open. There is
+ * no count of reads to stay under any more (2026-11-24); the one limit is the
+ * day's spending, and `errorCode` says when that is why a page was not read.
  */
 export const BACKGROUND_TRANSCRIBE_SKETCH = gql`
     mutation BackgroundTranscribeSketch($noteId: ID!, $image: String!, $mediaType: String!) {
         autoTranscribeSketch(noteId: $noteId, image: $image, mediaType: $mediaType, background: true) {
             status
             retryAt
+            error
+            errorCode
         }
     }
 `;
+
+// ── "today's limit is used up" ─────────────────────────────────────────────
+// The one thing here the writer is told about (Chef, 2026-11-24: "keep one
+// daily limit with a notification if something fails because of it"). A page
+// that was not read because the day's spending limit is reached would
+// otherwise just sit unread until tomorrow with nothing said.
+
+/** Why a page waits until tomorrow: the spending limit, or the runaway bound. */
+export const READ_LIMIT_CODES = ['AI_BUDGET', 'AI_CAP'];
+/** Once per device per UTC day (the limit resets at midnight UTC). */
+export const READ_LIMIT_SEEN_KEY = 'geeksuite.readLimit.toldOn';
+
+const limitListeners = new Set();
+let toldOnInMemory = null;
+
+/** Be told when a read fails because of the day's limit. Returns the unsubscribe. */
+export function onReadLimit(fn) {
+  limitListeners.add(fn);
+  return () => limitListeners.delete(fn);
+}
+
+/**
+ * A transcript state came back (from the background reader or an open
+ * sketch). If it says the day's limit stopped the read, tell the listeners,
+ * once a day. Returns whether it told anyone. Never throws.
+ */
+export function reportReadLimit(view, { now = Date.now(), storage = globalThis.localStorage } = {}) {
+  if (!view || view.status !== 'retry' || !READ_LIMIT_CODES.includes(view.errorCode)) return false;
+  if (!limitListeners.size) return false;
+  const today = new Date(now).toISOString().slice(0, 10);
+  let seen = toldOnInMemory;
+  try {
+    seen = storage?.getItem(READ_LIMIT_SEEN_KEY) || seen;
+  } catch {
+    // Private mode or blocked storage: this session's memory will do.
+  }
+  if (seen === today) return false;
+  toldOnInMemory = today;
+  try {
+    storage?.setItem(READ_LIMIT_SEEN_KEY, today);
+  } catch {
+    // As above.
+  }
+  const notice = {
+    code: view.errorCode,
+    message: view.errorCode === 'AI_BUDGET'
+      ? "Today's AI spending limit is used up. Handwriting written from now on will be read after midnight UTC."
+      : "Today's handwriting reads are used up. The rest will be read after midnight UTC.",
+    retryAt: view.retryAt || null,
+  };
+  limitListeners.forEach((fn) => {
+    try {
+      fn(notice);
+    } catch {
+      // A listener's trouble is not the reader's.
+    }
+  });
+  return true;
+}
+
+/** For tests. */
+export function _resetReadLimit() {
+  toldOnInMemory = null;
+  limitListeners.clear();
+}
 
 /** After the app opens, or comes back to the front. */
 export const FIRST_PASS_MS = 15_000;
@@ -155,6 +223,7 @@ export function createBackgroundReader({ client, render, doc = globalThis.docume
       mutation: BACKGROUND_TRANSCRIBE_SKETCH,
       variables: { noteId: id, image: page.base64, mediaType: page.mediaType },
     });
+    reportReadLimit(res?.autoTranscribeSketch);
     return res?.autoTranscribeSketch?.status || 'unknown';
   }
 

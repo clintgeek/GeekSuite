@@ -541,28 +541,18 @@ async function openComposeMany(page, h, calls) {
 // navigation that starts the next scene. The detour is a blank same-origin
 // page served by the harness (every scene navigates for itself, so none
 // depends on where the last one stopped).
-// Note templates (DOCS/TEMPLATES_SPEC.md N1). Opens the picker the way each
-// layout does and returns the dialog that holds the list.
-const TEMPLATE_IDS = ['meeting', 'one-to-one', 'weekly-review', 'project-brief', 'decision-record', 'troubleshooting', 'packing-list', 'recipe'];
-async function openTemplatePicker(page, h) {
+// The New surface, opened the way each layout does: desktop's split-button
+// menu, or the New sheet from the phone's bar and the tablet's rail. Returns
+// the locator its entries hang off.
+async function openNew(page, h) {
   if (desktopLayout(h)) {
     await page.getByRole('button', { name: 'More kinds of note' }).click();
     await h.settle(400);
-    const item = page.locator('[role="menu"] [data-new-entry="template"]');
-    if (!(await item.count())) throw new Error('the New menu has no "From a template"');
-    await item.click();
-  } else {
-    await navItem(page, 'new').click();
-    await h.settle(600);
-    const entry = page.getByRole('dialog', { name: /new/i }).locator('[data-new-entry="template"]');
-    if (!(await entry.count())) throw new Error('the New sheet has no "From a template"');
-    await entry.click();
+    return page.locator('[role="menu"]');
   }
-  await h.settle(700);
-  const dialog = page.getByRole('dialog', { name: 'From a template' });
-  if (!(await dialog.count())) throw new Error('"From a template" did not open the template picker');
-  if (!(await dialog.locator('[data-template-list]').count())) throw new Error('the picker has no template list');
-  return dialog;
+  await navItem(page, 'new').click();
+  await h.settle(600);
+  return page.getByRole('dialog', { name: /new/i });
 }
 
 const BLANK = '/__harness_blank';
@@ -2255,115 +2245,37 @@ export const scenes = [
     },
   },
 
-  // ── Templates (DOCS/TEMPLATES_SPEC.md, 2026-11-20) ──────────────────────
+  // ── Templates (DOCS/TEMPLATES_SPEC.md) ─────────────────────────────────
   {
-    // N1, N5: "From a template" on the New surfaces. Phone and tablet: the
-    // New sheet turns over to the eight templates. Desktop: the split
-    // button's menu opens the picker in a dialog.
-    name: '23a-template-picker',
+    // N6 (2026-11-24): the typed templates are gone. The New surfaces offer
+    // the two handwritten pages directly, 1:1 and Meeting notes, and no
+    // "From a template". 1:1 asks who; Meeting notes opens the Meeting sheet.
+    name: '23a-new-pages',
     goto: '/',
     wait: 1200,
     async setup(page, h) {
-      const dialog = await openTemplatePicker(page, h);
-      const rows = dialog.locator('[data-template]');
-      const ids = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-template')));
-      if (ids.join(',') !== TEMPLATE_IDS.join(',')) throw new Error(`the picker offers "${ids.join(',')}", not the eight templates`);
-      for (const id of TEMPLATE_IDS) {
-        const row = dialog.locator(`[data-template="${id}"]`);
+      let surface = await openNew(page, h);
+      if (await surface.locator('[data-new-entry="template"]').count()) throw new Error('the New surface still offers "From a template"');
+      for (const key of ['one-on-one', 'meeting']) {
+        const row = surface.locator(`[data-new-entry="${key}"]`);
+        if (!(await row.count())) throw new Error(`the New surface has no ${key} entry`);
         const box = await row.boundingBox();
-        if (!box || box.height < 44) throw new Error(`template row ${id} is ${box ? Math.round(box.height) : 0}px high`);
-        const words = await row.locator('p, div').allInnerTexts();
-        if (words.filter((w) => w.trim()).length < 2) throw new Error(`template row ${id} has no name + description`);
-        if (!(await row.locator('svg[aria-hidden="true"]').count())) throw new Error(`template row ${id} has no glyph`);
+        if (!box || box.height < (desktopLayout(h) ? 32 : 44)) throw new Error(`the ${key} entry is ${box ? Math.round(box.height) : 0}px high`);
       }
-      // Nothing is cut off: the last one can be brought on screen.
-      const last = dialog.locator('[data-template="recipe"]');
-      await last.scrollIntoViewIfNeeded();
-      if (!(await last.isVisible())) throw new Error('the last template (Recipe) cannot be reached');
-      await dialog.locator('[data-template="meeting"]').scrollIntoViewIfNeeded();
-      await h.settle(300);
-    },
-    teardown: (page, h) => h.esc(400),
-  },
-  {
-    // N2, N3, N5: Weekly review, opened from the picker — by keyboard alone
-    // on desktop. (The first two templates, Meeting notes and 1:1, open
-    // handwritten pages: scenes 24c and 24d.) The ordinary editor, filled in; and nothing has been sent
-    // to the gateway or kept on the device, three seconds on (the autosave
-    // is two).
-    name: '23b-template-note',
-    async setup(page, h) {
-      await bootstrapChef(page);
-      const calls = { create: 0, update: 0 };
-      await graphqlRoute(page, {
-        ...OPS,
-        CreateNote: (vars) => { calls.create += 1; return OPS.CreateNote(vars); },
-        UpdateNote: (vars) => { calls.update += 1; return OPS.UpdateNote(vars); },
-      });
-      await page.goto(h.base + '/', { waitUntil: 'networkidle' });
-      await h.settle(1000);
-      if (desktopLayout(h)) {
-        // Keyboard only: the menu button, down to the item, Enter; the
-        // picker opens with the first template focused; Enter picks it.
-        await page.getByRole('button', { name: 'More kinds of note' }).focus();
-        await page.keyboard.press('Enter');
-        await h.settle(400);
-        const item = page.getByRole('menuitem', { name: /from a template/i });
-        for (let i = 0; i < 8 && !(await item.evaluate((el) => el === document.activeElement)); i += 1) await page.keyboard.press('ArrowDown');
-        if (!(await item.evaluate((el) => el === document.activeElement))) throw new Error('the arrow keys never reach "From a template…" in the New menu');
-        await page.keyboard.press('Enter');
-        await h.settle(700);
-        const first = page.getByRole('dialog', { name: 'From a template' }).locator('[data-template="meeting"]');
-        if (!(await first.count())) throw new Error('Enter on "From a template…" did not open the picker');
-        if (!(await first.evaluate((el) => el === document.activeElement))) throw new Error('the picker opened without focus on its first template: the keyboard is stranded');
-        await page.keyboard.press('ArrowDown');
-        await page.keyboard.press('ArrowUp');
-        if (!(await first.evaluate((el) => el === document.activeElement))) throw new Error('the arrow keys do not move between templates');
-        const third = page.getByRole('dialog', { name: 'From a template' }).locator('[data-template="weekly-review"]');
-        for (let i = 0; i < 4 && !(await third.evaluate((el) => el === document.activeElement)); i += 1) await page.keyboard.press('ArrowDown');
-        if (!(await third.evaluate((el) => el === document.activeElement))) throw new Error('the arrow keys never reach Weekly review');
-        await page.keyboard.press('Enter');
-      } else {
-        const dialog = await openTemplatePicker(page, h);
-        await dialog.locator('[data-template="weekly-review"]').click();
-      }
+      await surface.locator('[data-new-entry="one-on-one"]').click();
+      await h.settle(700);
+      if (!(await page.getByRole('dialog', { name: 'New 1:1' }).count())) throw new Error('1:1 on the New surface did not open the person picker');
+      await page.keyboard.press('Escape');
+      await h.settle(500);
+      surface = await openNew(page, h);
+      await surface.locator('[data-new-entry="meeting"]').click();
+      await page.waitForSelector('.tl-container', { timeout: 20000 });
       await h.settle(1200);
-      if (!/\/notes\/new\?template=weekly-review$/.test(page.url())) throw new Error(`picking Weekly review went to ${page.url()}`);
-      // (A closed bottom sheet stays mounted, hidden: visible is the question.)
-      if (await page.locator('[data-template-list]:visible').count()) throw new Error('the picker is still open over the editor');
-      const title = await page.getByRole('textbox', { name: 'Note title' }).inputValue();
-      if (!/^Weekly review — week of [A-Z][a-z]{2} \d{1,2}, \d{4}$/.test(title)) throw new Error(`the title is "${title}", not "Weekly review — week of <date>"`);
-      // N4: the Monday of the local week, as this browser sees it.
-      const monday = await page.evaluate(() => {
-        const now = new Date();
-        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7), 12);
-        return `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-      });
-      if (title !== `Weekly review — week of ${monday}`) throw new Error(`the title is "${title}" but the local week starts ${monday}`);
-      const body = await page.getByRole('textbox', { name: 'Note body' }).inputValue();
-      for (const heading of ['## What got done', '## What slipped, and why', '## Open loops', '## Keep, stop, start']) {
-        if (!body.includes(heading)) throw new Error(`the body has no "${heading}"`);
-      }
-      if (!/- \[ \] /.test(body)) throw new Error('the open loops are not a checklist');
-      if (!(await page.getByText('review', { exact: true }).count())) throw new Error('the note is not tagged "review"');
-      if (!(await page.getByRole('toolbar', { name: 'Markdown formatting' }).count())) throw new Error('this is not the ordinary Markdown editor');
-      // N3: like a new note nobody has typed in.
-      await h.settle(3000);
-      if (calls.create || calls.update) throw new Error(`a template that was only opened was saved (${calls.create} create, ${calls.update} update)`);
-      const drafts = await page.evaluate(() => new Promise((resolve) => {
-        const open = indexedDB.open('notegeek-drafts');
-        open.onerror = () => resolve(0);
-        open.onsuccess = () => {
-          const db = open.result;
-          if (!db.objectStoreNames.contains('drafts')) { db.close(); resolve(0); return; }
-          const count = db.transaction('drafts', 'readonly').objectStore('drafts').count();
-          count.onsuccess = () => { db.close(); resolve(count.result); };
-          count.onerror = () => { db.close(); resolve(-1); };
-        };
-      }));
-      if (drafts !== 0) throw new Error(`opening a template left ${drafts} device draft(s) behind`);
-      if (await page.getByRole('button', { name: /restore unsaved changes/i }).count()) throw new Error('a restore-draft banner is showing on a template nobody edited');
-      if (!(await page.getByRole('status').filter({ hasText: /^draft$/ }).count())) throw new Error('the save status is not "draft"');
+      if (!/\/notes\/new\?type=handwritten&meeting=1$/.test(page.url())) throw new Error(`Meeting notes went to ${page.url()}`);
+      // A typed template's old address is a plain new note, not an error.
+      await page.goto(`${h.base}/notes/new?template=recipe`, { waitUntil: 'networkidle' });
+      await h.settle(800);
+      if ((await page.getByRole('textbox', { name: 'Note title' }).inputValue()) !== '') throw new Error('?template=recipe still fills in a note');
     },
   },
   {
@@ -2761,7 +2673,7 @@ export const scenes = [
     // The sidebar's one-click starts, under All notes: New 1:1 opens the
     // person picker; New meeting opens a handwritten page on the Meeting
     // sheet (two pages long), dated and tagged, and saves nothing until
-    // there is ink. The template picker's Meeting notes goes to the same page.
+    // there is ink.
     name: '24d-sidebar-quick-new',
     viewports: ['desktop'],
     async setup(page, h) {
@@ -2794,13 +2706,6 @@ export const scenes = [
       if (Math.round((size.h / size.w) * 10) !== 28) throw new Error(`the sheet is ${size.w} x ${size.h}, not two pages long`);
       await h.settle(2600);
       if (calls.create.length) throw new Error('opening a new meeting created a note before any ink');
-      // The template picker's "Meeting notes" opens the same page.
-      await page.getByRole('button', { name: 'More kinds of note' }).click();
-      await page.getByRole('menuitem', { name: /from a template/i }).click();
-      await h.settle(600);
-      await page.getByRole('dialog', { name: 'From a template' }).locator('[data-template="meeting"]').click();
-      await h.settle(1200);
-      if (!/\/notes\/new\?type=handwritten&meeting=1$/.test(page.url())) throw new Error(`Meeting notes in the picker went to ${page.url()}`);
     },
   },
 

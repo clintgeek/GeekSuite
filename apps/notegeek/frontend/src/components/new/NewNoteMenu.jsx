@@ -3,10 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Button, Divider, ListItemIcon, ListItemText, Menu, MenuItem, useTheme } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import { IMPORT_ENTRY, NEW_FRONT, NEW_MORE, TEMPLATE_ENTRY, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
-import { MEETING_TEMPLATE, ONE_ON_ONE_TEMPLATE, noteTemplatePath } from '../../utils/noteTemplates';
-import { MEETING_PATH } from '../../utils/oneOnOne';
-import { TemplatePicker } from './TemplateList';
+import { IMPORT_ENTRY, NEW_FRONT, NEW_MORE, NEW_PAGES, ONE_ON_ONE_ENTRY, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
 import { openImportPicker } from '../../store/importStore';
 import { openOneOnOnePicker } from '../../store/oneOnOneStore';
 import { graphiteTokens } from '../../theme/tokens';
@@ -14,15 +11,15 @@ import { graphiteTokens } from '../../theme/tokens';
 /**
  * NewNoteMenu — desktop's compact New: a split button in the top bar. The
  * main half makes a note (Markdown) in one click; the caret opens the other
- * kinds — photo, sketch, "From a template" (which opens the template picker,
- * DOCS/TEMPLATES_SPEC.md N1/N5), then code and mind map, then Markdown import.
+ * kinds — photo, sketch, the two handwritten pages written every day (1:1,
+ * which asks who, and Meeting notes), then code and mind map, then Markdown
+ * import.
  */
 function NewNoteMenu() {
   const navigate = useNavigate();
   const theme = useTheme();
   const g = graphiteTokens(theme);
   const [anchor, setAnchor] = useState(null);
-  const [templatesOpen, setTemplatesOpen] = useState(false);
   const go = (key) => { setAnchor(null); navigate(newNotePath(key)); };
   const others = NEW_FRONT.filter((k) => k !== 'markdown');
 
@@ -64,19 +61,19 @@ function NewNoteMenu() {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 220, mt: '4px' } } }}
       >
-        {[...others, TEMPLATE_ENTRY.key, 'divider', ...NEW_MORE, 'divider2', IMPORT_ENTRY.key].map((key) => {
+        {[...others, ...NEW_PAGES, 'divider', ...NEW_MORE, 'divider2', IMPORT_ENTRY.key].map((key) => {
           if (key.startsWith('divider')) return <Divider key={key} />;
-          if (key === TEMPLATE_ENTRY.key) {
-            const Icon = TEMPLATE_ENTRY.Icon;
+          if (key === ONE_ON_ONE_ENTRY.key) {
+            const Icon = ONE_ON_ONE_ENTRY.Icon;
             return (
               <MenuItem
                 key={key}
                 data-new-entry={key}
                 aria-haspopup="dialog"
-                onClick={() => { setAnchor(null); setTemplatesOpen(true); }}
+                onClick={() => { setAnchor(null); openOneOnOnePicker(); }}
               >
                 <ListItemIcon><Icon fontSize="small" /></ListItemIcon>
-                <ListItemText>{TEMPLATE_ENTRY.long}…</ListItemText>
+                <ListItemText>{ONE_ON_ONE_ENTRY.long}…</ListItemText>
               </MenuItem>
             );
           }
@@ -103,16 +100,6 @@ function NewNoteMenu() {
           );
         })}
       </Menu>
-      <TemplatePicker
-        open={templatesOpen}
-        onClose={() => setTemplatesOpen(false)}
-        onPick={(id) => {
-          setTemplatesOpen(false);
-          if (id === ONE_ON_ONE_TEMPLATE) { openOneOnOnePicker(); return; }
-          if (id === MEETING_TEMPLATE) { navigate(MEETING_PATH); return; }
-          navigate(noteTemplatePath(id));
-        }}
-      />
     </Box>
   );
 }

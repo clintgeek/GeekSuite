@@ -162,8 +162,8 @@ carried its own `^note`, that comes first.
 
 ### 8. "Send tasks" spends a request only when it has to
 If the sketch already has a current transcript (the automatic one, usually), the dialog
-opens instantly from it. Otherwise it reads the page the way Convert does (one of the day's
-40) and keeps that reading for the sketch.
+opens instantly from it. Otherwise it reads the page the way Convert does (one read)
+and keeps that reading for the sketch.
 
 ### 9. Handwritten Markdown: keep the writer's marks, and draw journal marks properly
 - The prompt copies Markdown the writer wrote (Decision 2).

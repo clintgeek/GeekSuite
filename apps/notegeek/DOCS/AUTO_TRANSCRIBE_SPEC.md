@@ -269,7 +269,8 @@ a day**, leaving 10 for Convert. A sketch that hits the cap waits for the next U
    the sketch is next opened is acceptable.
 2. **Default ON**, with a Settings toggle. External processing is visible. OpenRouter is
    fine for this.
-3. **Quota**: automatic runs get at most 60 a day; 20 are reserved for manual Convert.
+3. **Quota**: none of its own since 2026-11-24 (see "One limit" at the end). Before that,
+   automatic runs got at most 60 a day and 20 were reserved for manual Convert.
    (Doubled 2026-11-23 from 30 / 10, on Chef's "We can loosen spending limits a bit".)
 4. **Convert reuse**: yes. Show the stored transcript when the content hasn't changed, with
    an explicit **Transcribe again** button.
@@ -409,9 +410,8 @@ caught it.
   not changed for 90 s (`QUIET_MS`), newest first. Mongo rules out everything whose remembered
   hash says it is settled without loading a drawing; the rest are judged by the same
   `transcriptView` the open sketch uses. Empty when the setting is off.
-- Gateway: `autoTranscribeSketch(..., background: true)` stops at 40 of the day's reads
-  (`BACKGROUND_DAILY_CAP`), the open sketch still at 30, Convert at 40. A backlog of old pages
-  cannot use up the reads the page written on today needs.
+- Gateway: `autoTranscribeSketch(..., background: true)` is the reader's read. It had its own
+  daily cap until 2026-11-24; it has none now ("One limit" below).
 - Gateway: a template sheet is left out of the content hash, is not a photo page, and alone is an
   empty page (`sketchText.js`). `sketchHash` gains `v` (`HASH_VERSION` 2) and `photo`. A hash
   remembered under the old rule is recomputed only for a sketch that has a sheet, so no other
@@ -429,7 +429,7 @@ caught it.
 **Limits.**
 - Some app has to be open on some device. A tablet closed straight after writing is read the next
   time NoteGeek or GeekDay is opened anywhere, within about 15 s.
-- A backlog drains at 20 pages a day, newest first.
+- A backlog drains newest first, three pages a pass, with no daily count.
 - A page a client cannot draw (over the size limit) is skipped until that app is reloaded.
 
 **Deploy order:** the gateway first. An older gateway refuses the new query; the reader then does
@@ -438,3 +438,35 @@ nothing and asks again later.
 **Tests:** gateway `notegeekBackgroundReader.test.js` (11); `packages/api-client`
 `backgroundReader.test.js` (11); NoteGeek `BackgroundReader.test.jsx` (4); harness scenes
 notegeek `25a-background-read` and geekday `40-background-read`, both with the real tldraw.
+
+## One limit (2026-11-24)
+
+**Why.** Chef: "I don't care about limiting spend on AI, it turns out to be so cheap it isn't
+worth the effort", then: "keep one daily limit with a notification if something fails because
+of it." Total spend to that day was $0.27.
+
+**What changed.**
+- The three read caps are gone (Convert 80, automatic 60, background 40). Every handwriting
+  read counts on one `transcribe` counter whose bound, `TRANSCRIBE_DAILY_CAP` = 2000, exists
+  only to stop a loop that reads the same page all day.
+- The one limit is the gateway's daily spending ceiling, `AI_PAID_PER_DAY_USD`, set to 5.00 in
+  `apps/basegeek/.env.production`. It covers every app's paid AI calls, not only handwriting.
+  `AI_PAID_PER_CALL_USD` (0.10) is unchanged: it refuses one absurdly priced call, and a page
+  costs a fraction of a cent.
+- When a read gets no answer, `transcribeSketch` asks the governor whether the day's ceiling is
+  the reason (`dailyBudgetSpent`: the app's paid-first model, no reservation). If so the error
+  is `AI_BUDGET`, not `AI_UNAVAILABLE`. A page a free model still read is not a failure.
+- An automatic or background read that fails that way is `retry` until midnight UTC, never
+  counts toward giving up on the page, and carries `errorCode: 'AI_BUDGET'`
+  (`SketchTranscriptState.errorCode`, new).
+- **The notification.** `@geeksuite/api-client` `reportReadLimit(view)` / `onReadLimit(fn)`.
+  The background reader (NoteGeek and GeekDay) and NoteGeek's open sketch report every state
+  they get back; the first one a day that says `AI_BUDGET` (or `AI_CAP`) raises one warning
+  toast: "Today's AI spending limit is used up. Handwriting written from now on will be read
+  after midnight UTC." Once per device per UTC day (`localStorage`
+  `geeksuite.readLimit.toldOn`). Convert already showed its error in place.
+
+**Not changed.** The other features' daily counts (Compose 120, Fold in 60, Suggest 30,
+BookGeek 20, GameGeek 20) are as they were.
+
+**Deploy order:** the gateway first; an older gateway does not know `errorCode`.

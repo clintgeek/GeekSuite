@@ -286,6 +286,7 @@ export const SKETCH_TRANSCRIPT_FIELDS = `
     at
     retryAt
     error
+    errorCode
     sentTaskKeys
     autoEnabled
 `;

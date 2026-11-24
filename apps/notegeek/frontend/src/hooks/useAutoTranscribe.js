@@ -33,6 +33,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@apollo/client';
+import { reportReadLimit } from '@geeksuite/api-client';
 import { AUTO_TRANSCRIBE_SKETCH } from '../graphql/mutations';
 import { SKETCH_TRANSCRIPT } from '../graphql/queries';
 
@@ -134,6 +135,8 @@ export function useAutoTranscribe({ noteId, enabled, active, exportPage, isBusy 
       const next = res?.autoTranscribeSketch;
       if (next) {
         failuresRef.current = 0;
+        // Not read because today's spending limit is used up: say so, once a day.
+        reportReadLimit(next);
         if (next.status === 'off') offRef.current = true;
         const tooLong = Boolean(page.tooLong);
         if (editSeqRef.current !== seq) {

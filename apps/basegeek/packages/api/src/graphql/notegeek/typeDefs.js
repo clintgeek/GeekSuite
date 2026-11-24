@@ -124,6 +124,8 @@ export const typeDefs = gql`
     at: String
     retryAt: String
     error: String
+    "Why a retry or failure happened. AI_BUDGET: today's spending limit is used up."
+    errorCode: String
     "Keys of journal lines already sent to TodoGeek from this sketch."
     sentTaskKeys: [String!]!
     """
@@ -529,10 +531,10 @@ export const typeDefs = gql`
     """Automatic transcription of a sketch's page (AUTO_TRANSCRIBE_SPEC.md).
     The client calls it 90 s after the last pen stroke; the server skips
     unchanged content, runs one request per sketch, and reports failures in
-    the returned status rather than as errors. Uses at most 30 of the day's 40
-    transcriptions; Convert keeps the rest. background: true (a page nobody has
-    open, read by the background reader) stops at 20, so a backlog never uses
-    up the reads today's open page needs."""
+    the returned status rather than as errors (status retry, with errorCode
+    AI_BUDGET when today's spending limit is the reason). background: true
+    marks a page nobody has open, read by the background reader; it no longer
+    changes any limit."""
     autoTranscribeSketch(noteId: ID!, image: String!, mediaType: String!, background: Boolean): SketchTranscriptState!
     """Keep the user's corrections to a sketch's transcript (from Convert's
     review, or a photo note's reviewed pages), for the content hash they were

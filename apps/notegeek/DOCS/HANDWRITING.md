@@ -70,7 +70,9 @@ byte-identical to an earlier one, or quotes rule 4, `transcribe.js` is current.*
    - It goes through `runAIFeature` with `app: 'notegeek'` and `feature: 'transcribe'`,
      asking for **`need: 'vision+prose:balanced'`** (vision routes only through OpenRouter;
      see memory). It uses NoteGeek's existing paid-first governance, not a new tier.
-   - **Daily cap:** 40 per user.
+   - **Daily cap:** none on the number of reads (2026-11-24). The one limit is the gateway's
+     daily spending ceiling (`AI_PAID_PER_DAY_USD`); a read it stops fails with `AI_BUDGET`.
+     `TRANSCRIBE_DAILY_CAP` (2000) only bounds a runaway loop.
    - **Input validation:** mediaType is `image/png` or `image/jpeg`, and the base64 is at
      most about 8 MB, checked before any AI call.
    - **The prompt:** transcribe the handwriting faithfully. Keep line breaks and list
@@ -274,7 +276,7 @@ page' and have it process the same way it will the sketch->text?"
      ink only; ignore ruled lines, margins, page edges, holes, shadows, the desk, and
      anything **printed** on the notebook (headers, dates, logos); cope with slight skew.
    - Pages go **one call each**, in order, with progress ("Page 2 of 4"). Every page counts
-     against the daily cap of 80.
+     as one read (there is no daily count to stay under; see §2).
 5. **Review:** the same review step. A strip of page images sits beside one editable
    transcript, with `--- page N ---` markers.
 6. **Result:**
@@ -307,7 +309,7 @@ would push the snapshot over the ceiling, say so before creating anything.
   plain `String` (so the input-object parity count is unchanged), validated by zod as
   `sketch | photo` ("source must be sketch or photo."), and `null` or absent means
   `sketch`. Validation still runs before any model is asked or the cap counts, and a
-  photo page counts against the same 80 a day.
+  photo page counts the same as a sketch page.
 - The seven sketch rules are one shared constant (`TRANSCRIBE_RULES`), so the photo
   prompt cannot drift from them. `TRANSCRIBE_PROMPT` is byte-identical to the §2 prompt.
   `TRANSCRIBE_PHOTO_PROMPT` has its own first line ("a photograph of a page from a paper

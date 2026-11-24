@@ -840,3 +840,25 @@ the rail's Tags sheet; the scene that proved them was desktop-only. The rail
 (`buildNavItems`, `rail` only) now reads Home, Search, New, Notes, 1:1,
 Meeting, Tags. The phone bar is unchanged. Harness `40a-tablet-rail` checks the
 order, that all seven fit on screen, and that 1:1 opens the picker.
+
+
+## 2026-11-24 — NoteGeek: typed templates removed
+
+Chef: "Actively not using and would remove: Recipe, Packing List ... don't need any typed
+templates." All eight typed templates, the "From a template" picker and `?template=` seeding
+are deleted (TEMPLATES_SPEC N6). The New sheet and the desktop New menu list 1:1 and Meeting
+notes directly. Handwritten sheets (Meeting, 1:1, Top 3, Schedule, Cornell) are unchanged.
+Three test files went with the feature (1173 → 1117 tests). Harness `23a-new-pages` replaces
+`23a-template-picker` and `23b-template-note`.
+
+Also 2026-11-24: `DOCS/REFERENCE_PANE_SPEC.md` signed off, not built.
+
+## 2026-11-24 — One spending limit, and a notice when it bites
+
+Chef: "keep one daily limit with a notification if something fails because of it."
+Handwriting's three read caps (80 / 60 / 40) are removed; `TRANSCRIBE_DAILY_CAP` is now a
+2000-a-day runaway bound. The limit is the gateway's `AI_PAID_PER_DAY_USD`, raised 1.00 → 5.00
+in `apps/basegeek/.env.production` (not in git). A read stopped by it is `AI_BUDGET`, waits for
+midnight UTC, and NoteGeek and GeekDay show one warning toast a day. Details:
+`apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md`, "One limit". Other features' daily counts are
+untouched. Gateway `npm test -- notegeek`: 495.

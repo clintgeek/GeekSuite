@@ -50,7 +50,6 @@ import { onNoteCreated, onNoteUpdated } from '../graphql/cacheUpdates';
 import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
 import { applyInlineTags } from '../utils/inlineTags';
 import { containsNoteLink, insertLink, noteLinkMarkup, supportsLinkInsertion } from '../utils/noteLinks';
-import { buildNoteFromTemplate } from '../utils/noteTemplates';
 import { buildMeeting, buildOneOnOne, oneOnOneRoot, personName, personOfNote, personTag } from '../utils/oneOnOne';
 import OpenItems from '../components/oneOnOne/OpenItems';
 
@@ -279,21 +278,9 @@ function NoteEditorPage({ editorKey } = {}) {
       // `?title=` — an unresolved [[link]]'s "create this note". Seeded, not
       // dirty: nothing is saved until the writer actually writes.
       const params = new URLSearchParams(location.search);
-      // `?template=` — a note template (DOCS/TEMPLATES_SPEC.md N2, N3):
-      // its title, tags and body on screen, always as Markdown. Seeded the
-      // way `?title=` is — NOT dirty — so opening a template and leaving
-      // creates no note and writes no device draft; the first edit (or Save
-      // now) saves it like any new note. An unknown id is a plain new note.
-      const template = buildNoteFromTemplate(params.get('template'), new Date());
-      if (template) {
-        setNoteType(NOTE_TYPES.MARKDOWN);
-        setTitle(template.title);
-        setContent(template.content);
-        setTags(template.tags);
-      }
       // `?oneOnOne=<person>` — a new 1:1 (DOCS/ONE_ON_ONE_SPEC.md req 1, 2):
       // a handwritten page, titled and tagged for the person, on the 1:1
-      // sheet. Seeded like a template: nothing is saved until the first ink.
+      // sheet. Seeded the way `?title=` is: nothing is saved until the first ink.
       const oneOnOne = buildOneOnOne(params.get('oneOnOne'), oneOnOneTagRef.current);
       if (oneOnOne) {
         setNoteType(NOTE_TYPES.HANDWRITTEN);

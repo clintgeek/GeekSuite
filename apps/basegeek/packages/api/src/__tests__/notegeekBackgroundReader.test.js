@@ -12,8 +12,6 @@ import {
   autoTranscribeSketch,
   getSketchTranscript,
   sketchesToTranscribe,
-  AUTO_TRANSCRIBE_DAILY_CAP,
-  BACKGROUND_DAILY_CAP,
   QUIET_MS,
 } from '../graphql/notegeek/sketchTranscript.js';
 import { sketchContentHash, hasPhotoPages, hasAnyShape } from '../graphql/notegeek/sketchText.js';
@@ -161,15 +159,14 @@ describe('sketchesToTranscribe', () => {
   });
 });
 
-test('a background read stops at 40 of the day, the open page at 60', async () => {
+test('a background read and the open page are limited alike: neither passes a cap of its own (2026-11-24)', async () => {
   const a = await sketch();
   const b = await sketch(snapshot([stroke('b')]));
   const transcribe = reading();
   await run(a, transcribe, { background: true });
   await run(b, transcribe);
-  expect(transcribe.mock.calls[0][0].dailyCap).toBe(BACKGROUND_DAILY_CAP);
-  expect(transcribe.mock.calls[1][0].dailyCap).toBe(AUTO_TRANSCRIBE_DAILY_CAP);
-  expect([BACKGROUND_DAILY_CAP, AUTO_TRANSCRIBE_DAILY_CAP]).toEqual([40, 60]);
+  expect(transcribe.mock.calls[0][0].dailyCap).toBeUndefined();
+  expect(transcribe.mock.calls[1][0].dailyCap).toBeUndefined();
 });
 
 describe('a sketch on a template is read as a form (TEMPLATES_SPEC T6, 2026-11-22)', () => {

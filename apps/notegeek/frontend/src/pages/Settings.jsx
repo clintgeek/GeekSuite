@@ -246,7 +246,7 @@ function Settings() {
                     icon={<SketchIcon sx={{ fontSize: 20, color: 'text.secondary' }} />}
                     primary="Make sketches searchable automatically"
                     secondary={autoTranscribe
-                        ? 'On — about 90 seconds after you stop writing, the page is sent to OpenRouter to read the handwriting (up to 60 a day). Your drawing is never changed.'
+                        ? 'On — about 90 seconds after you stop writing, the page is sent to OpenRouter to read the handwriting. Your drawing is never changed.'
                         : 'Off — sketches are only read when you use Convert handwriting to text'}
                     action={
                         <Switch

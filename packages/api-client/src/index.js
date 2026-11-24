@@ -367,4 +367,4 @@ export function GeekSuiteApolloProvider({ children, appName }) {
 }
 
 // Reading sketches nobody has open (backgroundReader.js).
-export { createBackgroundReader, setOpenSketch, getOpenSketch, sketchClosed } from './backgroundReader.js';
+export { createBackgroundReader, setOpenSketch, getOpenSketch, sketchClosed, onReadLimit, reportReadLimit } from './backgroundReader.js';

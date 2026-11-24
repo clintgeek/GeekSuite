@@ -10,12 +10,13 @@
  * day page uses (read-only, never focused), and sends the image.
  *
  * The schedule and the rules are @geeksuite/api-client's backgroundReader.js.
- * This shows nothing and can break nothing: a page that fails to load or to
+ * This shows nothing (but one notice when the day's spending limit stops a read) and can break nothing: a page that fails to load or to
  * draw waits for next time.
  */
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useApolloClient } from '@apollo/client';
-import { createBackgroundReader } from '@geeksuite/api-client';
+import { createBackgroundReader, onReadLimit } from '@geeksuite/api-client';
+import { useToast } from '@geeksuite/ui';
 
 const InkCanvas = lazy(() => import('../ink/index.js').then((module) => ({ default: module.InkCanvas })));
 
@@ -90,6 +91,13 @@ export default function BackgroundReader() {
     seq.current += 1;
     setJob({ key: seq.current, content, apiRef, fail: (err) => finish(reject, err) });
   }), []);
+
+  // The one thing this says out loud: a page was not read because today's
+  // spending limit is used up (once a day; api-client's reportReadLimit).
+  const { notify } = useToast();
+  useEffect(() => onReadLimit((notice) => {
+    notify(notice.message, { tone: 'warning', duration: 12000 });
+  }), [notify]);
 
   useEffect(() => {
     const reader = createBackgroundReader({ client, render });

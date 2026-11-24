@@ -16,7 +16,6 @@ import {
   saveSketchTranscriptEdit,
   recordSketchTasksSent,
   transcriptView,
-  AUTO_TRANSCRIBE_DAILY_CAP,
   CLAIM_STALE_MS,
 } from '../graphql/notegeek/sketchTranscript.js';
 import { sketchContentHash, sketchSearchText } from '../graphql/notegeek/sketchText.js';
@@ -84,12 +83,12 @@ describe('autoTranscribeSketch', () => {
     expect(chunkNote(after)[0]).toMatch(/Standup[\s\S]*buy milk/);
   });
 
-  test('uses at most 60 of the shared transcribe cap, so Convert keeps 20', async () => {
+  test('passes no cap of its own: the one limit is the day\'s spending', async () => {
     const id = await sketch();
     const transcribe = reading();
     await run(id, transcribe);
-    expect(transcribe.mock.calls[0][0]).toMatchObject({ dailyCap: AUTO_TRANSCRIBE_DAILY_CAP, source: 'sketch' });
-    expect(AUTO_TRANSCRIBE_DAILY_CAP).toBe(60);
+    expect(transcribe.mock.calls[0][0]).toMatchObject({ source: 'sketch' });
+    expect(transcribe.mock.calls[0][0].dailyCap).toBeUndefined();
   });
 
   test('unchanged content is not transcribed again', async () => {
@@ -195,6 +194,22 @@ describe('autoTranscribeSketch', () => {
     const capped = jest.fn(async () => { const e = new Error('cap'); e.extensions = { code: 'AI_CAP' }; throw e; });
     const view = await run(id, capped);
     expect(view).toMatchObject({ status: 'retry', retryAt: '2026-11-15T00:00:00.000Z' });
+  });
+
+  test("today's spending limit waits for the next UTC day, says why, and never counts against the page", async () => {
+    const id = await sketch();
+    const spent = jest.fn(async () => {
+      const e = new Error("Today's AI spending limit is used up, so handwriting is not being read. It resets at midnight UTC.");
+      e.extensions = { code: 'AI_BUDGET' };
+      throw e;
+    });
+    const view = await run(id, spent);
+    expect(view).toMatchObject({ status: 'retry', retryAt: '2026-11-15T00:00:00.000Z', errorCode: 'AI_BUDGET' });
+    expect(view.error).toMatch(/spending limit is used up/);
+    expect((await stored(id)).sketchTranscript.attempts).toBe(0);
+    // Read the next day: the reason is cleared with the error.
+    const next = await run(id, reading('milk'), Date.parse('2026-11-15T00:05:00.000Z'));
+    expect(next).toMatchObject({ status: 'searchable', errorCode: null, error: null });
   });
 
   test('a permanent failure is not retried until the content changes', async () => {

@@ -7,7 +7,9 @@ import AccountTreeIcon from '@mui/icons-material/AccountTreeOutlined';
 import GestureIcon from '@mui/icons-material/Gesture';
 import PhotoCameraOutlined from '@mui/icons-material/PhotoCameraOutlined';
 import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined';
-import DashboardCustomizeOutlined from '@mui/icons-material/DashboardCustomizeOutlined';
+import ForumOutlined from '@mui/icons-material/ForumOutlined';
+import GroupsOutlined from '@mui/icons-material/GroupsOutlined';
+import { MEETING_PATH } from '../../utils/oneOnOne';
 
 /**
  * The five note types, in one table, so the rows, filters, editor head and
@@ -68,29 +70,46 @@ export const IMPORT_ENTRY = {
 };
 
 /**
- * "From a template" (DOCS/TEMPLATES_SPEC.md N1): not a type — it opens the
- * list of note templates (components/new/TemplateList.jsx), and the one
- * picked is an ordinary Markdown note at `/notes/new?template=<id>`.
+ * The two pages written every day, on the New surfaces beside the types
+ * (Chef, 2026-11-24: the typed templates are gone; these two stay). Neither
+ * is a type: both are a sketch on a printed sheet. A 1:1 asks who first
+ * (store/oneOnOneStore.js, DOCS/ONE_ON_ONE_SPEC.md req 1); a meeting opens
+ * straight on the Meeting sheet (utils/oneOnOne.js MEETING_PATH).
  */
-export const TEMPLATE_ENTRY = {
-  key: 'template',
-  label: 'Template',
-  long: 'From a template',
-  aria: 'New note from a template',
-  Icon: DashboardCustomizeOutlined,
-  description: 'Meeting notes, weekly review, packing list and more',
+export const ONE_ON_ONE_ENTRY = {
+  key: 'one-on-one',
+  inkType: 'handwritten',
+  label: '1:1',
+  long: '1:1',
+  aria: 'New 1:1',
+  Icon: ForumOutlined,
+  description: 'Pick a person: a handwritten page with what is still open',
 };
+export const MEETING_ENTRY = {
+  key: 'meeting',
+  inkType: 'handwritten',
+  label: 'Meeting',
+  long: 'Meeting notes',
+  aria: 'New meeting notes',
+  Icon: GroupsOutlined,
+  description: 'A handwritten page: attendees, agenda, notes and actions',
+  path: MEETING_PATH,
+};
+/** In the order the New surfaces list them, after the front-door types. */
+export const NEW_PAGES = [ONE_ON_ONE_ENTRY.key, MEETING_ENTRY.key];
 
 export function noteTypeMeta(type) {
   if (type === 'photo') return PHOTO_ENTRY;
   if (type === 'import') return IMPORT_ENTRY;
-  if (type === 'template') return TEMPLATE_ENTRY;
+  if (type === ONE_ON_ONE_ENTRY.key) return ONE_ON_ONE_ENTRY;
+  if (type === MEETING_ENTRY.key) return MEETING_ENTRY;
   return NOTE_TYPE_META[type] || NOTE_TYPE_META.text;
 }
 
 /** Where a New entry goes. */
 export function newNotePath(key) {
   if (key === 'photo') return PHOTO_ENTRY.path;
+  if (key === MEETING_ENTRY.key) return MEETING_ENTRY.path;
   if (key === 'markdown') return '/notes/new';
   return `/notes/new?type=${encodeURIComponent(key)}`;
 }

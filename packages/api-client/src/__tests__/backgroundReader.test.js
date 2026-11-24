@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createBackgroundReader, setOpenSketch, sketchClosed, getOpenSketch,
   FIRST_PASS_MS, IDLE_PASS_MS, NEXT_BATCH_MS, AFTER_CLOSE_MS, VISIBLE_PASS_MS, BATCH,
+  onReadLimit,
+  reportReadLimit,
+  _resetReadLimit,
 } from '../backgroundReader.js';
 
 const opName = (doc) => doc.definitions[0].name.value;
@@ -190,5 +193,73 @@ describe('the background reader', () => {
     sketchClosed('n1');
     await vi.advanceTimersByTimeAsync(FIRST_PASS_MS + IDLE_PASS_MS);
     expect(gw.client.query).not.toHaveBeenCalled();
+  });
+});
+
+describe("today's limit is said out loud, once a day (2026-11-24)", () => {
+  const memory = () => {
+    const m = new Map();
+    return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, v) };
+  };
+  const spent = { status: 'retry', errorCode: 'AI_BUDGET', retryAt: '2026-11-25T00:00:00.000Z', error: 'x' };
+  const NOW = Date.parse('2026-11-24T15:00:00.000Z');
+
+  beforeEach(() => { _resetReadLimit(); globalThis.localStorage?.clear?.(); });
+  afterEach(() => _resetReadLimit());
+
+  it('tells the listener when a read failed because of the spending limit', () => {
+    const told = vi.fn();
+    onReadLimit(told);
+    expect(reportReadLimit(spent, { now: NOW, storage: memory() })).toBe(true);
+    expect(told).toHaveBeenCalledTimes(1);
+    expect(told.mock.calls[0][0]).toMatchObject({ code: 'AI_BUDGET', retryAt: spent.retryAt });
+    expect(told.mock.calls[0][0].message).toMatch(/spending limit is used up/);
+  });
+
+  it('says it once a day per device, and again the next day', () => {
+    const told = vi.fn();
+    const storage = memory();
+    onReadLimit(told);
+    reportReadLimit(spent, { now: NOW, storage });
+    reportReadLimit(spent, { now: NOW + 60_000, storage });
+    expect(told).toHaveBeenCalledTimes(1);
+    reportReadLimit(spent, { now: NOW + 24 * 60 * 60 * 1000, storage });
+    expect(told).toHaveBeenCalledTimes(2);
+  });
+
+  it('says nothing for an outage, a page that was read, or a state with no reason', () => {
+    const told = vi.fn();
+    onReadLimit(told);
+    for (const view of [
+      { status: 'retry', errorCode: 'AI_UNAVAILABLE' },
+      { status: 'retry', errorCode: null },
+      { status: 'searchable', errorCode: null },
+      { status: 'failed', errorCode: 'AI_BUDGET' },
+      null,
+    ]) expect(reportReadLimit(view, { now: NOW, storage: memory() })).toBe(false);
+    expect(told).not.toHaveBeenCalled();
+  });
+
+  it('is not marked as said when nobody was listening, and survives storage that throws', () => {
+    const storage = memory();
+    expect(reportReadLimit(spent, { now: NOW, storage })).toBe(false);
+    const told = vi.fn();
+    onReadLimit(told);
+    expect(reportReadLimit(spent, { now: NOW, storage })).toBe(true);
+    const broken = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+    expect(() => reportReadLimit(spent, { now: NOW + 48 * 60 * 60 * 1000, storage: broken })).not.toThrow();
+    expect(told).toHaveBeenCalledTimes(2);
+  });
+
+  it('the background reader reports what the gateway said about the page it sent', async () => {
+    const told = vi.fn();
+    onReadLimit(told);
+    const gw = gateway({ waiting: ['a'] });
+    gw.client.mutate.mockImplementation(async () => ({ data: { autoTranscribeSketch: spent } }));
+    make(gw);
+    reader.start();
+    const outcomes = await reader.pass();
+    expect(outcomes).toEqual(['a:retry']);
+    expect(told).toHaveBeenCalledTimes(1);
   });
 });

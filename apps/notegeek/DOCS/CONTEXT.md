@@ -776,24 +776,11 @@ Client half of §17 (local, not deployed; the gateway goes first). `frontend/src
 
 Spec: `DOCS/TEMPLATES_SPEC.md` (repo root). No gateway operation, schema or storage was added.
 
-- **Note templates (N1–N5).** Eight Markdown starting pages (Meeting notes, One-to-one, Weekly review, Project
-  brief, Decision record, Troubleshooting log, Packing list, Recipe) in one pure module,
-  `frontend/src/utils/noteTemplates.js`: `id`, `label`, one-line `description`, `tags` (suite standard),
-  `title(now)`, `body(now)`. Bodies use only what the Markdown preview renders (h2, lists, `- [ ]` with words
-  after it, one table) and no `#word` (the save reads those as tags). Dates are the LOCAL calendar day, from the
-  Date's own local fields (`templateDay`, `templateWeekStart` = Monday); `@geeksuite/utils` is not a dependency
-  of this app.
-- **Where.** "From a template" on the New surfaces: `NewNoteSheet` (phone bar and tablet rail) turns the same
-  sheet over to `components/new/TemplateList.jsx` (no second sheet; "All kinds of note" goes back);
-  `NewNoteMenu` (desktop) has a menu item that opens `TemplatePicker` (a `GeekSheet`, so Esc / Android Back
-  close it). Rows are buttons; Up/Down/Home/End move between them. There is no keyboard shortcut for New in
-  NoteGeek, so none was invented.
-- **Opening one** is `/notes/new?template=<id>` — the ordinary editor route. `NoteEditorPage`'s new-note seed
-  puts title, tags and body on screen and sets the type to Markdown **without marking the form dirty**, the
-  same way `?title=` is seeded. So autosave, the device draft, the hide/unmount flushes and Back all behave as
-  on a new note nobody typed in: nothing is created or drafted until the first edit or an explicit save
-  (Ctrl/Cmd+S, "Save now"). Save, draft, conflict and autosave code is unchanged. An unknown id is a plain new
-  note; `?title=` still wins the title.
+- **Typed note templates: removed 2026-11-24 (TEMPLATES_SPEC N6).** `utils/noteTemplates.js`,
+  `components/new/TemplateList.jsx`, `templateIcons.js` and `?template=` seeding are gone; an old
+  `?template=<id>` address opens a plain new note. The New surfaces (`NewNoteSheet`, `NewNoteMenu`) list
+  `NEW_PAGES` from `components/notes/noteTypeMeta.js` instead: `one-on-one` (opens the person picker) and
+  `meeting` (`MEETING_PATH`), both handwritten pages on a sheet.
 - **Templates in a sketch (T1–T10; reworked 2026-11-21 on Chef's test).** A template is NOT paper. It is a
   white sheet printed into the drawing: ONE locked tldraw `image` shape, fixed id `shape:paper-template`,
   1000×1400 page units, `meta.paperTemplate = <id>`, with an inline SVG asset `asset:paper-template-<id>`
@@ -821,9 +808,10 @@ Spec: `DOCS/TEMPLATES_SPEC.md` (repo root). No gateway operation, schema or stor
   drawn for it, nothing converts it, the key is left in place.
 - **a11y.** tldraw 2.4's `<img class="tl-image">` has no alt; the harness waiver for photo notes now also names
   scenes `23c` and `23d`.
-- **Tests / harness.** `__tests__/utils/noteTemplates.test.jsx`, `pages/noteEditorTemplate.test.jsx` (N3),
-  `components/new/templatePicker.test.jsx`, `components/editors/paperTemplate.test.jsx`, plus cases in
-  `HandwrittenEditor.test.jsx` and `sketchExport.test.js`. Harness scenes `23a`–`23e` (`23c` places, erases over, removes and undoes a sheet in the real editor).
+- **Tests / harness.** `components/editors/paperTemplate.test.jsx`, plus cases in
+  `HandwrittenEditor.test.jsx` and `sketchExport.test.js`. Harness scenes `23a-new-pages` (1:1 and Meeting on
+  the New surfaces, no "From a template") and `23c`–`23e` (`23c` places, erases over, removes and undoes a
+  sheet in the real editor).
 - **Not done.** The list thumbnail shows a sheet as its outline only, not its print.
 
 ## 20. 1:1 notes (client only, 2026-11-22)
@@ -837,9 +825,8 @@ What: `DOCS/ONE_ON_ONE_SPEC.md`. No gateway change, no new stored field.
   `startSheet` (NoteEditorPage). `HandwrittenEditor` places the sheet with
   `store.mergeRemoteChanges`, so it is neither a save nor an undo step; the first stroke
   saves note and sheet together. The picker (`OneOnOnePicker`, mounted in Layout, opened via
-  `store/oneOnOneStore.js`) is reached from "New 1:1" on the tag pages and from the template
-  list's "1:1" row (which no longer opens the Markdown one-to-one template; that body still
-  exists at `?template=one-to-one`).
+  `store/oneOnOneStore.js`) is reached from "New 1:1" on the tag pages, the sidebar, the tablet rail and the
+  New surfaces' "1:1" row.
 - **Tag pages.** `TagNotesList` shows `PeopleOverview` on the 1:1 tag (in place of the
   sub-tag pills) and `PersonHeader` on a person's tag. Other tags are untouched.
 - **Open items.** `OpenItems` reads TodoGeek `tasks(status:"pending", tags:[personTag])` and
@@ -860,7 +847,7 @@ Full account: `AUTO_TRANSCRIBE_SPEC.md`, "Background reader". What to know befor
   content hash, not a "photo page", and alone an empty page. Before this, every sketch on a
   template was `off` and never read.
 - **`sketchesToTranscribe(limit)`** lists sketches that are `waiting` and unchanged for 90 s.
-  **`autoTranscribeSketch(background: true)`** is the reader's read, capped at 40 a day.
+  **`autoTranscribeSketch(background: true)`** is the reader's read. It has no cap of its own (2026-11-24): the one limit is the gateway's daily spending ceiling, and a read it stops comes back `retry` with `errorCode: 'AI_BUDGET'`, which `reportReadLimit` (`@geeksuite/api-client`) turns into one toast a day in NoteGeek and GeekDay.
 - **`components/BackgroundReader.jsx`** (mounted in `Layout` when signed in) mounts
   `HandwrittenEditor` off-screen, read-only, `autoFocus={false}`, inside an `inert` box, one
   sketch at a time. The schedule is `@geeksuite/api-client` `backgroundReader.js`, shared with

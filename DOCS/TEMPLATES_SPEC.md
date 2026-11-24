@@ -105,13 +105,15 @@ N1a. *(2026-11-23, Chef: "The Meeting notes should be handwritten. I'm not
     `meeting`; like a 1:1, nothing is saved until the first ink. The desktop
     sidebar and the Tags sheet carry "New 1:1" and "New meeting" straight
     under All notes (Chef: "two templates that I'll use constantly").
-N2. Choosing one opens the ordinary editor on a new note with that template's
-    title, tags and body filled in. It is an ordinary note from then on.
-N3. Nothing is saved until the user edits or saves, as with any new note
-    today: opening a template and leaving creates no note.
-N4. Dates in a template's title or body are the local day it was opened.
-N5. Templates are also reachable from the keyboard on desktop and pass the
-    harness at phone, tablet and desktop.
+N6. *(2026-11-24, Chef: "don't need any typed templates"; Recipe and Packing
+    list named as "actively not using and would remove".)* **The typed note
+    templates are removed.** N1, N2, N3, N4 and N5 no longer apply: there is
+    no "From a template", and `/notes/new?template=<id>` is a plain new note.
+    Notes already made from a template are ordinary notes and are untouched.
+    The New surfaces offer the two handwritten pages directly: 1:1 (the
+    person picker) and Meeting notes (N1a). The tablet rail carries both too.
+    Chef may want student sheets later; those would be handwritten sheets
+    (T-requirements), not typed templates.
 
 ## 3. Out of Scope
 

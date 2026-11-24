@@ -6,12 +6,13 @@
  * that needs React: one sketch at a time is mounted off-screen in the same
  * editor the note page uses (read-only, never focused), exported with the
  * same exporter, and unmounted. tldraw is loaded only when there is a page to
- * draw. It shows nothing and can break nothing: an editor that fails to load
+ * draw. It shows nothing (but one notice when the day's spending limit stops a read) and can break nothing: an editor that fails to load
  * or to draw is a page that waits for next time.
  */
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { apolloClient } from '../apolloClient';
-import { createBackgroundReader } from '@geeksuite/api-client';
+import { createBackgroundReader, onReadLimit } from '@geeksuite/api-client';
+import { useToast } from '@geeksuite/ui';
 
 const HandwrittenEditor = lazy(() => import('./editors/HandwrittenEditor'));
 
@@ -86,6 +87,13 @@ export default function BackgroundReader({ client = apolloClient }) {
     seq.current += 1;
     setJob({ key: seq.current, content, apiRef, fail: (err) => finish(reject, err) });
   }), []);
+
+  // The one thing this says out loud: a page was not read because today's
+  // spending limit is used up (once a day; api-client's reportReadLimit).
+  const { notify } = useToast();
+  useEffect(() => onReadLimit((notice) => {
+    notify(notice.message, { tone: 'warning', duration: 12000 });
+  }), [notify]);
 
   useEffect(() => {
     const reader = createBackgroundReader({ client, render });

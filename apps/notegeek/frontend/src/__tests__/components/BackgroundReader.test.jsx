@@ -98,3 +98,17 @@ describe('BackgroundReader', () => {
     expect(screen.queryByTestId('background-reader')).toBeNull();
   });
 });
+
+describe("today's spending limit", () => {
+  it('is said once, in words, when a read fails because of it', async () => {
+    const { GeekToastProvider } = await import('@geeksuite/ui');
+    const { reportReadLimit } = await import('@geeksuite/api-client');
+    window.localStorage.clear();
+    render(<GeekToastProvider><BackgroundReader client={client('ink')} /></GeekToastProvider>);
+    const spent = { status: 'retry', errorCode: 'AI_BUDGET', retryAt: null };
+    await act(async () => { reportReadLimit(spent); });
+    expect(screen.getByText(/Today's AI spending limit is used up/)).toBeTruthy();
+    await act(async () => { reportReadLimit(spent); });
+    expect(screen.getAllByText(/Today's AI spending limit is used up/)).toHaveLength(1);
+  });
+});

@@ -2,22 +2,17 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, ButtonBase, Collapse, Typography, useTheme } from '@mui/material';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import ChevronRight from '@mui/icons-material/ChevronRight';
-import ArrowBack from '@mui/icons-material/ArrowBack';
 import { GeekSheet } from '@geeksuite/ui';
-import { NEW_FRONT, NEW_MORE, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
+import { NEW_FRONT, NEW_MORE, NEW_PAGES, ONE_ON_ONE_ENTRY, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
 import { graphiteTokens } from '../../theme/tokens';
 import { openImportPicker } from '../../store/importStore';
 import { openOneOnOnePicker } from '../../store/oneOnOneStore';
-import { MEETING_TEMPLATE, ONE_ON_ONE_TEMPLATE, noteTemplatePath } from '../../utils/noteTemplates';
-import { MEETING_PATH } from '../../utils/oneOnOne';
-import { TemplateList } from './TemplateList';
 
 /**
  * One row of the New surface: glyph, name, a line of description. The first
  * (a plain note) is the primary action, so it gets the highlighter.
  */
-export function NewEntry({ entryKey, onPick, primary = false, opens = false }) {
+export function NewEntry({ entryKey, onPick, primary = false }) {
   const theme = useTheme();
   const g = graphiteTokens(theme);
   const meta = noteTypeMeta(entryKey);
@@ -51,45 +46,27 @@ export function NewEntry({ entryKey, onPick, primary = false, opens = false }) {
           {meta.description}
         </Typography>
       </Box>
-      {opens ? <ChevronRight aria-hidden sx={{ fontSize: 20, color: 'text.secondary', ml: 'auto', flexShrink: 0 }} /> : null}
     </ButtonBase>
   );
 }
 
 /**
  * NewNoteSheet — the phone's "New": a bottom sheet with the three front-door
- * entries (a note, a photo of a page, a sketch), "From a template", "More"
- * folding out Code and Mind map, and "Import a Markdown file". Markdown is
- * the default note; rich text is not offered.
- *
- * "From a template" (DOCS/TEMPLATES_SPEC.md N1) turns the same sheet over to
- * the list of templates rather than stacking a second sheet on this one: one
- * surface, one Back press to close it. The tablet rail opens this sheet too.
+ * entries (a note, a photo of a page, a sketch), the two pages written every
+ * day (1:1 and Meeting notes, both handwritten), "More" folding out Code and
+ * Mind map, and "Import a Markdown file". Markdown is the default note; rich
+ * text is not offered. The tablet rail opens this sheet too.
  */
 function NewNoteSheet({ open, onClose }) {
   const navigate = useNavigate();
   const theme = useTheme();
   const [more, setMore] = useState(false);
-  const [view, setView] = useState('new'); // 'new' | 'templates'
-  // Back to the front page each time the sheet OPENS, not as it closes: the
-  // list a template was picked from must not flip over while it slides away.
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) setView('new');
-  }
 
   const close = () => { setMore(false); onClose(); };
-  const pickTemplate = (id) => {
-    close();
-    // A 1:1 is a handwritten page for one person: ask who (DOCS/ONE_ON_ONE_SPEC.md req 1).
-    if (id === ONE_ON_ONE_TEMPLATE) { openOneOnOnePicker(); return; }
-    if (id === MEETING_TEMPLATE) { navigate(MEETING_PATH); return; }
-    navigate(noteTemplatePath(id));
-  };
 
   const pick = (key) => {
-    if (key === 'template') { setView('templates'); return; }
+    // A 1:1 is a handwritten page for one person: ask who (DOCS/ONE_ON_ONE_SPEC.md req 1).
+    if (key === ONE_ON_ONE_ENTRY.key) { close(); openOneOnOnePicker(); return; }
     // The file picker must open inside the tap (user activation), so it is
     // asked for before the sheet closes; the importer lives outside it.
     if (key === 'import') openImportPicker();
@@ -98,38 +75,14 @@ function NewNoteSheet({ open, onClose }) {
   };
 
   return (
-    <GeekSheet open={open} onClose={close} title={view === 'templates' ? 'From a template' : 'New'}>
-      {view === 'templates' ? (
-        <>
-          <ButtonBase
-            data-template-back
-            onClick={() => setView('new')}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              gap: '8px',
-              minHeight: 44,
-              px: '12px',
-              mb: '4px',
-              borderRadius: '8px',
-              color: 'text.secondary',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              '&:focus-visible': { outline: `2px solid ${theme.palette.text.primary}`, outlineOffset: 2 },
-            }}
-          >
-            <ArrowBack aria-hidden sx={{ fontSize: 20 }} />
-            All kinds of note
-          </ButtonBase>
-          <TemplateList onPick={pickTemplate} autoFocus />
-        </>
-      ) : (
+    <GeekSheet open={open} onClose={close} title="New">
       <Box role="list" aria-label="New" sx={{ display: 'flex', flexDirection: 'column', gap: '4px', pb: '8px' }}>
         {NEW_FRONT.map((key, i) => (
           <Box role="listitem" key={key}><NewEntry entryKey={key} onPick={pick} primary={i === 0} /></Box>
         ))}
-        <Box role="listitem"><NewEntry entryKey="template" onPick={pick} opens /></Box>
+        {NEW_PAGES.map((key) => (
+          <Box role="listitem" key={key}><NewEntry entryKey={key} onPick={pick} /></Box>
+        ))}
         <Box role="listitem">
           <ButtonBase
             onClick={() => setMore((m) => !m)}
@@ -169,7 +122,6 @@ function NewNoteSheet({ open, onClose }) {
         </Box>
         <Box role="listitem"><NewEntry entryKey="import" onPick={pick} /></Box>
       </Box>
-      )}
     </GeekSheet>
   );
 }
