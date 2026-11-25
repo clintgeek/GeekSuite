@@ -873,3 +873,12 @@ First, `NoteEditorPage.jsx` was split (1,894 → about 1,290 lines; `pages/noteE
 behaviour change. Details and two tldraw landmines: `apps/notegeek/DOCS/CONTEXT.md` §22.
 Tests 1117 → 1140. Harness `26a`–`26c`.
 
+## 2026-11-24: note kinds (the notes list, partitioned)
+
+- Spec: `DOCS/NOTE_KINDS_SPEC.md`. Notes no longer lists daily pages, meetings or 1:1s;
+  each has its own list and rail/sidebar entry; Everything is the merged stream.
+- Gateway: `notes` / `notesPage(notUnder:)`.
+- NoteGeek: `utils/noteKinds.js`, `KindNotesList`, routes `/dailies`, `/meetings`,
+  `/everything`; rail and sidebar entries are places, not "start a note" actions.
+- Details: `apps/notegeek/DOCS/CONTEXT.md` §23.
+

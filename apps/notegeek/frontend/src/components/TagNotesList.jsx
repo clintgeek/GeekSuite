@@ -165,7 +165,8 @@ const TagNotesList = ({ tag: tagProp } = {}) => {
 
     const parts = decodedTag.split('/');
     const crumbs = [
-        { title: 'All notes', href: '/notes' },
+        // A tag's notes are of every kind, so the way up is the merged list.
+        { title: 'Everything', href: '/everything' },
         ...parts.map((part, index) => ({
             title: part,
             href: tagHref(parts.slice(0, index + 1).join('/')),

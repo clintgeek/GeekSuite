@@ -241,6 +241,7 @@ export const notesPageArgsSchema = z
     tag: z.string().max(200).nullish(),
     prefix: z.string().max(200).nullish(),
     under: z.string().max(200).nullish(),
+    notUnder: z.array(z.string().max(200)).max(20).nullish(),
     type: z.enum(NOTE_TYPES).nullish(),
     // Any case (`updatedat_desc` too, as the old `notes` query took it).
     sort: z

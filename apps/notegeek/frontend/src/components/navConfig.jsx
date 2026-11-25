@@ -31,6 +31,9 @@ export const navSections = [
  */
 const extraTitles = {
   '/notes': 'Notes',
+  '/dailies': 'Dailies',
+  '/meetings': 'Meetings',
+  '/everything': 'Everything',
   '/tags': 'Notes',
   '/search': 'Search',
   '/archived': 'Archived',

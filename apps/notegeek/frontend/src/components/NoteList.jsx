@@ -81,6 +81,8 @@ function FilterChip({ type, active, onClick }) {
     );
 }
 
+const NOTE_NOUN = ['note', 'notes'];
+
 // Sort options
 const SORT_OPTIONS = [
     { value: 'updated', label: 'Recent' },
@@ -144,8 +146,14 @@ function RowList({ notes, dateField, tagContext, selection }) {
  * `under` is the nested-tag view (TagNotesList): the tag and everything
  * beneath it, with each row naming the sub-tag it sits in. `tag` / `prefix`
  * are the older exact / raw-prefix filters, kept for any caller that wants them.
+ *
+ * Kind lists (KindNotesList, DOCS/NOTE_KINDS_SPEC.md): `notUnder` leaves
+ * whole tag subtrees out (Notes, without the dailies, meetings and 1:1s);
+ * `defaultSort` and `typeFilters={false}` shape a list of one kind, where
+ * every note is the same type and the day it was written is what matters;
+ * `noun` is what the count calls a row.
  */
-function NoteList({ tag, prefix, under }) {
+function NoteList({ tag, prefix, under, notUnder, defaultSort = 'updated', typeFilters = true, noun = NOTE_NOUN, emptyTitle, emptyDescription }) {
     const theme = useTheme();
     const g = graphiteTokens(theme);
     // The Tags button is the phone's way to the tag tree. A tablet has the
@@ -154,12 +162,14 @@ function NoteList({ tag, prefix, under }) {
     const listWidth = useListWidth();
     const [tagsOpen, setTagsOpen] = useState(false);
     const [typeFilter, setTypeFilter] = useState(null);
-    const [sortBy, setSortBy] = useState('updated');
+    const [sortBy, setSortBy] = useState(defaultSort);
     // Select mode (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U1): a different
     // tag's list is a different page, so the selection does not carry over.
-    const selection = useNoteSelection({ resetKey: `${tag || ''}|${prefix || ''}|${under || ''}` });
+    const selection = useNoteSelection({ resetKey: `${tag || ''}|${prefix || ''}|${under || ''}|${(notUnder || []).join(',')}` });
 
-    const variables = { tag, prefix, under, type: typeFilter, sort: SERVER_SORT[sortBy], first: NOTE_PAGE_SIZE };
+    // `notUnder` only when there is something to leave out, so every other
+    // list asks exactly what it always did.
+    const variables = { tag, prefix, under, ...(notUnder?.length ? { notUnder } : {}), type: typeFilter, sort: SERVER_SORT[sortBy], first: NOTE_PAGE_SIZE };
     const { loading: isLoadingList, error, data, refetch } = useQuery(GET_NOTES_PAGE, {
         variables,
         fetchPolicy: 'cache-and-network',
@@ -259,7 +269,7 @@ function NoteList({ tag, prefix, under }) {
                 px: '4px',
             }}>
                 <Typography variant="h6" component="h2" sx={{ color: 'text.secondary', m: 0, mr: 'auto' }}>
-                    {notes.length}{hasMore ? '+' : ''} {notes.length === 1 && !hasMore ? 'note' : 'notes'}
+                    {notes.length}{hasMore ? '+' : ''} {notes.length === 1 && !hasMore ? noun[0] : noun[1]}
                 </Typography>
 
                 {notes.length > 0 && <SelectButton selection={selection} />}
@@ -316,6 +326,7 @@ function NoteList({ tag, prefix, under }) {
             )}
 
             {/* Type filter — one quiet row, scrolls sideways on a phone */}
+            {typeFilters ? (
             <Box
                 role="group"
                 aria-label="Filter by type"
@@ -342,6 +353,7 @@ function NoteList({ tag, prefix, under }) {
                     );
                 })}
             </Box>
+            ) : null}
 
             {isPhone && (
                 <GeekSheet open={tagsOpen} onClose={() => setTagsOpen(false)} title="Tags" snap="full" headerSx={TAGS_SHEET_HEADER_SX}>
@@ -353,8 +365,8 @@ function NoteList({ tag, prefix, under }) {
                 then grouped by recency for date sorts, or flat for A–Z. */}
             {sortedNotes.length === 0 ? (
                 <GeekEmptyState
-                    title={(tag || under) ? 'No notes tagged here yet.' : 'No notes yet'}
-                    description={!(tag || under) ? 'Create your first note to get started' : undefined}
+                    title={emptyTitle || ((tag || under) ? 'No notes tagged here yet.' : 'No notes yet')}
+                    description={emptyTitle ? emptyDescription : (!(tag || under) ? 'Create your first note to get started' : undefined)}
                 />
             ) : (
                 <>

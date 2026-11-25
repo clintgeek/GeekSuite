@@ -357,8 +357,8 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 |---|---|
 | `sketchTranscript(noteId: ID!)` | `SketchTranscriptState!` |
 | `sketchesToTranscribe(limit: Int)` | `[ID!]!` |
-| `notes(tag: String, prefix: String, under: String, type: String, limit: Int, sort: String)` | `[Note!]!` |
-| `notesPage(tag: String, prefix: String, under: String, type: String, sort: String, first: Int, after: String)` | `NotePage!` |
+| `notes(tag: String, prefix: String, under: String, notUnder: [String!], type: String, limit: Int, sort: String)` | `[Note!]!` |
+| `notesPage(tag: String, prefix: String, under: String, notUnder: [String!], type: String, sort: String, first: Int, after: String)` | `NotePage!` |
 | `note(id: ID!)` | `Note` |
 | `deletedNotes(limit: Int)` | `[Note!]!` |
 | `noteVersions(noteId: ID!)` | `[NoteVersion!]!` |

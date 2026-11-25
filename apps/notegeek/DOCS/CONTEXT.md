@@ -897,3 +897,26 @@ What: `DOCS/REFERENCE_PANE_SPEC.md`. No gateway change, no stored field.
   (`handleSaveRef`, `dirtyRef`, `contentRef` and the rest) are declared before those hooks and
   passed in; `handleSaveRef.current` is assigned after `handleSave` on every render.
 
+## 23. Note kinds: the notes list, partitioned (gateway + client, 2026-11-24)
+
+What: `DOCS/NOTE_KINDS_SPEC.md`. No stored field; a kind is read off tags.
+
+- **Kinds.** `utils/noteKinds.js` (pure): daily = under `daily` (GeekDay's tag), meeting =
+  under `meeting`, 1:1 = under the 1:1 tag (§20). `kindListQuery(kind, root)` is what a
+  list asks for.
+- **Gateway.** `notes` / `notesPage` take `notUnder: [String!]` (`listFilter` in
+  `resolvers.js`): a `$nin` over the stored spellings of each subtree. Optional; other
+  clients are unaffected. Test: `notegeekListsSearch.test.js`.
+- **Lists.** `components/KindNotesList.jsx` wraps `NoteList` for `/notes` (sends
+  `notUnder`), `/dailies`, `/meetings` and `/everything`. `NoteList` gained `notUnder`,
+  `defaultSort`, `typeFilters`, `noun`, `emptyTitle`. 1:1s is the 1:1 tag page.
+- **Navigation.** Rail: notes, dailies, one-on-ones, meetings are PLACES (they were
+  actions until this date); `navValueFor` needs the 1:1 root to light 1:1s. Sidebar /
+  Tags sheet rows carry `data-nav-kind`. Two-pane (`Layout.useListContext`) treats every
+  kind list like `/notes`.
+- **Deploy order.** The client sends `notUnder` only from `/notes`. A new client against
+  an old gateway fails that one query (unknown argument), so the gateway must be live
+  first; both ship from the same push and BaseGeek restarts independently.
+- **Harness.** Scenes `27a`–`27b`; fixtures `KIND_NOTES` / `ALL_KINDS` are kept out of
+  `NOTES`.
+

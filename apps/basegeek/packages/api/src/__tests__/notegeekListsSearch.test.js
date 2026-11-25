@@ -162,6 +162,23 @@ describe('notesPage', () => {
     expect(seen.size).toBe(230);
   });
 
+  test('notUnder leaves out whole tag subtrees, across pages and with other filters', async () => {
+    await create({ title: 'plain', content: 'x' });
+    await create({ title: 'tagged', content: 'x', tags: ['house'] });
+    await create({ title: 'day', content: 'x', tags: ['daily', 'daily/2026-11-24'] });
+    await create({ title: 'meet', content: 'x', tags: ['meeting'] });
+    await create({ title: 'alex', content: 'x', tags: ['fd/1on1/alex'] });
+    await create({ title: 'both', content: 'x', tags: ['house', 'meeting'] });
+    await create({ title: 'dailyish', content: 'x', tags: ['dailyplanet'] });
+    const notUnder = ['daily', 'meeting', 'fd/1on1'];
+    expect((await all({ notUnder, sort: 'title_asc' }))).toEqual(['dailyish', 'plain', 'tagged']);
+    expect((await all({ notUnder, under: 'house' }))).toEqual(['tagged']);
+    expect((await Query.notes(null, { notUnder, sort: 'title_asc' }, ctx(ALICE))).map((n) => n.title)).toEqual(['dailyish', 'plain', 'tagged']);
+    // Nothing to leave out narrows nothing.
+    expect(await all({ notUnder: [], sort: 'title_asc' })).toHaveLength(7);
+    expect(await all({ notUnder: ['nowhere'], sort: 'title_asc' })).toHaveLength(7);
+  });
+
   test('a bad cursor starts over; a bad sort is refused', async () => {
     await seed();
     expect((await Query.notesPage(null, { first: 2, after: 'garbage' }, ctx(ALICE))).notes).toHaveLength(2);

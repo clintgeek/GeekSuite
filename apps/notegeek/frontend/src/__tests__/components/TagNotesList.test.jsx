@@ -81,7 +81,7 @@ describe('TagNotesList', () => {
         renderAt('/tags/project%2Ffoo%2Fbar', []);
 
         const crumbs = screen.getByRole('navigation', { name: 'Tag path' });
-        expect(within(crumbs).getByRole('link', { name: 'All notes' })).toHaveAttribute('href', '/notes');
+        expect(within(crumbs).getByRole('link', { name: 'Everything' })).toHaveAttribute('href', '/everything');
         expect(within(crumbs).getByRole('link', { name: 'project' })).toHaveAttribute('href', '/tags/project');
         expect(within(crumbs).getByRole('link', { name: 'foo' })).toHaveAttribute('href', '/tags/project%2Ffoo');
         expect(screen.getByRole('heading', { level: 1, name: 'bar' })).toBeInTheDocument();

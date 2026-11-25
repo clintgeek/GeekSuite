@@ -12,12 +12,16 @@ import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
 import LocalOffer from '@mui/icons-material/LocalOffer';
 import ForumOutlined from '@mui/icons-material/ForumOutlined';
 import GroupsOutlined from '@mui/icons-material/GroupsOutlined';
+import Forum from '@mui/icons-material/Forum';
+import Groups from '@mui/icons-material/Groups';
+import TodayOutlined from '@mui/icons-material/TodayOutlined';
+import Today from '@mui/icons-material/Today';
 import { GeekSheet, useGeekNavMode, useGeekNavSlots } from '@geeksuite/ui';
 import NewNoteSheet from './new/NewNoteSheet';
 import Sidebar, { TagsPanel, TAGS_SHEET_HEADER_SX } from './Sidebar';
 import { graphiteTokens } from '../theme/tokens';
-import { openOneOnOnePicker } from '../store/oneOnOneStore';
-import { MEETING_PATH } from '../utils/oneOnOne';
+import { useOneOnOneRoot } from './oneOnOne/useOneOnOne';
+import { KIND_LISTS, isOneOnOnePath, oneOnOnesPath } from '../utils/noteKinds';
 
 /**
  * NoteGeek's primary navigation — ONE items array, three surfaces
@@ -25,26 +29,37 @@ import { MEETING_PATH } from '../utils/oneOnOne';
  *
  *   phone   — the bottom bar: Home, Search, New, Notes (unchanged: Graphite's
  *             one set of paths; the tag tree opens from the Notes page)
- *   tablet  — the rail: the same four, then 1:1 and Meeting (the two
- *             templates used every day, one tap each — the tablet is where
- *             they are written), then Tags, which opens the tag tree (with
- *             All notes, Archived, Recently deleted) in a sheet — the
+ *   tablet  — the rail: the same four, then the other kinds of note, each
+ *             its own list (DOCS/NOTE_KINDS_SPEC.md): Dailies, 1:1s and
+ *             Meetings; then Tags, which opens the tag tree (with the kinds,
+ *             Everything, Archived, Recently deleted) in a sheet — the
  *             sidebar's contents, reachable without a sidebar
  *   desktop — the sidebar (Sidebar.jsx: brand, Home, the tag tree); New and
  *             search live in the top bar there (Header.jsx)
  *
  * New is an action on the bar and the rail (it opens the New sheet), never
- * "current"; so are 1:1 and Meeting. Tags is an action on the rail.
+ * "current". Tags is an action on the rail. Until 2026-11-24 the rail's 1:1
+ * and Meeting were actions too (they started a note); they are places now,
+ * and each place has its New button at the top.
  */
 
 /** Which bar/rail item a path belongs to. The rail has Tags; the phone does not. */
-export function navValueFor(pathname, { rail = false } = {}) {
+export function navValueFor(pathname, { rail = false, oneOnOneRoot = '' } = {}) {
   if (pathname.startsWith('/search')) return 'search';
   if (pathname === '/') return 'home';
+  if (rail) {
+    if (pathname.startsWith('/dailies')) return 'dailies';
+    if (pathname.startsWith('/meetings')) return 'meetings';
+    if (isOneOnOnePath(pathname, oneOnOneRoot)) return 'one-on-ones';
+    // Everything lives in the Tags sheet, beside Archived.
+    if (pathname.startsWith('/everything')) return 'tags';
+  }
   if (rail && (pathname.startsWith('/tags/') || pathname.startsWith('/archived') || pathname.startsWith('/deleted'))) {
     return 'tags';
   }
   if (pathname.startsWith('/notes') || pathname.startsWith('/tags/')) return 'notes';
+  // A phone reaches the other kinds from the Notes page's Tags sheet.
+  if (pathname.startsWith('/dailies') || pathname.startsWith('/meetings') || pathname.startsWith('/everything')) return 'notes';
   // Archived and Recently deleted are reached from the Notes page's Tags
   // sheet on a phone; they belong there, not to Home (review 2026-11-18 #9).
   if (pathname.startsWith('/archived') || pathname.startsWith('/deleted')) return 'notes';
@@ -92,10 +107,10 @@ function NavIcon({ active, children, action = false }) {
 const ICON = { fontSize: 21 };
 
 /**
- * The one items array. `rail` adds 1:1, Meeting and the Tags item (a rail
+ * The one items array. `rail` adds the other kinds and the Tags item (a rail
  * has no sidebar to hold them); everything else is shared.
  */
-export function buildNavItems({ value, rail, navigate, onNew, onTags }) {
+export function buildNavItems({ value, rail, navigate, onNew, onTags, oneOnOneRoot }) {
   const item = (id, label, Outline, Filled, onClick) => ({
     id,
     label,
@@ -118,10 +133,10 @@ export function buildNavItems({ value, rail, navigate, onNew, onTags }) {
     item('notes', 'Notes', AutoStoriesOutlinedIcon, AutoStoriesIcon, () => navigate('/notes')),
   ];
   if (rail) {
-    // Actions, like New: they start a note, so they are never "current".
     items.push(
-      { id: 'one-on-one', label: '1:1', icon: <NavIcon><ForumOutlined sx={ICON} /></NavIcon>, onClick: openOneOnOnePicker },
-      { id: 'meeting', label: 'Meeting', icon: <NavIcon><GroupsOutlined sx={ICON} /></NavIcon>, onClick: () => navigate(MEETING_PATH) },
+      item('dailies', 'Dailies', TodayOutlined, Today, () => navigate(KIND_LISTS.dailies.path)),
+      item('one-on-ones', '1:1s', ForumOutlined, Forum, () => navigate(oneOnOnesPath(oneOnOneRoot))),
+      item('meetings', 'Meetings', GroupsOutlined, Groups, () => navigate(KIND_LISTS.meetings.path)),
       item('tags', 'Tags', LocalOfferOutlined, LocalOffer, onTags),
     );
   }
@@ -145,11 +160,12 @@ export function useNotePrimaryNav({ hidden = false, sidebarCollapsed = false } =
   // Mode first (useGeekNavSlots reads the same hook), so the items can carry
   // Tags on the rail only.
   const rail = useGeekNavMode() === 'rail';
-  const value = navValueFor(pathname, { rail });
+  const oneOnOneRoot = useOneOnOneRoot();
+  const value = navValueFor(pathname, { rail, oneOnOneRoot });
 
   const items = useMemo(
-    () => buildNavItems({ value, rail, navigate, onNew: () => setNewOpen(true), onTags: () => setTagsOpen(true) }),
-    [value, rail, navigate]
+    () => buildNavItems({ value, rail, navigate, onNew: () => setNewOpen(true), onTags: () => setTagsOpen(true), oneOnOneRoot }),
+    [value, rail, navigate, oneOnOneRoot]
   );
 
   const { navMode, nav, rail: railEl, bottomNav } = useGeekNavSlots({

@@ -34,8 +34,10 @@ import { gql, useQuery } from '@apollo/client';
 import { graphiteTokens } from '../theme/tokens';
 import { tagTree as buildTagTree, filterTagTree } from '@geeksuite/tags';
 import { navSections, activeNavId } from './navConfig';
-import { openOneOnOnePicker } from '../store/oneOnOneStore';
-import { MEETING_PATH } from '../utils/oneOnOne';
+import TodayOutlined from '@mui/icons-material/TodayOutlined';
+import AllInboxOutlined from '@mui/icons-material/AllInboxOutlined';
+import { useOneOnOneRoot } from './oneOnOne/useOneOnOne';
+import { KIND_LISTS, isOneOnOnePath, oneOnOnesPath } from '../utils/noteKinds';
 
 const GET_TAGS = gql`
   query GetNoteTags {
@@ -434,7 +436,17 @@ export function TagsPanel({ onNavigate, stickyBg = 'background.paper' }) {
         return next;
     }, [collapsed, activePath]);
 
-    const onAllNotes = location.pathname === '/notes';
+    // The kinds of note, each its own list (DOCS/NOTE_KINDS_SPEC.md), then
+    // Everything: the merged stream, with the count of every note.
+    const oneOnOneRoot = useOneOnOneRoot();
+    const at = location.pathname.replace(/\/+$/, '') || '/';
+    const kindRows = [
+        { id: 'notes', label: 'Notes', to: KIND_LISTS.notes.path, Icon: AllNotesIcon, on: at === KIND_LISTS.notes.path },
+        { id: 'dailies', label: 'Dailies', to: KIND_LISTS.dailies.path, Icon: TodayOutlined, on: at === KIND_LISTS.dailies.path },
+        { id: 'meetings', label: 'Meetings', to: KIND_LISTS.meetings.path, Icon: GroupsOutlined, on: at === KIND_LISTS.meetings.path },
+        { id: 'one-on-ones', label: '1:1s', to: oneOnOnesPath(oneOnOneRoot), Icon: ForumOutlined, on: isOneOnOnePath(location.pathname, oneOnOneRoot) },
+        { id: 'everything', label: 'Everything', to: KIND_LISTS.everything.path, Icon: AllInboxOutlined, on: at === KIND_LISTS.everything.path, count: countNotes ? countNotes.length : null },
+    ];
     const onArchived = location.pathname === '/archived';
     const onDeleted = location.pathname === '/deleted';
 
@@ -484,65 +496,40 @@ export function TagsPanel({ onNavigate, stickyBg = 'background.paper' }) {
                     />
                 </Box>
 
-                {/* All notes. The row is an <li> that CONTAINS the link — a
-                    bare ListItemButton put an <a> straight into the <ul> (axe
-                    `list`), unseen until a scene first opened the drawer. */}
+                {/* The kinds, then Everything. Each row is an <li> that
+                    CONTAINS the link — a bare ListItemButton put an <a>
+                    straight into the <ul> (axe `list`), unseen until a scene
+                    first opened the drawer. */}
                 <List sx={{ pt: 0, px: 0.75 }}>
-                    <ListItem disablePadding>
+                    {kindRows.map(({ id, label, to, Icon, on, count }) => (
+                    <ListItem disablePadding key={id}>
                     <ListItemButton
                         component={Link}
-                        to="/notes"
-                        selected={onAllNotes}
-                        aria-current={onAllNotes ? 'page' : undefined}
+                        to={to}
+                        selected={on}
+                        aria-current={on ? 'page' : undefined}
                         onClick={onNavigate}
+                        data-nav-kind={id}
                     >
                         <ListItemIcon sx={{ minWidth: 26 }}>
-                            <AllNotesIcon sx={{ fontSize: 17, color: onAllNotes ? g.onHl : 'text.secondary' }} />
+                            <Icon sx={{ fontSize: 17, color: on ? g.onHl : 'text.secondary' }} />
                         </ListItemIcon>
                         <ListItemText
-                            primary="All notes"
-                            primaryTypographyProps={{ fontSize: '0.8125rem', fontWeight: onAllNotes ? 600 : 400 }}
+                            primary={label}
+                            primaryTypographyProps={{ fontSize: '0.8125rem', fontWeight: on ? 600 : 400 }}
                         />
-                        {countNotes && (
+                        {count != null && (
                             <Typography
                                 component="span"
                                 variant="caption"
-                                sx={{ color: onAllNotes ? g.onHl : 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
+                                sx={{ color: on ? g.onHl : 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
                             >
-                                {countNotes.length}
+                                {count}
                             </Typography>
                         )}
                     </ListItemButton>
                     </ListItem>
-                    {/* The two templates used every day, one click each, straight
-                        under All notes: a 1:1 (the person picker,
-                        DOCS/ONE_ON_ONE_SPEC.md req 1) and Meeting notes, a
-                        handwritten page on the Meeting sheet. */}
-                    <ListItem disablePadding>
-                    <ListItemButton
-                        onClick={() => { openOneOnOnePicker(); onNavigate?.(); }}
-                        aria-haspopup="dialog"
-                        data-nav-new="one-on-one"
-                    >
-                        <ListItemIcon sx={{ minWidth: 26 }}>
-                            <ForumOutlined sx={{ fontSize: 17, color: 'text.secondary' }} />
-                        </ListItemIcon>
-                        <ListItemText primary="New 1:1" primaryTypographyProps={{ fontSize: '0.8125rem' }} />
-                    </ListItemButton>
-                    </ListItem>
-                    <ListItem disablePadding>
-                    <ListItemButton
-                        component={Link}
-                        to={MEETING_PATH}
-                        onClick={onNavigate}
-                        data-nav-new="meeting"
-                    >
-                        <ListItemIcon sx={{ minWidth: 26 }}>
-                            <GroupsOutlined sx={{ fontSize: 17, color: 'text.secondary' }} />
-                        </ListItemIcon>
-                        <ListItemText primary="New meeting" primaryTypographyProps={{ fontSize: '0.8125rem' }} />
-                    </ListItemButton>
-                    </ListItem>
+                    ))}
                     {/* Archived (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U7): a
                         secondary place, beside All notes rather than a tab. */}
                     <ListItem disablePadding>

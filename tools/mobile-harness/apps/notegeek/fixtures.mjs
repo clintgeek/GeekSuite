@@ -270,7 +270,23 @@ export const ONE_ON_ONE_OPEN = [
   { __typename: 'Task', id: 't-a1', content: 'Send Alex the on-call rotation draft', status: 'pending', dueDate: daysAgo(-2) },
   { __typename: 'Task', id: 't-a2', content: 'Ask about the promo packet timeline', status: 'pending', dueDate: null },
 ];
-const withOneOnOnes = (vars) => (String(vars?.under || '').startsWith('fd/1on1') ? [...ONE_ON_ONE_NOTES, ...NOTES] : NOTES);
+// Daily pages (GeekDay) and meeting pages: notes of a kind of their own
+// (DOCS/NOTE_KINDS_SPEC.md). Like the 1:1s, kept out of `NOTES` so no other
+// scene changes; a list asked for by their tag gets them.
+export const KIND_NOTES = [
+  { ...note('d1', '2026-11-23', 'handwritten', ['daily', 'daily/2026-11-23'], '', daysAgo(1)), createdAt: daysAgo(1) },
+  { ...note('d2', '2026-11-22', 'handwritten', ['daily', 'daily/2026-11-22'], '', daysAgo(2)), createdAt: daysAgo(2) },
+  { ...note('m1', '2026-11-20 Meeting', 'handwritten', ['meeting'], '', daysAgo(4)), createdAt: daysAgo(4) },
+  { ...note('m2', '2026-11-12 Meeting', 'handwritten', ['meeting'], '', daysAgo(12)), createdAt: daysAgo(12) },
+];
+/** Every note of every kind: what the gateway holds in the kind scenes. */
+export const ALL_KINDS = [...KIND_NOTES, ...ONE_ON_ONE_NOTES, ...NOTES];
+const withOneOnOnes = (vars) => {
+  const under = String(vars?.under || '');
+  if (under.startsWith('fd/1on1')) return [...ONE_ON_ONE_NOTES, ...NOTES];
+  if (under === 'daily' || under === 'meeting') return [...KIND_NOTES, ...NOTES];
+  return NOTES;
+};
 
 // Enough tags (with a nested path) that the sidebar's tree must scroll — the
 // last ones sat hidden below a 40vh cap until 2026-09-24.
@@ -486,6 +502,7 @@ export const filterNotes = (list, vars = {}) => list.filter((n) =>
   (!vars.tag || n.tags.includes(vars.tag))
   && (!vars.prefix || n.tags.some((t) => t.startsWith(vars.prefix)))
   && (!vars.under || n.tags.some((t) => inSubtree(t, vars.under)))
+  && !(vars.notUnder || []).some((root) => n.tags.some((t) => inSubtree(t, root)))
   && (!vars.type || n.type === vars.type));
 
 // Pinned first, then the chosen key (titles case-insensitively), the way

@@ -136,7 +136,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, ARCHIVED, DELETED, NOTES, conflictAnswer, transcriptState, notesPage, listRow, NOTE_COMPOSED, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_SKETCH_TEMPLATE, NOTE_SKETCH_LEGACY_TEMPLATE, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
+import { OPS, ALL_KINDS, ARCHIVED, DELETED, NOTES, conflictAnswer, transcriptState, notesPage, listRow, NOTE_COMPOSED, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_SKETCH_TEMPLATE, NOTE_SKETCH_LEGACY_TEMPLATE, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
 
 // ── Fold-in helpers (scenes 19a-19e) ────────────────────────────────────────
 // The gateway is stubbed with the proposal the real model made for this note
@@ -2670,10 +2670,11 @@ export const scenes = [
     },
   },
   {
-    // The sidebar's one-click starts, under All notes: New 1:1 opens the
-    // person picker; New meeting opens a handwritten page on the Meeting
-    // sheet (two pages long), dated and tagged, and saves nothing until
-    // there is ink.
+    // The sidebar lists the kinds of note, then Everything, then Archived
+    // (DOCS/NOTE_KINDS_SPEC.md). 1:1s is the people page, where New 1:1
+    // opens the person picker; Meetings has New meeting at the top, which
+    // opens a handwritten page on the Meeting sheet (two pages long), dated
+    // and tagged, and saves nothing until there is ink.
     name: '24d-sidebar-quick-new',
     viewports: ['desktop'],
     async setup(page, h) {
@@ -2685,15 +2686,20 @@ export const scenes = [
       });
       await page.goto(`${h.base}/notes`, { waitUntil: 'networkidle' });
       await h.settle(1000);
-      const order = (await page.locator('li:has([data-nav-new]), li:has(a[href="/notes"]), li:has([data-nav-archived])').allInnerTexts()).map((t) => t.split('\n')[0].trim());
-      if (order.join('|') !== 'All notes|New 1:1|New meeting|Archived') throw new Error(`the rows under All notes read ${order.join('|')}`);
-      await page.locator('[data-nav-new="one-on-one"]').click();
+      const order = (await page.locator('li:has([data-nav-kind]), li:has([data-nav-archived])').allInnerTexts()).map((t) => t.split('\n')[0].trim());
+      if (order.join('|') !== 'Notes|Dailies|Meetings|1:1s|Everything|Archived') throw new Error(`the sidebar's rows read ${order.join('|')}`);
+      await page.locator('[data-nav-kind="one-on-ones"]').click();
+      await h.settle(800);
+      if ((await page.locator('[data-nav-kind="one-on-ones"]').getAttribute('aria-current')) !== 'page') throw new Error('1:1s is not current on the people page');
+      await page.getByTestId('one-on-one-new').click();
       await h.settle(600);
       const picker = page.getByRole('dialog', { name: 'New 1:1' });
-      if (!(await picker.count())) throw new Error('New 1:1 in the sidebar did not open the person picker');
+      if (!(await picker.count())) throw new Error('New 1:1 on the people page did not open the person picker');
       await page.keyboard.press('Escape');
       await h.settle(400);
-      await page.locator('[data-nav-new="meeting"]').click();
+      await page.locator('[data-nav-kind="meetings"]').click();
+      await h.settle(800);
+      await page.getByTestId('kind-new').click();
       await page.waitForSelector('.tl-container', { timeout: 20000 });
       await h.settle(1500);
       if (!/\/notes\/new\?type=handwritten&meeting=1$/.test(page.url())) throw new Error(`New meeting went to ${page.url()}`);
@@ -2706,6 +2712,92 @@ export const scenes = [
       if (Math.round((size.h / size.w) * 10) !== 28) throw new Error(`the sheet is ${size.w} x ${size.h}, not two pages long`);
       await h.settle(2600);
       if (calls.create.length) throw new Error('opening a new meeting created a note before any ink');
+    },
+  },
+
+  // ── Note kinds (DOCS/NOTE_KINDS_SPEC.md): the notes list, partitioned ──
+  {
+    // The gateway holds notes of every kind. Notes shows none of the daily
+    // pages, meetings or 1:1s; each of those has its own list; Everything is
+    // the lot; and search still finds a daily page.
+    name: '27a-note-kinds',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const asked = [];
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNotesPage: (vars) => { asked.push(vars); return notesPage(ALL_KINDS, vars); },
+        SearchNotes: () => ({ searchNotes: [{ ...SEARCH_RESULTS[0], _id: 'd1', title: '2026-11-23', type: 'handwritten', tags: ['daily', 'daily/2026-11-23'], snippet: 'Talked to Alex about the on-call rotation.' }] }),
+      });
+      const ids = () => page.locator('[data-note-row]').evaluateAll((els) => els.map((e) => (e.getAttribute('href') || '').split('/').pop()));
+      const kindIds = ['d1', 'd2', 'm1', 'm2', 'o1', 'o2', 'o3'];
+
+      await page.goto(`${h.base}/notes`, { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      const plain = await ids();
+      if (!plain.length) throw new Error('Notes is empty');
+      const leaked = plain.filter((id) => kindIds.includes(id));
+      if (leaked.length) throw new Error(`Notes still lists ${leaked.join(', ')}`);
+      const sent = asked[asked.length - 1]?.notUnder || [];
+      if (sent.join(',') !== 'daily,meeting,fd/1on1') throw new Error(`Notes asked to leave out "${sent.join(',')}"`);
+
+      await page.goto(`${h.base}/meetings`, { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      if ((await ids()).join(',') !== 'm1,m2') throw new Error(`Meetings lists ${(await ids()).join(',')}`);
+      if (!(await page.getByRole('heading', { name: 'Meetings' }).count())) throw new Error('the page is not titled Meetings');
+      if (await page.locator('[data-type-filter]').count()) throw new Error('Meetings still shows the type chips');
+      const make = await page.getByTestId('kind-new').boundingBox();
+      if (!make || make.height < 44) throw new Error(`New meeting is ${make ? Math.round(make.height) : 0}px high`);
+      if (railLayout(h) && (await page.locator('[data-geek-nav-rail-item="meetings"]').getAttribute('aria-current')) !== 'page') throw new Error('the rail does not mark Meetings as current');
+
+      await page.goto(`${h.base}/dailies`, { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      if ((await ids()).join(',') !== 'd1,d2') throw new Error(`Dailies lists ${(await ids()).join(',')}`);
+      if (await page.getByTestId('kind-new').count()) throw new Error('Dailies offers a New button');
+      if (railLayout(h) && (await page.locator('[data-geek-nav-rail-item="dailies"]').getAttribute('aria-current')) !== 'page') throw new Error('the rail does not mark Dailies as current');
+
+      await page.goto(`${h.base}/everything`, { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      const all = await ids();
+      const missing = kindIds.filter((id) => !all.includes(id));
+      if (missing.length) throw new Error(`Everything is missing ${missing.join(', ')}`);
+
+      // A daily page is still a note: search finds it.
+      await page.goto(`${h.base}/search?q=rotation`, { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      if (!(await page.locator('[data-note-row][href="/notes/d1"]').count())) throw new Error('search did not find the daily page');
+
+      await page.goto(`${h.base}/meetings`, { waitUntil: 'networkidle' });
+      await h.settle(1000);
+    },
+  },
+  {
+    // On the tablet rail the kinds are places: 1:1s is the people page, and
+    // starting a 1:1 or a meeting is the button at the top of its list.
+    name: '27b-note-kinds-rail',
+    viewports: ['tablet'],
+    goto: '/notes',
+    wait: 1200,
+    async setup(page, h) {
+      await page.locator('[data-geek-nav-rail-item="one-on-ones"]').click();
+      await h.settle(900);
+      if (!/\/tags\/fd%2F1on1$/.test(page.url())) throw new Error(`1:1s went to ${page.url()}`);
+      if ((await page.locator('[data-geek-nav-rail-item="one-on-ones"]').getAttribute('aria-current')) !== 'page') throw new Error('the rail does not mark 1:1s as current');
+      if (!(await page.getByTestId('one-on-one-people').count())) throw new Error('1:1s is not the people page');
+      await page.getByTestId('one-on-one-new').click();
+      await h.settle(600);
+      if (!(await page.getByRole('dialog', { name: 'New 1:1' }).count())) throw new Error('New 1:1 did not open the person picker');
+      await page.keyboard.press('Escape');
+      await h.settle(400);
+      await page.locator('[data-geek-nav-rail-item="meetings"]').click();
+      await h.settle(900);
+      if (!/\/meetings$/.test(page.url())) throw new Error(`Meetings went to ${page.url()}`);
+      await page.getByTestId('kind-new').click();
+      await page.waitForSelector('.tl-container', { timeout: 20000 });
+      await h.settle(1200);
+      if (!/\/notes\/new\?type=handwritten&meeting=1$/.test(page.url())) throw new Error(`New meeting went to ${page.url()}`);
+      // Written from the Meetings list, so (landscape) that list stays beside it.
+      if (h.landscape && !(await page.locator('[data-note-two-pane] [data-kind-list="meetings"]').count())) throw new Error('the Meetings list did not stay beside the new meeting');
     },
   },
 
@@ -2725,16 +2817,10 @@ export const scenes = [
       if (await page.locator('[data-geek-bottom-nav]').count()) throw new Error('the tablet still draws the phone bottom bar');
       if (await page.locator('[data-geek-topbar="menu"]').count()) throw new Error('the tablet still has a hamburger');
       const ids = await page.locator('[data-geek-nav-rail-item]').evaluateAll((els) => els.map((e) => e.getAttribute('data-geek-nav-rail-item')));
-      if (ids.join(',') !== 'home,search,new,notes,one-on-one,meeting,tags') throw new Error(`rail items are ${ids.join(',')}`);
+      if (ids.join(',') !== 'home,search,new,notes,dailies,one-on-ones,meetings,tags') throw new Error(`rail items are ${ids.join(',')}`);
       // Every item fits on the rail: nothing is pushed off the bottom.
       const last = await page.locator('[data-geek-nav-rail-item="tags"]').boundingBox();
       if (last.y + last.height > h.height) throw new Error(`the rail's last item ends at ${Math.round(last.y + last.height)}px, below the ${h.height}px screen`);
-      // 1:1 opens the person picker; it starts a note, so it is never current.
-      await page.locator('[data-geek-nav-rail-item="one-on-one"]').click();
-      await h.settle(600);
-      if (!(await page.getByRole('dialog', { name: 'New 1:1' }).count())) throw new Error('1:1 on the rail did not open the person picker');
-      await page.keyboard.press('Escape');
-      await h.settle(400);
       if ((await page.locator('[data-geek-nav-rail-item="notes"]').getAttribute('aria-current')) !== 'page') throw new Error('Notes is not current on /notes');
       const row = await page.locator('[data-note-row]').first().boundingBox();
       if (!row) throw new Error('no note rows');
@@ -2752,8 +2838,8 @@ export const scenes = [
     },
   },
   {
-    // The rail's Tags item: the sidebar's contents (tag filter, All notes,
-    // Archived, Recently deleted, the tree) in a sheet, so a tablet loses
+    // The rail's Tags item: the sidebar's contents (tag filter, the kinds,
+    // Everything, Archived, Recently deleted, the tree) in a sheet, so a tablet loses
     // nothing the desktop sidebar has. The sheet is capped, not 800 wide.
     name: '40b-tablet-tags-sheet',
     viewports: ['tablet'],
@@ -2762,7 +2848,7 @@ export const scenes = [
     async setup(page, h) {
       await openTags(page, h);
       const sheet = page.getByRole('dialog', { name: /tags/i });
-      for (const name of [/all notes/i, /archived/i, /recently deleted/i]) {
+      for (const name of [/^notes/i, /dailies/i, /meetings/i, /1:1s/i, /everything/i, /archived/i, /recently deleted/i]) {
         if (!(await sheet.getByRole('link', { name }).count())) throw new Error(`the Tags sheet has no ${name} link`);
       }
       if (!(await sheet.getByRole('button', { name: /^collapse dev$/i }).count())) throw new Error('the Tags sheet has no tag tree');
@@ -3044,7 +3130,7 @@ export const waivers = [
     // shape has `altText`.
     rule: 'image-alt',
     match: 'tl-image',
-    scenes: ['13d-photo-note', '23c-sketch-template-menu', '23d-sketch-template', '24c-one-on-one-new', '24d-sidebar-quick-new', '26a-reference-pane'],
+    scenes: ['13d-photo-note', '23c-sketch-template-menu', '23d-sketch-template', '24c-one-on-one-new', '24d-sidebar-quick-new', '26a-reference-pane', '27b-note-kinds-rail'],
     reason: 'tldraw 2.4 image shape <img> has no alt and no way to set one (third-party UI)',
   },
 ];

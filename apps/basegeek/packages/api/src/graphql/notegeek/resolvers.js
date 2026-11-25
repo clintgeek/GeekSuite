@@ -260,7 +260,7 @@ const isMissingTextIndex = (err) => err?.code === 27 || /text index required/i.t
  * The list's filter: the owner's active notes, narrowed by tag / prefix /
  * under / type (shared by notes and notesPage).
  */
-async function listFilter(userId, { tag, prefix, under, type }) {
+async function listFilter(userId, { tag, prefix, under, notUnder, type }) {
   // Archived notes leave the list (spec §3 A2). The tag-spelling lookups
   // below stay owner-wide: a superset of spellings narrows nothing wrongly.
   const filter = { userId, ...active() };
@@ -295,6 +295,18 @@ async function listFilter(userId, { tag, prefix, under, type }) {
     filter.tags = tagConds[0];
   } else if (tagConds.length > 1) {
     filter.$and = tagConds.map((cond) => ({ tags: cond }));
+  }
+  // `notUnder` leaves out whole tag subtrees: the Notes list without the
+  // dailies, meetings and 1:1s (DOCS/NOTE_KINDS_SPEC.md). A note carrying
+  // any tag at or beneath one of them is out, whatever else it carries.
+  const outside = [];
+  for (const root of notUnder || []) {
+    const rootTag = normalizeTag(root);
+    if (rootTag) outside.push(...await subtreeSpellings(Note, owner, rootTag));
+  }
+  if (outside.length) {
+    const not = { tags: { $nin: outside } };
+    filter.$and = [...(filter.$and || []), not];
   }
   if (type) {
     filter.type = type;
@@ -342,10 +354,10 @@ export const resolvers = {
       return getNoteVersion({ versionId: id, userId });
     },
 
-    notes: async (_, { tag, prefix, under, type, limit, sort }, context, info) => {
+    notes: async (_, { tag, prefix, under, notUnder, type, limit, sort }, context, info) => {
       const userId = context.user?.id;
       if (!userId) return [];
-      const filter = await listFilter(userId, { tag, prefix, under, type });
+      const filter = await listFilter(userId, { tag, prefix, under, notUnder, type });
       const { key, dir } = sortSpec(sort);
       // Pinned notes sort first, ahead of whatever order was requested —
       // server-side, matching how every other `notes` sort is decided here

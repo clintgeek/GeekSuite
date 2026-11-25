@@ -12,7 +12,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 
 // Import main app components
-import NoteList from './components/NoteList';
+import KindNotesList from './components/KindNotesList';
 import NoteEditorRoute from './pages/NoteEditorRoute';
 import DeletedNotes from './pages/DeletedNotes';
 import PhotoPagesPage from './pages/PhotoPagesPage';
@@ -125,7 +125,11 @@ function App() {
                                 <Route path="/notes/photo" element={<Layout><PhotoPagesPage /></Layout>} />
                                 <Route path="/notes/undefined" element={<Navigate to="/" replace />} />
                                 <Route path="/notes/undefined/edit" element={<Navigate to="/" replace />} />
-                                <Route path="/notes" element={<Layout><NoteList /></Layout>} />
+                                {/* The notes list, partitioned (DOCS/NOTE_KINDS_SPEC.md). */}
+                                <Route path="/notes" element={<Layout><KindNotesList kind="notes" /></Layout>} />
+                                <Route path="/dailies" element={<Layout><KindNotesList kind="dailies" /></Layout>} />
+                                <Route path="/meetings" element={<Layout><KindNotesList kind="meetings" /></Layout>} />
+                                <Route path="/everything" element={<Layout><KindNotesList kind="everything" /></Layout>} />
                                 <Route path="/notes/:id" element={<Layout><NotePage /></Layout>} />
                                 <Route path="/notes/:id/edit" element={<Layout><NoteEditorRoute /></Layout>} />
                                 <Route path="/tags/:tag" element={<Layout><TagNotesList /></Layout>} />

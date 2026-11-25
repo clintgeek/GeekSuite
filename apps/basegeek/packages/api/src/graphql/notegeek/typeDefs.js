@@ -424,10 +424,11 @@ export const typeDefs = gql`
     """
     The note list. tag = exactly that tag; prefix = any tag starting with
     the string; under = the nested-tag view, the tag itself or anything
-    beneath it (house -> house, house/garage; never houseboat). Sent
+    beneath it (house -> house, house/garage; never houseboat). notUnder =
+    leave out every note with a tag at or beneath any of these. Sent
     together, they all narrow.
     """
-    notes(tag: String, prefix: String, under: String, type: String, limit: Int, sort: String): [Note!]!
+    notes(tag: String, prefix: String, under: String, notUnder: [String!], type: String, limit: Int, sort: String): [Note!]!
     """
     The note list, a page at a time (keyset paging: stable while notes are
     edited). Same filters as notes; pinned notes first, then sort:
@@ -435,7 +436,7 @@ export const typeDefs = gql`
     title_asc | title_desc (titles case-insensitive). first: 1-200, default
     50. after: the previous page's nextCursor.
     """
-    notesPage(tag: String, prefix: String, under: String, type: String, sort: String, first: Int, after: String): NotePage!
+    notesPage(tag: String, prefix: String, under: String, notUnder: [String!], type: String, sort: String, first: Int, after: String): NotePage!
     """A note by id — including one in Recently deleted (deletedAt is set) or archived."""
     note(id: ID!): Note
     """

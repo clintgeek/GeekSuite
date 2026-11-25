@@ -24,6 +24,7 @@ import Layout from '../../components/Layout';
 import { VIEWPORTS, setViewport, restoreViewport } from '../helpers/viewport';
 
 vi.mock('@geeksuite/user', () => ({
+    useAppPreferences: vi.fn(() => ({ preferences: {} })),
     ThemeProvider: ({ children }) => children,
     useThemeMode: () => ({ theme: 'light', themePreference: 'light', setThemePreference: vi.fn(), toggleTheme: vi.fn() }),
     usePreferences: vi.fn(() => ({ preferences: {}, loaded: true })),
@@ -127,7 +128,7 @@ describe('NoteGeek navigation by device', () => {
         setViewport(vp);
         renderAt('/');
         expect(chrome()).toEqual({ rail: true, bottom: false, sidebar: false, hamburger: false });
-        expect(railItems()).toEqual(['home', 'search', 'new', 'notes', 'one-on-one', 'meeting', 'tags']);
+        expect(railItems()).toEqual(['home', 'search', 'new', 'notes', 'dailies', 'one-on-ones', 'meetings', 'tags']);
         expect($('[data-geek-nav-rail-item="home"]').getAttribute('aria-current')).toBe('page');
     });
 
@@ -138,12 +139,16 @@ describe('NoteGeek navigation by device', () => {
         expect($('[data-geek-nav-rail-item="notes"]').getAttribute('aria-current')).toBe('page');
     });
 
-    it('tablet: Tags opens the tag tree with All notes, Archived and Recently deleted', async () => {
+    it('tablet: Tags opens the tag tree with the kinds, Everything, Archived and Recently deleted', async () => {
         setViewport(VIEWPORTS.tabletPortrait);
         renderAt('/notes');
         fireEvent.click($('[data-geek-nav-rail-item="tags"]'));
         const sheet = await screen.findByRole('dialog', { name: 'Tags' });
-        expect(within(sheet).getByRole('link', { name: /all notes/i })).toHaveAttribute('href', '/notes');
+        expect(within(sheet).getByRole('link', { name: /^notes/i })).toHaveAttribute('href', '/notes');
+        expect(within(sheet).getByRole('link', { name: /dailies/i })).toHaveAttribute('href', '/dailies');
+        expect(within(sheet).getByRole('link', { name: /meetings/i })).toHaveAttribute('href', '/meetings');
+        expect(within(sheet).getByRole('link', { name: /1:1s/i })).toHaveAttribute('href', '/tags/fd%2F1on1');
+        expect(within(sheet).getByRole('link', { name: /everything/i })).toHaveAttribute('href', '/everything');
         expect(within(sheet).getByRole('link', { name: /archived/i })).toHaveAttribute('href', '/archived');
         expect(within(sheet).getByRole('link', { name: /recently deleted/i })).toHaveAttribute('href', '/deleted');
         expect(within(sheet).getByRole('textbox', { name: /filter tags/i })).toBeInTheDocument();

@@ -101,6 +101,7 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 vi.mock('@geeksuite/user', () => ({
+    useAppPreferences: vi.fn(() => ({ preferences: {} })),
     ThemeProvider: ({ children }) => children,
     useThemeMode: () => ({
         theme: 'light',

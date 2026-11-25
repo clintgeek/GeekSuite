@@ -49,6 +49,7 @@ vi.mock('../../store/noteStore', () => {
 });
 
 vi.mock('@geeksuite/user', () => ({
+    useAppPreferences: vi.fn(() => ({ preferences: {} })),
     ThemeProvider: ({ children }) => children,
     useThemeMode: () => ({
         theme: 'light',

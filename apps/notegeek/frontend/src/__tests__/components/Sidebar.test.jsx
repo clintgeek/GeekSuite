@@ -8,7 +8,6 @@ import { lightTheme } from '../testUtils';
 import Sidebar from '../../components/Sidebar';
 import useAuthStore from '../../store/authStore';
 import useNoteStore from '../../store/noteStore';
-import useOneOnOneStore from '../../store/oneOnOneStore';
 
 const GET_TAGS = gql`
   query GetNoteTags {
@@ -92,23 +91,26 @@ describe('Sidebar', () => {
     it('renders main navigation links', () => {
         render(<Sidebar />, { wrapper: SidebarTestWrapper });
         expect(screen.getByText('Home')).toBeInTheDocument();
-        expect(screen.getByText('All notes')).toBeInTheDocument();
+        expect(screen.getByText('Notes')).toBeInTheDocument();
         // One path each: New is the top bar's split button and search is the
         // top bar's box, so the sidebar repeats neither.
         expect(screen.queryByText('New Note')).toBeNull();
         expect(screen.queryByText('Search')).toBeNull();
     });
 
-    it('offers New 1:1 and New meeting straight under All notes', () => {
-        useOneOnOneStore.setState({ open: false });
+    it('lists the kinds of note, then Everything, then Archived', () => {
         render(<Sidebar />, { wrapper: SidebarTestWrapper });
+        const rows = [...document.querySelectorAll('[data-nav-kind]')];
+        expect(rows.map((a) => [a.getAttribute('data-nav-kind'), a.getAttribute('href')])).toEqual([
+            ['notes', '/notes'],
+            ['dailies', '/dailies'],
+            ['meetings', '/meetings'],
+            ['one-on-ones', '/tags/fd%2F1on1'],
+            ['everything', '/everything'],
+        ]);
         const labels = screen.getAllByRole('listitem').map((li) => li.textContent);
-        const at = labels.findIndex((l) => l.startsWith('All notes'));
-        expect(labels.slice(at + 1, at + 4)).toEqual(['New 1:1', 'New meeting', 'Archived']);
-        // A meeting is a link to a sketch on the Meeting sheet; a 1:1 opens the person picker.
-        expect(screen.getByRole('link', { name: 'New meeting' })).toHaveAttribute('href', '/notes/new?type=handwritten&meeting=1');
-        fireEvent.click(screen.getByRole('button', { name: 'New 1:1' }));
-        expect(useOneOnOneStore.getState().open).toBe(true);
+        const at = labels.findIndex((l) => l.startsWith('Everything'));
+        expect(labels[at + 1]).toBe('Archived');
     });
 
     it('renders tags hierarchically', async () => {

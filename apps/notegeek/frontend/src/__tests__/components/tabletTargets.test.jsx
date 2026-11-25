@@ -50,6 +50,7 @@ const mocks = [
 
 vi.mock('../../components/TagContextMenu', () => ({ default: () => null }));
 vi.mock('@geeksuite/user', () => ({
+    useAppPreferences: vi.fn(() => ({ preferences: {} })),
   ThemeProvider: ({ children }) => children,
   useThemeMode: () => ({ theme: 'light', themePreference: 'light', setThemePreference: vi.fn(), toggleTheme: vi.fn() }),
   usePreferences: vi.fn(() => ({ preferences: {}, loaded: true })),

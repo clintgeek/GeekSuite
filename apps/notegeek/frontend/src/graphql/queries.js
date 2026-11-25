@@ -40,8 +40,8 @@ export const GET_NOTES = gql`
  * `after` is the previous page's `nextCursor`.
  */
 export const GET_NOTES_PAGE = gql`
-    query GetNotesPage($tag: String, $prefix: String, $under: String, $type: String, $sort: String, $first: Int, $after: String) {
-        notesPage(tag: $tag, prefix: $prefix, under: $under, type: $type, sort: $sort, first: $first, after: $after) {
+    query GetNotesPage($tag: String, $prefix: String, $under: String, $notUnder: [String!], $type: String, $sort: String, $first: Int, $after: String) {
+        notesPage(tag: $tag, prefix: $prefix, under: $under, notUnder: $notUnder, type: $type, sort: $sort, first: $first, after: $after) {
             notes {
                 ${NOTE_LIST_FIELDS}
             }

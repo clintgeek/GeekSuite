@@ -5,7 +5,7 @@ import { GeekShell, GeekAppFrame, GeekToastProvider, GeekTwoPane, GeekEmptyState
 import AutoStoriesOutlinedIcon from '@mui/icons-material/AutoStoriesOutlined';
 import useAuthStore from '../store/authStore';
 import Header from './Header';
-import NoteList from './NoteList';
+import KindNotesList from './KindNotesList';
 import TagNotesList from './TagNotesList';
 import useEditorChrome from '../store/editorChromeStore';
 import useNavStore from '../store/navStore';
@@ -14,6 +14,7 @@ import { useNotePrimaryNav } from './PrimaryNav';
 import { CurrentNoteContext, useNoteFormFactor } from '../hooks/useNoteFormFactor';
 import OneOnOnePicker from './oneOnOne/OneOnOnePicker';
 import BackgroundReader from './BackgroundReader';
+import { kindForPath } from '../utils/noteKinds';
 
 /**
  * The paths that are one note: `/notes/new`, `/notes/:id`, `/notes/:id/edit`
@@ -24,8 +25,9 @@ const TAG_LIST = /^\/tags\/([^/]+)\/?$/;
 
 /**
  * Which list sits in the list pane in two-pane: the last list the writer
- * looked at — all notes, or one tag's notes — so opening a note from a tag
- * keeps that tag's list (its scroll and filters) beside it.
+ * looked at — a kind's list (Notes, Dailies, Meetings, Everything) or one
+ * tag's notes — so opening a note from a tag keeps that tag's list (its
+ * scroll and filters) beside it.
  *
  * `beside` says whether that list is ON SCREEN to open a note beside: true
  * from a list page and on through the notes opened from it, false once the
@@ -38,7 +40,8 @@ function useListContext(pathname) {
     const last = useRef({ kind: 'notes', key: 'notes' });
     const beside = useRef(false);
     let next = null;
-    if (pathname === '/notes' || pathname === '/notes/') next = { kind: 'notes', key: 'notes' };
+    const kind = kindForPath(pathname);
+    if (kind) next = { kind, key: kind };
     const tag = TAG_LIST.exec(pathname);
     if (tag) next = { kind: 'tag', tag: tag[1], key: `tag:${tag[1]}` };
     if (next && next.key !== last.current.key) last.current = next;
@@ -56,7 +59,8 @@ function useListContext(pathname) {
  * the rail shows GeekShell draws no drawer, hamburger or bottom bar.
  *
  * Two panes (tablet wave, plan P2a/P2b): from 1024 px (`twoPane`) the notes
- * list and the note sit side by side on `/notes`, `/tags/:tag` and a note
+ * list and the note sit side by side on a kind's list (`/notes`,
+ * `/dailies`, `/meetings`, `/everything`), on `/tags/:tag` and a note
  * opened FROM one of those (see useListContext: a note opened from Home or
  * Search stays a whole page). The list element stays at the same place in the tree
  * while the note changes, so it keeps its scroll, type filter and sort.
@@ -86,7 +90,7 @@ function Layout({ children }) {
     const split =
         showNavigation &&
         twoPane &&
-        (pathname === '/notes' || pathname === '/notes/' || TAG_LIST.test(pathname) ||
+        (Boolean(kindForPath(pathname)) || TAG_LIST.test(pathname) ||
             (Boolean(detailMatch) && listContext.beside));
     const fillFrame = singleNote;
     // Writing on a phone: the suite top bar tucks away while the caret is in
@@ -111,7 +115,7 @@ function Layout({ children }) {
             list={
                 listContext.kind === 'tag'
                     ? <TagNotesList tag={listContext.tag} />
-                    : <NoteList />
+                    : <KindNotesList kind={listContext.kind} />
             }
             detail={detailMatch ? children : null}
             placeholder={

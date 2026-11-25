@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { buildNavItems, hidesBottomBar, navValueFor } from '../../components/PrimaryNav';
-import { MEETING_PATH } from '../../utils/oneOnOne';
 import { pageTitle } from '../../components/navConfig';
 
 /**
@@ -42,13 +41,29 @@ describe('PrimaryNav rules', () => {
     expect(navValueFor('/notes/abc', { rail: true })).toBe('notes');
   });
 
-  it('the rail carries 1:1 and Meeting, one tap each; the phone bar does not', () => {
+  it('the rail carries the other kinds as places; the phone bar does not', () => {
     const navigate = vi.fn();
-    const rail = buildNavItems({ value: 'notes', rail: true, navigate, onNew: () => {}, onTags: () => {} });
-    expect(rail.map((i) => i.id)).toEqual(['home', 'search', 'new', 'notes', 'one-on-one', 'meeting', 'tags']);
-    rail.find((i) => i.id === 'meeting').onClick();
-    expect(navigate).toHaveBeenCalledWith(MEETING_PATH);
+    const rail = buildNavItems({ value: 'notes', rail: true, navigate, onNew: () => {}, onTags: () => {}, oneOnOneRoot: 'fd/1on1' });
+    expect(rail.map((i) => i.id)).toEqual(['home', 'search', 'new', 'notes', 'dailies', 'one-on-ones', 'meetings', 'tags']);
+    rail.find((i) => i.id === 'meetings').onClick();
+    expect(navigate).toHaveBeenCalledWith('/meetings');
+    rail.find((i) => i.id === 'dailies').onClick();
+    expect(navigate).toHaveBeenCalledWith('/dailies');
+    rail.find((i) => i.id === 'one-on-ones').onClick();
+    expect(navigate).toHaveBeenCalledWith('/tags/fd%2F1on1');
     const bar = buildNavItems({ value: 'notes', rail: false, navigate, onNew: () => {}, onTags: () => {} });
     expect(bar.map((i) => i.id)).toEqual(['home', 'search', 'new', 'notes']);
+  });
+
+  it('each kind lights its own rail item; a phone keeps them under Notes', () => {
+    const rail = { rail: true, oneOnOneRoot: 'fd/1on1' };
+    expect(navValueFor('/dailies', rail)).toBe('dailies');
+    expect(navValueFor('/meetings', rail)).toBe('meetings');
+    expect(navValueFor('/tags/fd%2F1on1', rail)).toBe('one-on-ones');
+    expect(navValueFor('/tags/fd%2F1on1%2Falex', rail)).toBe('one-on-ones');
+    expect(navValueFor('/tags/fd%2F1on1-old', rail)).toBe('tags');
+    expect(navValueFor('/everything', rail)).toBe('tags');
+    expect(navValueFor('/notes', rail)).toBe('notes');
+    for (const path of ['/dailies', '/meetings', '/everything']) expect(navValueFor(path)).toBe('notes');
   });
 });
