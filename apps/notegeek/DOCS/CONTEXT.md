@@ -865,3 +865,35 @@ Full account: `AUTO_TRANSCRIBE_SPEC.md`, "Background reader". What to know befor
   Convert and Send tasks then send `source: 'form'`. The gateway picks the form prompt itself for
   `autoTranscribeSketch`. Transcripts of such pages carry "§ HEADING" lines: keep them out of
   anything that treats a line as the writer's.
+
+## 22. Reference pane and the editor split (client only, 2026-11-24)
+
+What: `DOCS/REFERENCE_PANE_SPEC.md`. No gateway change, no stored field.
+
+- **Where the code is.** `components/reference/`: `ReferencePane.jsx` (pane, bar, divider),
+  `SketchReference.jsx` (a handwritten note, read-only), `ReferencePicker.jsx`,
+  `referenceSplit.js` (the divider's arithmetic, pure), `useReferenceNote.jsx` (page state and
+  the head's button). `utils/recentNotes.js` keeps "opened on this device" in localStorage.
+- **Layout.** `ReferencePane` wraps `NoteShell` in `NoteEditorPage` and renders a fragment:
+  the pane, then its children. There is no wrapper element, so with the pane closed the page's
+  DOM is what it was, and opening or closing never remounts the note (a remount would rebuild
+  tldraw and lose undo). Keep `children` in the same position in that fragment.
+- **Read-only by construction.** `SketchReference` is its own small `<Tldraw>`: instance state
+  `isReadonly`, the hand tool, no document listener, no `noteId`, no `setOpenSketch`. Nothing
+  in `components/reference/` calls a mutation. The pane's queries are `GetNoteById` and
+  `SketchTranscript`.
+- **Landmine: tldraw user preferences are shared by every `<Tldraw>` on the page.** The
+  editor's `PaperSync` writes the colour scheme there. `SketchReference` passes its own `user`
+  (`useTldrawUser`) so a reference on white paper cannot switch the ink colours of a dark page
+  being written on. Do not mount `PaperSync` in it.
+- **Landmine: `<Tldraw readOnly>` is not a prop in tldraw 2.4.** Read-only is
+  `editor.updateInstanceState({ isReadonly: true })`.
+- **Not on a phone** (`useNoteFormFactor().phone`): no button, and an open pane closes.
+- **Harness.** `26a` (a 1:1 with an earlier 1:1 above it, both real canvases), `26b` (typed),
+  `26c` (phone has no button).
+- **Editor split.** `NoteEditorPage.jsx` keeps the form, the save core and the layout
+  (about 1,290 lines, from 1,894). Compose, Convert, Send tasks, print preparation, the dialogs
+  and the load states are in `pages/noteEditor/`. The refs the save core shares
+  (`handleSaveRef`, `dirtyRef`, `contentRef` and the rest) are declared before those hooks and
+  passed in; `handleSaveRef.current` is assigned after `handleSave` on every render.
+

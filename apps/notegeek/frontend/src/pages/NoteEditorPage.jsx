@@ -1,32 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Box, CircularProgress, Typography, Button } from '@mui/material';
-// Deep-import (see RichTextEditor.jsx for why) instead of the
-// '@mui/icons-material' barrel.
-import BackIcon from '@mui/icons-material/ArrowBack';
+import { Box, Button } from '@mui/material';
 import { useQuery, useMutation, getApolloContext } from '@apollo/client';
-import { GET_NOTE_BY_ID, SKETCH_TRANSCRIPT } from '../graphql/queries';
-import {
-  CREATE_NOTE, UPDATE_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH, SAVE_SKETCH_TRANSCRIPT_EDIT,
-  CREATE_TODO_TASK, RECORD_SKETCH_TASKS_SENT,
-} from '../graphql/mutations';
-import SendTasksDialog from '../components/editors/SendTasksDialog';
-import { taskInputFor, sendTaskRows, sentKeysFor, applyLineEdits } from '../utils/journalLines';
-import { taskClientId } from '../utils/taskClientId';
+import { GET_NOTE_BY_ID } from '../graphql/queries';
+import { CREATE_NOTE, UPDATE_NOTE } from '../graphql/mutations';
 import { saveDraft, getDraft, clearDraft, draftKeyFor } from '../utils/draftStore';
-import ConflictDialog from '../components/notes/ConflictDialog';
 import RestoreDraftBanner from '../components/notes/RestoreDraftBanner';
 import DeletedBanner from '../components/notes/DeletedBanner';
 import { useAutoTranscribe } from '../hooks/useAutoTranscribe';
 import { setOpenSketch, sketchClosed } from '@geeksuite/api-client';
 import TranscriptStatus from '../components/notes/TranscriptStatus';
-import ComposeDialog from '../components/editors/ComposeDialog';
-import TranscribeDialog from '../components/editors/TranscribeDialog';
-import FoldInSheet from '../components/foldin/FoldInSheet';
-import { sketchHasShapes } from '../utils/sketchExport';
-import { derivedNoteContent, derivedNoteTitle } from '../utils/sketchToText';
-import { carryCorrections, rememberCorrections } from '../utils/transcriptCorrections';
-import NoteHistoryDialog from '../components/notes/NoteHistoryDialog';
 import ArchivedBanner from '../components/notes/ArchivedBanner';
 import { useNoteArchiveState } from '../hooks/useNoteArchiveState';
 import { useArchiveNotes } from '../hooks/useArchiveNotes';
@@ -38,7 +21,6 @@ import NoteFooter from '../components/notes/NoteFooter';
 import { WikiLinkContext, useNoteLinks } from '../hooks/useNoteLinks';
 import { BackButton } from '../components/notes/NoteActions';
 import NotePrintView from '../components/notes/NotePrintView';
-import useNotePrint from '../hooks/useNotePrint';
 import useImportStore from '../store/importStore';
 import { SaveStatus, SaveAlert } from '../components/notes/SaveStatus';
 import { saveStampState } from '../utils/saveStamp';
@@ -52,6 +34,16 @@ import { applyInlineTags } from '../utils/inlineTags';
 import { containsNoteLink, insertLink, noteLinkMarkup, supportsLinkInsertion } from '../utils/noteLinks';
 import { buildMeeting, buildOneOnOne, oneOnOneRoot, personName, personOfNote, personTag } from '../utils/oneOnOne';
 import OpenItems from '../components/oneOnOne/OpenItems';
+import { useNoteCompose } from './noteEditor/useNoteCompose';
+import { useSketchConvert } from './noteEditor/useSketchConvert';
+import { useSendTasks } from './noteEditor/useSendTasks';
+import { useSketchPrint } from './noteEditor/useSketchPrint';
+import EditorDialogs from './noteEditor/EditorDialogs';
+import { NoteLoading, NoteLoadError } from './noteEditor/EditorLoadStates';
+import ReferencePane from '../components/reference/ReferencePane';
+import ReferencePicker from '../components/reference/ReferencePicker';
+import { ReferenceButton, useReferenceNote } from '../components/reference/useReferenceNote';
+import { rememberOpened } from '../utils/recentNotes';
 
 /**
  * NoteEditorPage - Unified page for creating and editing notes
@@ -190,6 +182,9 @@ function NoteEditorPage({ editorKey } = {}) {
   oneOnOneTagRef.current = oneOnOneTag;
   const [startSheet, setStartSheet] = useState(null);
   const oneOnOnePerson = personOfNote(tags, oneOnOneTag);
+  // A second note, read-only, above this one (DOCS/REFERENCE_PANE_SPEC.md).
+  // Page state only: nothing about it is saved, and it never touches this form.
+  const reference = useReferenceNote();
 
   // Where the caret was in the body's textarea the last time it moved. Markdown
   // and code notes are plain textareas, so a related-note link can land where
@@ -321,6 +316,8 @@ function NoteEditorPage({ editorKey } = {}) {
       draftKeyRef.current = draftKeyFor(id);
       offerDraftIfAny(draftKeyRef.current, noteToEdit);
       setSeededId(id);
+      // On this device only: what the reference picker offers first.
+      rememberOpened({ id, title: noteToEdit.title, type: noteToEdit.type });
 
       if (noteToEdit.type && Object.values(NOTE_TYPES).includes(noteToEdit.type)) {
         setNoteType(noteToEdit.type);
@@ -371,152 +368,32 @@ function NoteEditorPage({ editorKey } = {}) {
     clearDraft(draftKeyRef.current);
   };
 
-  // Handle save — allow if either title or content has text
-  // ── Compose ─────────────────────────────────────────────────────────────
-  //
-  // Build a document out of the scraps in this note. Nothing is written until
-  // the result has been seen: a compose is lossy by design, and this note may
-  // be the only copy of material pasted in from a chat or an email.
-  const [composeNoteMutation, { loading: isComposing }] = useMutation(COMPOSE_NOTE);
-  const [compose, setCompose] = useState(null);
+  // ── Refs the extracted hooks close over ───────────────────────────────
+  // Declared BEFORE the hook calls below (they take them as arguments). These
+  // always point to the latest values so stale closures don't bite. The
+  // handleSaveRef object is made here and pointed at handleSave once that is
+  // defined, later in this same render.
+  const handleSaveRef = useRef(null);
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  // What the form holds RIGHT NOW, for the "did the user type while the save
+  // was in flight?" check inside handleSave.
+  const contentRef = useRef(content);
+  contentRef.current = content;
+  const titleRef = useRef(title);
+  titleRef.current = title;
+  const saveErrorRef = useRef(saveError);
+  saveErrorRef.current = saveError;
+  const tagsRef = useRef(tags);
+  tagsRef.current = tags;
+  const noteTypeRef = useRef(noteType);
+  noteTypeRef.current = noteType;
+  const locationRef = useRef(location);
+  locationRef.current = location;
+  // The sketch editor's imperative handle (export for Convert, Send tasks, print).
+  const sketchApiRef = useRef(null);
+
   const [historyOpen, setHistoryOpen] = useState(false);
-
-  /**
-   * Types Compose can read.
-   *
-   * `text` is TipTap HTML, so the markup is stripped before it goes out — the
-   * model should see the writing, not the tags, and tags are most of the
-   * tokens. `code` is already plain. A null type is the app's old default and
-   * behaves as text (six of sixteen live notes carry one). `mindmap` and
-   * `handwritten` are excluded: their content is not prose.
-   */
-  const COMPOSABLE = ['text', 'markdown', 'code', null, undefined];
-  const canCompose = COMPOSABLE.includes(noteType);
-
-  const plainTextForCompose = () => {
-    if (noteType !== 'text' && noteType !== null && noteType !== undefined) return content;
-    // A parser, not a regex: stripping tags by pattern mangles anything
-    // containing a literal `<`, which code fragments routinely do.
-    const doc = new DOMParser().parseFromString(content || '', 'text/html');
-    return (doc.body?.textContent || '').trim();
-  };
-
-  /**
-   * `override` is the handwriting path's reviewed transcript
-   * (DOCS/HANDWRITING.md §2): Compose reads that instead of this note's body,
-   * and the result can only become a new note (`origin: 'sketch'`).
-   */
-  const handleCompose = async (override) => {
-    const fromSketch = typeof override === 'string';
-    const origin = fromSketch ? 'sketch' : 'note';
-    const source = fromSketch ? override : plainTextForCompose();
-    if (!source || !source.trim() || isComposing) return;
-    const show = (state) => setCompose({ ...state, origin });
-    show({ open: true, loading: true, markdown: '', stats: null, error: null });
-    try {
-      const { data } = await composeNoteMutation({ variables: { content: source } });
-      const result = data?.composeNote;
-      const reason = result?.provenance?.reason;
-
-      if (reason === 'content_too_long') {
-        show({
-          open: true, loading: false, markdown: '', stats: result?.stats || null,
-          error: 'That is more material than one compose can take. Split it across two notes and compose each.',
-        });
-        return;
-      }
-      if (reason === 'degenerate_output') {
-        // The gateway threw the answer away because it was a loop, not a
-        // document. Say what happened and that retrying is worth a try —
-        // routing picks again, so a second attempt is not the same attempt.
-        show({
-          open: true, loading: false, markdown: '', stats: result?.stats || null,
-          error: 'The model got stuck repeating itself, so that result was thrown away. '
-            + 'Your note is untouched — try again, and it may land on a better model.',
-          model: result?.provenance?.model || null,
-        });
-        return;
-      }
-      if (!result?.markdown?.trim()) {
-        show({
-          open: true, loading: false, markdown: '', stats: result?.stats || null,
-          error: 'Compose is unavailable right now — your note is unchanged.',
-        });
-        return;
-      }
-      show({
-        open: true, loading: false, markdown: result.markdown, stats: result.stats, error: null,
-        model: result?.provenance?.model || null,
-      });
-    } catch (err) {
-      show({
-        open: true, loading: false, markdown: '', stats: null,
-        error: err?.message || 'Could not compose this note.',
-      });
-    }
-  };
-
-  /** The safe path: a new markdown note, source left exactly as it was. */
-  const handleComposeSaveAsNew = async (markdown) => {
-    setCompose(null);
-    try {
-      const { data } = await createNoteMutation({
-        variables: {
-          title: title ? `${title} (composed)` : 'Composed note',
-          content: markdown,
-          type: 'markdown',
-          tags,
-        },
-      });
-      const created = data?.createNote;
-      notify('Saved as a new note.', { tone: 'success' });
-      if (created?.id) navigate(`/notes/${created.id}`);
-    } catch (err) {
-      notify(err?.message || 'Could not save the composed note.', { tone: 'error' });
-    }
-  };
-
-  /**
-   * Replace this note's body with the composed document.
-   *
-   * Safe only because every note now carries version history — this lands as
-   * one `compose` entry in it and is undoable. It would have been the single
-   * irreversible action in the app otherwise.
-   */
-  const handleComposeReplace = async (markdown) => {
-    setCompose(null);
-    setContent(markdown);
-    setNoteType('markdown');
-    setDirty(true);
-    try {
-      if (savedNoteId) {
-        await updateNoteMutation({
-          variables: {
-            id: savedNoteId,
-            title,
-            content: markdown,
-            type: 'markdown',
-            tags,
-            changeReason: 'compose',
-          },
-        });
-        // The server has it now, so the editor is clean again. Leaving it
-        // dirty would have the unmount flush re-save the same text on the way
-        // out — harmless, but it also leaves a false "unsaved" on screen.
-        setDirty(false);
-        setSaveError(null);
-        setLastSavedAt(new Date());
-        notify('Replaced. The previous version is in History.', { tone: 'success' });
-      } else {
-        // An unsaved note has nothing to replace server-side yet. The text is
-        // on screen and dirty, so the ordinary autosave (or Cmd/Ctrl+S, or
-        // "Save now" in the ⋯ menu) writes it.
-        notify('Composed. It saves like any other edit.', { tone: 'success' });
-      }
-    } catch (err) {
-      notify(err?.message || 'Could not replace the note.', { tone: 'error' });
-    }
-  };
 
   // ── Fold in new info (DOCS/CONTEXT.md §13) ───────────────────────────
   //
@@ -568,19 +445,6 @@ function NoteEditorPage({ editorKey } = {}) {
     setSaveToken((n) => n + 1);
   };
 
-  // ── Convert handwriting to text (DOCS/HANDWRITING.md §2) ──────────────
-  //
-  // Export the page, have it read, let the writer correct the reading, then
-  // Compose it or keep it plain. Either way the result is a NEW markdown note
-  // whose first line links back here. The sketch is never replaced: nothing
-  // on this path calls updateNote or setContent.
-  const sketchApiRef = useRef(null);
-  const transcribeRunRef = useRef(0);
-  const [transcribeSketchMutation] = useMutation(TRANSCRIBE_SKETCH);
-  const [saveTranscriptEdit] = useMutation(SAVE_SKETCH_TRANSCRIPT_EDIT);
-  const [transcribe, setTranscribe] = useState(null);
-  const canTranscribe = isHandwritten && sketchHasShapes(content);
-
   // ── Automatic transcription (DOCS/AUTO_TRANSCRIBE_SPEC.md) ─────────────
   // The open sketch reads itself ~90 s after the last pen stroke. Autosave
   // knows nothing about it: only ink edits (onInkEdit) start the debounce,
@@ -611,314 +475,30 @@ function NoteEditorPage({ editorKey } = {}) {
     return () => sketchClosed(openSketchId);
   }, [openSketchId]);
 
-  /**
-   * The sketch's transcript state as the server sees it NOW — after a save
-   * has just landed, `current` in the hook's copy can still describe the
-   * sketch before it (2.8). Falls back to the hook's copy without a client.
-   */
-  const freshTranscriptState = async () => {
-    const noteId = savedNoteIdRef.current;
-    if (!apollo || !noteId) return transcriptViewRef.current;
-    try {
-      const { data: fresh } = await apollo.query({ query: SKETCH_TRANSCRIPT, variables: { noteId }, fetchPolicy: 'network-only' });
-      const view = fresh?.sketchTranscript || null;
-      if (view) setTranscriptView(view);
-      return view || transcriptViewRef.current;
-    } catch {
-      return transcriptViewRef.current;
-    }
-  };
+  const { compose, setCompose, isComposing, canCompose, handleCompose, handleComposeSaveAsNew, handleComposeReplace } = useNoteCompose({
+    noteType, content, title, tags, savedNoteId,
+    createNoteMutation, updateNoteMutation, navigate, notify,
+    setContent, setNoteType, setDirty, setSaveError, setLastSavedAt,
+  });
 
-  const revokeImage = (url) => {
-    if (url && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url);
-  };
+  const {
+    transcribe, setTranscribe, canTranscribe, closeTranscribe,
+    handleTranscribe, saveFromSketch, handleTranscriptKeepPlain, handleTranscriptCompose,
+    transcribeSketchMutation, saveTranscriptEdit, freshTranscriptState, transcribeErrorMessage,
+  } = useSketchConvert({
+    content, title, tags, isHandwritten, apollo,
+    savedNoteIdRef, handleSaveRef, dirtyRef, sketchApiRef, transcriptViewRef,
+    setTranscriptView, settleSave, createNoteMutation, navigate, notify,
+    setCompose, handleCompose,
+  });
 
-  const closeTranscribe = () => {
-    transcribeRunRef.current += 1; // anything still in flight is now stale
-    setTranscribe((t) => { revokeImage(t?.imageUrl); return null; });
-  };
+  const { sendTasks, setSendTasks, openSendTasks, closeSendTasks, handleSendCorrections, handleSendTasks } = useSendTasks({
+    title, savedNoteIdRef, tagsRef, oneOnOneTagRef, sketchApiRef, settleSave,
+    freshTranscriptState, transcribeSketchMutation, transcribeErrorMessage,
+    saveTranscriptEdit, setTranscriptView, notify,
+  });
 
-  const transcribeErrorMessage = (err) => {
-    const status = err?.networkError?.statusCode;
-    if (status === 413) return 'That page is too large for the server to accept (413). Your sketch is unchanged.';
-    if (err?.networkError && !err?.graphQLErrors?.length) return 'Could not reach the server. Your sketch is unchanged.';
-    return saveErrorMessage(err);
-  };
-
-  /**
-   * The writer corrected the reading: keep the corrections as the sketch's
-   * transcript (searchable, and never overwritten by automatic runs).
-   * Best effort — Convert's own result never waits on it failing.
-   */
-  const keepTranscriptCorrections = async (t) => {
-    const noteId = savedNoteIdRef.current;
-    if (!noteId || !t?.text?.trim() || t.text === t.original) return;
-    rememberCorrections(noteId, t.original, t.text); // carried into the next reading (2.11)
-    try {
-      const { data } = await saveTranscriptEdit({ variables: { noteId, text: t.text, forHash: t.forHash || undefined } });
-      if (data?.saveSketchTranscriptEdit) setTranscriptView(data.saveSketchTranscriptEdit);
-    } catch {
-      // The new note is what the writer asked for; this is a bonus.
-    }
-  };
-
-  const handleTranscribe = async ({ forceRead = false } = {}) => {
-    const run = ++transcribeRunRef.current;
-    const stale = () => run !== transcribeRunRef.current;
-
-    setTranscribe((t) => {
-      revokeImage(t?.imageUrl);
-      return { open: true, stage: 'working', step: 'export', text: '', original: '', forHash: null, reused: null, error: null, model: null, imageUrl: null, saving: false };
-    });
-
-    // The new note links back to this sketch, and a stored reading is only
-    // for the SAVED sketch: save first and wait for it (2.8), then ask the
-    // server whether this exact page has been read already.
-    const settled = await settleSave();
-    if (stale()) return;
-    const stored = settled ? await freshTranscriptState() : null;
-    if (stale()) return;
-
-    let exported;
-    try {
-      const api = sketchApiRef.current;
-      if (!api) throw new Error('The sketch is still loading. Try again in a moment.');
-      exported = await api.exportPng();
-    } catch (err) {
-      if (stale()) return;
-      setTranscribe((t) => ({ ...t, stage: 'error', error: err?.message || 'Could not turn the sketch into an image.' }));
-      return;
-    }
-    if (stale()) return;
-
-    const imageUrl = typeof URL.createObjectURL === 'function' ? URL.createObjectURL(exported.blob) : null;
-
-    // AUTO_TRANSCRIBE_SPEC.md §5: this exact sketch was already read (an
-    // automatic run, an earlier Convert, or the writer's corrections). Show
-    // that instead of paying again; "Transcribe again" is the explicit way
-    // to spend a request. Only when nothing is unsaved: the stored reading is
-    // for the SAVED sketch.
-    if (!forceRead && settled && !dirtyRef.current && stored?.current && stored.text?.trim()) {
-      const by = stored.edited || stored.source === 'user'
-        ? 'Already transcribed · with your corrections'
-        : `Already transcribed · ${stored.source === 'convert' ? 'by an earlier conversion' : 'automatically'}`;
-      setTranscribe((t) => ({
-        ...t, stage: 'review', step: 'read', imageUrl, text: stored.text, original: stored.text,
-        forHash: stored.contentHash, reused: by, model: stored.edited ? null : stored.model,
-      }));
-      return;
-    }
-    setTranscribe((t) => ({ ...t, step: 'read', imageUrl, reused: null }));
-
-    try {
-      const { data } = await transcribeSketchMutation({
-        variables: { image: exported.base64, mediaType: exported.mediaType, source: exported.form ? 'form' : undefined, noteId: savedNoteIdRef.current || undefined },
-      });
-      if (stale()) return;
-      const result = data?.transcribeSketch;
-      if (!result?.text?.trim()) {
-        setTranscribe((t) => ({ ...t, stage: 'error', error: 'The model read nothing back from that page. Try again.' }));
-        return;
-      }
-      setTranscribe((t) => ({ ...t, stage: 'review', text: carryCorrections(savedNoteIdRef.current, result.text), original: result.text, model: result.provenance?.model || null }));
-      // The gateway keeps a paid reading as the sketch's transcript; show
-      // that in the status line, and let Send tasks / the next Convert reuse
-      // it instead of paying for the same page again (2.8).
-      if (settled) freshTranscriptState();
-    } catch (err) {
-      if (stale()) return;
-      setTranscribe((t) => ({ ...t, stage: 'error', error: transcribeErrorMessage(err) }));
-    }
-  };
-
-  /** A new markdown note made from this sketch. Never an update to it. */
-  const saveFromSketch = async (body, { composed }) => {
-    if (!savedNoteIdRef.current) await handleSaveRef.current();
-    const sketchId = savedNoteIdRef.current;
-    if (!sketchId) {
-      notify('Save the sketch first: the new note links back to it.', { tone: 'error' });
-      return false;
-    }
-    try {
-      const { data } = await createNoteMutation({
-        variables: {
-          title: derivedNoteTitle({ sketchTitle: title, body, composed }),
-          content: derivedNoteContent({ sketchId, sketchTitle: title, body, composed }),
-          type: 'markdown',
-          tags,
-        },
-      });
-      const created = data?.createNote;
-      closeTranscribe();
-      setCompose(null);
-      notify('Saved as a new note. The sketch is unchanged.', { tone: 'success' });
-      if (created?.id) navigate(`/notes/${created.id}`);
-      return true;
-    } catch (err) {
-      notify(saveErrorMessage(err), { tone: 'error' });
-      return false;
-    }
-  };
-
-  const handleTranscriptKeepPlain = async () => {
-    if (!transcribe?.text?.trim()) return;
-    setTranscribe((t) => ({ ...t, saving: true }));
-    keepTranscriptCorrections(transcribe);
-    const ok = await saveFromSketch(transcribe.text, { composed: false });
-    if (!ok) setTranscribe((t) => (t ? { ...t, saving: false } : t));
-  };
-
-  // ── Journal lines → TodoGeek (DOCS/BUJO_HANDWRITING.md) ────────────────
-  // The page read as a bullet journal. Uses the stored transcript when it is
-  // for exactly this sketch (no request spent); otherwise reads the page the
-  // way Convert does. Tasks are TodoGeek's own createTask, built by its own
-  // grammar. The sketch is never changed; sent lines are remembered so they
-  // are not offered twice.
-  const [createTodoTask] = useMutation(CREATE_TODO_TASK);
-  const [recordTasksSent] = useMutation(RECORD_SKETCH_TASKS_SENT);
-  const [sendTasks, setSendTasks] = useState(null);
-  const sendTasksRunRef = useRef(0);
-
-  const rowsFromText = (text, sentKeys = []) => sendTaskRows(text, sentKeys);
-
-  const openSendTasks = async () => {
-    const run = ++sendTasksRunRef.current;
-    const stale = () => run !== sendTasksRunRef.current;
-    setSendTasks({ open: true, stage: 'working', rows: [], error: null, sending: false, result: null, transcript: '', forHash: null, writtenAt: null });
-
-    // Save first and wait (2.8): a stored reading is for the SAVED sketch,
-    // and the lines sent are remembered against this note's id.
-    const settled = await settleSave();
-    if (stale()) return;
-    const stored = settled ? await freshTranscriptState() : null;
-    if (stale()) return;
-    if (settled && stored?.current && stored.text?.trim()) {
-      setSendTasks((t) => (t ? {
-        ...t, stage: 'review', rows: rowsFromText(stored.text, stored.sentTaskKeys || []),
-        transcript: stored.text, forHash: stored.contentHash || null, writtenAt: stored.at || null,
-      } : t));
-      return;
-    }
-    try {
-      const api = sketchApiRef.current;
-      if (!api) throw new Error('The sketch is still loading. Try again in a moment.');
-      const exported = await api.exportPng();
-      const { data } = await transcribeSketchMutation({
-        variables: { image: exported.base64, mediaType: exported.mediaType, source: exported.form ? 'form' : undefined, noteId: savedNoteIdRef.current || undefined },
-      });
-      if (stale()) return;
-      const text = data?.transcribeSketch?.text || '';
-      // The gateway kept that reading as the transcript: the status line
-      // and the next Convert can use it rather than pay again.
-      const after = settled ? await freshTranscriptState() : null;
-      if (stale()) return;
-      setSendTasks((t) => (t ? {
-        ...t, stage: 'review', rows: rowsFromText(text, after?.sentTaskKeys || stored?.sentTaskKeys || []),
-        transcript: text, forHash: after?.current ? after.contentHash || null : null, writtenAt: null,
-      } : t));
-    } catch (err) {
-      if (stale()) return;
-      setSendTasks((t) => (t ? { ...t, stage: 'error', error: err?.graphQLErrors?.length || err?.networkError ? transcribeErrorMessage(err) : (err?.message || 'Could not read the page.') } : t));
-    }
-  };
-
-  const closeSendTasks = () => {
-    sendTasksRunRef.current += 1;
-    setSendTasks(null);
-  };
-
-  /**
-   * Words the writer corrected in the Send dialog become corrections to the
-   * sketch's transcript (1.11), the same as Convert's review: "Bbo" fixed to
-   * "Bob" stays fixed, and a later reading of the page matches the line that
-   * was sent. Called by the dialog on Send, with `[{ line, from, to }]`.
-   * Best effort — the tasks are what was asked for.
-   */
-  const pendingCorrectionsRef = useRef(null);
-  const handleSendCorrections = (edits) => {
-    pendingCorrectionsRef.current = edits && edits.length ? edits : null;
-  };
-
-  const saveSendCorrections = async (edits, sketchId) => {
-    const base = sendTasks?.transcript;
-    if (!edits || !sketchId || !base) return;
-    const corrected = applyLineEdits(base, edits);
-    if (!corrected || corrected === base) return;
-    try {
-      const { data } = await saveTranscriptEdit({
-        variables: { noteId: sketchId, text: corrected, forHash: sendTasks?.forHash || undefined },
-      });
-      if (data?.saveSketchTranscriptEdit) setTranscriptView(data.saveSketchTranscriptEdit);
-    } catch {
-      // The corrections are a bonus; the tasks went (or did not) on their own.
-    }
-  };
-
-  const handleSendTasks = async ({ now: anchor = null } = {}) => {
-    const chosen = (sendTasks?.rows || []).filter((r) => r.on && r.text.trim());
-    if (!chosen.length) return;
-    if (!savedNoteIdRef.current) await settleSave();
-    const sketchId = savedNoteIdRef.current;
-    const edits = pendingCorrectionsRef.current;
-    pendingCorrectionsRef.current = null;
-    setSendTasks((t) => ({ ...t, sending: true }));
-    const now = anchor instanceof Date ? anchor : new Date();
-    const sentRows = [];
-    let failed = 0;
-    // One at a time, in page order: TodoGeek lists them in the order they arrive.
-    for (const row of chosen) {
-      // A 1:1's tasks carry the person's tag, so they show as open with them (req 3).
-      const person = personOfNote(tagsRef.current, oneOnOneTagRef.current);
-      const input = taskInputFor(row, {
-        now, today: new Date(), sketch: sketchId ? { id: sketchId, title } : null, origin: window.location.origin,
-        tags: person ? [personTag(oneOnOneTagRef.current, person)] : [],
-      });
-      if (!input) { failed += 1; continue; }
-      try {
-        // C1: the same line of the same sketch always carries the same
-        // clientId, so a retry (or a second Send of a line that went) returns
-        // the task TodoGeek already has instead of making another.
-        const clientId = sketchId ? await taskClientId(sketchId, row.key) : null;
-        await createTodoTask({ variables: clientId ? { ...input, clientId } : input });
-        sentRows.push(row);
-      } catch {
-        failed += 1;
-      }
-    }
-    if (edits && sketchId) await saveSendCorrections(edits, sketchId);
-    const sentKeys = sentRows.map((r) => r.key);
-    if (sentRows.length && sketchId) {
-      try {
-        // As read AND as sent (journalLines.sentKeysFor), so a corrected or
-        // re-read line is still known to have gone (1.11).
-        const keys = [...new Set(sentRows.flatMap((r) => sentKeysFor(r)))];
-        const { data } = await recordTasksSent({ variables: { noteId: sketchId, keys } });
-        if (data?.recordSketchTasksSent) setTranscriptView(data.recordSketchTasksSent);
-      } catch {
-        // The tasks are in TodoGeek; only the "already sent" memory was lost.
-      }
-    }
-    const todoGeekUrl = window.location.hostname.includes('notegeek')
-      ? `${window.location.protocol}//${window.location.hostname.replace('notegeek', 'todogeek')}/today`
-      : null;
-    setSendTasks((t) => (t ? {
-      ...t,
-      sending: false,
-      stage: sentKeys.length ? 'done' : 'review',
-      error: null,
-      rows: t.rows.map((r) => (sentKeys.includes(r.key) ? { ...r, sent: true, on: false } : r)),
-      result: { sent: sentKeys.length, failed, todoGeekUrl },
-    } : t));
-    if (!sentKeys.length) notify('Nothing was added to TodoGeek. Try again in a moment.', { tone: 'error' });
-  };
-
-  const handleTranscriptCompose = () => {
-    if (!transcribe?.text?.trim()) return;
-    // Hidden, not closed: "Back to transcript" in Compose returns to it.
-    keepTranscriptCorrections(transcribe);
-    setTranscribe((t) => ({ ...t, open: false }));
-    handleCompose(transcribe.text);
-  };
+  // Handle save — allow if either title or content has text
 
   /**
    * Save what the form holds. Reads the form through refs, not this render's
@@ -1099,6 +679,8 @@ function NoteEditorPage({ editorKey } = {}) {
     }
   };
 
+  handleSaveRef.current = handleSave;
+
   // ── Conflict (C3) ─────────────────────────────────────────────────────
   const resolveConflict = () => {
     conflictRef.current = null;
@@ -1241,26 +823,6 @@ function NoteEditorPage({ editorKey } = {}) {
     setDirty(true);
   }, [noteType]);
 
-  // ── Refs for flush-on-unmount and keyboard shortcut ───────────────────
-  // These always point to the latest values so stale closures don't bite.
-  const handleSaveRef = useRef(handleSave);
-  handleSaveRef.current = handleSave;
-  const dirtyRef = useRef(dirty);
-  dirtyRef.current = dirty;
-  // What the form holds RIGHT NOW, for the "did the user type while the save
-  // was in flight?" check inside handleSave.
-  const contentRef = useRef(content);
-  contentRef.current = content;
-  const titleRef = useRef(title);
-  titleRef.current = title;
-  const saveErrorRef = useRef(saveError);
-  saveErrorRef.current = saveError;
-  const tagsRef = useRef(tags);
-  tagsRef.current = tags;
-  const noteTypeRef = useRef(noteType);
-  noteTypeRef.current = noteType;
-  const locationRef = useRef(location);
-  locationRef.current = location;
 
   // ── The device copy (1.2) ─────────────────────────────────────────────
   // What is on screen, mirrored to IndexedDB half a second after it changes
@@ -1484,50 +1046,7 @@ function NoteEditorPage({ editorKey } = {}) {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
-  // ── Print / Save as PDF (DOCS/CONTEXT.md §8) ──────────────────────────
-  //
-  // NotePrintView is the paper copy; the ⋯ menu and Ctrl/Cmd+P both go
-  // through `printNote`. Only a sketch needs preparing: its canvas is
-  // exported to images (one per photographed page) right before the dialog
-  // opens, so the drawing printed is the drawing on screen.
-  const [printSketch, setPrintSketch] = useState({ images: null, error: null });
-  const revokePrintImages = (images) => images?.forEach((img) => revokeImage(img.url));
-  const preparePrint = async () => {
-    if (!isHandwritten) return;
-    const api = sketchApiRef.current;
-    if (!api?.exportForPrint) {
-      setPrintSketch((prev) => {
-        revokePrintImages(prev.images);
-        return { images: null, error: 'The sketch was still loading, so the drawing is not on this page. Try again in a moment.' };
-      });
-      return;
-    }
-    let next;
-    try {
-      const pages = await api.exportForPrint();
-      next = {
-        images: pages.map((p) => ({ url: URL.createObjectURL(p.blob), width: p.width, height: p.height })),
-        error: null,
-      };
-    } catch (err) {
-      next = {
-        images: null,
-        error: err?.code === 'empty' ? 'This sketch is empty.' : `The drawing could not be exported (${err?.message || 'export failed'}).`,
-      };
-    }
-    setPrintSketch((prev) => {
-      revokePrintImages(prev.images);
-      return next;
-    });
-  };
-  const { print: handlePrint, printing: isPrinting, rootRef: printRootRef } = useNotePrint({
-    title,
-    prepare: preparePrint,
-  });
-  const printImagesRef = useRef(null);
-  printImagesRef.current = printSketch.images;
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only
-  useEffect(() => () => revokePrintImages(printImagesRef.current), []);
+  const { printSketch, handlePrint, isPrinting, printRootRef } = useSketchPrint({ isHandwritten, sketchApiRef, title });
 
   // ── Markdown import onto a blank note (DOCS/CONTEXT.md §9) ────────────
   // A file dropped on a brand-new, still-empty Markdown note becomes a note
@@ -1559,64 +1078,12 @@ function NoteEditorPage({ editorKey } = {}) {
   const awaitingSeed = !isNewNote && seededId !== id && !selectedError
     && (isLoadingSelected || (noteToEdit && !freshEnough));
   if (awaitingSeed) {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          p: 4,
-          minHeight: 300,
-          gap: 2,
-        }}
-      >
-        <CircularProgress size={32} thickness={4} />
-        <Typography variant="body2" color="text.secondary">
-          Loading note...
-        </Typography>
-      </Box>
-    );
+    return <NoteLoading />;
   }
 
   // Error state
   if (selectedError && !isNewNote) {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          p: 4,
-          minHeight: 300,
-          gap: 3,
-          textAlign: 'center',
-        }}
-      >
-        <Typography
-          sx={{
-            fontFamily: 'inherit',
-            fontSize: '1.25rem',
-            fontWeight: 600,
-            color: 'error.main',
-          }}
-        >
-          Couldn't load this note
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 300 }}>
-          {selectedError}
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<BackIcon />}
-          onClick={() => navigate('/notes')}
-          sx={{ borderRadius: 2, fontWeight: 600 }}
-        >
-          Back to Notes
-        </Button>
-      </Box>
-    );
+    return <NoteLoadError message={selectedError} onBack={() => navigate('/notes')} />;
   }
 
   const isCanvas = isMindMap || isHandwritten;
@@ -1634,6 +1101,12 @@ function NoteEditorPage({ editorKey } = {}) {
   return (
     <WikiLinkContext.Provider value={resolveLink}>
     <Box sx={{ flex: 1, minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <ReferencePane
+        noteId={reference.noteId}
+        onClose={reference.close}
+        onChange={reference.openPicker}
+        onOpenFull={(refId) => navigate(`/notes/${refId}`)}
+      >
       <NoteShell
         variant={isCanvas ? 'canvas' : 'page'}
         header={
@@ -1684,7 +1157,9 @@ function NoteEditorPage({ editorKey } = {}) {
                   sx={{ mt: '8px' }}
                 />
               ) : null}
-              {oneOnOnePerson && !archived ? (
+              {/* Not while a reference note is above: the page needs the height
+                  (a landscape tablet has about 700px for both notes). */}
+              {oneOnOnePerson && !archived && !reference.noteId ? (
                 <Box sx={{ mt: '8px' }}>
                   <OpenItems
                     strip
@@ -1694,7 +1169,7 @@ function NoteEditorPage({ editorKey } = {}) {
                   />
                 </Box>
               ) : null}
-              {suggestEnabled ? (
+              {suggestEnabled && !reference.noteId ? (
               <SuggestionStrip
                 enabled
                 noteId={savedNoteId}
@@ -1710,6 +1185,10 @@ function NoteEditorPage({ editorKey } = {}) {
               </>
             ) : null}
             actions={inBin ? null : (
+              <>
+              {reference.available ? (
+                <ReferenceButton onClick={reference.openPicker} active={Boolean(reference.noteId)} />
+              ) : null}
               <NoteActions
                 onSave={handleSave}
                 // At once, with Undo in the toast; no confirm (review
@@ -1737,6 +1216,7 @@ function NoteEditorPage({ editorKey } = {}) {
                 archived={archived}
                 isArchiving={isArchiving}
               />
+              </>
             )}
           />
         }
@@ -1764,6 +1244,18 @@ function NoteEditorPage({ editorKey } = {}) {
           />
         </Box>
       </NoteShell>
+      </ReferencePane>
+
+      {/* Mounted only while open: its list queries have no reason to run otherwise. */}
+      {reference.pickerOpen ? (
+        <ReferencePicker
+          open
+          onClose={reference.closePicker}
+          onPick={reference.show}
+          currentNoteId={savedNoteId}
+          person={oneOnOnePerson ? { tag: personTag(oneOnOneTag, oneOnOnePerson), name: personName(oneOnOnePerson) } : null}
+        />
+      ) : null}
 
       <NotePrintView
         note={{ title, type: noteType, content, tags, updatedAt: lastSavedAt }}
@@ -1772,118 +1264,23 @@ function NoteEditorPage({ editorKey } = {}) {
         rootRef={printRootRef}
       />
 
-      {/* Mounted only while open: the dialog's own Apollo hooks have no reason
-          to run on every editor mount, and the list query is network-only. */}
-      {historyOpen && savedNoteId ? (
-        <NoteHistoryDialog
-          open={historyOpen}
-          noteId={savedNoteId}
-          onClose={() => setHistoryOpen(false)}
-          onRestored={(note) => {
-            // Put the restored text on screen without a reload, and mark it
-            // clean: the server has already written it.
-            if (!note) return;
-            setTitle(note.title || '');
-            setContent(note.content || '');
-            setNoteType(note.type || NOTE_TYPES.TEXT);
-            setDirty(false);
-            setSaveError(null);
-            setLastSavedAt(new Date());
-            notify('Restored. The version you replaced is still in History.', { tone: 'success' });
-          }}
-        />
-      ) : null}
-
-      {compose && compose.origin === 'sketch' ? (
-        // From a sketch's transcript: a new note only, never "Replace this
-        // note" (the sketch is the original). Discard goes back to the
-        // transcript rather than losing it.
-        <ComposeDialog
-          open={compose.open}
-          loading={compose.loading}
-          markdown={compose.markdown}
-          stats={compose.stats}
-          error={compose.error}
-          model={compose.model}
-          discardLabel="Back to transcript"
-          onClose={() => {
-            setCompose(null);
-            setTranscribe((t) => (t ? { ...t, open: true } : t));
-          }}
-          onSaveAsNew={() => saveFromSketch(compose.markdown, { composed: true })}
-        />
-      ) : null}
-
-      {compose && compose.origin !== 'sketch' ? (
-        <ComposeDialog
-          open={compose.open}
-          loading={compose.loading}
-          markdown={compose.markdown}
-          stats={compose.stats}
-          error={compose.error}
-          model={compose.model}
-          onClose={() => setCompose(null)}
-          onSaveAsNew={() => handleComposeSaveAsNew(compose.markdown)}
-          onReplace={() => handleComposeReplace(compose.markdown)}
-        />
-      ) : null}
-
-      {foldInOpen && savedNoteId ? (
-        <FoldInSheet
-          open
-          note={{ id: savedNoteId, title, type: noteType }}
-          prepare={flushBeforeFoldIn}
-          onClose={() => setFoldInOpen(false)}
-          onApplied={({ note }) => showServerNote(note)}
-          onUndone={showServerNote}
-        />
-      ) : null}
-
-      {transcribe ? (
-        <TranscribeDialog
-          open={transcribe.open}
-          stage={transcribe.stage}
-          step={transcribe.step}
-          text={transcribe.text}
-          onTextChange={(text) => setTranscribe((t) => ({ ...t, text }))}
-          error={transcribe.error}
-          model={transcribe.model}
-          imageUrl={transcribe.imageUrl}
-          saving={transcribe.saving}
-          onClose={closeTranscribe}
-          onRetry={() => handleTranscribe({ forceRead: Boolean(transcribe.reused) })}
-          onCompose={handleTranscriptCompose}
-          onKeepPlain={handleTranscriptKeepPlain}
-          reused={transcribe.reused}
-          onTranscribeAgain={transcribe.reused ? () => handleTranscribe({ forceRead: true }) : null}
-        />
-      ) : null}
-
-      {sendTasks ? (
-        <SendTasksDialog
-          open={sendTasks.open}
-          stage={sendTasks.stage}
-          rows={sendTasks.rows}
-          error={sendTasks.error}
-          sending={sendTasks.sending}
-          result={sendTasks.result}
-          onToggle={(key, on) => setSendTasks((t) => ({ ...t, rows: t.rows.map((r) => (r.key === key ? { ...r, on } : r)) }))}
-          onTextChange={(key, text) => setSendTasks((t) => ({ ...t, rows: t.rows.map((r) => (r.key === key ? { ...r, text } : r)) }))}
-          onSend={handleSendTasks}
-          onClose={closeSendTasks}
-          onRetry={openSendTasks}
-          writtenAt={sendTasks.writtenAt}
-          onCorrections={handleSendCorrections}
-        />
-      ) : null}
-
-      <ConflictDialog
-        open={Boolean(conflict)}
-        serverNote={conflict?.serverNote}
-        busy={conflictBusy}
-        onKeepMine={handleKeepMine}
-        onUseTheirs={handleUseTheirs}
-        onKeepBoth={handleKeepBoth}
+      <EditorDialogs
+        savedNoteId={savedNoteId} title={title} noteType={noteType} notify={notify}
+        setTitle={setTitle} setContent={setContent} setNoteType={setNoteType}
+        setDirty={setDirty} setSaveError={setSaveError} setLastSavedAt={setLastSavedAt}
+        historyOpen={historyOpen} setHistoryOpen={setHistoryOpen}
+        compose={compose} setCompose={setCompose} saveFromSketch={saveFromSketch}
+        handleComposeSaveAsNew={handleComposeSaveAsNew} handleComposeReplace={handleComposeReplace}
+        foldInOpen={foldInOpen} setFoldInOpen={setFoldInOpen}
+        flushBeforeFoldIn={flushBeforeFoldIn} showServerNote={showServerNote}
+        transcribe={transcribe} setTranscribe={setTranscribe} closeTranscribe={closeTranscribe}
+        handleTranscribe={handleTranscribe} handleTranscriptCompose={handleTranscriptCompose}
+        handleTranscriptKeepPlain={handleTranscriptKeepPlain}
+        sendTasks={sendTasks} setSendTasks={setSendTasks} handleSendTasks={handleSendTasks}
+        closeSendTasks={closeSendTasks} openSendTasks={openSendTasks}
+        handleSendCorrections={handleSendCorrections}
+        conflict={conflict} conflictBusy={conflictBusy} handleKeepMine={handleKeepMine}
+        handleUseTheirs={handleUseTheirs} handleKeepBoth={handleKeepBoth}
       />
 
     </Box>

@@ -1,6 +1,6 @@
 # Reference pane in NoteGeek — spec
 
-**Status:** signed off 2026-11-24, not yet built. Chef accepted the shape ("I think that is
+**Status:** signed off 2026-11-24. Built 2026-11-24 (see §7). Chef accepted the shape ("I think that is
 exactly right") and every answer in §6 ("I like all of your ideas there").
 
 ## 1. Intent
@@ -74,3 +74,20 @@ Proposed by Sage, accepted by Chef: "I like all of your ideas there."
 12. **Which notes can host it.** Any open note, handwritten or typed.
 13. **"Open this note."** A small button in the pane leaves the current note and opens the
     reference note in full.
+
+## 7. As built (2026-11-24)
+
+How it works is in `apps/notegeek/DOCS/CONTEXT.md` §22. Choices made while building that the
+spec did not settle (Sage's, not yet seen by Chef):
+
+- **The bar under the pane is the divider.** One 44px strip between the two notes: drag handle
+  and the reference's title on the left; Transcript, "Open this note", change note and close
+  on the right.
+- **"Most recently opened"** is kept on the device (the server is never told a note was
+  opened), topped up with the most recently edited notes.
+- **Mind maps are not offered** in the picker: they have no reading view.
+- **While the pane is open, a 1:1's "Open with …" strip and the tag suggestions are hidden**,
+  to give the page the height. They return when the pane closes.
+- **Search** in the picker is the ordinary keyword search (titles, text and transcripts).
+- **Landscape tablet:** with the pane at half, about 250px of page is left to write on. A
+  third is workable. Portrait is the case this was built for.

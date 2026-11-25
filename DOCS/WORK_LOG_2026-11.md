@@ -862,3 +862,14 @@ in `apps/basegeek/.env.production` (not in git). A read stopped by it is `AI_BUD
 midnight UTC, and NoteGeek and GeekDay show one warning toast a day. Details:
 `apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md`, "One limit". Other features' daily counts are
 untouched. Gateway `npm test -- notegeek`: 495.
+
+## 2026-11-24 — NoteGeek: reference pane, and the editor page split
+
+Chef: "go for it." `DOCS/REFERENCE_PANE_SPEC.md` is built: from an open note, the head's
+Reference button opens a picker (in a 1:1, that person's earlier 1:1s first, then recents, then
+search) and the note picked shows read-only above the one being written. The bar between them
+is the divider: a third or half, and dragged to the top it closes. Tablet and desktop only.
+First, `NoteEditorPage.jsx` was split (1,894 → about 1,290 lines; `pages/noteEditor/`), with no
+behaviour change. Details and two tldraw landmines: `apps/notegeek/DOCS/CONTEXT.md` §22.
+Tests 1117 → 1140. Harness `26a`–`26c`.
+

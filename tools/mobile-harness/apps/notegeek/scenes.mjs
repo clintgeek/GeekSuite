@@ -2836,6 +2836,198 @@ export const scenes = [
       if (!(await note.getByText('Q3 roadmap notes').count())) throw new Error('the second note did not open beside the list');
     },
   },
+  {
+    // The reference pane (DOCS/REFERENCE_PANE_SPEC.md): in a 1:1, the head's
+    // Reference button offers that person's earlier 1:1s first; the one
+    // picked opens read-only ABOVE the page being written, a third of the
+    // screen, with a second (real) tldraw. The page under the pen is the same
+    // canvas as before, still takes ink and still saves; nothing is ever
+    // written or read for the reference note. The divider drags to half, and
+    // dragged to the top it closes the pane.
+    name: '26a-reference-pane',
+    viewports: ['tablet', 'desktop'],
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const mine = { ...NOTE_SKETCH, id: 'o1', title: '2026-11-18 Alex 1:1', tags: ['fd/1on1/alex'] };
+      const earlier = { ...NOTE_SKETCH_TEMPLATE, id: 'o2', title: '2026-11-04 Alex 1:1', tags: ['fd/1on1/alex'] };
+      const row = ({ id, title }, days) => ({ ...listRow(NOTE_SKETCH), id, title, tags: ['fd/1on1/alex'], createdAt: new Date(Date.now() - days * 86400000).toISOString() });
+      const writes = [];
+      const seen = [];
+      page.on('request', (req) => {
+        if (!req.url().includes('/graphql') || req.method() !== 'POST') return;
+        try {
+          const body = JSON.parse(req.postData() || '{}');
+          seen.push({ op: body.operationName, vars: body.variables || {} });
+        } catch { /* not ours */ }
+      });
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNoteById: (vars) => ({ note: vars.id === 'o2' ? earlier : mine }),
+        GetNotes: (vars) => (vars?.tag === 'fd/1on1/alex' ? { notes: [row(mine, 4), row(earlier, 18)] } : OPS.GetNotes(vars)),
+        UpdateNote: (vars) => { writes.push(vars.id); return { updateNote: { ...listRow(mine), updatedAt: new Date().toISOString() } }; },
+      });
+      await page.goto(h.base + '/notes/o1/edit', { waitUntil: 'networkidle' });
+      await page.waitForSelector('.tl-container', { timeout: 20000 });
+      await h.settle(1500);
+      // Mark the canvas under the pen: it must be the same element afterwards.
+      await page.evaluate(() => { document.querySelector('[data-note-canvas] .tl-container').__underThePen = true; });
+
+      const button = page.locator('[data-testid="reference-button"]');
+      if (!(await button.count())) throw new Error('no Reference button in the head of an open note');
+      const bb = await button.boundingBox();
+      if (h.viewport !== 'desktop' && (!bb || bb.height < 44 || bb.width < 44)) throw new Error('the Reference button is under 44px on a tablet');
+      await button.click();
+      await h.settle(900);
+      const picker = page.getByRole('dialog', { name: 'Show a note above this one' });
+      if (!(await picker.count())) throw new Error('Reference did not open the picker');
+      const first = picker.locator('[data-reference-section]').first();
+      if ((await first.getAttribute('data-reference-section')) !== 'person') throw new Error("the picker does not start with this person's earlier 1:1s");
+      if (!/Earlier 1:1s with Alex/i.test(await first.innerText())) throw new Error('the 1:1 section is not named for the person');
+      if (await picker.locator('[data-reference-option="o1"]').count()) throw new Error('the picker offers the note being written');
+      const option = picker.locator('[data-reference-option="o2"]');
+      const ob = await option.boundingBox();
+      if (!ob || ob.height < 44) throw new Error('a picker row is under 44px');
+      await option.click();
+      await page.waitForSelector('[data-testid="reference-sketch"] .tl-container', { timeout: 20000 });
+      await h.settle(1800);
+
+      const pane = page.locator('[data-testid="reference-pane"]');
+      const shell = page.locator('[data-note-shell]');
+      const pb = await pane.boundingBox();
+      const sb = await shell.boundingBox();
+      if (!(pb && sb && pb.y < sb.y && Math.abs(pb.y + pb.height - sb.y) < 2)) throw new Error('the reference is not directly above the note');
+      const share = pb.height / (pb.height + sb.height);
+      if (Math.abs(share - 1 / 3) > 0.03) throw new Error(`the pane opened at ${Math.round(share * 100)}% of the page, not a third`);
+      if (Math.abs(pb.width - sb.width) > 1) throw new Error('the note under the pane lost width');
+      if (!/2026-11-04 Alex 1:1/.test(await page.locator('[data-testid="reference-title"]').innerText())) throw new Error('the bar does not name the reference note');
+      if (await page.locator('.tl-error-boundary').count()) throw new Error('tldraw rendered its own error screen');
+      if (!(await page.evaluate(() => document.querySelector('[data-note-canvas] .tl-container')?.__underThePen === true))) throw new Error('opening the pane remounted the canvas under the pen');
+      // The reference shows its sheet and ink, fitted to the pane's width.
+      const refShapes = await pane.locator('.tl-shape').count();
+      if (refShapes < 2) throw new Error(`the reference shows ${refShapes} shapes`);
+      const sheet = await pane.locator('.tl-shape[data-shape-type="image"]').first().boundingBox();
+      if (!sheet || sheet.x < pb.x - 1 || sheet.x + sheet.width > pb.x + pb.width + 1) throw new Error('the reference page is not fitted to the width of the pane');
+      // Read-only: a drag across the reference scrolls it and draws nothing.
+      const shapesBefore = await pane.locator('.tl-shape').count();
+      const cx = pb.x + pb.width / 2;
+      await page.mouse.move(cx, pb.y + pb.height * 0.3);
+      await page.mouse.down();
+      await page.mouse.move(cx + 40, pb.y + pb.height * 0.5, { steps: 6 });
+      await page.mouse.up();
+      await h.settle(500);
+      if ((await pane.locator('.tl-shape').count()) > shapesBefore) throw new Error('a drag drew on the reference note');
+      // The transcript, and back.
+      const toggle = page.locator('[data-testid="reference-transcript"]');
+      if (!(await toggle.count())) throw new Error('no switch to the transcript on a page that has been read');
+      await toggle.click();
+      await h.settle(400);
+      if (!/Onboarding flow/.test(await page.locator('[data-testid="reference-text"]').innerText())) throw new Error('the transcript is not shown');
+      await toggle.click();
+      await page.waitForSelector('[data-testid="reference-sketch"] .tl-container', { timeout: 20000 });
+      await h.settle(1200);
+
+      // Ink on the page underneath still lands, and saves THIS note only.
+      await page.locator('[data-note-canvas]').getByRole('button', { name: 'Write', exact: true }).click();
+      await h.settle(300);
+      const canvas = await page.locator('[data-note-canvas] .tl-canvas').boundingBox();
+      if (canvas.height < 150) throw new Error(`only ${Math.round(canvas.height)}px of page is left to write on under the pane`);
+      const inkBefore = await page.locator('[data-note-canvas] .tl-shape').count();
+      const y = canvas.y + canvas.height * 0.6;
+      await page.mouse.move(canvas.x + canvas.width * 0.3, y);
+      await page.mouse.down();
+      await page.mouse.move(canvas.x + canvas.width * 0.45, y + 20, { steps: 8 });
+      await page.mouse.move(canvas.x + canvas.width * 0.55, y - 10, { steps: 8 });
+      await page.mouse.up();
+      await h.settle(4500);
+      const inkAfter = await page.locator('[data-note-canvas] .tl-shape').count();
+      if (inkAfter <= inkBefore) throw new Error('the page under the pane did not take ink');
+      if (!writes.length) throw new Error('ink under the pane was not saved');
+      // Drag the divider to about half: it rests there.
+      const divider = page.locator('[data-testid="reference-divider"]');
+      const db = await divider.boundingBox();
+      if (!db || db.height < 43.5) throw new Error('the divider is under 44px');
+      const pageTop = pb.y;
+      const pageHeight = pb.height + sb.height;
+      const gx = db.x + 60;
+      await page.mouse.move(gx, db.y + db.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(gx, pageTop + pageHeight * 0.47, { steps: 8 });
+      await page.mouse.up();
+      await h.settle(700);
+      const half = (await pane.boundingBox()).height / pageHeight;
+      if (Math.abs(half - 0.5) > 0.03) throw new Error(`the divider rested at ${Math.round(half * 100)}%, not half`);
+
+      if (writes.some((id) => id !== 'o1')) throw new Error(`a save went to ${writes.join(',')}`);
+      const READS = new Set(['GetNoteById', 'SketchTranscript', 'NoteLinks']);
+      const touched = seen.filter((r) => (r.vars.id === 'o2' || r.vars.noteId === 'o2') && !READS.has(r.op));
+      if (touched.length) throw new Error(`showing the reference sent ${touched.map((r) => r.op).join(', ')} for it`);
+    },
+    async teardown(page, h) {
+      // Dragged to the top, the pane closes and the note has the page again.
+      const divider = page.locator('[data-testid="reference-divider"]');
+      const db = await divider.boundingBox();
+      const pane = await page.locator('[data-testid="reference-pane"]').boundingBox();
+      await page.mouse.move(db.x + 60, db.y + db.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(db.x + 60, pane.y + 30, { steps: 8 });
+      await page.mouse.up();
+      await h.settle(700);
+      if (await page.locator('[data-testid="reference-pane"]').count()) throw new Error('dragging the divider to the top did not close the pane');
+      if (!(await page.evaluate(() => document.querySelector('[data-note-canvas] .tl-container')?.__underThePen === true))) throw new Error('closing the pane remounted the canvas under the pen');
+    },
+  },
+  {
+    // A typed note as the reference, found by searching, above a typed note:
+    // its text, nothing editable. The close button closes it; "Open this
+    // note" leaves for the reference note.
+    name: '26b-reference-typed',
+    viewports: ['tablet', 'desktop'],
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const full = (id) => NOTES.find((n) => n.id === id) || NOTE_N1;
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNoteById: (vars) => ({ note: full(vars.id) }),
+        SearchNotes: (vars) => ({ searchNotes: /cookie/i.test(vars.q || '') ? SEARCH_RESULTS : [] }),
+      });
+      await page.goto(h.base + '/notes/n1/edit', { waitUntil: 'networkidle' });
+      await h.settle(1400);
+      await page.locator('[data-testid="reference-button"]').click();
+      await h.settle(700);
+      const picker = page.getByRole('dialog', { name: 'Show a note above this one' });
+      if (await picker.locator('[data-reference-section="person"]').count()) throw new Error('a note that is not a 1:1 offers a 1:1 section');
+      if (await picker.locator('[data-reference-option="n1"]').count()) throw new Error('the picker offers the note being written');
+      await picker.getByRole('textbox', { name: 'Search all notes' }).fill('cookie');
+      await h.settle(900);
+      await picker.locator('[data-reference-option="n2"]').click();
+      await h.settle(900);
+      const text = page.locator('[data-testid="reference-text"]');
+      if (!/chill the dough/.test(await text.innerText())) throw new Error('the typed reference does not show its text');
+      if (await text.locator('textarea, input, [contenteditable="true"]').count()) throw new Error('the reference note can be edited');
+      if (await page.locator('[data-testid="reference-transcript"]').count()) throw new Error('a typed note offers a transcript switch');
+      for (const id of ['reference-open', 'reference-change', 'reference-close']) {
+        const box = await page.locator(`[data-testid="${id}"]`).boundingBox();
+        if (!box || box.height < 43.5) throw new Error(`${id} is ${box ? Math.round(box.height) : 0}px high`);
+      }
+      const title = page.getByRole('textbox', { name: 'Note title' });
+      if ((await title.inputValue()) !== NOTE_N1.title) throw new Error('the note being written is gone');
+    },
+    async teardown(page, h) {
+      await page.locator('[data-testid="reference-close"]').click();
+      await h.settle(500);
+      if (await page.locator('[data-testid="reference-pane"]').count()) throw new Error('Close did not close the pane');
+    },
+  },
+  {
+    // Not on a phone (decision 11): no Reference button.
+    name: '26c-reference-not-on-phone',
+    viewports: ['phone'],
+    async setup(page, h) {
+      await openNote(page, h, NOTE_MD, '/notes/n2/edit');
+      if (await page.locator('[data-testid="reference-button"]').count()) throw new Error('a phone offers the Reference button');
+      if (!(await page.getByRole('button', { name: /more note actions/i }).count())) throw new Error('the note head is missing');
+    },
+  },
 ].map(withCleanDrafts);
 
 // Known, ticketed violations. Each one should die when the app is fixed —
@@ -2852,7 +3044,7 @@ export const waivers = [
     // shape has `altText`.
     rule: 'image-alt',
     match: 'tl-image',
-    scenes: ['13d-photo-note', '23c-sketch-template-menu', '23d-sketch-template', '24c-one-on-one-new', '24d-sidebar-quick-new'],
+    scenes: ['13d-photo-note', '23c-sketch-template-menu', '23d-sketch-template', '24c-one-on-one-new', '24d-sidebar-quick-new', '26a-reference-pane'],
     reason: 'tldraw 2.4 image shape <img> has no alt and no way to set one (third-party UI)',
   },
 ];
