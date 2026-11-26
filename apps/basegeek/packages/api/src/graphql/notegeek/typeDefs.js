@@ -117,6 +117,17 @@ export const typeDefs = gql`
     contentHash: String
     current: Boolean!
     text: String
+    """
+    The last machine reading, whatever the content hash (it may be of an
+    older version of the page). Null when the note is locked or encrypted.
+    For placing a search hit on the page (HANDWRITING.md §5); stores nothing.
+    """
+    lastReading: String
+    """
+    The user's corrections while word search still counts them, whatever the
+    hash. Null when the note is locked or encrypted.
+    """
+    lastEdit: String
     edited: Boolean
     source: String
     provider: String
