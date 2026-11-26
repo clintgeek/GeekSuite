@@ -12,3 +12,4 @@ export * from './penPrefs.js';
 export * from './lassoGeometry.js';
 export * from './sketchBody.js';
 export * from './sketchExport.js';
+export * from './inkLines.js';

@@ -13,3 +13,17 @@ export function highlightTerms(query) {
         .filter((w) => w.length >= 3 && !HIGHLIGHT_STOPWORDS.has(w));
     return words.length ? words : [q.toLowerCase()];
 }
+
+/**
+ * One case-insensitive pattern for `terms`, longest first (so "garages" wins
+ * over "garage" where both are terms). What a search row marks, and where a
+ * search hit is looked for on a handwritten page (utils/sketchFind.js).
+ */
+export function termRegExp(terms) {
+    if (!terms?.length) return null;
+    const pattern = [...terms]
+        .sort((a, b) => b.length - a.length)
+        .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|');
+    return new RegExp(`(${pattern})`, 'gi');
+}

@@ -2800,7 +2800,7 @@ export const scenes = [
       // A daily page is still a note: search finds it.
       await page.goto(`${h.base}/search?q=rotation`, { waitUntil: 'networkidle' });
       await h.settle(1200);
-      if (!(await page.locator('[data-note-row][href="/notes/d1"]').count())) throw new Error('search did not find the daily page');
+      if (!(await page.locator('[data-note-row][href^="/notes/d1"]').count())) throw new Error('search did not find the daily page');
 
       await page.goto(`${h.base}/meetings`, { waitUntil: 'networkidle' });
       await h.settle(1000);
@@ -3271,6 +3271,176 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(500),
   },
+  // ── 31: a search hit in a handwritten note shows where (HANDWRITING.md §5) ──
+  // From the search results to the note: the page opens at the line, the
+  // words are highlighted on the canvas, the bar steps and closes. The
+  // highlight is checked against the ink itself: the expected line's strokes
+  // are found on screen by their marker opacity (fixtures.mjs FIND_MARK).
+  // Nothing is ever written: every mutation the page sends is recorded.
+  ...(() => {
+    const fixtures = () => import('./fixtures.mjs');
+    async function stubFind(page) {
+      const F = await fixtures();
+      await bootstrapChef(page);
+      const state = { sent: [], errors: [] };
+      page.on('pageerror', (err) => state.errors.push(String(err.message || err)));
+      page.on('request', (req) => {
+        if (!req.url().includes('/graphql') || req.method() !== 'POST') return;
+        try {
+          const body = JSON.parse(req.postData() || '{}');
+          if (/^\s*mutation\b/.test(body.query || '') || NOTE_WRITES.has(body.operationName)) state.sent.push(body.operationName);
+        } catch { /* not ours */ }
+      });
+      const notes = { hw1: [F.NOTE_FIND, F.FIND_TEXT], hw2: [F.NOTE_FIND_DRAWING, F.FIND_DRAWING_TEXT] };
+      const row = (n, snippet) => ({
+        __typename: 'SearchSnippet', bestMatch: false, _id: n.id, title: n.title, type: 'handwritten', tags: n.tags,
+        isLocked: false, isEncrypted: false, createdAt: n.createdAt, updatedAt: n.updatedAt, score: 2, snippet, message: null, matchedBy: 'keyword', why: null,
+      });
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNoteById: (vars) => ({ note: notes[vars.id]?.[0] || NOTE_N1 }),
+        NoteThumbContent: (vars) => {
+          const n = notes[vars.id]?.[0];
+          return { note: n ? { __typename: 'Note', id: n.id, content: n.content, updatedAt: n.updatedAt } : null };
+        },
+        SearchNotes: (vars) => ({
+          searchNotes: Object.values(notes)
+            .filter(([, text]) => text.toLowerCase().includes(String(vars.q || '').toLowerCase()))
+            .map(([n, text]) => row(n, text.split('\n').find((l) => l.toLowerCase().includes(String(vars.q).toLowerCase())))),
+        }),
+        SketchTranscript: (vars) => ({ sketchTranscript: transcriptState({ text: notes[vars.noteId]?.[1] || null }) }),
+        SketchTranscriptFind: (vars) => ({
+          sketchTranscript: { __typename: 'SketchTranscriptState', status: 'searchable', current: true, text: notes[vars.noteId]?.[1] || null, lastReading: notes[vars.noteId]?.[1] || null, lastEdit: null },
+        }),
+      });
+      return state;
+    }
+    function assertNothingWritten(state, what) {
+      if (state.sent.length) throw new Error(`${what}: the page sent ${state.sent.join(', ')}`);
+      if (state.errors.length) throw new Error(`page error: ${state.errors[0]}`);
+    }
+    async function openFromSearch(page, h, q, title, bar = 'placed') {
+      await page.goto(`${h.base}/search?q=${encodeURIComponent(q)}`, { waitUntil: 'networkidle' });
+      const row = page.locator('[data-note-row="handwritten"]').filter({ hasText: title }).first();
+      await row.waitFor({ timeout: 15000 });
+      const href = await row.getAttribute('href');
+      if (!href || !href.includes(`find=${encodeURIComponent(q)}`)) throw new Error(`the search row links to ${href}, not to the hit`);
+      await row.click();
+      await page.waitForURL(/[?&]find=/, { timeout: 15000 });
+      await page.locator(`[data-find-bar="${bar}"]`).waitFor({ timeout: 20000 });
+      await h.settle(1200);
+    }
+    /** The highlight is on screen, on the expected line, over the word, not under the bar. */
+    async function assertHitAt(page, h, { count, line, word }) {
+      const F = await fixtures();
+      const bar = page.locator('[data-find-bar="placed"]');
+      const shown = await bar.locator('[data-find-count]').innerText();
+      if (shown !== count) throw new Error(`the bar says "${shown}", not "${count}"`);
+      const geo = await page.evaluate(({ lineOp, wordOp }) => {
+        const plain = (r) => (r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null);
+        const unionOf = (els) => els.map((e) => e.getBoundingClientRect()).filter((r) => r.width || r.height).reduce((u, r) => (u
+          ? { left: Math.min(u.left, r.left), top: Math.min(u.top, r.top), right: Math.max(u.right, r.right), bottom: Math.max(u.bottom, r.bottom) }
+          : plain(r)), null);
+        const shapes = [...document.querySelectorAll('.tl-shape')];
+        const is = (e, o) => Math.abs(Number(getComputedStyle(e).opacity) - o) < 0.001;
+        // The drawn ink, not the shape's box: tldraw 2.4 places the box at the
+        // shape's origin and lets the stroke overflow it (points above the
+        // first one are negative), so the box is not where the ink is.
+        const ink = (els) => els.flatMap((e) => [...e.querySelectorAll('path')]);
+        return {
+          line: unionOf(ink(shapes.filter((e) => is(e, lineOp) || is(e, wordOp)))),
+          word: unionOf(ink(shapes.filter((e) => is(e, wordOp)))),
+          hl: unionOf([...document.querySelectorAll('[data-find-rect]')]),
+          bar: plain(document.querySelector('[data-find-bar]')?.getBoundingClientRect()),
+          canvas: plain(document.querySelector('.tl-container')?.getBoundingClientRect()),
+          vw: window.innerWidth,
+          vh: window.innerHeight,
+          live: document.querySelector('[data-find-line]')?.textContent || '',
+        };
+      }, { lineOp: F.FIND_MARK[line], wordOp: F.FIND_MARK[word] });
+      const r = (b) => (b ? `${Math.round(b.left)},${Math.round(b.top)}→${Math.round(b.right)},${Math.round(b.bottom)}` : 'none');
+      h.log(`[31] ${count}: highlight ${r(geo.hl)} · ink line ${r(geo.line)} · word ${r(geo.word)} · bar ${r(geo.bar)}`);
+      if (!geo.hl) throw new Error('no highlight on the page');
+      if (!geo.line || !geo.word) throw new Error('the expected ink line is not on screen');
+      const within = (a, b) => a.left >= b.left - 1 && a.top >= b.top - 1 && a.right <= b.right + 1 && a.bottom <= b.bottom + 1;
+      const screen = { left: 0, top: 0, right: geo.vw, bottom: geo.vh };
+      if (!within(geo.hl, geo.canvas) || !within(geo.hl, screen)) throw new Error(`the highlight ${r(geo.hl)} is not inside the canvas ${r(geo.canvas)} on screen`);
+      if (!within(geo.line, screen)) throw new Error(`the ink line ${r(geo.line)} is not wholly on screen`);
+      const cy = (geo.hl.top + geo.hl.bottom) / 2;
+      if (cy < geo.line.top || cy > geo.line.bottom) throw new Error(`the highlight (${r(geo.hl)}) is not on the expected line (${r(geo.line)})`);
+      const overlap = Math.min(geo.hl.right, geo.word.right) - Math.max(geo.hl.left, geo.word.left);
+      if (overlap < 0.5 * (geo.word.right - geo.word.left)) throw new Error(`the highlight (${r(geo.hl)}) does not cover the word (${r(geo.word)})`);
+      if (geo.hl.right - geo.hl.left > 0.6 * (geo.line.right - geo.line.left)) throw new Error('the highlight covers the whole line, not the word');
+      const hitsBar = geo.bar && !(geo.hl.bottom <= geo.bar.top || geo.hl.top >= geo.bar.bottom || geo.hl.right <= geo.bar.left || geo.hl.left >= geo.bar.right);
+      if (hitsBar) throw new Error(`the find bar ${r(geo.bar)} covers the highlight ${r(geo.hl)}`);
+      if (!/gate/.test(geo.live)) throw new Error(`the live line reads "${geo.live}"`);
+      // Six lines read as six lines: nothing about this page is a guess.
+      if (/approximate/.test(geo.live)) throw new Error(`a clean page's hit is called approximate: "${geo.live}"`);
+    }
+    return [
+      {
+        name: '31a-search-hit-handwritten',
+        viewports: ['tablet', 'desktop'],
+        async setup(page, h) {
+          const state = await stubFind(page);
+          await openFromSearch(page, h, 'gate', 'Garage and gate');
+          await assertHitAt(page, h, { count: '1 of 2', line: 'line3', word: 'line3Gate' });
+          await page.getByRole('button', { name: 'Next match' }).click();
+          await h.settle(1000);
+          await assertHitAt(page, h, { count: '2 of 2', line: 'line6', word: 'line6Gate' });
+          await page.keyboard.press('Escape');
+          await h.settle(400);
+          if (await page.locator('[data-find-bar]').count()) throw new Error('Esc did not close the find bar');
+          if (await page.locator('[data-find-rect]').count()) throw new Error('Esc left the highlight on the page');
+          // Back to the results and in again, for the screenshot.
+          await openFromSearch(page, h, 'gate', 'Garage and gate');
+          await assertHitAt(page, h, { count: '1 of 2', line: 'line3', word: 'line3Gate' });
+          await h.settle(3000);
+          assertNothingWritten(state, 'a search hit');
+        },
+      },
+      {
+        // The words are in the text but no line of writing can hold them (a
+        // page of boxes and arrows): the note opens as usual and says so.
+        name: '31b-search-hit-unplaced',
+        async setup(page, h) {
+          const state = await stubFind(page);
+          await openFromSearch(page, h, 'verify', 'Signup flow', 'unplaced');
+          const bar = page.locator('[data-find-bar="unplaced"]');
+          if (!(await bar.getByText("Found in the text read from this page; its place on the page isn't known").count())) throw new Error('the unplaced bar does not say so');
+          if (await page.locator('[data-find-rect]').count()) throw new Error('an unplaced hit drew a highlight');
+          if (!(await page.locator('.tl-shape').count())) throw new Error('the drawing is not on the page');
+          await bar.getByRole('button', { name: 'View text' }).click();
+          const dialog = page.getByRole('dialog', { name: /the handwriting, as read/i });
+          await dialog.waitFor({ timeout: 10000 });
+          if (!(await dialog.getByText('verify email').count())) throw new Error('View text does not show the text');
+          await page.keyboard.press('Escape');
+          await h.settle(600);
+          if (await dialog.count()) throw new Error('Esc did not close the text');
+          if (!(await bar.count())) throw new Error('closing the text closed the bar too');
+          await h.settle(3000);
+          assertNothingWritten(state, 'an unplaced search hit');
+        },
+      },
+      {
+        name: '31c-search-hit-phone',
+        viewports: ['phone'],
+        async setup(page, h) {
+          const state = await stubFind(page);
+          await openFromSearch(page, h, 'gate', 'Garage and gate');
+          await assertHitAt(page, h, { count: '1 of 2', line: 'line3', word: 'line3Gate' });
+          await page.getByRole('button', { name: 'Next match' }).click();
+          await h.settle(1000);
+          await assertHitAt(page, h, { count: '2 of 2', line: 'line6', word: 'line6Gate' });
+          await page.getByRole('button', { name: 'Previous match' }).click();
+          await h.settle(1000);
+          await assertHitAt(page, h, { count: '1 of 2', line: 'line3', word: 'line3Gate' });
+          await h.settle(3000);
+          assertNothingWritten(state, 'a search hit on a phone');
+        },
+      },
+    ];
+  })(),
 ].map(withCleanDrafts);
 
 // Known, ticketed violations. Each one should die when the app is fixed —

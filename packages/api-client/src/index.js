@@ -167,6 +167,10 @@ export function mayReplayAfterRefresh(operation, response) {
 
 export const errorLink = (appName) => onError(({ graphQLErrors, networkError, response, operation, forward }) => {
     if (isSchemaMismatch(graphQLErrors, networkError)) {
+        // An operation that asks for fields an older gateway may not have yet,
+        // and falls back by itself (context `newFields: true`), is not a stale
+        // bundle: the newer side is this tab (NoteGeek's search-hit find).
+        if (operation?.getContext?.()?.newFields) return;
         reloadForStaleBundleOnce();
         return;
     }

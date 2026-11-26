@@ -9,7 +9,7 @@ import {
 import { formatRelativeTime } from '../../utils/dateUtils';
 import { previewText } from '../../utils/previewText';
 import { rowTagLabels } from '../../utils/tagPath';
-import { highlightTerms } from '../../utils/highlightTerms';
+import { highlightTerms, termRegExp } from '../../utils/highlightTerms';
 import { graphiteTokens } from '../../theme/tokens';
 import TypeIcon from './TypeIcon';
 import { NoteThumb } from './NotePreview';
@@ -41,12 +41,7 @@ function highlightQuery(text, query) {
     if (!query || !text) return text;
     const terms = highlightTerms(query);
     if (!terms.length) return text;
-    // Longest first, so "garages" wins over "garage" where both are terms.
-    const pattern = terms
-        .sort((a, b) => b.length - a.length)
-        .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-        .join('|');
-    const parts = text.split(new RegExp(`(${pattern})`, 'gi'));
+    const parts = text.split(termRegExp(terms));
     return parts.map((part, i) =>
         terms.includes(part.toLowerCase())
             ? <mark key={i}>{part}</mark>
@@ -159,7 +154,10 @@ function NoteRow({
     const g = graphiteTokens(theme);
 
     const noteId = note.id || note._id;
-    const linkTo = to || `/notes/${noteId}`;
+    // A keyword hit on a handwritten note opens at the words on the page
+    // (DOCS/HANDWRITING.md §5). Not a meaning hit: its words may not be there.
+    const findQuery = query && isVisual && !byMeaning && !note.isLocked && !note.isEncrypted ? String(query).trim() : '';
+    const linkTo = to || (findQuery ? `/notes/${noteId}?find=${encodeURIComponent(findQuery)}` : `/notes/${noteId}`);
     // Two-pane: the note open beside the list is this row (Layout.jsx).
     const currentNoteId = useCurrentNoteId();
     const current = !selectMode && noteId != null && currentNoteId === String(noteId);

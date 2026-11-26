@@ -907,3 +907,25 @@ All built 2026-11-25, uncommitted at the time of writing. Not yet on a device.
 - Tests: gateway 195 suites / 3850 tests; packages/ui 27 files / 1039 tests; packages/ink 7 files / 61 tests; GeekDay 20 files / 319 tests; NoteGeek 107 files / 1071 tests.
 - Not yet on a device. Browser harness: all twelve apps clean at every viewport (NoteGeek 698 scenes, FitnessGeek 324, ThingGeek 142, NewsGeek 104, GeekDay 78, BookGeek 56, TodoGeek 50, GameGeek 48, StoryGeek 38, BaseGeek 38, FlockGeek 34, StartGeek 24).
 - Details: `apps/notegeek/DOCS/CONTEXT.md` §25, `apps/geekday/DOCS/CONTEXT.md`, `DOCS/SUITE_TODO.md`.
+
+## 2026-11-26: NoteGeek, a handwriting search hit shows where
+
+Chef: "Handwriting search that shows where. A search hit in a handwritten note jumps to and highlights
+the words on the page." Built overnight on Chef's authorisation; not yet on a device.
+
+- `@geeksuite/ink` `findInkLines` / `inkBoxesOf` (lines of writing from stroke geometry; GeekDay can reuse).
+- NoteGeek `utils/sketchFind.js` (transcript lines aligned to ink lines), `SketchFind.jsx` (bar, highlight
+  via tldraw `OnTheCanvas`), `useSketchFind`; `NoteRow` links keyword hits to `/notes/:id?find=<q>`.
+- Gateway: `SketchTranscriptState.lastReading` / `lastEdit`, read only. `@geeksuite/api-client`: an operation
+  with context `newFields` is not taken for a stale bundle.
+- Decisions made on Chef's behalf: positions on the client only, nothing stored; the find text is the current
+  transcript, else whichever stored reading (machine first, then corrections) holds the words; hits on
+  neighbouring lines are one hit; words not in the text (a title or tag hit) or no text at all open the note
+  quietly with no bar; the pen writing ends the find (bar and highlight); the first view waits at most 2.5 s for
+  the text; a photo note stops at the page; a typed note ignores `?find=`; the reference pane does not jump;
+  `lastEdit` mirrors what word search counts; the highlight is the highlighter colour at 55% under the ink,
+  padded a quarter letter-height; "approximate" below confidence 0.6.
+- Found in the harness: tldraw draws a two-point stroke as a dot half a letter high (it became a line of its
+  own until the line finder learned it), and tldraw places a shape's DOM box at the stroke's origin, not around
+  the ink.
+- Details: `apps/notegeek/DOCS/HANDWRITING.md` §5, `apps/notegeek/DOCS/CONTEXT.md` §26.

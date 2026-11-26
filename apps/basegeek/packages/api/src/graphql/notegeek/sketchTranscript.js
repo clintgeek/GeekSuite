@@ -134,6 +134,11 @@ export function transcriptView(note, { now = Date.now(), autoEnabled = true, con
 
   const current = status === 'searchable';
   const editedCurrent = t.edited?.hash === contentHash && typeof t.edited?.text === 'string';
+  // Search-hit location (HANDWRITING.md §5): the stored readings whatever the
+  // hash, as word search counts them (sketchText.js sketchSearchText), and
+  // nothing at all from a locked or encrypted note.
+  const open = note?.type === 'handwritten' && !note.isLocked && !note.isEncrypted;
+  const editCounts = Boolean(t.edited) && (t.edited.hash === t.hash || t.editedSearchable !== false);
   return {
     status,
     contentHash,
@@ -141,6 +146,8 @@ export function transcriptView(note, { now = Date.now(), autoEnabled = true, con
     // What Convert should show for this exact content: the user's
     // corrections if they were made against it, else the machine reading.
     text: current ? (editedCurrent ? t.edited.text : t.text) : null,
+    lastReading: open && typeof t.text === 'string' ? t.text : null,
+    lastEdit: open && editCounts && typeof t.edited?.text === 'string' ? t.edited.text : null,
     edited: current && editedCurrent,
     source: current ? (editedCurrent ? 'user' : (t.source || null)) : null,
     provider: t.provider || null,

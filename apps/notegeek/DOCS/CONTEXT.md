@@ -980,3 +980,27 @@ note's history), leaving only `markdown` and `handwritten` among live notes.
   Local and unchanged in role: `utils/penPrefs.js` (a binding of the same storage keys),
   `utils/sketchExport.js` (a wrapper with the template sheet and print export), `utils/saveGuards.js`, and
   `HandwrittenEditor.jsx`. Palm handling at canvas level still differs from GeekDay (here tldraw pen mode).
+
+## 26. A search hit shows where (gateway + client + packages, built 2026-11-26, not yet on a device)
+
+Full account: `HANDWRITING.md` §5. What to know before touching it:
+
+- **Nothing is stored.** Positions are worked out on open from the strokes (`@geeksuite/ink`
+  `findInkLines`, `inkBoxesOf`) and the transcript (`utils/sketchFind.js`). The gateway only gained
+  two read-only fields on `SketchTranscriptState`: `lastReading`, `lastEdit` (null when locked or
+  encrypted; `lastEdit` only while word search still counts the corrections).
+- **Link.** `NoteRow` adds `?find=<q>` for a keyword hit on an unlocked handwritten note (search
+  results only: it is keyed on the `query` prop). `NoteEditorPage` reads `find` and passes
+  `useSketchFind`'s result to `HandwrittenEditor` as `find`.
+- **Landmine: the shared error link reloads on `GRAPHQL_VALIDATION_FAILED`** (a stale bundle). A
+  query that asks for fields an older gateway lacks must carry context `{ newFields: true }`
+  (`@geeksuite/api-client` `errorLink`) or a new client against an old gateway reloads the tab.
+- **Landmine: the highlight is a tldraw component, not a shape.** `components.OnTheCanvas` (in the
+  stable `HIDDEN_TLDRAW_COMPONENTS`) reads `FindHighlightContext`; making it a shape would save it,
+  export it and send it to the model.
+- **Camera.** A find jump replaces `applyFirstView` for that open; `findActiveRef` keeps the camera
+  listener (and the unmount write) from remembering a find's camera.
+- **Deploy order.** Either order works: a new client on an old gateway falls back to `text`, then to
+  the quiet note.
+- **Harness.** `31a` (tablet, desktop), `31b` (every viewport), `31c` (phone); fixtures `NOTE_FIND`
+  (six generated lines, marker opacities on lines 3 and 6), `NOTE_FIND_DRAWING`.

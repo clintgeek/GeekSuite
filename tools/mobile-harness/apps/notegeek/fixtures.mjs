@@ -83,6 +83,64 @@ const SKETCH_PAPER = { paperColor: 'warm', paperPattern: 'lined' };
 export const UNREADABLE_TRUNCATED = '{"store":';
 export const unreadableNote = (content = UNREADABLE_TRUNCATED) => note('u1', 'Torn sketch', 'handwritten', ['product'], content, daysAgo(2));
 
+// ── Handwriting search shows where (apps/notegeek/DOCS/HANDWRITING.md §5) ──
+// Six lines of generated handwriting: real tldraw draw shapes on the real
+// snapshot's schema, one joined-up stroke per word (each letter a stroke up
+// to its height and back down), i-dots as their own small strokes, and a
+// slight climb across the page. Lines 3 and 6 carry a near-1 opacity (never
+// visible) so a scene can find their strokes on screen: tldraw 2.4 puts no
+// shape id in the DOM. FIND_TEXT is the matching transcript.
+export const FIND_LINES = [
+  'Garage door quote from Hendricks',
+  'call back before Friday',
+  'ask about the side gate',
+  'budget is about two thousand',
+  'pick paint at the yard',
+  'tell Sam about the gate',
+];
+export const FIND_TEXT = FIND_LINES.join('\n');
+export const FIND_MARK = { line3: 0.99, line3Gate: 0.98, line6: 0.97, line6Gate: 0.96 };
+function handwrittenPage(lines) {
+  const base = JSON.parse(SKETCH_CONTENT);
+  const store = Object.fromEntries(Object.entries(base.store).filter(([, r]) => r.typeName !== 'shape'));
+  const B62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  let n = 0;
+  const nextIndex = () => { n += 1; return n < 62 ? `a${B62[n]}` : `b${B62[Math.floor(n / 62)]}${B62[n % 62]}`; };
+  const stroke = (id, x, y, points, opacity = 1) => {
+    store[id] = {
+      x, y, rotation: 0, isLocked: false, opacity, meta: {}, id, type: 'draw', parentId: 'page:page', index: nextIndex(), typeName: 'shape',
+      props: { segments: [{ type: 'free', points: points.map(([px, py]) => ({ x: px, y: py, z: 0.5 })) }], color: 'black', fill: 'none', dash: 'draw', size: 's', isComplete: true, isClosed: false, isPen: true, scale: 1 },
+    };
+  };
+  lines.forEach((text, row) => {
+    let x = 40;
+    text.split(' ').forEach((word, w) => {
+      const lineNo = row + 1;
+      const isGate = word === 'gate';
+      const opacity = lineNo === 3 ? (isGate ? FIND_MARK.line3Gate : FIND_MARK.line3) : lineNo === 6 ? (isGate ? FIND_MARK.line6Gate : FIND_MARK.line6) : 1;
+      const baseline = 70 + row * 58 - x * 0.02;
+      const pts = [[0, 0]];
+      [...word].forEach((ch, i) => {
+        const h = /[bdfhklt]|[A-Z]/.test(ch) ? 26 : 14;
+        const deep = /[gjpqy]/.test(ch) ? 10 : 0;
+        pts.push([i * 11 + 4, -h], [i * 11 + 8, deep], [i * 11 + 11, 0]);
+        if (ch === 'i') stroke(`shape:hw${lineNo}-${w}-dot${i}`, x + i * 11 + 4, baseline - 22, [[0, 0], [1.5, 1]], opacity);
+      });
+      stroke(`shape:hw${lineNo}-${w}`, x, baseline, pts, opacity);
+      x += word.length * 11 + 16;
+    });
+  });
+  return JSON.stringify({ store, schema: base.schema });
+}
+export const NOTE_FIND = note('hw1', 'Garage and gate', 'handwritten', ['house'], handwrittenPage(FIND_LINES), hoursAgo(5));
+// Only the drawing (boxes and arrows): no line of writing to place a hit on.
+export const NOTE_FIND_DRAWING = note('hw2', 'Signup flow', 'handwritten', ['product'], (() => {
+  const s = JSON.parse(SKETCH_CONTENT);
+  s.store = Object.fromEntries(Object.entries(s.store).filter(([, r]) => r.typeName !== 'shape' || r.type !== 'draw'));
+  return JSON.stringify(s);
+})(), hoursAgo(6));
+export const FIND_DRAWING_TEXT = 'sign up\nverify email\nfirst note';
+
 export const NOTE_SKETCH_TEMPLATE = note(
   'n3t', 'Fri 20 Nov', 'handwritten', ['daily'],
   withTemplateSheet(withDocumentMeta(SKETCH_CONTENT, SKETCH_PAPER), 'meeting'), daysAgo(1),
