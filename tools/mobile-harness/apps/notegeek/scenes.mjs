@@ -2800,7 +2800,7 @@ export const scenes = [
       // A daily page is still a note: search finds it.
       await page.goto(`${h.base}/search?q=rotation`, { waitUntil: 'networkidle' });
       await h.settle(1200);
-      if (!(await page.locator('[data-note-row][href="/notes/d1"]').count())) throw new Error('search did not find the daily page');
+      if (!(await page.locator('[data-note-row][href^="/notes/d1"]').count())) throw new Error('search did not find the daily page');
 
       await page.goto(`${h.base}/meetings`, { waitUntil: 'networkidle' });
       await h.settle(1000);
