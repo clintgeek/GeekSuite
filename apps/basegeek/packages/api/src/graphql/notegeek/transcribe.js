@@ -146,14 +146,15 @@ export const transcribePromptFor = (source) => (
   source === 'photo' ? TRANSCRIBE_PHOTO_PROMPT : source === 'form' ? TRANSCRIBE_FORM_PROMPT : TRANSCRIBE_PROMPT
 );
 
-/** A GraphQLError in the shape the client's `saveErrorMessage` already reads. */
-function transcribeError(message, code, extra = {}) {
+/** A GraphQLError in the shape the client's `saveErrorMessage` already reads. Shared with diagram.js. */
+export function transcribeError(message, code, extra = {}) {
   return new GraphQLError(message, {
     extensions: { code, details: [{ path: [], message }], ...extra },
   });
 }
 
-const stripOuterFence = (text) => {
+/** The text inside one code fence wrapped around a whole answer, else the answer. Shared with diagram.js. */
+export const stripOuterFence = (text) => {
   const trimmed = (text || '').trim();
   const fence = trimmed.match(/^```[a-z]*\r?\n([\s\S]*?)\r?\n?```$/i);
   return fence ? fence[1] : trimmed;

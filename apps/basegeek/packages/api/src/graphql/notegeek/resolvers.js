@@ -12,6 +12,7 @@ import {
   composeNoteArgsSchema,
   transcribeSketchArgsSchema,
   autoTranscribeSketchArgsSchema,
+  diagramSketchArgsSchema,
   saveSketchTranscriptEditArgsSchema,
   recordSketchTasksSentArgsSchema,
   foldInPreviewArgsSchema,
@@ -31,6 +32,7 @@ import {
 import { sanitizeNoteArgs } from './sanitize.js';
 import { composeNote, composeNotes } from './compose.js';
 import { transcribeSketch } from './transcribe.js';
+import { diagramSketch } from './diagram.js';
 import {
   autoTranscribeSketch, getSketchTranscript, rememberConvertReading, saveSketchTranscriptEdit,
   recordSketchTasksSent, transcriptForCreate, sketchesToTranscribe,
@@ -80,6 +82,7 @@ const validateDeleteTag = validateInput(deleteTagArgsSchema);
 const validateComposeNote = validateInput(composeNoteArgsSchema);
 const validateTranscribeSketch = validateInput(transcribeSketchArgsSchema);
 const validateAutoTranscribeSketch = validateInput(autoTranscribeSketchArgsSchema);
+const validateDiagramSketch = validateInput(diagramSketchArgsSchema);
 const validateSaveSketchTranscriptEdit = validateInput(saveSketchTranscriptEditArgsSchema);
 const validateRecordSketchTasksSent = validateInput(recordSketchTasksSentArgsSchema);
 const validateFoldInPreview = validateInput(foldInPreviewArgsSchema);
@@ -963,6 +966,17 @@ export const resolvers = {
         await rememberConvertReading({ noteId, userId, text: result.text, provenance: result.provenance });
       }
       return result;
+    },
+
+    /**
+     * Turn a page into a Mermaid flowchart (diagram.js). Validated first, like
+     * transcribeSketch. Writes nothing at all: not the note, not its transcript.
+     */
+    diagramSketch: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { image, mediaType, source, previous, problem } = validateDiagramSketch(rawArgs);
+      return await diagramSketch({ image, mediaType, source, previous, problem, userId });
     },
 
     /** Automatic transcription (sketchTranscript.js). Failures come back as status. */
