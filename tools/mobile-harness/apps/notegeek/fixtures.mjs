@@ -627,6 +627,15 @@ export const OPS = {
     saveSketchTranscriptEdit: transcriptState({ text: vars.text, edited: true, source: 'user', contentHash: vars.forHash || 'h-sketch-1', at: new Date().toISOString() }),
   }),
   RecordSketchTasksSent: (vars) => ({ recordSketchTasksSent: transcriptState({ sentTaskKeys: vars.keys || [] }) }),
+  // "Turn into a diagram" (HANDWRITING.md): the fixture sketch's three boxes
+  // and two arrows as a flowchart. Scenes 32a-32b override it to count calls.
+  DiagramSketch: () => ({
+    diagramSketch: {
+      mermaid: 'flowchart LR\n  n1["sign up"] --> n2["verify email"]\n  n2 -->|then| n3["first note"]\n  n3 --> n4("ask Heather [?]")',
+      repaired: false,
+      provenance: { source: 'model', model: 'openai/gpt-4.1-mini' },
+    },
+  }),
   // Journal lines → TodoGeek, through the same gateway.
   CreateTodoTask: (vars) => ({ createTask: { __typename: 'Task', id: `task-${String(vars.clientId || 'x').slice(0, 8)}`, content: vars.content } }),
   RenameTag: { renameTag: true },

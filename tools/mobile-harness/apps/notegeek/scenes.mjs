@@ -3271,6 +3271,204 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(500),
   },
+  // ── "Turn into a diagram" (HANDWRITING.md, CONTEXT.md §26): scenes 32a-32e ──
+  // One contiguous block. The gateway's DiagramSketch is stubbed; Mermaid
+  // itself is real and draws in Chromium.
+  ...(() => {
+    const DIAGRAM = OPS.DiagramSketch().diagramSketch.mermaid;
+    const BROKEN = 'flowchart LR\n  n1["sign up"] --> n2["verify email"';
+    const answer = (mermaid) => ({ diagramSketch: { mermaid, repaired: false, provenance: { source: 'model', model: 'openai/gpt-4.1-mini' } } });
+    // Wide on purpose: on a phone it must scroll inside its own box.
+    const WIDE = [
+      'flowchart LR',
+      '  a["Idea on paper"] --> b{"Worth building?"}',
+      '  b -->|yes| c["Sketch the flow"]',
+      '  b -->|no| z(("Drop it"))',
+      '  c --> d["Write the spec"] --> e["Build it"] --> f["Ship to staging"] --> g["Ship"]',
+    ].join('\n');
+    const diagramNote = (id, mermaid) => ({
+      ...NOTE_MD,
+      id,
+      title: 'Diagram: Onboarding flow',
+      tags: ['work'],
+      content: `From handwritten note: [Onboarding flow](/notes/n3)\n\n\`\`\`mermaid\n${mermaid}\n\`\`\`\n\nNotes under the diagram.\n`,
+    });
+
+    async function openDiagramSketch(page, h, answers) {
+      await bootstrapChef(page);
+      const sent = [];
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNoteById: { note: NOTE_SKETCH },
+        UpdateNote: { updateNote: NOTE_SKETCH },
+        DiagramSketch: (vars) => {
+          sent.push(vars);
+          return answer(answers[Math.min(sent.length, answers.length) - 1]);
+        },
+      });
+      await page.goto(h.base + '/notes/n3/edit', { waitUntil: 'networkidle' });
+      await h.settle(1800);
+      await page.getByRole('button', { name: /more note actions/i }).first().click();
+      await h.settle(400);
+      const item = page.getByRole('menuitem', { name: /turn into a diagram/i });
+      if (!(await item.count())) throw new Error('⋯ menu has no "Turn into a diagram" on a handwritten note');
+      if (await item.getAttribute('aria-disabled') === 'true') throw new Error('"Turn into a diagram" is disabled on a page with ink');
+      await item.click();
+      const dialog = page.getByRole('dialog', { name: 'Handwriting to diagram' });
+      await dialog.locator('[data-diagram-drawing] figure[role="img"] svg').waitFor({ timeout: 30000 });
+      await h.settle(600);
+      return { sent, dialog };
+    }
+
+    // Every text in a drawn diagram against the fill it sits on: ≥ 4.5:1.
+    async function assertDiagramContrast(page, scope) {
+      const low = await page.evaluate((sel) => {
+        const rgb = (c) => {
+          const m = /rgba?\(([^)]+)\)/.exec(c || '');
+          if (!m) return null;
+          const [r, g, b, a = 1] = m[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+          return a === 0 ? null : [r, g, b];
+        };
+        const lum = ([r, g, b]) => {
+          const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+          return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+        };
+        const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+        const pageBg = (el) => {
+          for (let a = el; a; a = a.parentElement) {
+            const c = rgb(getComputedStyle(a).backgroundColor);
+            if (c) return c;
+          }
+          return [255, 255, 255];
+        };
+        const out = [];
+        for (const fig of document.querySelectorAll(sel)) {
+          for (const t of fig.querySelectorAll('svg text')) {
+            if (!t.textContent.trim()) continue;
+            const fg = rgb(getComputedStyle(t.querySelector('tspan') || t).fill);
+            const holder = t.closest('.node, .edgeLabel, .cluster');
+            const shape = holder?.querySelector('rect, polygon, circle, path');
+            const bg = (shape && rgb(getComputedStyle(shape).fill)) || pageBg(fig);
+            if (fg && ratio(fg, bg) < 4.5) out.push(`"${t.textContent.trim()}" ${ratio(fg, bg).toFixed(2)}:1`);
+          }
+        }
+        return out;
+      }, scope);
+      if (low.length) throw new Error(`diagram text below 4.5:1: ${low.slice(0, 4).join('; ')}`);
+    }
+
+    async function assertNoSidewaysPage(page, h) {
+      const r = await page.evaluate(() => {
+        const fig = document.querySelector('#root figure[role="img"]');
+        const box = fig?.getBoundingClientRect();
+        return {
+          page: document.documentElement.scrollWidth,
+          width: window.innerWidth,
+          figRight: box ? box.right : 0,
+          scrolls: fig ? fig.scrollWidth > fig.clientWidth + 1 : false,
+        };
+      });
+      if (r.page > r.width + 1) throw new Error(`the page scrolls sideways (${r.page} > ${r.width})`);
+      if (r.figRight > r.width + 1) throw new Error(`the diagram runs off the screen (right ${Math.round(r.figRight)})`);
+      if (h.isPhone && !r.scrolls) throw new Error('the wide diagram does not scroll inside its own box on a phone');
+    }
+
+    return [
+      {
+        // The ⋯ entry, the call (one, bare base64 PNG), and the review: a
+        // drawn diagram, its source, the page it came from.
+        name: '32a-diagram-review',
+        async setup(page, h) {
+          const { sent, dialog } = await openDiagramSketch(page, h, [DIAGRAM]);
+          if (sent.length !== 1) throw new Error(`expected one diagramSketch call, saw ${sent.length}`);
+          if (sent[0].mediaType !== 'image/png' || !/^iVBORw0KGgo/.test(sent[0].image)) throw new Error('the page was not sent as bare base64 PNG');
+          if (sent[0].previous || sent[0].problem) throw new Error('the first call asked for a repair');
+          if ((await dialog.getByRole('textbox', { name: 'Mermaid source' }).inputValue()) !== DIAGRAM) throw new Error('the source box does not hold the diagram');
+          const name = await dialog.locator('figure[role="img"]').getAttribute('aria-label');
+          if (!/sign up/.test(name || '')) throw new Error(`the drawing is named "${name}"`);
+          if (!(await dialog.getByRole('button', { name: 'Save as new note' }).isEnabled())) throw new Error('Save as new note is not enabled');
+          await assertDiagramContrast(page, '[data-diagram-drawing] figure[role="img"]');
+        },
+        teardown: (page, h) => h.esc(400),
+      },
+      {
+        // Mermaid refuses the first answer: one repair call with the error,
+        // and the repaired diagram is drawn.
+        name: '32b-diagram-repair',
+        viewports: ['phone', 'desktop'],
+        async setup(page, h) {
+          const { sent, dialog } = await openDiagramSketch(page, h, [BROKEN, DIAGRAM]);
+          if (sent.length !== 2) throw new Error(`expected two diagramSketch calls, saw ${sent.length}`);
+          if (sent[1].previous !== BROKEN || !sent[1].problem) throw new Error('the repair call did not carry previous and problem');
+          console.log(`  [diagram repair] ${h.viewport}: problem "${sent[1].problem.slice(0, 80)}"`);
+          if ((await dialog.getByRole('textbox', { name: 'Mermaid source' }).inputValue()) !== DIAGRAM) throw new Error('the repaired diagram is not the one under review');
+          if (await dialog.locator('[data-diagram-problem]').count()) throw new Error('a problem is shown for a diagram that parses');
+        },
+        teardown: (page, h) => h.esc(400),
+      },
+      {
+        // A Typed note with a mermaid block, in the viewer: drawn, named,
+        // readable in both schemes, and on a phone it scrolls in its own box.
+        name: '32c-diagram-note',
+        async setup(page, h) {
+          await openNote(page, h, diagramNote('nd', WIDE), '/notes/nd');
+          const fig = page.locator('#root figure[role="img"]').first();
+          await fig.locator('svg').waitFor({ timeout: 30000 });
+          await h.settle(500);
+          const name = await fig.getAttribute('aria-label');
+          if (!/Idea on paper/.test(name || '')) throw new Error(`the diagram is named "${name}"`);
+          if (!(await page.getByRole('button', { name: 'Show source' }).count())) throw new Error('no "Show source"');
+          await assertDiagramContrast(page, '#root figure[role="img"]');
+          await assertNoSidewaysPage(page, h);
+        },
+      },
+      {
+        // A block Mermaid cannot draw: the source and why, never a blank.
+        name: '32d-diagram-error',
+        viewports: ['phone', 'desktop'],
+        async setup(page, h) {
+          await openNote(page, h, diagramNote('ne', BROKEN), '/notes/ne');
+          // The screen copy (the print copy, display: none, says the same).
+          const screenCopy = page.locator('#root');
+          const status = screenCopy.getByText(/^This diagram could not be drawn: /);
+          await status.waitFor({ timeout: 30000 });
+          if ((await status.getAttribute('role')) !== 'status') throw new Error('the failure is not a status');
+          const source = screenCopy.getByRole('region', { name: 'Diagram source' });
+          if (!(await source.textContent()).includes('verify email')) throw new Error('the source is not shown');
+          if (await screenCopy.locator('figure[role="img"]').count()) throw new Error('a figure was drawn for a broken diagram');
+        },
+      },
+      {
+        // Print from the editor: the paper copy waits for the diagram, drawn
+        // light, before the dialog opens.
+        name: '32e-diagram-print',
+        viewports: ['phone', 'desktop'],
+        async setup(page, h) {
+          await openNote(page, h, diagramNote('nd', DIAGRAM), '/notes/nd/edit');
+          await page.evaluate(() => {
+            window.__diagramPrint = [];
+            window.print = () => {
+              const root = document.querySelector('body > .ng-print-root');
+              window.__diagramPrint.push({
+                svgs: root?.querySelectorAll('figure[role="img"] svg').length || 0,
+                pending: root?.querySelectorAll('[data-mermaid-pending]').length || 0,
+                toggle: Boolean(root?.querySelector('button')),
+              });
+              setTimeout(() => window.dispatchEvent(new Event('afterprint')), 0);
+            };
+          });
+          await page.getByRole('button', { name: /more note actions/i }).first().click();
+          await h.settle(400);
+          await page.getByRole('menuitem', { name: /print or save as pdf/i }).click();
+          await page.waitForFunction(() => window.__diagramPrint.length > 0, null, { timeout: 20000 });
+          const [printed] = await page.evaluate(() => window.__diagramPrint);
+          if (printed.svgs !== 1 || printed.pending) throw new Error(`printed ${printed.svgs} drawn diagrams with ${printed.pending} pending`);
+          if (printed.toggle) throw new Error('the paper copy has a button');
+          await assertPrintMedia(page);
+        },
+      },
+    ];
+  })(),
 ].map(withCleanDrafts);
 
 // Known, ticketed violations. Each one should die when the app is fixed —

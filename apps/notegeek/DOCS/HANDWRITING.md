@@ -546,3 +546,35 @@ they differ (open position, listener, phone bar).
   and the asset handler (20 s per-test timeout). New: `sketchImages`, `twoFingerTap`,
   `palmTouch` (both now tested in `packages/ink`). Harness scenes `10-editor-sketch` and `03q-sketch-paper-dark` change look and
   were not re-run.
+
+## 4. Turn into a diagram (as built 2026-11-26, not yet on a device)
+
+The requirement (Chef): "'turn this page into a Mermaid diagram' is one more conversion option in
+NoteGeek." Chef sketches boxes and arrows by hand; the page is already sent to a model for
+transcription; this sends it for a Mermaid diagram instead. The handwritten note is never replaced.
+
+**The flow.**
+1. ⋯ menu on a handwritten note: **Turn into a diagram**, right after "Convert handwriting to
+   text", offered and disabled exactly where that one is (Typed notes, an unreadable page and a
+   note in Recently deleted have neither). There is no second entry point.
+2. The page is saved if needed, exported exactly as for Convert, and sent to the gateway's
+   `diagramSketch` (a new mutation: it writes nothing, and the answer never becomes the page's
+   transcript or search text).
+3. The gateway asks a vision model for a flowchart only, labels as written and quoted, `[?]`
+   for unreadable words, and checks the answer as text (`mermaidCheck.js`); a failed check is
+   retried once with the problem named. A page that is not a diagram answers `[no diagram]`,
+   shown as "This page doesn't look like a diagram."
+4. The client checks the answer with `mermaid.parse`. If Mermaid refuses it, the gateway is
+   asked once more with the answer and Mermaid's error (`previous` + `problem`).
+5. Review (`DiagramDialog`): the drawn diagram, its Mermaid source (editable, redrawn after a
+   pause in typing, the last good drawing kept meanwhile) and the page it came from. Discard,
+   or **Save as new note**; a diagram that still cannot be drawn shows the error and offers
+   **Save anyway**.
+6. The new note is Typed: title "Diagram: <title>", the usual "From handwritten note: [..](..)"
+   first line, a blank line, then a ```mermaid fence (longer than any backtick run in the
+   source), the original's tags. It opens. The handwritten note is untouched.
+
+**Limits.** Flowcharts only (`flowchart`/`graph`, TD/TB/BT/LR/RL); no styling, links,
+directives or HTML; at most 8,000 characters and 150 nodes. The prompt has never been run
+against a real model and a real page: the tests stub the model. Rendering in notes, print,
+search text and the service worker: `CONTEXT.md` §26.
