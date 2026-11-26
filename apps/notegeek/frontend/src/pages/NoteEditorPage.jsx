@@ -38,6 +38,7 @@ import { buildMeeting, buildOneOnOne, oneOnOneRoot, personName, personOfNote, pe
 import OpenItems from '../components/oneOnOne/OpenItems';
 import { useNoteCompose } from './noteEditor/useNoteCompose';
 import { useSketchConvert } from './noteEditor/useSketchConvert';
+import { useSketchDiagram } from './noteEditor/useSketchDiagram';
 import { useSendTasks } from './noteEditor/useSendTasks';
 import { useSketchPrint } from './noteEditor/useSketchPrint';
 import EditorDialogs from './noteEditor/EditorDialogs';
@@ -474,6 +475,11 @@ function NoteEditorPage({ editorKey } = {}) {
     savedNoteIdRef, handleSaveRef, dirtyRef, sketchApiRef, transcriptViewRef,
     setTranscriptView, settleSave, createNoteMutation, navigate, notify,
     setCompose, handleCompose,
+  });
+
+  const sketchDiagram = useSketchDiagram({
+    title, tags, savedNoteIdRef, handleSaveRef, sketchApiRef, settleSave,
+    createNoteMutation, navigate, notify,
   });
 
   const { sendTasks, setSendTasks, openSendTasks, closeSendTasks, handleSendCorrections, handleSendTasks } = useSendTasks({
@@ -1148,6 +1154,8 @@ function NoteEditorPage({ editorKey } = {}) {
                 onCompose={canCompose && !unreadable ? () => handleCompose() : undefined}
                 isComposing={isComposing}
                 onTranscribe={isHandwritten && !unreadable ? () => handleTranscribe() : undefined}
+                onDiagram={isHandwritten && !unreadable ? () => sketchDiagram.handleDiagram() : undefined}
+                isDiagramming={sketchDiagram.diagram?.stage === 'working'}
                 onSendTasks={isHandwritten && !unreadable ? () => openSendTasks() : undefined}
                 canTranscribe={canTranscribe && !unreadable}
                 isTranscribing={transcribe?.stage === 'working'}
@@ -1209,6 +1217,7 @@ function NoteEditorPage({ editorKey } = {}) {
         transcribe={transcribe} setTranscribe={setTranscribe} closeTranscribe={closeTranscribe}
         handleTranscribe={handleTranscribe} handleTranscriptCompose={handleTranscriptCompose}
         handleTranscriptKeepPlain={handleTranscriptKeepPlain}
+        sketchDiagram={sketchDiagram}
         sendTasks={sendTasks} setSendTasks={setSendTasks} handleSendTasks={handleSendTasks}
         closeSendTasks={closeSendTasks} openSendTasks={openSendTasks}
         handleSendCorrections={handleSendCorrections}

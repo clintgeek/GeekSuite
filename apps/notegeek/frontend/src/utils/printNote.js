@@ -105,6 +105,30 @@ export async function waitForImages(root, timeout = IMAGE_WAIT_MS) {
   ]);
 }
 
+/** Longest wait for Mermaid diagrams (a first load fetches Mermaid itself). */
+export const DIAGRAM_WAIT_MS = 8000;
+
+/**
+ * Resolve once no diagram under `root` is still being drawn (MermaidBlock
+ * marks itself `data-mermaid-pending` until it has an SVG or an error), or
+ * after `timeout`. A diagram that failed prints its source and the reason.
+ */
+export async function waitForDiagrams(root, timeout = DIAGRAM_WAIT_MS) {
+  if (!root?.querySelector?.('[data-mermaid-pending]')) return;
+  await new Promise((resolve) => {
+    const done = () => {
+      observer?.disconnect();
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(done, timeout);
+    const observer = typeof MutationObserver === 'function'
+      ? new MutationObserver(() => { if (!root.querySelector('[data-mermaid-pending]')) done(); })
+      : null;
+    observer?.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-mermaid-pending'] });
+  });
+}
+
 /**
  * Print the note: title swapped, `prepare` awaited, images loaded, dialog
  * opened. A failing `prepare` does not stop the print — the view is expected
@@ -131,6 +155,7 @@ export async function runPrint({ title, prepare, getRoot } = {}) {
     console.warn('NoteGeek print: could not prepare the note', err);
   }
   await waitForImages(getRoot?.() || null);
+  await waitForDiagrams(getRoot?.() || null);
   window.print();
 }
 

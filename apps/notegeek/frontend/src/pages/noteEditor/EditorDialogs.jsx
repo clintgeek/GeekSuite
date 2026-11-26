@@ -3,6 +3,7 @@ import ConflictDialog from '../../components/notes/ConflictDialog';
 import SendTasksDialog from '../../components/editors/SendTasksDialog';
 import ComposeDialog from '../../components/editors/ComposeDialog';
 import TranscribeDialog from '../../components/editors/TranscribeDialog';
+import DiagramDialog from '../../components/editors/DiagramDialog';
 import FoldInSheet from '../../components/foldin/FoldInSheet';
 import NoteHistoryDialog from '../../components/notes/NoteHistoryDialog';
 import { normalizeNoteType } from '../../components/notes/noteTypeMeta';
@@ -16,6 +17,7 @@ export default function EditorDialogs({
   foldInOpen, setFoldInOpen, flushBeforeFoldIn, showServerNote,
   transcribe, setTranscribe, closeTranscribe, handleTranscribe,
   handleTranscriptCompose, handleTranscriptKeepPlain,
+  sketchDiagram = null,
   sendTasks, setSendTasks, handleSendTasks, closeSendTasks, openSendTasks, handleSendCorrections,
   conflict, conflictBusy, handleKeepMine, handleUseTheirs, handleKeepBoth,
 }) {
@@ -105,6 +107,25 @@ export default function EditorDialogs({
           onKeepPlain={handleTranscriptKeepPlain}
           reused={transcribe.reused}
           onTranscribeAgain={transcribe.reused ? () => handleTranscribe({ forceRead: true }) : null}
+        />
+      ) : null}
+
+      {sketchDiagram?.diagram ? (
+        <DiagramDialog
+          open={sketchDiagram.diagram.open}
+          stage={sketchDiagram.diagram.stage}
+          step={sketchDiagram.diagram.step}
+          source={sketchDiagram.diagram.source}
+          onSourceChange={sketchDiagram.setDiagramSource}
+          parseError={sketchDiagram.diagram.parseError}
+          onDrawn={sketchDiagram.onDiagramDrawn}
+          error={sketchDiagram.diagram.error}
+          model={sketchDiagram.diagram.model}
+          imageUrl={sketchDiagram.diagram.imageUrl}
+          saving={sketchDiagram.diagram.saving}
+          onClose={sketchDiagram.closeDiagram}
+          onRetry={sketchDiagram.handleDiagram}
+          onSave={sketchDiagram.saveDiagram}
         />
       ) : null}
 

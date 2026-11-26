@@ -7,6 +7,7 @@
  */
 import { noteLinkMarkup } from './noteLinks';
 import { readMarkDetailed } from './journalLines';
+import { mermaidFence } from './mermaidText';
 
 const sketchLabel = (sketchTitle) => String(sketchTitle || '').trim() || 'Untitled';
 
@@ -77,6 +78,20 @@ export function plainTextAsMarkdown(text) {
     })
     .join('\n')
     .trim();
+}
+
+/** "Turn into a diagram": the new note's title. */
+export function diagramNoteTitle({ sketchTitle }) {
+  return `Diagram: ${sketchLabel(sketchTitle)}`.slice(0, 500);
+}
+
+/**
+ * "Turn into a diagram": the new note's body. The same back-link line as any
+ * note made from handwriting, a blank line, then the diagram in a ```mermaid
+ * fence that nothing in the source can close.
+ */
+export function diagramNoteContent({ sketchId, sketchTitle, mermaid }) {
+  return `${backLinkLine({ sketchId, sketchTitle })}\n\n${mermaidFence(mermaid)}\n`;
 }
 
 /** The whole body of the new note: back-link, blank line, then the text. */

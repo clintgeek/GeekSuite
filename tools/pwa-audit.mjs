@@ -309,7 +309,16 @@ export function auditApp(name, distDir) {
       if (missingFonts.length && !fontCovered) bad('sw', `${missingFonts.length} .woff2 file(s) are not cached at all`);
       else if (missingFonts.length) notes.push(`${missingFonts.length} woff2 runtime-cached, not precached`);
     }
-    const unprecached = hashed.filter((h) => !precached.has(h));
+    // A folder of lazy chunks may be left out of the precache on purpose
+    // (NoteGeek's assets/mermaid/, used now and then, megabytes): covered when
+    // the SW names that folder in a CacheFirst / StaleWhileRevalidate route.
+    const runtimeDirs = new Set(workbox && /CacheFirst\(|StaleWhileRevalidate\(/.test(sw)
+      ? [...sw.matchAll(/"(\/assets\/[\w-]+\/)"/g)].map((m) => m[1])
+      : []);
+    const runtimeCovered = (h) => [...runtimeDirs].some((d) => h.startsWith(d));
+    const lazy = hashed.filter((h) => !precached.has(h) && runtimeCovered(h));
+    if (lazy.length) notes.push(`${lazy.length} hashed js/css runtime-cached on first use (${[...runtimeDirs].join(', ')})`);
+    const unprecached = hashed.filter((h) => !precached.has(h) && !runtimeCovered(h));
     if (unprecached.length) bad('sw', `${unprecached.length} of ${hashed.length} hashed assets are not precached (e.g. ${unprecached[0]}) — too big for maximumFileSizeToCacheInBytes, or outside globPatterns`);
     if (hasOffline && !precached.has('/offline.html')) bad('sw', 'offline.html ships but is not precached');
     notes.push(`${precached.size} precached, ${hashed.length} hashed js/css, ${woff2.length} woff2`);

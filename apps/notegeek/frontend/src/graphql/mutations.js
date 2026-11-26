@@ -189,6 +189,24 @@ export const TRANSCRIBE_SKETCH = gql`
 `;
 
 /**
+ * "Turn into a diagram" (DOCS/HANDWRITING.md): the page as a Mermaid
+ * flowchart. Same image as TRANSCRIBE_SKETCH. `previous` + `problem` ask for
+ * one repair of a diagram `mermaid.parse` refused. Writes nothing.
+ */
+export const DIAGRAM_SKETCH = gql`
+    mutation DiagramSketch($image: String!, $mediaType: String!, $source: String, $previous: String, $problem: String) {
+        diagramSketch(image: $image, mediaType: $mediaType, source: $source, previous: $previous, problem: $problem) {
+            mermaid
+            repaired
+            provenance {
+                source
+                model
+            }
+        }
+    }
+`;
+
+/**
  * Fold-in (DOCS/CONTEXT.md §13): propose how new information fits into an
  * existing Markdown note, as anchored operations the gateway has already
  * checked against the note. Writes NOTHING. Needs the 2026-10-01 gateway.
