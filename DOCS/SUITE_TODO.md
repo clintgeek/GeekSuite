@@ -452,8 +452,9 @@ the app was down over its due time, should it arrive late or be skipped?
     and the NoteGeek half of 4.3; 5.11 lazy routes; most Tier 6 NoteGeek polish; Tier 7.
   - *Sketch:* banded reading of long sketches (needs a gateway change: several images per
     call; today it only warns "page too long to read well"); chrome above the canvas still
-    takes ~35 % of a phone screen; lasso, scribble-to-erase, pages, pressure toggle,
-    search-hit location; typo matching in search (5.4).
+    takes ~35 % of a phone screen; lasso, scribble-to-erase, pages, pressure toggle;
+    ~~search-hit location~~ (built 2026-11-26, HANDWRITING.md §5; not yet on a device);
+    typo matching in search (5.4).
   - *Harness:* NoteGeek fixtures lack stubs for `SketchTranscript` and
     `SaveSketchTranscriptEdit`; scenes `10-editor-sketch` and `03q-sketch-paper-dark` need a
     re-run and re-look; the fresh-build NoteGeek run was pending when this was written;

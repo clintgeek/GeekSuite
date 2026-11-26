@@ -538,11 +538,62 @@ they differ (open position, listener, phone bar).
 - **Cheap wins (2.12).** Share as image (More): `navigator.share({files})` when available,
   else a PNG download at print resolution; two-finger-tap undo (`packages/ink/src/twoFingerTap.js`,
   listen-only); a "Recent pens" strip (last 3, per device) in the pen picker.
-- **Not done:** lasso, scribble-to-erase, pages or a page boundary, a pressure toggle, search-hit
-  location in a sketch; folding or tucking the chrome above the canvas (page layout); the
+- **Not done:** lasso, scribble-to-erase, pages or a page boundary, a pressure toggle; folding or
+  tucking the chrome above the canvas (page layout); the
   text-tool top-bar shift (could not be reproduced from the code).
 - **Tests:** `HandwrittenEditor.test.jsx`'s tldraw mock now honours listen filters,
   `getStoreSnapshot`, a deprecated `getSnapshot`/`loadSnapshot` that throw, `mergeRemoteChanges`
   and the asset handler (20 s per-test timeout). New: `sketchImages`, `twoFingerTap`,
   `palmTouch` (both now tested in `packages/ink`). Harness scenes `10-editor-sketch` and `03q-sketch-paper-dark` change look and
   were not re-run.
+
+## 5. A search hit shows where (built 2026-11-26, not yet on a device)
+
+Chef: "Handwriting search that shows where. A search hit in a handwritten note jumps to and
+highlights the words on the page." Built overnight on Chef's authority; the decisions are in
+`DOCS/WORK_LOG_2026-11.md` (2026-11-26).
+
+**How.** Nothing about positions is stored, no model is asked, the transcript prompt is unchanged.
+When the note opens, the client works out where the lines of writing are from the strokes
+(`packages/ink/src/inkLines.js`: median stroke height h; taller than 3h is a figure; flatter than
+0.35h is a mark that joins the nearest line; lines by vertical overlap; XY-cut reading order),
+lines the transcript up with them (`frontend/src/utils/sketchFind.js`: a dynamic-programming
+alignment allowing 1:2 and 2:1, scored on rank down the page and text length against ink width;
+`[drawing: …]` pairs with figures; `§` headings and page markers are skipped), finds the query's
+words the way search rows mark them (`highlightTerms`, `termRegExp`), and places each word by word
+gaps when the counts agree, else by proportion along the line. Hits on neighbouring lines are one
+hit.
+
+- A **keyword** hit (not a meaning-only one) on a handwritten, unlocked note links to
+  `/notes/:id?find=<q>` (`NoteRow`). The page fetches the text with its own query
+  (`useSketchFind`): `sketchTranscript.lastReading` / `lastEdit` (gateway, read only; the stored
+  text whatever the hash, null when locked or encrypted), else the old `text`, else nothing.
+- `HandwrittenEditor` waits up to 2.5 s for the text, then jumps (`zoomToBounds`, at most 100%,
+  animated only on Next/Previous and never under reduced motion) instead of its usual first view.
+  The remembered per-note camera is not written while a find is open.
+- The highlight is tldraw's `OnTheCanvas` component (inside the camera transform, under the ink),
+  the highlighter colour at 55%: never in the store, so never saved, exported, printed, read or
+  undone. It goes when the bar closes or the pen writes.
+- The bar: "1 of 2", Previous, Next, Close (44px); Enter / Shift+Enter, Esc. Its `aria-live` line
+  reads the matched line, plus "approximate" under confidence 0.6.
+
+**Accuracy, honestly.** Tested on synthetic strokes and one generated page in the harness, not on
+Chef's writing. Expect the right line when the model's line count matches the page's (the usual
+case for a list or notes); a line out when the model joins or splits lines unevenly or the page has
+a lot of stray ink; the word box is a guess, widened, when word gaps are unclear. Lines closer than
+~1.5 letter heights, columns closer than ~4, a title over 3× the usual size, and drawings made of
+many short strokes all confuse the line finder (limits listed in `inkLines.js`). A reading of an
+older version of the page still places, at lower confidence.
+
+**How it degrades.** Words not in the text (a title or tag hit): the note opens as usual, no bar.
+No text (an old gateway with nothing current, an unread page): the same. Words in the text but no
+line to put them on: the note opens as usual and the bar says "Found in the text read from this
+page; its place on the page isn't known", with View text. Photographed pages stop at the page
+(`--- page N ---`). An unreadable note shows no bar. The reference pane does not jump (v1), and a
+typed note ignores `?find=`. An old gateway rejects the new fields: the operation carries context
+`newFields`, so the shared error link does not take it for a stale bundle and reload; the client
+falls back quietly.
+
+**Tests.** `packages/ink` `inkLines.test.js`; NoteGeek `sketchFind.test.js`,
+`HandwrittenEditor.test.jsx` (find block), `noteRowFind.test.jsx`, `useSketchFind.test.jsx`;
+gateway `notegeekSketchFind.test.js`; `@geeksuite/api-client` errorLink. Harness `31a`–`31c`.

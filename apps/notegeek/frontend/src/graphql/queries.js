@@ -252,3 +252,22 @@ export const SKETCH_TRANSCRIPT = gql`
         }
     }
 `;
+
+/**
+ * The text a search hit is placed with (DOCS/HANDWRITING.md §5): the stored
+ * readings whatever the hash. Needs the gateway from 2026-11-26; an older one
+ * rejects the operation, and useSketchFind falls back to SKETCH_TRANSCRIPT.
+ * Its own document, sent with context `newFields` so the rejection is not
+ * taken for a stale bundle (@geeksuite/api-client errorLink).
+ */
+export const SKETCH_TRANSCRIPT_FIND = gql`
+    query SketchTranscriptFind($noteId: ID!) {
+        sketchTranscript(noteId: $noteId) {
+            status
+            current
+            text
+            lastReading
+            lastEdit
+        }
+    }
+`;

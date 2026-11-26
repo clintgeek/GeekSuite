@@ -287,6 +287,13 @@ describe('errorLink stale-bundle heal', () => {
     expect(reloads.length).toBe(0);
   });
 
+  it('an operation marked newFields falls back by itself: no reload', async () => {
+    const reloads = setBrowserEnv();
+    const link = errorLink('notegeek');
+    await run(link, makeOperation({ newFields: true }), makeForward([{ error: validationNetworkError() }])).catch(() => {});
+    expect(reloads.length).toBe(0);
+  });
+
   it('an ordinary 400 (not a validation failure) does not reload and does not log out', async () => {
     const reloads = setBrowserEnv();
     const link = errorLink('gamegeek');

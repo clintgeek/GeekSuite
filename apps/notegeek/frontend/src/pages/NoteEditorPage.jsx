@@ -46,6 +46,7 @@ import ReferencePane from '../components/reference/ReferencePane';
 import ReferencePicker from '../components/reference/ReferencePicker';
 import { ReferenceButton, useReferenceNote } from '../components/reference/useReferenceNote';
 import { rememberOpened } from '../utils/recentNotes';
+import useSketchFind from './noteEditor/useSketchFind';
 
 /**
  * NoteEditorPage - Unified page for creating and editing notes
@@ -448,6 +449,9 @@ function NoteEditorPage({ editorKey } = {}) {
   });
   const transcriptViewRef = useRef(transcriptView);
   transcriptViewRef.current = transcriptView;
+  // A search hit opened this note (`?find=`): where the words are on the page (DOCS/HANDWRITING.md §5).
+  const findQuery = isHandwritten && !isNewNote ? (new URLSearchParams(location.search).get('find') || '').trim() : '';
+  const sketchFind = useSketchFind({ apollo, noteId: findQuery ? savedNoteId : null, query: findQuery });
 
   // The background reader (@geeksuite/api-client) leaves the open sketch
   // to the hook above, and reads it a few seconds after it is closed if the
@@ -1173,7 +1177,7 @@ function NoteEditorPage({ editorKey } = {}) {
           onChange={handleContentChange}
           readOnly={readOnlyMeta}
           isLoading={isLoadingSelected}
-          {...(isHandwritten ? { sketchApiRef, onInkEdit, noteId: savedNoteId, startSheet: isNewNote ? startSheet : null, onLoadError: () => markUnreadable(true) } : {})}
+          {...(isHandwritten ? { sketchApiRef, onInkEdit, noteId: savedNoteId, startSheet: isNewNote ? startSheet : null, onLoadError: () => markUnreadable(true), find: sketchFind || (findQuery ? { query: findQuery, loading: true } : null) } : {})}
         />
         )}
       </NoteShell>

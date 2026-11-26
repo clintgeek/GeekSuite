@@ -202,7 +202,10 @@ vi.mock('@tldraw/tldraw', async () => {
         return (
             <EditorContext.Provider value={editor}>
                 <div data-testid="tldraw-mock" className="tl-container">
-                    <div data-testid="tl-canvas" className="tl-canvas" onPointerDown={(e) => { radixPointerDown(e); onPointerDown(e); }} onPointerUp={onPointerUp} onContextMenu={onContextMenu} />
+                    <div data-testid="tl-canvas" className="tl-canvas" onPointerDown={(e) => { radixPointerDown(e); onPointerDown(e); }} onPointerUp={onPointerUp} onContextMenu={onContextMenu}>
+                        {/* tldraw renders OnTheCanvas inside the camera-transformed shape layer. */}
+                        {components?.OnTheCanvas ? <div className="tl-html-layer tl-shapes"><components.OnTheCanvas /></div> : null}
+                    </div>
                     {children}
                 </div>
             </EditorContext.Provider>
@@ -1474,5 +1477,164 @@ describe('HandwrittenEditor — the 2026-11 review', () => {
             await user.click(within(strip).getByRole('button', { name: 'Recent pen: blue, Fine' }));
             expect(editor.setStyleForNextShapes).toHaveBeenLastCalledWith(DefaultColorStyle, 'blue');
         });
+    });
+});
+
+// ── A search hit opens the note at the words (DOCS/HANDWRITING.md §5) ──────
+describe('HandwrittenEditor: a search hit on the page', () => {
+    // Printed handwriting, one draw shape per letter (packages/ink's inkLines tests).
+    const LINES = ['Garage door quote from Hendricks', 'call back before Friday', 'ask about the side gate', 'budget about two thousand', 'pick paint at the yard', 'tell Sam about the gate'];
+    function page(lines = LINES) {
+        const shapes = [];
+        lines.forEach((text, row) => {
+            const baseline = 40 + row * 30;
+            let at = 20;
+            for (const ch of text) {
+                if (ch === ' ') { at += 9; continue; }
+                const tall = /[bdfhklt]|[A-Z]/.test(ch);
+                const deep = /[gjpqy]/.test(ch);
+                const top = baseline - (tall ? 18 : 10);
+                const id = `shape:s${shapes.length}`;
+                shapes.push({ id, typeName: 'shape', type: 'draw', index: `a${String(shapes.length).padStart(4, '0')}`, x: at, y: top, props: { w: 7, h: baseline + (deep ? 7 : 0) - top } });
+                at += 8.5;
+            }
+        });
+        return JSON.stringify({ store: Object.fromEntries(shapes.map((r) => [r.id, r])), schema: {} });
+    }
+    const TEXT = LINES.join('\n');
+    let setContent;
+    let rect;
+    const mount = async (props = {}) => {
+        const utils = render(<HandwrittenEditor content={page()} setContent={setContent} noteId="n1" {...props} />, { wrapper: AllProviders });
+        await screen.findByTestId('tldraw-mock');
+        return { ...utils, editor: tl.editors.at(-1) };
+    };
+
+    beforeEach(() => {
+        setContent = vi.fn();
+        tl.renders.length = 0;
+        tl.editors.length = 0;
+        tl.loads.length = 0;
+        localStorage.clear();
+        observers.length = 0;
+        setViewport(false);
+        rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+            left: 0, top: 0, right: 800, bottom: 700, width: 800, height: 700, x: 0, y: 0, toJSON: () => ({}),
+        });
+    });
+    afterEach(() => rect.mockRestore());
+
+    it('opens at the line, highlights the words, and writes nothing', async () => {
+        const { editor, container } = await mount({ find: { query: 'Friday', text: TEXT, loading: false } });
+        await waitFor(() => expect(editor.zoomToBounds).toHaveBeenCalled());
+        // The jump replaces the first view: the whole line 2 (y about 52..70), at most 100%.
+        expect(editor.zoomToBounds).toHaveBeenCalledTimes(1);
+        const [box, opts] = editor.zoomToBounds.mock.calls[0];
+        expect(box.y).toBeGreaterThan(45);
+        expect(box.y + box.h).toBeLessThan(80);
+        expect(opts).toMatchObject({ targetZoom: 1 });
+        expect(opts.animation).toBeUndefined();
+        // The highlight is drawn on the canvas layer, not added to the store.
+        const rects = container.querySelectorAll('.tl-shapes [data-find-rect]');
+        expect(rects).toHaveLength(1);
+        expect(rects[0].style.transform).toMatch(/translate\(1\d\d(\.\d+)?px, 5\d(\.\d+)?px\)/);
+        expect(screen.getByText('1 of 1')).toBeInTheDocument();
+        expect(screen.getByText('call back before Friday')).toHaveAttribute('aria-live', 'polite');
+        // Nothing in the document changed and nothing was saved.
+        await new Promise((r) => setTimeout(r, 500));
+        expect(editor.store.mergeRemoteChanges).toHaveBeenCalledTimes(1); // the load
+        expect(editor.updateDocumentSettings).not.toHaveBeenCalled();
+        expect(setContent).not.toHaveBeenCalled();
+        expect(editor.store.getStoreSnapshot).not.toHaveBeenCalled();
+    });
+
+    it('a find jump is not remembered as the note\'s camera', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        try {
+            const { editor, unmount } = await mount({ find: { query: 'gate', text: TEXT, loading: false } });
+            await waitFor(() => expect(editor.zoomToBounds).toHaveBeenCalled());
+            editor.getCamera.mockReturnValue({ x: -300, y: -100, z: 1 });
+            act(() => editor.emit({ changes: { added: {}, updated: { 'camera:page:page': [{}, {}] }, removed: {} } }));
+            await act(async () => { vi.advanceTimersByTime(1500); });
+            unmount();
+            expect(localStorage.getItem('notegeek:sketchCameras') || '').not.toContain('n1');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('Next steps through the hits; Esc closes the bar and the highlight', async () => {
+        const user = userEvent.setup();
+        const { editor, container } = await mount({ find: { query: 'gate', text: TEXT, loading: false } });
+        await screen.findByText('1 of 2');
+        expect(screen.getByText('ask about the side gate')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Next match' }));
+        expect(screen.getByText('2 of 2')).toBeInTheDocument();
+        expect(screen.getByText('tell Sam about the gate')).toBeInTheDocument();
+        expect(editor.zoomToBounds).toHaveBeenCalledTimes(2);
+        expect(editor.zoomToBounds.mock.calls[1][0].y).toBeGreaterThan(170);
+        // Shift+Enter in the bar goes back.
+        await user.keyboard('{Shift>}{Enter}{/Shift}');
+        expect(screen.getByText('1 of 2')).toBeInTheDocument();
+        await user.keyboard('{Escape}');
+        expect(screen.queryByRole('region', { name: 'Search hit on this page' })).not.toBeInTheDocument();
+        expect(container.querySelector('[data-find-rect]')).toBeNull();
+    });
+
+    it('the pen writing removes the highlight', async () => {
+        const { editor, container } = await mount({ find: { query: 'Friday', text: TEXT, loading: false } });
+        await screen.findByText('1 of 1');
+        expect(container.querySelector('[data-find-rect]')).not.toBeNull();
+        act(() => editor.emit({ changes: { added: { 'shape:new': { id: 'shape:new', typeName: 'shape' } }, updated: {}, removed: {} } }));
+        expect(container.querySelector('[data-find-rect]')).toBeNull();
+        expect(screen.queryByText('1 of 1')).not.toBeInTheDocument();
+    });
+
+    it('waits for the text, then jumps instead of the usual first view', async () => {
+        const { editor, rerender } = await mount({ find: { query: 'Friday', loading: true } });
+        await new Promise((r) => setTimeout(r, 300));
+        expect(editor.zoomToBounds).not.toHaveBeenCalled();
+        rerender(<HandwrittenEditor content={page()} setContent={setContent} noteId="n1" find={{ query: 'Friday', text: TEXT, loading: false }} />);
+        await waitFor(() => expect(editor.zoomToBounds).toHaveBeenCalledTimes(1));
+        expect(editor.zoomToBounds.mock.calls[0][0].y).toBeGreaterThan(45);
+    });
+
+    it('words not in the text (a title hit): the note opens as usual, no bar', async () => {
+        const { editor } = await mount({ find: { query: 'zebra', text: TEXT, loading: false } });
+        await waitFor(() => expect(editor.zoomToBounds).toHaveBeenCalledTimes(1));
+        expect(editor.zoomToBounds).toHaveBeenCalledWith({ x: 0, y: 0, w: 900, h: 400 }, { targetZoom: 1, inset: 32 });
+        expect(screen.queryByRole('region', { name: 'Search hit on this page' })).not.toBeInTheDocument();
+    });
+
+    it('no text at all (an old gateway): opens as usual, no bar', async () => {
+        const { editor } = await mount({ find: { query: 'gate', text: null, loading: false } });
+        await waitFor(() => expect(editor.zoomToBounds).toHaveBeenCalledTimes(1));
+        expect(screen.queryByRole('region', { name: 'Search hit on this page' })).not.toBeInTheDocument();
+    });
+
+    it('no line can be placed: opens as usual, says so, and offers the text', async () => {
+        const user = userEvent.setup();
+        // Only a drawing on the page; the words are in the text.
+        const drawing = JSON.stringify({ store: { 'shape:g': { id: 'shape:g', typeName: 'shape', type: 'geo', index: 'a1', x: 0, y: 0, props: { w: 300, h: 200 } } }, schema: {} });
+        const { editor } = await mount({ content: drawing, find: { query: 'gate', text: 'the side gate', loading: false } });
+        await waitFor(() => expect(editor.zoomToBounds).toHaveBeenCalledTimes(1));
+        expect(editor.zoomToBounds).toHaveBeenCalledWith({ x: 0, y: 0, w: 900, h: 400 }, { targetZoom: 1, inset: 32 });
+        expect(await screen.findByText("Found in the text read from this page; its place on the page isn't known")).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'View text' }));
+        const dialog = await screen.findByRole('dialog', { name: /The handwriting, as read/ });
+        expect(within(dialog).getByText('the side gate')).toBeInTheDocument();
+    });
+
+    it('works on a read-only note', async () => {
+        const { container } = await mount({ readOnly: true, find: { query: 'Friday', text: TEXT, loading: false } });
+        await screen.findByText('1 of 1');
+        expect(container.querySelector('[data-find-rect]')).not.toBeNull();
+    });
+
+    it('an unreadable note shows no bar', async () => {
+        const { container } = await mount({ content: '{"not":"a snapshot"', find: { query: 'Friday', text: TEXT, loading: false } });
+        await screen.findByText('This note could not be read');
+        expect(screen.queryByRole('region', { name: 'Search hit on this page' })).not.toBeInTheDocument();
+        expect(container.querySelector('[data-find-rect]')).toBeNull();
     });
 });

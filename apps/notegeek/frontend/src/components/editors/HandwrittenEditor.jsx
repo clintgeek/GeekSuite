@@ -6,7 +6,12 @@ import {
 } from '@tldraw/tldraw';
 import {
     attachPenButton, attachPenKey, attachTwoFingerTap, fineStrokeHandler, isEmptySketchBody, parseSketchBody,
+    findInkLines, inkBoxesOf,
 } from '@geeksuite/ink';
+import { findInSketch } from '../../utils/sketchFind';
+import { FindBar, FindHighlight } from './SketchFind';
+import { FindHighlightContext } from './findHighlight';
+import { TranscriptTextDialog } from '../notes/TranscriptStatus';
 import { exportSketchPng, exportSketchForPrint, PRINT_MAX_EDGE } from '../../utils/sketchExport';
 import { isInkEdit } from '../../utils/inkEdit';
 import {
@@ -61,6 +66,8 @@ const HIDDEN_TLDRAW_COMPONENTS = {
     DebugMenu: null,         // Hide debug menu
     SharePanel: null,        // Hide share panel
     Background: PaperBackground, // the sketch's paper colour and ruling (Paper.jsx)
+    // A search hit's highlight, under the ink and never in the store (SketchFind.jsx).
+    OnTheCanvas: FindHighlight,
 };
 
 /**
@@ -110,6 +117,37 @@ function applyFirstView(editor, noteId) {
 }
 
 /**
+ * The photographed pages of a photo note (HANDWRITING.md §3), in page order:
+ * image shapes that carry `meta.photoPage`. An image the writer inserted, or
+ * a template sheet, is not one.
+ */
+function photoPageBounds(editor) {
+    const pages = (editor.getCurrentPageShapesSorted?.() || [])
+        .filter((s) => s.type === 'image' && !isPaperSheetShape(s) && Number.isFinite(Number(s.meta?.photoPage)))
+        .sort((a, b) => Number(a.meta.photoPage) - Number(b.meta.photoPage));
+    return pages.map((s) => editor.getShapePageBounds?.(s)).filter(Boolean);
+}
+
+/** Where a search hit is on this page (utils/sketchFind.js). Reads only. */
+function placeFind(editor, find) {
+    try {
+        const photoPages = photoPageBounds(editor);
+        return findInSketch({
+            query: find.query,
+            text: find.text,
+            stale: Boolean(find.stale),
+            ...(photoPages.length ? { photoPages } : { ink: findInkLines(inkBoxesOf(editor)) }),
+        });
+    } catch (error) {
+        console.warn('HandwrittenEditor - could not place the search hit.', error);
+        return { status: 'none', hits: [] };
+    }
+}
+
+/** If the find's text has not come within this long, the note opens as usual. */
+const FIND_WAIT_MS = 2500;
+
+/**
  * Pen mode (tldraw's palm rejection: the pen draws, fingers pan) from the
  * first touch on a device that has had a pen, instead of from the first pen
  * stroke of every visit (review 2.3). "Finger draws" keeps it off.
@@ -135,8 +173,14 @@ function PenModeSync({ fingerDraws }) {
  * was pending) — for the page's own save on hide/unmount (review 1.2).
  *
  * `noteId` (optional): the camera is remembered per sketch on this device.
+ *
+ * `find` (optional, DOCS/HANDWRITING.md §5): a search hit opened this note,
+ * `{ query, loading, text, stale }`. The note opens at the first hit with
+ * the words highlighted and a find bar, instead of its usual first view. A
+ * find never touches the document, never saves and never moves the
+ * remembered camera.
  */
-const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null, onInkEdit = null, noteId = null, startSheet = null, autoFocus = true, onLoadError = null }) => {
+const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null, onInkEdit = null, noteId = null, startSheet = null, autoFocus = true, onLoadError = null, find = null }) => {
     // `autoFocus={false}`: a sketch drawn off-screen to be read (BackgroundReader) must never take the keyboard.
     // The sheet a brand-new sketch starts on (a 1:1, DOCS/ONE_ON_ONE_SPEC.md req 2).
     const startSheetRef = useRef(startSheet);
@@ -188,6 +232,23 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
     const [barPosition, setBarPositionState] = useState(() => readBarPosition());
     const [notice, setNotice] = useState(null);
     const theme = useTheme();
+    // A search hit (`find`): { status: 'placed' | 'unplaced', hits, index } or null.
+    const [findState, setFindStateRaw] = useState(null);
+    const findStateRef = useRef(null);
+    const setFindState = useCallback((next) => {
+        findStateRef.current = next;
+        setFindStateRaw(next);
+    }, []);
+    const findRef = useRef(find);
+    findRef.current = find;
+    // While a find is open (or still waiting for its text), the camera it
+    // moves is not remembered for this note.
+    const findActiveRef = useRef(Boolean(find?.query));
+    // The first view waited for the find's text.
+    const firstViewWaitingRef = useRef(false);
+    const findWaitTimerRef = useRef(null);
+    const endFindRef = useRef(null);
+    const [showFindText, setShowFindText] = useState(false);
 
     const setFingerDraws = useCallback((on) => {
         writeFingerDraws(on);
@@ -401,6 +462,8 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                 if (isInkEdit(entry)) {
                     keepPaperOnFirstInk(editor);
                     onInkEditRef.current?.();
+                    // The pen writes: the search hit's highlight goes.
+                    if (findStateRef.current) endFindRef.current?.();
                 }
                 scheduleSave();
             }, { scope: 'document', source: 'user' });
@@ -411,6 +474,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
             const touched = Object.keys({ ...entry?.changes?.updated, ...entry?.changes?.added }).some((id) => id.startsWith('camera:'));
             if (!touched || !noteIdRef.current) return;
             if (cameraTimerRef.current) clearTimeout(cameraTimerRef.current);
+            if (findActiveRef.current) return; // a find's camera is not this note's
             cameraTimerRef.current = setTimeout(() => {
                 cameraTimerRef.current = null;
                 writeCamera(noteIdRef.current, editor.getCamera?.());
@@ -450,6 +514,102 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         };
     }, [readOnly, isLoading]);
 
+    // ── A search hit (DOCS/HANDWRITING.md §5) ───────────────────────────────
+    /** Bring a hit into view: at most 100%, no animation on opening or under reduced motion. */
+    const jumpTo = useCallback((hit, { animate = false } = {}) => {
+        const editor = editorRef.current;
+        if (!editor || editor.isDisposed || !hit?.box) return;
+        const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+        findActiveRef.current = true;
+        editor.zoomToBounds?.(hit.box, { targetZoom: 1, inset: 64, ...(animate && !reduce ? { animation: { duration: 240 } } : null) });
+    }, []);
+
+    /** The first view of a saved note: at the hit, or as usual. */
+    const firstViewRef = useRef(() => {});
+    firstViewRef.current = () => {
+        const f = findRef.current;
+        const state = findStateRef.current;
+        if (f?.query && f.loading && !blockedRef.current) {
+            // Wait for the text, but not for long: then open as usual.
+            firstViewWaitingRef.current = true;
+            if (!findWaitTimerRef.current) {
+                findWaitTimerRef.current = setTimeout(() => {
+                    findWaitTimerRef.current = null;
+                    if (!firstViewWaitingRef.current) return;
+                    firstViewWaitingRef.current = false;
+                    applyFirstView(editorRef.current, noteIdRef.current);
+                }, FIND_WAIT_MS);
+            }
+            return;
+        }
+        if (state?.status === 'placed') jumpTo(state.hits[state.index]);
+        else applyFirstView(editorRef.current, noteIdRef.current);
+    };
+
+    const endFind = useCallback(() => {
+        setFindState(null);
+        setShowFindText(false);
+        findActiveRef.current = false;
+        // A camera move the find made is never written for this note.
+        if (cameraTimerRef.current) {
+            clearTimeout(cameraTimerRef.current);
+            cameraTimerRef.current = null;
+        }
+    }, [setFindState]);
+    endFindRef.current = endFind;
+
+    // Place the hits once the page is loaded and the text has come.
+    const findQuery = find?.query || '';
+    const findLoading = Boolean(find?.loading);
+    useEffect(() => {
+        const editor = editorRef.current;
+        if (isLoading || !editor || !findQuery || findLoading) return;
+        const f = findRef.current;
+        const result = blockedRef.current ? { status: 'none', hits: [] } : placeFind(editor, f);
+        const shown = result.status === 'placed' || result.status === 'unplaced';
+        setFindState(shown ? { status: result.status, hits: result.hits, index: 0 } : null);
+        findActiveRef.current = result.status === 'placed';
+        if (firstViewWaitingRef.current) {
+            firstViewWaitingRef.current = false;
+            if (findWaitTimerRef.current) {
+                clearTimeout(findWaitTimerRef.current);
+                findWaitTimerRef.current = null;
+            }
+            if (result.status === 'placed') jumpTo(result.hits[0]);
+            else applyFirstView(editor, noteIdRef.current);
+        } else if (result.status === 'placed' && !firstViewPendingRef.current) {
+            // The note had already opened (the text was slow): go there now.
+            jumpTo(result.hits[0], { animate: true });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per query, when the page and the text are both there
+    }, [isLoading, findQuery, findLoading]);
+
+    const stepFind = useCallback((by) => {
+        const state = findStateRef.current;
+        if (state?.status !== 'placed' || !state.hits.length) return;
+        const index = (state.index + by + state.hits.length) % state.hits.length;
+        setFindState({ ...state, index });
+        jumpTo(state.hits[index], { animate: true });
+    }, [jumpTo, setFindState]);
+
+    // Esc closes the find bar (not while a dialog is open over it).
+    const findOpen = Boolean(findState);
+    useEffect(() => {
+        if (!findOpen) return undefined;
+        const onKey = (e) => {
+            if (e.key !== 'Escape' || e.defaultPrevented) return;
+            if (e.target?.closest?.('[role="dialog"]') || document.querySelector('.MuiDialog-root')) return;
+            endFindRef.current();
+        };
+        window.addEventListener('keydown', onKey, true);
+        return () => window.removeEventListener('keydown', onKey, true);
+    }, [findOpen]);
+
+    const highlight = useMemo(() => {
+        const hit = findState?.status === 'placed' ? findState.hits[findState.index] : null;
+        return hit?.rects?.length ? { rects: hit.rects } : null;
+    }, [findState]);
+
     // Use ResizeObserver for reliable viewport bounds updates
     useEffect(() => {
         const container = containerRef.current;
@@ -463,7 +623,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                 // A saved sketch's first view, now that the viewport is real.
                 if (firstViewPendingRef.current && container.getBoundingClientRect().width > 1) {
                     firstViewPendingRef.current = false;
-                    applyFirstView(editorRef.current, noteIdRef.current);
+                    firstViewRef.current();
                 }
             }
         };
@@ -534,8 +694,9 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
             if (cameraUnsubscribeRef.current) cameraUnsubscribeRef.current();
             if (cameraTimerRef.current) {
                 clearTimeout(cameraTimerRef.current);
-                if (noteIdRef.current && editorRef.current) writeCamera(noteIdRef.current, editorRef.current.getCamera?.());
+                if (noteIdRef.current && editorRef.current && !findActiveRef.current) writeCamera(noteIdRef.current, editorRef.current.getCamera?.());
             }
+            if (findWaitTimerRef.current) clearTimeout(findWaitTimerRef.current);
             if (saveTimeoutRef.current) {
                 clearTimeout(saveTimeoutRef.current);
             }
@@ -594,6 +755,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                     </Box>
                 )}
                 <SketchPortalContext.Provider value={portal}>
+                    <FindHighlightContext.Provider value={highlight}>
                     <Tldraw
                         key={readOnly ? 'read-only' : 'writable'}
                         onMount={handleMount}
@@ -626,7 +788,27 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                         />
                     )}
                     </Tldraw>
+                    </FindHighlightContext.Provider>
                 </SketchPortalContext.Provider>
+                {findState && !loadFailed && !isLoading ? (
+                    <FindBar
+                        state={findState}
+                        onPrev={() => stepFind(-1)}
+                        onNext={() => stepFind(1)}
+                        onClose={endFind}
+                        onViewText={find?.text ? () => setShowFindText(true) : null}
+                        side={barPosition === 'top' ? 'bottom' : 'top'}
+                        inset={{ left: barPosition === 'left' ? 64 : 8, right: barPosition === 'right' ? 64 : 8 }}
+                    />
+                ) : null}
+                {find?.text ? (
+                    <TranscriptTextDialog
+                        open={showFindText}
+                        onClose={() => setShowFindText(false)}
+                        text={find.text}
+                        caption={find.stale ? 'An earlier reading of this page' : 'An approximation · Convert turns it into a note'}
+                    />
+                ) : null}
                 {loadFailed && (
                     <UnreadableSketch
                         title="This note could not be read"

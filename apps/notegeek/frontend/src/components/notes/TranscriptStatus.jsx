@@ -62,14 +62,54 @@ export function transcriptStatusText(view) {
   return { label: entry.label, tip, model };
 }
 
-export default function TranscriptStatus({ view, onTranscribeNow = null }) {
+/**
+ * The handwriting as read, in a dialog with Copy. Also opened from the find
+ * bar when a search hit's place on the page isn't known (HandwrittenEditor).
+ */
+export function TranscriptTextDialog({ open, onClose, text, caption }) {
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down('sm'));
+  const [copied, setCopied] = useState(false);
+  const textTitleId = useId();
+  const mono = { fontFamily: theme.typography.fontFamilyMono, wordSpacing: 'normal' };
+  const button = { textTransform: 'none', minHeight: 44 };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <Dialog open={open} onClose={onClose} TransitionProps={{ onEnter: () => setCopied(false) }} fullScreen={phone} maxWidth="sm" fullWidth aria-labelledby={textTitleId}>
+      <DialogTitle id={textTitleId} sx={{ pb: 1 }}>
+        The handwriting, as read
+        <Typography variant="caption" component="p" sx={{ ...mono, color: 'text.secondary', mt: 1 }}>
+          {caption}
+        </Typography>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Typography component="pre" variant="body2" sx={{ ...mono, m: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {text}
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ px: 4, py: 3, gap: 2 }}>
+        <Typography role="status" variant="caption" sx={{ ...mono, color: 'text.secondary', mr: 'auto' }}>
+          {copied ? 'Copied' : ''}
+        </Typography>
+        <Button onClick={copy} sx={button}>Copy</Button>
+        <Button onClick={onClose} variant="contained" sx={button}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+export default function TranscriptStatus({ view, onTranscribeNow = null }) {
+  const theme = useTheme();
   const [anchor, setAnchor] = useState(null);
   const [showText, setShowText] = useState(false);
-  const [copied, setCopied] = useState(false);
   const detailId = useId();
-  const textTitleId = useId();
   const text = transcriptStatusText(view);
   if (!text) return null;
 
@@ -77,15 +117,6 @@ export default function TranscriptStatus({ view, onTranscribeNow = null }) {
   const hasText = typeof view.text === 'string' && view.text.trim() !== '';
   const mono = { fontFamily: theme.typography.fontFamilyMono, wordSpacing: 'normal' };
   const button = { textTransform: 'none', minHeight: 44 };
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(view.text);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  };
 
   return (
     <>
@@ -134,33 +165,19 @@ export default function TranscriptStatus({ view, onTranscribeNow = null }) {
             </Button>
           ) : null}
           {hasText ? (
-            <Button sx={button} onClick={() => { setAnchor(null); setCopied(false); setShowText(true); }}>
+            <Button sx={button} onClick={() => { setAnchor(null); setShowText(true); }}>
               View text
             </Button>
           ) : null}
         </Box>
       </Popover>
 
-      <Dialog open={showText && hasText} onClose={() => setShowText(false)} fullScreen={phone} maxWidth="sm" fullWidth aria-labelledby={textTitleId}>
-        <DialogTitle id={textTitleId} sx={{ pb: 1 }}>
-          The handwriting, as read
-          <Typography variant="caption" component="p" sx={{ ...mono, color: 'text.secondary', mt: 1 }}>
-            {view.edited || view.source === 'user' ? 'With your corrections' : 'An approximation · Convert turns it into a note'}
-          </Typography>
-        </DialogTitle>
-        <DialogContent dividers>
-          <Typography component="pre" variant="body2" sx={{ ...mono, m: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {view.text}
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 4, py: 3, gap: 2 }}>
-          <Typography role="status" variant="caption" sx={{ ...mono, color: 'text.secondary', mr: 'auto' }}>
-            {copied ? 'Copied' : ''}
-          </Typography>
-          <Button onClick={copy} sx={button}>Copy</Button>
-          <Button onClick={() => setShowText(false)} variant="contained" sx={button}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <TranscriptTextDialog
+        open={showText && hasText}
+        onClose={() => setShowText(false)}
+        text={view.text}
+        caption={view.edited || view.source === 'user' ? 'With your corrections' : 'An approximation · Convert turns it into a note'}
+      />
     </>
   );
 }
