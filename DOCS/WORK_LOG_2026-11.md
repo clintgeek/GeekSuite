@@ -904,6 +904,6 @@ All built 2026-11-25, uncommitted at the time of writing. Not yet on a device.
 - New `packages/ink` (`@geeksuite/ink`): pen button, pen key, two-finger tap, Fine pen, palm rule, `createPenPrefs`, lasso geometry, sketch body checks, sketch export core. Each app keeps a small `penPrefs.js` over its own storage keys. The two canvases stay per app. CI: an `ink` step in the `shared` job.
 - `packages/ui`: `GeekSheet` keeps one children instance across `md`, so a tablet rotation no longer loses typing, focus or scroll. `GeekToastProvider` `actionDuration` defaults to `Math.max(duration, GEEK_TOAST_ACTION_DURATION)`.
 - Docs tidied the same day: six archived, stale passages corrected.
-- Tests: gateway 195 suites / 3850 tests; packages/ui 27 files / 1038 tests; packages/ink 7 files / 61 tests; GeekDay 20 files / 319 tests; NoteGeek 107 files / 1071 tests.
-- Not yet on a device. Browser harness: <to be filled>
+- Tests: gateway 195 suites / 3850 tests; packages/ui 27 files / 1039 tests; packages/ink 7 files / 61 tests; GeekDay 20 files / 319 tests; NoteGeek 107 files / 1071 tests.
+- Not yet on a device. Browser harness: all twelve apps clean at every viewport (NoteGeek 698 scenes, FitnessGeek 324, ThingGeek 142, NewsGeek 104, GeekDay 78, BookGeek 56, TodoGeek 50, GameGeek 48, StoryGeek 38, BaseGeek 38, FlockGeek 34, StartGeek 24).
 - Details: `apps/notegeek/DOCS/CONTEXT.md` §25, `apps/geekday/DOCS/CONTEXT.md`, `DOCS/SUITE_TODO.md`.
