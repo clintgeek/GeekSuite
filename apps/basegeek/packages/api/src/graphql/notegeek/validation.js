@@ -400,8 +400,7 @@ const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
  * PNG labelled JPEG answers with a 400 that would reach the writer as
  * "unavailable" — so the lie is caught here, where it can be named.
  */
-export const transcribeSketchArgsSchema = z
-  .object({
+const pageImageFields = {
     mediaType: z.enum(TRANSCRIBE_MEDIA_TYPES, {
       errorMap: () => ({ message: `mediaType must be ${TRANSCRIBE_MEDIA_TYPES.join(' or ')}.` }),
     }),
@@ -417,18 +416,54 @@ export const transcribeSketchArgsSchema = z
       })
       .nullish()
       .transform((v) => v ?? 'sketch'),
-    // Optional (AUTO_TRANSCRIBE_SPEC.md §5): which sketch this page came from,
-    // so the reading is kept for it and Convert needn't pay for it again.
-    noteId: idString.nullish(),
-  })
-  .strict()
-  .superRefine((args, ctx) => {
+};
+
+const imageMatchesType = (args, ctx) => {
     const signature = IMAGE_SIGNATURES[args.mediaType];
     if (signature && typeof args.image === 'string' && BASE64.test(args.image) && !args.image.startsWith(signature)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['image'],
         message: `The image is not a ${args.mediaType === 'image/png' ? 'PNG' : 'JPEG'}.`,
+      });
+    }
+};
+
+export const transcribeSketchArgsSchema = z
+  .object({
+    ...pageImageFields,
+    // Optional (AUTO_TRANSCRIBE_SPEC.md §5): which sketch this page came from,
+    // so the reading is kept for it and Convert needn't pay for it again.
+    noteId: idString.nullish(),
+  })
+  .strict()
+  .superRefine(imageMatchesType);
+
+// ── diagramSketch (HANDWRITING.md, "Turn into a diagram") ───────────────────
+
+/** A diagram sent back for repair, and why the client could not draw it. */
+export const DIAGRAM_PREVIOUS_MAX = 20000;
+export const DIAGRAM_PROBLEM_MAX = 1000;
+
+/**
+ * The same page image as transcribeSketch, plus an optional repair request:
+ * `previous` (the diagram the client's mermaid.parse refused) and `problem`
+ * (its error), both or neither.
+ */
+export const diagramSketchArgsSchema = z
+  .object({
+    ...pageImageFields,
+    previous: z.string().trim().min(1).max(DIAGRAM_PREVIOUS_MAX, 'That diagram is too long to repair.').nullish(),
+    problem: z.string().trim().min(1).max(DIAGRAM_PROBLEM_MAX).nullish(),
+  })
+  .strict()
+  .superRefine(imageMatchesType)
+  .superRefine((args, ctx) => {
+    if (Boolean(args.previous) !== Boolean(args.problem)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [args.previous ? 'problem' : 'previous'],
+        message: 'A repair needs both previous and problem.',
       });
     }
   });

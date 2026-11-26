@@ -929,3 +929,20 @@ the words on the page." Built overnight on Chef's authorisation; not yet on a de
   own until the line finder learned it), and tldraw places a shape's DOM box at the stroke's origin, not around
   the ink.
 - Details: `apps/notegeek/DOCS/HANDWRITING.md` §5, `apps/notegeek/DOCS/CONTEXT.md` §26.
+
+## 2026-11-26: NoteGeek "Turn into a diagram"
+
+Chef: "'turn this page into a Mermaid diagram' is one more conversion option in NoteGeek." Built overnight,
+not yet on a device, and the prompt has never been run against a real model and a real page.
+
+- Gateway: `diagramSketch` (new mutation, writes nothing), `diagram.js` (`vision+code:balanced`, one automatic
+  retry on a failed text check, `[no diagram]` → `AI_NOT_A_DIAGRAM`, same spending-ceiling handling as
+  transcribe), `mermaidCheck.js`; a ```mermaid fence's labels become search text and preview words.
+- NoteGeek: ⋯ "Turn into a diagram" next to Convert; review dialog (drawing, editable source, the page); saves a
+  new Typed note "Diagram: <title>" that links back. Mermaid 11 renders ```mermaid fences everywhere Markdown
+  renders, and on paper; loaded on demand, its 56 chunks kept out of the service worker's precache and cached on
+  first use (`tools/pwa-audit.mjs` and `DOCS/PWA_STANDARD.md` §1a amended for that).
+- Main chunk 1,526.49 → 1,541.52 kB (gzip 483.43 → 488.00 kB); precache still 30 entries; Mermaid 3.45 MB raw
+  / 0.96 MB gzip, lazy.
+- Harness: 32a–32e; full NoteGeek run `scenes: 726  violations: 0  a11y: 0 (enforcing)  page errors: 0`.
+- Details: `apps/notegeek/DOCS/HANDWRITING.md` §4, `apps/notegeek/DOCS/CONTEXT.md` §27.

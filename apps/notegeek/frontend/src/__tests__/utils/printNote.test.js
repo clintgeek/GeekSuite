@@ -9,6 +9,7 @@ import {
   printTitleFor,
   runPrint,
   waitForImages,
+  waitForDiagrams,
 } from '../../utils/printNote';
 
 /**
@@ -100,6 +101,34 @@ describe('printNote', () => {
     const t0 = Date.now();
     await waitForImages(root, 60);
     expect(Date.now() - t0).toBeLessThan(2000);
+  });
+
+  it('waits for diagrams still being drawn before the dialog opens', async () => {
+    const root = document.createElement('div');
+    const block = document.createElement('div');
+    block.setAttribute('data-mermaid-pending', '');
+    root.appendChild(block);
+    document.body.appendChild(root);
+    const order = [];
+    printSpy.mockImplementation(() => order.push('print'));
+    const printing = runPrint({ title: 'Flow', getRoot: () => root });
+    await new Promise((r) => setTimeout(r, 80));
+    expect(order).toEqual([]);
+    order.push('drawn');
+    block.removeAttribute('data-mermaid-pending');
+    await printing;
+    expect(order).toEqual(['drawn', 'print']);
+    root.remove();
+  });
+
+  it('gives up waiting on a diagram after the timeout, and does not wait when there is none', async () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<div data-mermaid-pending></div>';
+    const t0 = Date.now();
+    await waitForDiagrams(root, 60);
+    expect(Date.now() - t0).toBeLessThan(2000);
+    await waitForDiagrams(document.createElement('div'), 60000);
+    await waitForDiagrams(null);
   });
 
   it('knows Ctrl+P and Cmd+P, and nothing near them', () => {

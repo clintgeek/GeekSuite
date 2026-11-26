@@ -4,6 +4,50 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 import { themePreboot } from '@geeksuite/user/vite';
 
+/**
+ * Mermaid (diagrams in Typed notes, DOCS/CONTEXT.md §27) is a dynamic import
+ * of several megabytes used now and then. Every chunk that only Mermaid
+ * reaches is written under assets/mermaid/, which the service worker leaves
+ * out of the precache (installing the app must not download it) and caches
+ * on first use instead (the runtime rule below). A module the app also
+ * reaches without going through Mermaid stays in the ordinary, precached
+ * chunks, so leaving these out can never break the app offline.
+ */
+export const MERMAID_DIR = 'assets/mermaid/';
+const IN_MERMAID = /[\\/]node_modules[\\/]mermaid[\\/]/;
+
+function mermaidChunks() {
+  let mermaidOnly = new Set();
+  return {
+    name: 'notegeek-mermaid-chunks',
+    apply: 'build',
+    buildEnd() {
+      // Everything the app reaches without entering the mermaid package.
+      const reached = new Set();
+      const stack = [...this.getModuleIds()].filter((id) => this.getModuleInfo(id)?.isEntry);
+      while (stack.length) {
+        const id = stack.pop();
+        if (reached.has(id) || IN_MERMAID.test(id)) continue;
+        reached.add(id);
+        const info = this.getModuleInfo(id);
+        if (info) stack.push(...info.importedIds, ...info.dynamicallyImportedIds);
+      }
+      mermaidOnly = new Set([...this.getModuleIds()].filter((id) => !reached.has(id)));
+    },
+    outputOptions(options) {
+      const fallback = options.chunkFileNames || 'assets/[name]-[hash].js';
+      return {
+        ...options,
+        chunkFileNames: (chunk) => {
+          const ids = chunk.moduleIds || [];
+          if (ids.length && ids.every((id) => mermaidOnly.has(id))) return `${MERMAID_DIR}[name]-[hash].js`;
+          return typeof fallback === 'function' ? fallback(chunk) : fallback;
+        },
+      };
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const isProd = mode === 'production';
@@ -13,6 +57,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       themePreboot(),
+      mermaidChunks(),
       VitePWA({
         injectRegister: false,
         registerType: 'autoUpdate',
@@ -93,6 +138,8 @@ export default defineConfig(({ mode }) => {
           clientsClaim: true,
           skipWaiting: true,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          // Mermaid's chunks: cached on first use (runtime rule), not installed.
+          globIgnores: [`${MERMAID_DIR}**`],
           // The HandwrittenEditor (tldraw) chunk is ~1 MB; the default 2 MiB cap
           // silently drops anything bigger from the precache. 4 MiB is headroom,
           // and tools/pwa-audit.mjs fails CI if a hashed chunk still misses.
@@ -111,6 +158,25 @@ export default defineConfig(({ mode }) => {
               handler: 'NetworkOnly',
               options: {
                 cacheName: 'auth-bypass'
+              }
+            },
+            {
+              // Mermaid's chunks (left out of the precache above). Hashed
+              // names never change content, so cache-first; a text/html
+              // answer (an SPA fallback) is never stored as a script
+              // (DOCS/PWA_STANDARD.md §1a rule 2).
+              urlPattern: ({ url }) => url.pathname.startsWith('/assets/mermaid/'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'notegeek-mermaid',
+                expiration: { maxEntries: 120, maxAgeSeconds: 60 * 24 * 60 * 60 },
+                plugins: [{
+                  cacheWillUpdate: async ({ response }) => {
+                    if (!response || response.status !== 200) return null;
+                    if ((response.headers.get('content-type') || '').includes('text/html')) return null;
+                    return response;
+                  }
+                }]
               }
             },
             {

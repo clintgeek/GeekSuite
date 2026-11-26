@@ -22,6 +22,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import ArrowBack from '@mui/icons-material/ArrowBack';
 import ChecklistOutlined from '@mui/icons-material/ChecklistOutlined';
 import TextSnippetOutlined from '@mui/icons-material/TextSnippetOutlined';
+import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined';
 import PushPin from '@mui/icons-material/PushPin';
 import PushPinOutlined from '@mui/icons-material/PushPinOutlined';
 import PrintOutlined from '@mui/icons-material/PrintOutlined';
@@ -103,6 +104,10 @@ function NoteActions({
   onTranscribe,
   canTranscribe = false,
   isTranscribing = false,
+  // "Turn into a diagram" (DOCS/HANDWRITING.md). Offered exactly where
+  // Convert is (the page passes both or neither), with the same gating.
+  onDiagram,
+  isDiagramming = false,
   // Journal lines → TodoGeek (DOCS/BUJO_HANDWRITING.md). Sketches only, same
   // gating as Convert: there has to be something on the page to read.
   onSendTasks,
@@ -157,7 +162,7 @@ function NoteActions({
           '&:focus-visible': { boxShadow: `0 0 0 3px ${glow(theme).ring}` },
         }}
       >
-        {isComposing || isTranscribing || isPrinting ? <CircularProgress size={16} color="inherit" /> : <MoreHoriz fontSize="small" />}
+        {isComposing || isTranscribing || isDiagramming || isPrinting ?<CircularProgress size={16} color="inherit" /> : <MoreHoriz fontSize="small" />}
       </IconButton>
 
       <Menu
@@ -237,6 +242,16 @@ function NoteActions({
             <ListItemIcon><TextSnippetOutlined fontSize="small" /></ListItemIcon>
             <ListItemText
               primary="Convert handwriting to text"
+              secondary={canTranscribe ? null : 'Write something first'}
+              secondaryTypographyProps={{ sx: { fontFamily: theme.typography.fontFamilyMono, fontSize: '0.75rem' } }}
+            />
+          </MenuItem>
+        )}
+        {onDiagram && (
+          <MenuItem onClick={run(onDiagram)} disabled={!canTranscribe || isTranscribing || isDiagramming} sx={itemSx}>
+            <ListItemIcon><AccountTreeOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText
+              primary="Turn into a diagram"
               secondary={canTranscribe ? null : 'Write something first'}
               secondaryTypographyProps={{ sx: { fontFamily: theme.typography.fontFamilyMono, fontSize: '0.75rem' } }}
             />

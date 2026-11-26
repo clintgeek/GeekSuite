@@ -4,6 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toDate } from '../../utils/dateUtils';
 import { normalizeNoteType } from './noteTypeMeta';
+import MermaidBlock from './MermaidBlock';
+import { mermaidSourceOf } from '../../utils/mermaidText';
 import './notePrint.css';
 
 /**
@@ -50,7 +52,14 @@ function PrintTaskBox({ node, type, checked, ...props }) {
 }
 /* eslint-enable no-unused-vars */
 
-const PRINT_MARKDOWN_COMPONENTS = { a: PrintLink, input: PrintTaskBox };
+/** A ```mermaid fence on paper: drawn at once, light, no toggle. printNote waits for it. */
+function PrintPre({ node, ...props }) {
+  const mermaid = mermaidSourceOf(node);
+  if (mermaid !== null) return <MermaidBlock source={mermaid} immediate mode="light" print />;
+  return <pre {...props} />;
+}
+
+const PRINT_MARKDOWN_COMPONENTS = { a: PrintLink, input: PrintTaskBox, pre: PrintPre };
 
 function formatUpdated(value) {
   const d = toDate(value);

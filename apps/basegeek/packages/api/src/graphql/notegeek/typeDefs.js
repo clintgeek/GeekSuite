@@ -105,6 +105,16 @@ export const typeDefs = gql`
   }
 
   """
+  A page of handwriting drawn as a Mermaid flowchart, for review. Never kept
+  as the page's transcript. repaired: the answer is a corrected second attempt.
+  """
+  type SketchDiagram {
+    mermaid: String!
+    provenance: AIProvenance
+    repaired: Boolean!
+  }
+
+  """
   A sketch's automatic transcript (AUTO_TRANSCRIBE_SPEC.md): derived,
   searchable text kept beside the strokes, never written into them.
   status: empty (nothing drawn) | off (locked, encrypted or photo pages) |
@@ -518,6 +528,12 @@ export const typeDefs = gql`
     page, read with rules for ruled lines and printed text.
     Changes nothing. Failures are errors, never an empty transcript."""
     transcribeSketch(image: String!, mediaType: String!, source: String, noteId: ID): SketchTranscript!
+    """Turn a handwritten page's exported image into a Mermaid flowchart.
+    Same image rules as transcribeSketch. previous + problem (both or
+    neither): a diagram the client could not draw, and its error, for one
+    repair. Changes nothing. Failures are errors (AI_NOT_A_DIAGRAM when the
+    page is not a diagram)."""
+    diagramSketch(image: String!, mediaType: String!, source: String, previous: String, problem: String): SketchDiagram!
     """Automatic transcription of a sketch's page (AUTO_TRANSCRIBE_SPEC.md).
     The client calls it 90 s after the last pen stroke; the server skips
     unchanged content, runs one request per sketch, and reports failures in

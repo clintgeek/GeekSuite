@@ -61,6 +61,15 @@ Precaching is what makes a deploy survivable: the old client keeps serving the
 old chunks from its own precache instead of re-fetching URLs the server no
 longer has.
 
+**One sanctioned exception (2026-11-26, NoteGeek's Mermaid).** A folder of
+lazy chunks that only an occasional feature reaches (`assets/mermaid/`, about
+3.4 MB) may be left out of the precache (`globIgnores`) if a `CacheFirst` rule
+with the text/html guard covers that folder. The cost: an old client whose
+first use comes after a deploy cannot fetch them, and the feature must fail
+visibly (NoteGeek shows the diagram's source and the error). `pwa-audit.mjs`
+accepts such a folder only when the SW names it in a CacheFirst or
+StaleWhileRevalidate route.
+
 **The SW must reinstall on every deploy (suite rule, Q54, 2026-09-05).**
 A hand-rolled `public/sw.js` (Flavor B) has no build step, so its precache
 manifest and cache name were originally hand-written constants. A constant

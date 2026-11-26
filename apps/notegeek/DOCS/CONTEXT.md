@@ -107,6 +107,7 @@ which exist.)
   `tags` and the renameTag/deleteTag inputs. Nothing about the tree is stored; it is read off the
   strings.
   - `transcribeSketch(image, mediaType, source)`: reads a sketch's exported PNG, or (`source: 'photo'`) a photographed notebook page as JPEG with a prompt that ignores ruled lines and printed text, with the vision model (`need: vision+prose:balanced`, 40/day, every page counts). It writes nothing; the client saves new notes that link back. See `HANDWRITING.md` §2 and §3 ("Photo of a page", route `/notes/photo`). It needs `client_max_body_size 12m` on the vhost's `/graphql` location, or images over 1 MB get a 413.
+  - `diagramSketch(image, mediaType, source, previous, problem)`: the same page image as a Mermaid flowchart (§27). Writes nothing.
 
 ### HTML & Markdown Security
 The gateway sanitizes markdown/HTML on write (`apps/basegeek/packages/api/src/graphql/notegeek/sanitize.js`). The frontend no longer renders stored HTML: the rich-text viewer and `sanitizeNoteHtml.js` were removed (§24). A leftover `text` note is shown as a Markdown note, so its HTML appears as text. Neither Markdown renderer loads `rehype-raw`; adding it would make stored HTML reach the DOM again and bring the need for a sanitizer back. The earlier account is in `DOCS/ARCHIVE/CURSOR-CONTEXT.md` (Q63).
@@ -1004,3 +1005,38 @@ Full account: `HANDWRITING.md` §5. What to know before touching it:
   the quiet note.
 - **Harness.** `31a` (tablet, desktop), `31b` (every viewport), `31c` (phone); fixtures `NOTE_FIND`
   (six generated lines, marker opacities on lines 3 and 6), `NOTE_FIND_DRAWING`.
+
+## 27. Turn into a diagram, and Mermaid in Typed notes (gateway + client, 2026-11-26, not yet on a device)
+
+The flow and its limits: `HANDWRITING.md` §4. Facts for whoever touches it next:
+
+- **Gateway** (`graphql/notegeek/`): `diagramSketch(image, mediaType, source, previous, problem): SketchDiagram
+  { mermaid provenance repaired }`. A new mutation, not a mode of `transcribeSketch`, because that one keeps its
+  reading as the page's transcript. Writes nothing. `diagram.js` (feature `diagram`, `need: 'vision+code:balanced'`,
+  temperature 0, 45 s, 2500 tokens, 400/day runaway bound; errors and the `AI_BUDGET` check reused from
+  `transcribe.js`; `[no diagram]` → `AI_NOT_A_DIAGRAM`; still invalid → `AI_BAD_DIAGRAM`). `mermaidCheck.js` is a
+  pure text check plus `mermaidLabels` (copied in the client as `utils/mermaidText.js`: change both). Validation:
+  `diagramSketchArgsSchema` shares the page-image fields with `transcribeSketchArgsSchema`. Tests:
+  `notegeekDiagramSketch.test.js`.
+- **Search and previews:** `noteDerived.js#mermaidFencesAsWords` turns a ```mermaid fence into its labels joined by
+  " · ". No `DERIVED_VERSION` bump (no stored note had such a fence).
+- **Client:** menu item in `NoteActions.jsx` (`onDiagram`, passed exactly where `onTranscribe` is),
+  `pages/noteEditor/useSketchDiagram.js`, `components/editors/DiagramDialog.jsx`, note built by
+  `utils/sketchToText.js#diagramNoteTitle/diagramNoteContent`. An old gateway (validation error naming the
+  mutation) shows "Diagrams aren't available yet. Try again in a minute."
+- **Rendering:** `utils/mermaidLoader.js` (dynamic `import('mermaid')`, mermaid `^11.17.2`; `securityLevel: 'strict'`,
+  `htmlLabels: false`, `suppressErrorRendering`, `useMaxWidth: false`, `base` theme with the Graphite palette per
+  mode). Mermaid's settings are global, so renders are queued and each sets its mode first.
+  `components/notes/MermaidBlock.jsx` is used by `ScrollingPre` in `markdownComponents.jsx` (viewer, editor preview,
+  compose, fold-in, reference pane) and by `NotePrintView` (immediate, light, no toggle; `printNote.js#waitForDiagrams`
+  waits on `[data-mermaid-pending]`, 8 s at most). The Markdown editor's textarea keeps the source as text.
+- **Bundle and service worker:** `vite.config.js` `mermaidChunks()` writes every chunk reachable only through the
+  mermaid package to `assets/mermaid/`; workbox `globIgnores` leaves them out of the precache and a `CacheFirst`
+  rule (`notegeek-mermaid`, text/html refused) caches them on first use. `tools/pwa-audit.mjs` now accepts a
+  hashed asset that is not precached when the SW names its folder in a CacheFirst/StaleWhileRevalidate route.
+- **Landmines.** (1) A client on an old SW that opens its first diagram after a deploy asks for chunk names the
+  server no longer has: the block shows its source and the error, and the next load fixes it. (2) `<` is refused
+  by the gateway check only when it starts a tag (`<-->` is an arrow). (3) `click`/`href` are refused only outside
+  quoted labels. (4) Mermaid's SVG text has no axe contrast check; harness `32a`/`32c` measure it themselves.
+- **Harness:** `32a-diagram-review`, `32b-diagram-repair`, `32c-diagram-note`, `32d-diagram-error`,
+  `32e-diagram-print`; `DiagramSketch` stubbed in `fixtures.mjs`, real Mermaid in Chromium.

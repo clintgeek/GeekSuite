@@ -15,6 +15,7 @@
  */
 import { htmlToText, codeText, mindmapText } from './chunking.js';
 import { sketchSearchText } from './sketchText.js';
+import { mermaidLabels } from './mermaidCheck.js';
 
 /** Bump when what these functions produce changes; wordIndex.js re-derives every note below it. */
 export const DERIVED_VERSION = 3; // 3: a markdown preview drops a leading heading that repeats the title
@@ -23,9 +24,35 @@ export const PREVIEW_CHARS = 200;
 export const SNIPPET_CHARS = 200;
 const SKETCH = 'handwritten';
 
+/**
+ * A ```mermaid fence (a diagram, HANDWRITING.md "Turn into a diagram") as its
+ * words: the node and arrow labels joined by " · ", not Mermaid syntax. Any
+ * fence length, backticks or tildes; an unclosed fence runs to the end.
+ * No DERIVED_VERSION bump with it: no stored note had such a fence yet.
+ */
+export function mermaidFencesAsWords(md) {
+  const lines = String(md ?? '').split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const open = /^ {0,3}(`{3,}|~{3,})[ \t]*mermaid[ \t]*\r?$/i.exec(lines[i]);
+    if (!open) { out.push(lines[i]); continue; }
+    const fence = open[1];
+    const body = [];
+    let j = i + 1;
+    for (; j < lines.length; j += 1) {
+      const close = /^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/.exec(lines[j]);
+      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) break;
+      body.push(lines[j]);
+    }
+    out.push(mermaidLabels(body.join('\n')).join(' · '));
+    i = j;
+  }
+  return out.join('\n');
+}
+
 /** Markdown → its words: links keep their text, emphasis and heading marks go. */
 export function markdownToText(md) {
-  return String(md ?? '')
+  return mermaidFencesAsWords(md)
     .replace(/```[^\n]*\n/g, '\n')
     .replace(/```/g, '')
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')

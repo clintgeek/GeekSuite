@@ -384,6 +384,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `foldInPreview(noteId: ID!, input: String!)` | `FoldInProposal!` |
 | `foldInApply(noteId: ID!, baseUpdatedAt: String!, operations: [FoldInOperationInput!]!)` | `FoldInResult!` |
 | `transcribeSketch(image: String!, mediaType: String!, source: String, noteId: ID)` | `SketchTranscript!` |
+| `diagramSketch(image: String!, mediaType: String!, source: String, previous: String, problem: String)` | `SketchDiagram!` |
 | `autoTranscribeSketch(noteId: ID!, image: String!, mediaType: String!, background: Boolean)` | `SketchTranscriptState!` |
 | `saveSketchTranscriptEdit(noteId: ID!, text: String!, forHash: String)` | `SketchTranscriptState!` |
 | `recordSketchTasksSent(noteId: ID!, keys: [String!]!, texts: [String!])` | `SketchTranscriptState!` |

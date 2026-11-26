@@ -12,6 +12,8 @@ import React from 'react';
 import { Link as RouterLink, useInRouterContext } from 'react-router-dom';
 import remarkGfm from 'remark-gfm';
 import remarkInlineTags from '../../utils/remarkInlineTags';
+import MermaidBlock from './MermaidBlock';
+import { mermaidSourceOf } from '../../utils/mermaidText';
 // Deep imports (see MarkdownEditor.jsx for why).
 import CheckBoxOutlined from '@mui/icons-material/CheckBoxOutlined';
 import CheckBoxOutlineBlank from '@mui/icons-material/CheckBoxOutlineBlank';
@@ -31,8 +33,10 @@ function ScrollingTable({ node, ...props }) {
  * the keyboard cannot reach (`scrollable-region-focusable`), found by the
  * print harness scene's long shell line (2026-09-30).
  */
-// eslint-disable-next-line no-unused-vars -- `node` is react-markdown's AST node; keep it off the DOM
 function ScrollingPre({ node, ...props }) {
+    // A ```mermaid fence is drawn (MermaidBlock), everywhere markdown renders.
+    const mermaid = mermaidSourceOf(node);
+    if (mermaid !== null) return <MermaidBlock source={mermaid} />;
     return <pre role="region" aria-label="Code block" tabIndex={0} {...props} />;
 }
 
