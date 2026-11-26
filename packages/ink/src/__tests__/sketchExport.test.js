@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   EXPORT_MAX_EDGE, EXPORT_PADDING, TLDRAW_PIXEL_RATIO, LASSO_MIN_SHORT_EDGE, MIN_READABLE_SCALE,
-  SketchExportError, exportSketchPng, fitWithin, flattenOnWhite, readableScale,
+  EXPORT_MESSAGES, SketchExportError, exportSketchPng, fitWithin, flattenOnWhite, readableScale,
   sketchExportOptions, sketchHasShapes, tooLongToRead, unionBounds,
-} from './sketchExport';
+} from '../sketchExport.js';
 
 const fakeCanvas = () => {
   const calls = [];
@@ -135,6 +135,29 @@ describe('exportSketchPng', () => {
     const big = { size: 7 * 1024 * 1024 };
     await expect(exportSketchPng(editor, deps({ flatten: async () => ({ blob: big, width: 1, height: 1 }) })))
       .rejects.toMatchObject({ code: 'too_large' });
+  });
+
+  it('skipShape leaves shapes of the whole page out, and sizes by what is left', async () => {
+    const boxes = { 'shape:ink': { x: 100, y: 100, w: 200, h: 50 }, 'shape:sheet': { x: 0, y: 0, w: 1000, h: 1400 } };
+    const editor = { ...editorWith(boxes), getShape: (id) => ({ id, sheet: id === 'shape:sheet' }) };
+    const d = deps();
+    await exportSketchPng(editor, { ...d, skipShape: (s) => s?.sheet });
+    const call = d.exportToBlob.mock.calls[0][0];
+    expect(call.ids).toEqual(['shape:ink']);
+    expect(call.opts).toEqual(sketchExportOptions({ w: 200, h: 50 }));
+    await expect(exportSketchPng({ ...editorWith({ 'shape:sheet': boxes['shape:sheet'] }), getShape: editor.getShape }, { ...deps(), skipShape: (s) => s?.sheet }))
+      .rejects.toMatchObject({ code: 'empty' });
+  });
+
+  it('the error words are the app\'s to choose', async () => {
+    await expect(exportSketchPng(editorWith({}), deps())).rejects.toThrow(EXPORT_MESSAGES.empty);
+    await expect(exportSketchPng(editorWith({}), deps({ messages: { empty: 'Nothing circled.' } }))).rejects.toThrow('Nothing circled.');
+    const editor = editorWith({ 'shape:a': { x: 0, y: 0, w: 10, h: 10 } });
+    const big = { size: 7 * 1024 * 1024 };
+    await expect(exportSketchPng(editor, deps({ flatten: async () => ({ blob: big, width: 1, height: 1 }) })))
+      .rejects.toThrow(/7\.0 MB as an image; the limit is 6 MB\). Split it/);
+    await expect(exportSketchPng(editor, deps({ flatten: async () => ({ blob: big, width: 1, height: 1 }), messages: { tooLarge: (mb) => `${mb} MB, circle less` } })))
+      .rejects.toThrow('7.0 MB, circle less');
   });
 });
 

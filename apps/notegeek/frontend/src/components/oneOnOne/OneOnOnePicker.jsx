@@ -86,7 +86,7 @@ function PickerBody({ close }) {
           autoComplete="off"
           inputProps={{ 'data-testid': 'one-on-one-new-name', maxLength: 60 }}
         />
-        <Button type="submit" variant="contained" disabled={!slug} data-testid="one-on-one-new-go" sx={{ minHeight: 40, flexShrink: 0 }}>
+        <Button type="submit" variant="contained" disabled={!slug} data-testid="one-on-one-new-go" sx={{ minHeight: 44, flexShrink: 0 }}>
           Start
         </Button>
       </Box>

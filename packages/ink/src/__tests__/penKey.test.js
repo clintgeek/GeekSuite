@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { attachPenKey, isPenKey } from './penKey';
+import { attachPenKey, isPenKey } from '../penKey.js';
 
 function fakeEditor(tool = 'draw', { readonly = false, editing = null } = {}) {
   const e = {

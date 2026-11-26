@@ -1,6 +1,6 @@
-/** A palm on the toolbar in pen mode. Copied from NoteGeek's palmTouch.test.js. */
+/** A palm on the toolbar in pen mode. Shared by NoteGeek and GeekDay. */
 import { describe, it, expect } from 'vitest';
-import { isPalmTouch, PALM_PEN_RECENT_MS } from './palmTouch';
+import { isPalmTouch, PALM_PEN_RECENT_MS } from '../palmTouch.js';
 
 describe('isPalmTouch', () => {
   const now = 100_000;

@@ -13,7 +13,7 @@ services:
     # file (a separate, stale, uncommitted file next to this one) happened to
     # interpolate into the literal ${VAR} substitutions below, and anything not
     # named as a substitution (AI_GEEK_API_KEY, CORS_ORIGINS) never reached the
-    # container regardless of restarts — see STATUS.md Q1 ("restart storygeek
+    # container regardless of restarts — see DOCS/ARCHIVE/STATUS.md Q1 ("restart storygeek
     # to pick up its service key"), which this closes.
     env_file:
       - .env.production

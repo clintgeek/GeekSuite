@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { readPenSeen, writePenSeen, readFingerDraws, writeFingerDraws, touchDraws, PEN_PREF_KEYS } from './penPrefs';
+import { touchDraws } from '@geeksuite/ink';
+import { readPenSeen, writePenSeen, readFingerDraws, writeFingerDraws, PEN_PREF_KEYS } from './penPrefs';
 
 describe('pen prefs', () => {
   beforeEach(() => localStorage.clear());

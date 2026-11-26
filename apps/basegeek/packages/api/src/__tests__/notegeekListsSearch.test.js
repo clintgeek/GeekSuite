@@ -26,6 +26,8 @@ const { Query, Mutation } = resolvers;
 const ALICE = new mongoose.Types.ObjectId();
 const ctx = (userId) => ({ user: { id: String(userId) } });
 const create = (args) => Mutation.createNote(null, { type: 'markdown', ...args }, ctx(ALICE));
+/** A note of a type the gateway no longer writes (still stored, until purged). */
+const legacy = (args) => Note.create({ userId: ALICE, ...args });
 
 /** The `info` a resolver gets for this operation's root field. */
 function infoFor(source) {
@@ -61,12 +63,21 @@ afterAll(async () => {
 // ── 5.1 / 5.3 ──────────────────────────────────────────────────────────────
 describe('preview and word text are words, not markup', () => {
   test('each type', () => {
-    expect(previewFor({ type: 'markdown', content: '# Title\n\n**Bold** and [a link](http://x.example/y)\n- item' })).toBe('Title Bold and a link item');
+    expect(previewFor({ type: 'markdown', content: '# Title\n\n**Bold** and [a link](http://x.example/y)\n- item' })).toBe('Title — Bold and a link item');
+    expect(previewFor({ type: 'markdown', title: 'x', content: '# Only a heading' })).toBe('Only a heading');
+    expect(previewFor({ type: 'markdown', title: 'x', content: '# A\n## B\ntext' })).toBe('A — B — text');
     expect(previewFor({ type: 'text', content: '<p>Hello <a href="x" target="_blank">there</a></p>' })).toBe('Hello there');
     expect(previewFor({ type: 'code', content: JSON.stringify({ language: 'js', code: 'const x = 1;' }) })).toBe('const x = 1;');
     expect(previewFor({ type: 'mindmap', content: JSON.stringify({ nodes: [{ data: { label: 'Root' } }, { data: { label: 'Leaf' } }] }) })).toBe('Root Leaf');
     expect(previewFor({ type: 'handwritten', content: snapshot(), sketchTranscript: { text: 'buy milk' } })).toBe('buy milk');
     expect(previewFor({ type: 'markdown', content: 'secret', isLocked: true })).toBe('');
+    // A leading heading that repeats the title is left out; other headings stay.
+    expect(previewFor({ type: 'markdown', title: 'Cookies', content: '# Cookies\n\nBrown the butter' })).toBe('Brown the butter');
+    expect(previewFor({ type: 'markdown', title: '  cookies ', content: '\n\n##  COOKIES  ##\nBrown   the butter' })).toBe('Brown the butter');
+    expect(previewFor({ type: 'markdown', title: 'Recipes', content: '# Cookies\n\nBrown the butter' })).toBe('Cookies — Brown the butter');
+    expect(previewFor({ type: 'markdown', title: 'Cookies', content: 'Intro\n# Cookies\nBrown' })).toBe('Intro Cookies — Brown');
+    expect(previewFor({ type: 'markdown', content: '# Cookies\n\nBrown' })).toBe('Cookies — Brown');
+    expect(wordTextFor({ type: 'markdown', title: 'Cookies', content: '# Cookies\n\nBrown' })).toBe('Cookies\n\nBrown');
     expect(wordTextFor({ type: 'markdown', content: 'x', isEncrypted: true })).toBe('');
     expect(previewFor({ type: 'markdown', content: 'word '.repeat(100) }).length).toBeLessThanOrEqual(201);
   });
@@ -78,7 +89,7 @@ describe('preview and word text are words, not markup', () => {
     const rows = await Query.notes(null, {}, ctx(ALICE), info);
     expect(rows).toHaveLength(2);
     for (const r of rows) expect('content' in r).toBe(false);
-    expect(resolvers.Note.preview(rows.find((r) => String(r._id) === String(md._id)))).toBe('Groceries eggs');
+    expect(resolvers.Note.preview(rows.find((r) => String(r._id) === String(md._id)))).toBe('Groceries — eggs');
     // Selected (also through a fragment): read.
     const withBody = await Query.notes(null, {}, ctx(ALICE), infoFor('query { notes { ...F } } fragment F on Note { id content }'));
     expect(withBody.every((r) => typeof r.content === 'string')).toBe(true);
@@ -97,7 +108,7 @@ describe('preview and word text are words, not markup', () => {
     expect(String(row._id)).toBe(String(insertedId));
     expect(resolvers.Note.preview(row)).toBe('old words here');
     expect(resolvers.Note.pinned(row)).toBe(false);
-    expect(resolvers.Note.type(row)).toBe('text');
+    expect(resolvers.Note.type(row)).toBe('markdown');
   });
 });
 
@@ -191,9 +202,9 @@ describe('word search', () => {
   const ids = (rows) => rows.map((r) => String(r._id));
 
   test('markup is not words: "target", "language" and "label" match no note', async () => {
-    await create({ title: 'Rich', type: 'text', content: '<p><a href="https://x.example" target="_blank">link</a></p>' });
-    await create({ title: 'Code', type: 'code', content: JSON.stringify({ language: 'python', code: 'print(1)' }) });
-    await create({ title: 'Map', type: 'mindmap', content: JSON.stringify({ nodes: [{ id: '1', data: { label: 'Root idea' } }] }) });
+    await legacy({ title: 'Rich', type: 'text', content: '<p><a href="https://x.example" target="_blank">link</a></p>' });
+    await legacy({ title: 'Code', type: 'code', content: JSON.stringify({ language: 'python', code: 'print(1)' }) });
+    await legacy({ title: 'Map', type: 'mindmap', content: JSON.stringify({ nodes: [{ id: '1', data: { label: 'Root idea' } }] }) });
     for (const q of ['target', 'language', 'label', 'blank']) {
       // eslint-disable-next-line no-await-in-loop
       expect(await Query.searchNotes(null, { q }, ctx(ALICE))).toEqual([]);

@@ -110,7 +110,8 @@ export default function BackgroundReader() {
     <div aria-hidden="true" inert="" data-testid="background-reader" style={offscreen}>
       <Quiet key={job.key} onError={job.fail}>
         <Suspense fallback={null}>
-          <InkCanvas content={job.content} readOnly autoFocus={false} apiRef={job.apiRef} />
+          {/* An unreadable page is not read as a blank one: it waits for next time. */}
+          <InkCanvas content={job.content} readOnly autoFocus={false} apiRef={job.apiRef} onLoadError={(_, error) => job.fail(error)} />
         </Suspense>
       </Quiet>
     </div>

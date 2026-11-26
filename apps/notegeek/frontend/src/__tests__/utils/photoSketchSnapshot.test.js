@@ -21,7 +21,7 @@ import {
   SNAPSHOT_PER_PAGE_CHARS,
 } from '../../utils/photoPages';
 import { SNAPSHOT_CONTENT_MAX } from '../../utils/saveGuards';
-import { sketchHasShapes } from '../../utils/sketchExport';
+import { sketchHasShapes } from '@geeksuite/ink';
 
 // A real 1x1 JPEG, and a fake "page" of any size built from it: the bytes
 // only need to be a valid data: URL for tldraw's validator.

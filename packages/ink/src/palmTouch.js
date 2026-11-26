@@ -1,8 +1,7 @@
 /**
  * palmTouch.js — is a touch on the toolbar a resting palm?
  *
- * Copied from apps/notegeek/frontend/src/components/editors/DrawingToolbar.jsx
- * (`isPalmTouch`; GeekDay keeps its own copy).
+ * Used by both toolbars: NoteGeek's DrawingToolbar and GeekDay's InkToolbar.
  *
  * A touch on the bar in pen mode is a palm when a pen was near a moment ago
  * (resting the hand to write), or the contact is wide. A deliberate fingertip

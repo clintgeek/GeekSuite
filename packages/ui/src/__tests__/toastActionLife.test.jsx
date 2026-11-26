@@ -76,10 +76,21 @@ describe('how long a toast stays', () => {
     expect(shown('Gone')).toBe(false);
   });
 
-  it('follows a provider that was given its own duration', () => {
+  it('never gives an action toast less than the action life, whatever the provider duration', () => {
     mount({ duration: 1000 });
     act(() => { api.notify('Gone', { action: <button type="button">Undo</button> }); });
     tick(1500);
+    expect(shown('Gone')).toBe(true);
+    tick(7000);
+    expect(shown('Gone')).toBe(false);
+  });
+
+  it('follows a provider duration longer than the action life', () => {
+    mount({ duration: 12000 });
+    act(() => { api.notify('Gone', { action: <button type="button">Undo</button> }); });
+    tick(9000);
+    expect(shown('Gone')).toBe(true);
+    tick(4000);
     expect(shown('Gone')).toBe(false);
   });
 });

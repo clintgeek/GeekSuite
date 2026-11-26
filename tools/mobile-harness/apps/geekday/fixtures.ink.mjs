@@ -5,6 +5,7 @@
 //                                `paperTemplate: "schedule"` in the document meta. No sheet.
 //   ?__fixture=sheet-meeting     a saved page whose drawing holds a Meeting template sheet, with writing
 //   ?__fixture=reader            today is blank; an older page is waiting to be read (background reader)
+//   ?__fixture=unreadable       today's page exists but its stored body is cut off mid-JSON (`{"store":`)
 //   ?__fixture=sheet-elsewhere   a saved page with a Cornell sheet at page (60, 1500), as NoteGeek
 //                                (an endless canvas) may leave one
 //
@@ -41,6 +42,9 @@ function withSheet(body, templateId, at) {
   return JSON.stringify(doc);
 }
 
+/** A stored body that cannot be read: the write was cut off. */
+export const UNREADABLE_BODY = '{"store":';
+
 const PAGES = {
   'legacy-schedule': SCHEDULE,
   'sheet-meeting': withSheet(MEETING, 'meeting', { x: 0, y: 0 }),
@@ -56,6 +60,21 @@ const fixtureOf = (route) => {
   }
 };
 
+/** A readable saved day page, as FindDayNote answers it (a scene swaps this in for "Try again"). */
+export const readableDayNote = (tag) => ({
+  notes: [{
+    __typename: 'Note',
+    id: 'note-day-template',
+    title: String(tag).replace('daily/', ''),
+    content: PAGES['sheet-meeting'],
+    tags: ['daily', tag],
+    archived: false,
+    deletedAt: null,
+    createdAt: '2026-11-20T09:00:00.000Z',
+    updatedAt: '2026-11-20T09:00:00.000Z',
+  }],
+});
+
 export function extend(base) {
   return {
     // The background reader (apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md):
@@ -65,7 +84,8 @@ export function extend(base) {
     SketchToRead: (vars) => ({ note: { __typename: 'Note', id: vars.id, type: 'handwritten', content: PAGES['sheet-meeting'] } }),
     BackgroundTranscribeSketch: () => ({ autoTranscribeSketch: { __typename: 'SketchTranscriptState', status: 'searchable', retryAt: null } }),
     FindDayNote: (vars, route) => {
-      const content = PAGES[fixtureOf(route)];
+      const mode = fixtureOf(route);
+      const content = mode === 'unreadable' ? UNREADABLE_BODY : PAGES[mode];
       if (!content) return base.FindDayNote(vars, route);
       const tag = String(vars?.tag || 'daily/1970-01-01');
       const at = '2026-11-20T09:00:00.000Z';

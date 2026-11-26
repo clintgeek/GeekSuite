@@ -9,7 +9,6 @@ import {
   setNotePinnedArgsSchema,
   renameTagArgsSchema,
   deleteTagArgsSchema,
-  suggestForNoteArgsSchema,
   composeNoteArgsSchema,
   transcribeSketchArgsSchema,
   autoTranscribeSketchArgsSchema,
@@ -30,7 +29,6 @@ import {
   noteProjection, sortSpec, pageQuery, encodeCursor, decodeCursor, TITLE_COLLATION, fillMissingPreviews,
 } from './noteLists.js';
 import { sanitizeNoteArgs } from './sanitize.js';
-import { suggestForNote } from './suggest.js';
 import { composeNote, composeNotes } from './compose.js';
 import { transcribeSketch } from './transcribe.js';
 import {
@@ -79,7 +77,6 @@ const validateDeleteNote = validateInput(deleteNoteArgsSchema);
 const validateSetNotePinned = validateInput(setNotePinnedArgsSchema);
 const validateRenameTag = validateInput(renameTagArgsSchema);
 const validateDeleteTag = validateInput(deleteTagArgsSchema);
-const validateSuggestForNote = validateInput(suggestForNoteArgsSchema);
 const validateComposeNote = validateInput(composeNoteArgsSchema);
 const validateTranscribeSketch = validateInput(transcribeSketchArgsSchema);
 const validateAutoTranscribeSketch = validateInput(autoTranscribeSketchArgsSchema);
@@ -164,7 +161,7 @@ function searchRow(note, { score, matchedBy = null, why = null, bestMatch = fals
   return {
     _id: note._id,
     title: note.title,
-    type: note.type || 'text',
+    type: note.type || 'markdown',
     tags: normalizeTags(note.tags || []),
     isLocked: note.isLocked || false,
     isEncrypted: note.isEncrypted || false,
@@ -231,7 +228,7 @@ function noteConflict(note) {
         title: note.title ?? null,
         content: note.content ?? '',
         tags: normalizeTags(note.tags || []),
-        type: note.type || 'text',
+        type: note.type || 'markdown',
         updatedAt: new Date(note.updatedAt).toISOString(),
       },
     },
@@ -603,38 +600,6 @@ export const resolvers = {
       if (!userId) throw new Error('Unauthorized');
       return indexStatus({ userId });
     },
-
-    /**
-     * Tag and related-note suggestions for the note being written — AI_IDEAS
-     * #3. See `suggest.js` for the ranking, the opt-in and what (if anything)
-     * leaves the box.
-     *
-     * Anonymous callers get an empty answer rather than an error: GraphQL sits
-     * behind `optionalUser()`, and a suggestion strip is not worth a thrown
-     * error on a session that has merely expired mid-edit. It is a read that
-     * writes nothing, so there is no ownership decision to get wrong — the
-     * corpora are built from `userId` and nothing else.
-     */
-    suggestForNote: async (_, rawArgs, context) => {
-      const userId = context.user?.id;
-      const { noteId, title, excerpt, tags } = validateSuggestForNote(rawArgs);
-      if (!userId) {
-        return {
-          tags: [],
-          related: [],
-          provenance: {
-            source: 'fallback',
-            reason: 'unauthenticated',
-            model: null,
-            provider: null,
-            cached: false,
-            callsToday: 0,
-            cap: null,
-          },
-        };
-      }
-      return await suggestForNote({ userId, noteId: noteId ?? null, title, excerpt, tags });
-    },
   },
 
   Mutation: {
@@ -647,14 +612,12 @@ export const resolvers = {
       // session as the only source of ownership.
       const { userId: _payloadUserId, ...ownArgs } = rawArgs;
       const { transcriptText, ...args } = validateCreateNote(ownArgs);
-      // `text` notes store TipTap HTML and notegeek renders it as markup, so
-      // the body is sanitized before it is stored — see `sanitize.js` for the
-      // profile and for why the other four types are passed through untouched
-      // (their `content` is markdown or a JSON snapshot, and running an HTML
-      // sanitizer over either would corrupt it). A create that omits `type`
-      // gets `text` here because that is `Note.type`'s schema default — the
-      // row really will be a rich-text note, so it must be sanitized like one.
-      const effectiveType = args.type ?? 'text';
+      // Only `markdown` and `handwritten` can be created (validation.js), and
+      // neither is HTML, so `sanitizeNoteArgs` passes them through untouched;
+      // it is kept because an update of a restored legacy `text` note still
+      // reaches it. A create that omits `type` is `markdown`, `Note.type`'s
+      // schema default.
+      const effectiveType = args.type ?? 'markdown';
       const cleaned = sanitizeNoteArgs(args, effectiveType);
       // Sanitizing can make a body LONGER (see `assertContentCeiling`), so the
       // string that is actually stored is measured, not the one that arrived.
@@ -1212,7 +1175,7 @@ export const resolvers = {
     // Lists are read lean (plan 5.1), so a field an old note never had is
     // absent, not defaulted: these give the schema's non-null fields the
     // mongoose defaults back.
-    type: (note) => note.type || 'text',
+    type: (note) => note.type || 'markdown',
     isLocked: (note) => note.isLocked === true,
     isEncrypted: (note) => note.isEncrypted === true,
     pinned: (note) => note.pinned === true,

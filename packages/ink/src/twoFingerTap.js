@@ -1,4 +1,3 @@
-// Copied from apps/notegeek/frontend/src/utils/twoFingerTap.js (GeekDay keeps its own copy; apps do not import each other).
 /**
  * twoFingerTap.js — two fingers tapped together on the canvas undo
  * (review 2.12; the gesture GoodNotes and Procreate taught everyone).
@@ -7,15 +6,22 @@
  * other, both up quickly, and neither moved. Nothing is stopped or swallowed —
  * tldraw still sees every touch (a pinch is still a pinch); this only listens.
  *
+ * Only a touch that lands on the page counts: tldraw's `.tl-canvas` by
+ * default. GeekDay's lasso layer sits over the canvas and is page too, so it
+ * passes `surface: '.tl-canvas, [data-ink-surface]'`.
+ *
  * @param {HTMLElement} container
  * @param {() => void} onTap
+ * @param {object} [options]
+ * @param {string} [options.surface]  CSS selector for what counts as the page
  * @returns {() => void} detach
  */
 export const TAP_MAX_MS = 300;
 export const TAP_MAX_MOVE = 12;
 const DOWN_GAP_MS = 150;
+export const TAP_SURFACE = '.tl-canvas';
 
-export function attachTwoFingerTap(container, onTap, { now = () => Date.now() } = {}) {
+export function attachTwoFingerTap(container, onTap, { now = () => Date.now(), surface = TAP_SURFACE } = {}) {
   let touches = new Map(); // pointerId -> { x, y, t }
   let peak = 0;
   let firstAt = 0;
@@ -25,8 +31,7 @@ export function attachTwoFingerTap(container, onTap, { now = () => Date.now() } 
 
   const onDown = (e) => {
     if (e.pointerType !== 'touch') return;
-    // GeekDay: the lasso layer sits over the canvas and counts as the page too.
-    if (!e.target?.closest?.('.tl-canvas, [data-ink-surface]')) return;
+    if (!e.target?.closest?.(surface)) return;
     const t = now();
     if (touches.size === 0) { reset(); firstAt = t; }
     if (t - firstAt > DOWN_GAP_MS) spoiled = true;

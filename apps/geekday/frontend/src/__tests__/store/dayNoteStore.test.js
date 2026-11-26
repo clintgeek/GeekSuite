@@ -250,4 +250,79 @@ describe('DayNoteStore', () => {
     expect(listener).toHaveBeenCalled();
     stop();
   });
+
+  describe('a page that cannot be loaded is never written over', () => {
+    const STORED = '{"store":{"shape:1":'; // truncated
+    const dayNote = (content = STORED) => ({ id: 'n9', content, updatedAt: 'u9', createdAt: '2026-11-20T08:00:00Z' });
+    const writes = (client) => client.calls.filter((c) => c.op !== 'find');
+
+    it('a failed fetch is a load error, not an empty day: ink is refused and nothing is created', async () => {
+      const client = fakeClient();
+      client.queue.find.push(new Error('Failed to fetch'));
+      const { store } = makeStore(client);
+      await store.load();
+      expect(store.getState()).toMatchObject({ phase: 'loadError', noteId: null, content: null });
+      store.write(INK(1));
+      await settle();
+      expect(writes(client)).toEqual([]);
+      expect(store.hasUnsaved()).toBe(false);
+    });
+
+    it('an answer without a notes list is a load error too', async () => {
+      const client = fakeClient();
+      client.queue.find.push({ data: null });
+      const { store } = makeStore(client);
+      await store.load();
+      expect(store.getState().phase).toBe('loadError');
+      store.write(INK(1));
+      await settle();
+      expect(writes(client)).toEqual([]);
+    });
+
+    it('a page the canvas cannot draw is unreadable: a stroke sends no save', async () => {
+      const client = fakeClient({ notes: [dayNote()] });
+      const { store, timers } = makeStore(client);
+      await store.load();
+      store.unreadable(STORED);
+      expect(store.getState()).toMatchObject({ phase: 'unreadable', noteId: 'n9', content: STORED });
+      store.write(INK(1)); // the blank page plus a stroke
+      store.retryNow();
+      await settle();
+      expect(writes(client)).toEqual([]);
+      expect(timers).toEqual([]);
+      expect(store.hasUnsaved()).toBe(false);
+    });
+
+    it('only the content on screen can be called unreadable', async () => {
+      const client = fakeClient({ notes: [dayNote(INK(0))] });
+      const { store } = makeStore(client);
+      await store.load();
+      store.unreadable('something else');
+      expect(store.getState().phase).toBe('ready');
+    });
+
+    it('Try again reads the note again; once it opens, ink saves over it as usual', async () => {
+      const client = fakeClient({ notes: [dayNote()] });
+      const { store } = makeStore(client);
+      await store.load();
+      store.unreadable(STORED);
+      client.queue.find.push({ data: { notes: [dayNote(INK(0))] } }); // repaired meanwhile (in NoteGeek)
+      await store.load();
+      expect(store.getState()).toMatchObject({ phase: 'ready', content: INK(0), revision: 2 });
+      store.write(INK(1));
+      await settle();
+      expect(writes(client)).toEqual([{ op: 'save', variables: { id: 'n9', content: INK(1), baseUpdatedAt: 'u9' } }]);
+    });
+
+    it('Try again on a page that is still unreadable gives the same content back for the canvas to try', async () => {
+      const client = fakeClient({ notes: [dayNote()] });
+      const { store } = makeStore(client);
+      await store.load();
+      store.unreadable(STORED);
+      await store.load();
+      expect(store.getState()).toMatchObject({ phase: 'ready', content: STORED, revision: 2 });
+      store.unreadable(STORED);
+      expect(store.getState().phase).toBe('unreadable');
+    });
+  });
 });

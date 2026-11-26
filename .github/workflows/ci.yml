@@ -160,6 +160,10 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: packages/api-client
         run: npx vitest run
+      - name: ink (pen helpers shared by NoteGeek and GeekDay)
+        if: ${{ !cancelled() }}
+        working-directory: packages/ink
+        run: npx vitest run
       - name: auth (csrf headers)
         if: ${{ !cancelled() }}
         working-directory: packages/auth

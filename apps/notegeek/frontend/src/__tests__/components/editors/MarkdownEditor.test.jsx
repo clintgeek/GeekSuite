@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { MantineProvider } from '@mantine/core';
 import { MockedProvider } from '@apollo/client/testing';
 import ThemeModeProvider from '../../../theme/ThemeModeProvider';
 import MarkdownEditor from '../../../components/editors/MarkdownEditor';
@@ -9,14 +8,12 @@ import MarkdownEditor from '../../../components/editors/MarkdownEditor';
 const AllProviders = ({ children, mocks = [] }) => (
     <MockedProvider mocks={mocks}>
         <ThemeModeProvider>
-            <MantineProvider>
                 <MemoryRouter>{children}</MemoryRouter>
-            </MantineProvider>
         </ThemeModeProvider>
     </MockedProvider>
 );
 
-// Mock window.matchMedia for Mantine and MUI
+// Mock window.matchMedia for MUI
 Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: vi.fn().mockImplementation(query => ({

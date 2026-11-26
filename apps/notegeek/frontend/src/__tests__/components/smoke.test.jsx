@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { MantineProvider } from '@mantine/core';
 import { MockedProvider } from '@apollo/client/testing';
 import { gql } from '@apollo/client';
 import { GET_NOTES_PAGE } from '../../graphql/queries';
@@ -29,11 +28,9 @@ const apolloMocks = [
 
 const AllProviders = ({ children }) => (
     <ThemeModeProvider>
-        <MantineProvider>
             <MockedProvider mocks={apolloMocks} addTypename={false}>
                 <MemoryRouter>{children}</MemoryRouter>
             </MockedProvider>
-        </MantineProvider>
     </ThemeModeProvider>
 );
 
@@ -84,7 +81,7 @@ vi.mock('../../store/tagStore', () => {
     return { default: useStore };
 });
 
-// Mock window.matchMedia for Mantine
+// Mock window.matchMedia 
 Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: vi.fn().mockImplementation(query => ({
@@ -111,7 +108,7 @@ vi.mock('@geeksuite/user', () => ({
     usePreferences: vi.fn(() => ({ preferences: {}, loaded: true })),
 }));
 
-// Mock ResizeObserver for Mantine
+// Mock ResizeObserver 
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
     observe: vi.fn(),
     unobserve: vi.fn(),

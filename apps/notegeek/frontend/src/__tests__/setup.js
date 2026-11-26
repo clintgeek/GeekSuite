@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 
 // jsdom implements neither matchMedia nor ResizeObserver, both of which are
-// pulled in by MUI's useMediaQuery, MantineProvider and @geeksuite/user's
+// pulled in by MUI's useMediaQuery and @geeksuite/user's
 // theme detection. Without these shims any component tree containing them
 // throws before a single assertion runs.
 if (!window.matchMedia) {

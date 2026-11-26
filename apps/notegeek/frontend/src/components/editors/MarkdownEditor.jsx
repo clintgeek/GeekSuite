@@ -50,7 +50,7 @@ import { TOUCH_TARGET_MEDIA } from '../../hooks/useNoteFormFactor';
  * happens to have a few asterisks in it.
  *
  * The AI Tidy button lived here until 2026-09-22 and was removed with the
- * feature (see `DOCS/WORK_LOG_2026-09.md`). Compose, in the note's action row,
+ * feature (see `DOCS/ARCHIVE/WORK_LOG_2026-09.md`). Compose, in the note's action row,
  * is what replaced it.
  */
 const FORMATS = [

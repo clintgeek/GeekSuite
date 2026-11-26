@@ -4,12 +4,11 @@ import {
     Box as TlBox, Tldraw, DefaultSizeStyle, AssetRecordType,
     exportToBlob, getPointerInfo, loadSnapshot as loadTldrawSnapshot, useEditor, useValue,
 } from '@tldraw/tldraw';
-import { attachPenButton } from '../../utils/penButton';
-import { attachPenKey } from '../../utils/penKey';
+import {
+    attachPenButton, attachPenKey, attachTwoFingerTap, fineStrokeHandler, isEmptySketchBody, parseSketchBody,
+} from '@geeksuite/ink';
 import { exportSketchPng, exportSketchForPrint, PRINT_MAX_EDGE } from '../../utils/sketchExport';
-import { fineStrokeHandler } from '../../utils/finePen';
 import { isInkEdit } from '../../utils/inkEdit';
-import { attachTwoFingerTap } from '../../utils/twoFingerTap';
 import {
     readBarPosition, writeBarPosition, readCamera, writeCamera,
     readFingerDraws, writeFingerDraws, readPenSeen, writePenSeen,
@@ -32,6 +31,7 @@ import EditorErrorBoundary from './EditorErrorBoundary';
 import { surfaces } from '../../theme/tokens';
 import DrawingToolbar from './DrawingToolbar';
 import { PaperBackground, PaperSync } from './Paper';
+import UnreadableSketch from '../notes/UnreadableSketch';
 
 const SAVE_DEBOUNCE_MS = 400;
 /** How long the camera must rest before it is remembered for this sketch. */
@@ -136,7 +136,7 @@ function PenModeSync({ fingerDraws }) {
  *
  * `noteId` (optional): the camera is remembered per sketch on this device.
  */
-const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null, onInkEdit = null, noteId = null, startSheet = null, autoFocus = true }) => {
+const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null, onInkEdit = null, noteId = null, startSheet = null, autoFocus = true, onLoadError = null }) => {
     // `autoFocus={false}`: a sketch drawn off-screen to be read (BackgroundReader) must never take the keyboard.
     // The sheet a brand-new sketch starts on (a 1:1, DOCS/ONE_ON_ONE_SPEC.md req 2).
     const startSheetRef = useRef(startSheet);
@@ -161,6 +161,11 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
     // an echo, never a reason to reload (review 1.17).
     const emittedRef = useRef([]);
     const saveTimeoutRef = useRef(null);
+    // The stored body could not be read: this editor never saves (see loadSnapshot).
+    const blockedRef = useRef(false);
+    const [loadFailed, setLoadFailed] = useState(false);
+    const onLoadErrorRef = useRef(onLoadError);
+    onLoadErrorRef.current = onLoadError;
     const containerRef = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
     // The Fine pen: a ref the side effect reads live, and state for the
@@ -194,17 +199,27 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
     }, []);
 
     const loadSnapshot = useCallback((serialized, editor) => {
-        if (!serialized) return;
+        if (isEmptySketchBody(serialized)) return true;
         try {
-            const snapshot = JSON.parse(serialized);
+            // Throws on bad JSON and on JSON that is not a snapshot (`{}`).
+            const snapshot = parseSketchBody(serialized);
             // As a REMOTE change: the store listener (source 'user') never
             // sees a load, so loading can't echo back as a save, and it is
             // not on the undo stack. tldraw's listeners run a frame later, so
             // the old "applying" flag never covered them.
             editor.store.mergeRemoteChanges(() => loadTldrawSnapshot(editor.store, snapshot));
             lastKnownRef.current = serialized;
+            return true;
         } catch (error) {
-            console.warn('HandwrittenEditor - Invalid snapshot, ignoring.', error);
+            // An unreadable body is NOT a blank page: a blank canvas would
+            // autosave over the original. Nothing is saved from this editor
+            // (see `blockedRef`), the canvas is covered, the owner is told.
+            console.warn('HandwrittenEditor - the saved writing could not be read; saving is off.', error);
+            lastKnownRef.current = serialized;
+            blockedRef.current = true;
+            setLoadFailed(true);
+            onLoadErrorRef.current?.(error);
+            return false;
         }
     }, []);
 
@@ -215,7 +230,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
             saveTimeoutRef.current = null;
         }
         const editor = editorRef.current;
-        if (!dirtyRef.current || !editor) return null;
+        if (blockedRef.current || !dirtyRef.current || !editor) return null;
         dirtyRef.current = false;
         let serialized;
         try {
@@ -283,13 +298,19 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                 // the caller to ask for the form reading. A sheet with no
                 // writing is still nothing to read ("empty").
                 exportPng: async () => {
+                    if (blockedRef.current) throw new Error('The saved writing could not be read.');
                     const form = Boolean(paperSheetOf(editor)) && pageHasInk(editor);
                     const page = await exportSketchPng(editor, { exportToBlob, sheet: form });
                     return { ...page, form };
                 },
                 // Print / Save as PDF (utils/printNote.js): bigger, uncapped,
                 // one image per photographed page.
-                exportForPrint: () => exportSketchForPrint(editor, { exportToBlob }),
+                exportForPrint: () => {
+                    if (blockedRef.current) return Promise.reject(new Error('The saved writing could not be read.'));
+                    return exportSketchForPrint(editor, { exportToBlob });
+                },
+                // The stored body could not be read: not a blank page.
+                loadFailed: () => blockedRef.current,
                 // Ink, not a template sheet alone: there is nothing to read on a blank form.
                 hasShapes: () => pageHasInk(editor),
                 flush,
@@ -321,9 +342,10 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         // tldraw's colour scheme follows the paper and the app theme: PaperSync.
 
         let hasInk = false;
-        if (content) {
-            loadSnapshot(content, editor);
-            hasInk = pageHasInk(editor);
+        let failed = false;
+        if (!isEmptySketchBody(content)) {
+            failed = !loadSnapshot(content, editor);
+            hasInk = !failed && pageHasInk(editor);
             // Done by the bounds update below, once the viewport is measured.
             firstViewPendingRef.current = true;
         } else if (!readOnly && isPaperSheetTemplate(startSheetRef.current)) {
@@ -344,9 +366,19 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         // (Chef, 2026-09-27). New sketches start on Fine, the smallest line:
         // size 's' here plus FINE_SCALE on each new stroke (fineRef, above).
         // Small was the default 2026-11-14 to 11-16.
-        armOnPenRef.current = hasInk && !readOnly;
+        armOnPenRef.current = hasInk && !readOnly && !failed;
         editor.setCurrentTool(hasInk ? 'hand' : 'draw');
         editor.setStyleForNextShapes(DefaultSizeStyle, 's');
+        // <Tldraw> has no `readOnly` prop in 2.4 (it was silently ignored):
+        // read-only is instance state, set AFTER the load and the tool above
+        // (SketchReference does the same). Exports only read the store, so
+        // the background reader still works. tldraw calls the latest onMount
+        // only when the editor is built, so <Tldraw> is keyed on `readOnly`:
+        // a change rebuilds the editor and this runs again with the right
+        // listeners (no save listener while read-only, both ways).
+        const locked = readOnly || failed;
+        editor.updateInstanceState?.({ isReadonly: locked });
+        if (locked) editor.setCurrentTool?.('hand');
 
         // If onMount runs again, the previous editor's listener must go first,
         // or listeners stack up (one per mount) on stores that are gone.
@@ -359,7 +391,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
             cameraUnsubscribeRef.current = null;
         }
 
-        if (!readOnly) {
+        if (!locked) {
             // Document records changed by the user only: not the camera, the
             // pointer or the selection (session), and not a load (remote). The
             // whole sketch used to be serialised and compared on every
@@ -389,7 +421,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
 
     // Hold the S Pen's side button to erase; an eraser end erases
     // (DOCS/HANDWRITING.md §1). A capture-phase listener on the container, so
-    // it runs before tldraw's own handlers; see utils/penButton.js. Also: a
+    // it runs before tldraw's own handlers; see penButton.js in @geeksuite/ink. Also: a
     // pen's first press remembers this device has a pen, and arms a sketch
     // that opened to be looked at; two fingers tapped together undo.
     useEffect(() => {
@@ -408,7 +440,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         const detachPen = attachPenButton(container, () => editorRef.current, { getPointerInfo });
         const detachTap = attachTwoFingerTap(container, () => editorRef.current?.undo());
         // The Lenovo pen's button, double-clicked, arrives as a key: undo
-        // (utils/penKey.js).
+        // (penKey.js in @geeksuite/ink).
         const detachKey = attachPenKey(container.ownerDocument?.defaultView, () => editorRef.current);
         return () => {
             container.removeEventListener('pointerdown', onPenDown, { capture: true });
@@ -467,7 +499,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
     // echoes: reloading one wiped the first stroke of the next word (1.17).
     useEffect(() => {
         const editor = editorRef.current;
-        if (!editor || !content) return;
+        if (!editor || isEmptySketchBody(content) || blockedRef.current) return;
         if (content === lastKnownRef.current || emittedRef.current.includes(content)) return;
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
@@ -563,8 +595,8 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                 )}
                 <SketchPortalContext.Provider value={portal}>
                     <Tldraw
+                        key={readOnly ? 'read-only' : 'writable'}
                         onMount={handleMount}
-                        readOnly={readOnly}
                         autoFocus={autoFocus}
                         components={HIDDEN_TLDRAW_COMPONENTS}
                         options={TLDRAW_OPTIONS}
@@ -574,12 +606,12 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                     {/* Paper colour + tldraw's colour scheme (light on any paper, so
                         black ink stays black; the app's theme on "Match theme"). */}
                     <PaperSync />
-                    {!readOnly && <PenModeSync fingerDraws={fingerDraws} />}
+                    {!readOnly && !loadFailed && <PenModeSync fingerDraws={fingerDraws} />}
                     {/* The drawing toolbar. It must render INSIDE <Tldraw>: it calls
                         useEditor(), which only resolves within tldraw's context. As a
                         sibling it threw on every phone and the error boundary took
                         the whole sketch editor down. */}
-                    {!readOnly && !isLoading && (
+                    {!readOnly && !loadFailed && !isLoading && (
                         <DrawingToolbar
                             containerRef={containerRef}
                             fine={penFine}
@@ -595,6 +627,12 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                     )}
                     </Tldraw>
                 </SketchPortalContext.Provider>
+                {loadFailed && (
+                    <UnreadableSketch
+                        title="This note could not be read"
+                        description="Its saved writing couldn't be read. It has not been changed."
+                    />
+                )}
                 <Snackbar
                     open={Boolean(notice)}
                     message={notice || ''}

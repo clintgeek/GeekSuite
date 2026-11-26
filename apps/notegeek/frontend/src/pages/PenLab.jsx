@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Button, Typography, useTheme } from '@mui/material';
-import { penButtonTool, TLDRAW_ERASER_BUTTON } from '../utils/penButton';
+import { penButtonTool, TLDRAW_ERASER_BUTTON } from '@geeksuite/ink';
 
 /**
  * PenLab — /labs/pen. What a pen actually sends the browser.
@@ -9,7 +9,7 @@ import { penButtonTool, TLDRAW_ERASER_BUTTON } from '../utils/penButton';
  * of erasing (DOCS/HANDWRITING.md §1): nothing documents how Chrome on Android
  * reports each pen's buttons, so this shows it. Press, hold and drag in the
  * box, with and without the button; every pointer event that arrives is
- * listed with the fields `utils/penButton.js` reads (`pointerType`, `button`,
+ * listed with the fields `penButton.js` (@geeksuite/ink) reads (`pointerType`, `button`,
  * `buttons`), plus pressure and tilt. Key presses are listed too — a
  * Bluetooth pen button can arrive as a key. Nothing here is saved or sent.
  *

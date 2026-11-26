@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   pointInPolygon, boundsOfPoints, shapePagePoints, shapeSample, isCircled, selectByLasso,
   distanceToStroke, strokeAtPoint, isTap, lassoSelection,
-} from './lassoGeometry';
+} from '../lassoGeometry.js';
 
 const square = (x, y, s) => [{ x, y }, { x: x + s, y }, { x: x + s, y: y + s }, { x, y: y + s }];
 const draw = (id, x, y, points, extra = {}) => ({

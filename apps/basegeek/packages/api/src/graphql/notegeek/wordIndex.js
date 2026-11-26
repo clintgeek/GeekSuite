@@ -41,12 +41,12 @@ export async function backfillDerived({ model = Note } = {}) {
     // eslint-disable-next-line no-await-in-loop
     const rows = await coll.find(
       { $or: [{ derivedV: { $exists: false } }, { derivedV: { $lt: DERIVED_VERSION } }] },
-      { projection: { type: 1, content: 1, sketchTranscript: 1, isLocked: 1, isEncrypted: 1 } },
+      { projection: { type: 1, title: 1, content: 1, sketchTranscript: 1, isLocked: 1, isEncrypted: 1 } },
     ).limit(BATCH).toArray();
     if (!rows.length) break;
     // eslint-disable-next-line no-await-in-loop
     await coll.bulkWrite(rows.map((n) => ({
-      updateOne: { filter: { _id: n._id }, update: { $set: derivedFields({ type: 'text', ...n }) } },
+      updateOne: { filter: { _id: n._id }, update: { $set: derivedFields({ type: 'markdown', ...n }) } },
     })), { ordered: false });
     done += rows.length;
     if (rows.length < BATCH) break;

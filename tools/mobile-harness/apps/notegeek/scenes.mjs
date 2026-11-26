@@ -133,7 +133,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, ALL_KINDS, ARCHIVED, DELETED, NOTES, conflictAnswer, transcriptState, notesPage, listRow, NOTE_COMPOSED, NOTE_SKETCH, NOTE_SKETCH_TEMPLATE, NOTE_SKETCH_LEGACY_TEMPLATE, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
+import { OPS, ALL_KINDS, ARCHIVED, DELETED, NOTES, conflictAnswer, transcriptState, notesPage, listRow, NOTE_COMPOSED, NOTE_SKETCH, NOTE_SKETCH_TEMPLATE, NOTE_SKETCH_LEGACY_TEMPLATE, UNREADABLE_TRUNCATED, unreadableNote, SKETCH_CONTENT, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
 
 // ── Fold-in helpers (scenes 19a-19e) ────────────────────────────────────────
 // The gateway is stubbed with the proposal the real model made for this note
@@ -596,6 +596,91 @@ const withCleanDrafts = (scene) => ({
     }
   },
 });
+
+// ── Unreadable handwritten notes (2026-11-25) ───────────────────────────────
+// A sketch whose stored body cannot be read must show "can't be opened", mount
+// no canvas, and never send content: the original is still on the server.
+// `state.content` is what the stub serves, so a scene can "fix" the body and
+// press Try again. Every note write the page sends is recorded.
+const NOTE_WRITES = new Set(['UpdateNote', 'CreateNote', 'CreatePhotoNote']);
+async function stubUnreadable(page, content) {
+  await bootstrapChef(page);
+  const state = { content, sent: [], errors: [] };
+  page.on('pageerror', (err) => state.errors.push(String(err.message || err)));
+  page.on('request', (req) => {
+    if (!req.url().includes('/graphql') || req.method() !== 'POST') return;
+    try {
+      const body = JSON.parse(req.postData() || '{}');
+      if (/^\s*mutation\b/.test(body.query || '') || NOTE_WRITES.has(body.operationName)) {
+        state.sent.push({ op: body.operationName, vars: body.variables || {} });
+      }
+    } catch { /* not ours */ }
+  });
+  await graphqlRoute(page, {
+    ...OPS,
+    GetNoteById: (vars) => ({ note: vars.id === 'u1' ? unreadableNote(state.content) : NOTE_N1 }),
+    NoteThumbContent: (vars) => ({ note: { __typename: 'Note', id: vars.id, content: state.content, updatedAt: unreadableNote().updatedAt } }),
+    SearchNotes: (vars) => ({
+      searchNotes: /torn|sketch/i.test(vars.q || '')
+        ? [{ __typename: 'SearchSnippet', bestMatch: false, _id: 'u1', title: 'Torn sketch', type: 'handwritten', tags: ['product'], isLocked: false, isEncrypted: false, createdAt: unreadableNote().createdAt, updatedAt: unreadableNote().updatedAt, score: 2, snippet: 'Torn sketch', message: null, matchedBy: 'keyword', why: null }]
+        : [],
+    }),
+  });
+  return state;
+}
+function assertNoContentSent(state, what) {
+  const writes = state.sent.filter((m) => NOTE_WRITES.has(m.op) || 'content' in m.vars);
+  if (writes.length) throw new Error(`${what}: the page sent ${writes.map((m) => m.op).join(', ')} for an unreadable note`);
+}
+async function assertUnreadableChrome(page, h, state) {
+  const panel = page.locator('[data-testid="sketch-unreadable"]');
+  await panel.waitFor({ timeout: 20000 });
+  if (!(await panel.getByText("This note can't be opened").count())) throw new Error('the unreadable state has no "This note can\'t be opened"');
+  const retry = panel.getByRole('button', { name: 'Try again' });
+  if (!(await retry.count())) throw new Error('no "Try again" button');
+  const rb = await retry.boundingBox();
+  if (h.coarse && (!rb || rb.height < 43.5 || rb.width < 43.5)) throw new Error(`"Try again" is ${rb ? `${Math.round(rb.width)}x${Math.round(rb.height)}` : 'not shown'}, under 44px`);
+  if (await page.locator('.tl-container').count()) throw new Error('an unreadable note mounted a tldraw canvas');
+  if (await page.getByText(/start fresh/i).count()) throw new Error('an unreadable note offers "start fresh"');
+  const title = page.getByRole('textbox', { name: 'Note title' });
+  if (!(await title.isDisabled()) && !(await title.isEditable().then((e) => !e))) throw new Error('the title of an unreadable note is editable');
+  const tags = page.getByRole('combobox', { name: 'Tags' });
+  if ((await tags.count()) && (await tags.first().isEditable())) throw new Error('the tags of an unreadable note are editable');
+  // The page chrome still offers History and Delete.
+  await page.getByRole('button', { name: /more note actions/i }).first().click();
+  await h.settle(400);
+  for (const name of ['Version history', 'Delete note']) {
+    const item = page.getByRole('menuitem', { name });
+    if (!(await item.count())) throw new Error(`the note menu has no "${name}" on an unreadable note`);
+    if ((await item.getAttribute('aria-disabled')) === 'true') throw new Error(`"${name}" is disabled on an unreadable note`);
+  }
+  for (const name of [/convert handwriting/i, /send .* to todogeek|tasks/i]) {
+    if (await page.getByRole('menuitem', { name }).count()) throw new Error(`the menu offers ${name} on an unreadable note`);
+  }
+  await page.keyboard.press('Escape');
+  await h.settle(400);
+  // Interact with the body area (click, drag) and wait past the autosave delay.
+  const box = await panel.boundingBox();
+  await page.mouse.click(box.x + 12, box.y + 12);
+  await page.mouse.move(box.x + 20, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.4, box.y + 60, { steps: 6 });
+  await page.mouse.up();
+  await h.settle(3800);
+  assertNoContentSent(state, 'after clicking and dragging in the body');
+  if (state.errors.length) throw new Error(`page error: ${state.errors[0]}`);
+}
+
+// Press "Try again" after the stub serves a good body: the canvas appears.
+async function retryUntilReadable(page, h, state) {
+  state.content = SKETCH_CONTENT;
+  await page.locator('[data-testid="sketch-unreadable"]').getByRole('button', { name: 'Try again' }).click();
+  await page.waitForSelector('.tl-container', { timeout: 20000 });
+  await h.settle(1200);
+  if (await page.locator('[data-testid="sketch-unreadable"]').count()) throw new Error('"Try again" with a good body still shows the unreadable state');
+  if (!(await page.locator('.tl-shape').count())) throw new Error('the retried note opened with no shapes');
+  assertNoContentSent(state, 'after Try again');
+}
 
 export const scenes = [
   // Home (QuickCaptureHome): the start tiles, the capture box and the notes.
@@ -3102,6 +3187,89 @@ export const scenes = [
       await page.goto(h.base + '/', { waitUntil: 'networkidle' });
       await h.settle(800);
     },
+  },
+  {
+    // A handwritten note whose stored body is truncated JSON: "can't be
+    // opened", Try again, no canvas, nothing editable, nothing ever sent.
+    // Then the body reads again and Try again opens the canvas.
+    name: '29a-unreadable-handwritten',
+    async setup(page, h) {
+      const state = await stubUnreadable(page, UNREADABLE_TRUNCATED);
+      await page.goto(`${h.base}/notes/u1/edit`, { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      await assertUnreadableChrome(page, h, state);
+      await retryUntilReadable(page, h, state);
+    },
+  },
+  {
+    // Valid JSON that is not a tldraw snapshot is just as unreadable. Ends on
+    // the unreadable state, so the screenshot shows it.
+    name: '29b-unreadable-empty-object',
+    async setup(page, h) {
+      const state = await stubUnreadable(page, '{}');
+      await page.goto(`${h.base}/notes/u1/edit`, { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      await assertUnreadableChrome(page, h, state);
+      if (!(await page.locator('[data-testid="sketch-unreadable"]').isVisible())) throw new Error('the unreadable state went away');
+    },
+  },
+  {
+    // The reference pane on an unreadable sketch says so, and does not throw.
+    name: '29c-unreadable-reference',
+    viewports: ['tablet', 'desktop'],
+    async setup(page, h) {
+      const state = await stubUnreadable(page, UNREADABLE_TRUNCATED);
+      await page.goto(`${h.base}/notes/n1/edit`, { waitUntil: 'networkidle' });
+      await h.settle(1400);
+      await page.locator('[data-testid="reference-button"]').click();
+      await h.settle(700);
+      const picker = page.getByRole('dialog', { name: 'Show a note above this one' });
+      await picker.getByRole('textbox', { name: 'Search all notes' }).fill('torn');
+      await h.settle(900);
+      await picker.locator('[data-reference-option="u1"]').click();
+      const msg = page.locator('[data-testid="reference-unreadable"]');
+      await msg.waitFor({ timeout: 20000 });
+      await h.settle(800);
+      if (!/This note could not be read\./.test(await msg.innerText())) throw new Error(`the reference says "${await msg.innerText()}"`);
+      if (state.errors.length) throw new Error(`page error: ${state.errors[0]}`);
+      if (await page.locator('.tl-error-boundary').count()) throw new Error('tldraw rendered its own error screen');
+      const title = page.getByRole('textbox', { name: 'Note title' });
+      if ((await title.inputValue()) !== NOTE_N1.title) throw new Error('the note being written is gone');
+      await h.settle(3500);
+      assertNoContentSent(state, 'showing an unreadable reference');
+    },
+    async teardown(page, h) {
+      await page.locator('[data-testid="reference-close"]').click();
+      await h.settle(500);
+    },
+  },
+  {
+    // The shared sheet keeps its children mounted across the md breakpoint
+    // (a rotation): what was typed in its field is still there, the sheet is
+    // still open, and rotating back keeps both.
+    name: '30a-sheet-survives-rotation',
+    viewports: ['tablet'],
+    async setup(page, h) {
+      await openSpidersEditor(page, h);
+      await openFoldIn(page, h);
+      const picker = () => page.getByRole('dialog', { name: /fold in new info/i });
+      const field = () => picker().getByRole('textbox', { name: 'New info' });
+      const TYPED = 'Found a brown widow in the garage today.';
+      await field().fill(TYPED);
+      const start = page.viewportSize();
+      const other = { width: start.height, height: start.width };
+      for (const [label, size] of [['rotated', other], ['rotated back', start]]) {
+        await page.setViewportSize(size);
+        await h.settle(1200);
+        if (!(await picker().count())) throw new Error(`the sheet closed when the viewport ${label} to ${size.width}x${size.height}`);
+        if (!(await field().count())) throw new Error(`the field is gone after the viewport ${label}`);
+        const value = await field().inputValue();
+        if (value !== TYPED) throw new Error(`the field holds "${value}" after the viewport ${label}, not what was typed`);
+        const fb = await field().boundingBox();
+        if (!fb || fb.x < 0 || fb.x + fb.width > size.width + 1 || fb.y + fb.height > size.height + 1) throw new Error(`the field is off-screen after the viewport ${label}`);
+      }
+    },
+    teardown: (page, h) => h.esc(500),
   },
 ].map(withCleanDrafts);
 

@@ -20,6 +20,13 @@
  *   - a failed save is kept and retried (backoff, and at once when the
  *     network returns). Ink is never dropped while the app stays open.
  *
+ * Loading
+ *   - a failed fetch is 'loadError', never an empty day: an empty day would
+ *     take ink and create or overwrite a note.
+ *   - a page that was fetched but could not be drawn (the canvas calls
+ *     `unreadable`) is 'unreadable': nothing is written to that note until a
+ *     later load succeeds. The stored page stays exactly as it is.
+ *
  * Known limit: `createNote` has no idempotency key, so two devices that both
  * put first ink on the same new day at the same moment each create a page.
  * The older one is the day's page from then on; the other stays in NoteGeek.
@@ -50,7 +57,7 @@ export function pickDayNote(notes) {
 }
 
 const INITIAL = {
-  /** 'loading' | 'ready' | 'loadError' */
+  /** 'loading' | 'ready' | 'loadError' | 'unreadable' (fetched, but the canvas could not draw it) */
   phase: 'loading',
   /** The document to show. Changes with every write; see `revision`. */
   content: null,
@@ -114,7 +121,9 @@ export class DayNoteStore {
         context: { timeoutMs: LOAD_TIMEOUT_MS },
       });
       if (seq !== this.loadSeq || this.hasUnsaved()) return;
-      const note = pickDayNote(data?.notes);
+      // No list is not "no note": it must never open as a blank day.
+      if (!Array.isArray(data?.notes)) throw new Error('FindDayNote returned no notes list');
+      const note = pickDayNote(data.notes);
       const content = note?.content || null;
       const changed = this.state.phase !== 'ready' || content !== this.state.content;
       this.updatedAt = note?.updatedAt || null;
@@ -129,6 +138,16 @@ export class DayNoteStore {
       // A page that is already on screen stays; only a first load can fail visibly.
       if (this.state.phase !== 'ready') this.set({ phase: 'loadError' });
     }
+  }
+
+  /**
+   * The canvas could not draw `content` (bad JSON, a record tldraw refuses,
+   * a failed migration). Nothing is written to this note until a later load
+   * succeeds: what the canvas shows is not the note.
+   */
+  unreadable(content) {
+    if (this.state.phase !== 'ready' || content !== this.state.content || this.hasUnsaved()) return;
+    this.set({ phase: 'unreadable' });
   }
 
   /** New ink from the canvas: the whole serialised page. */
@@ -150,6 +169,7 @@ export class DayNoteStore {
 
   async pump() {
     if (this.inFlight || this.pending === null || this.conflict) return;
+    if (this.state.phase !== 'ready') return; // never over a page that did not load
     if (this.pending.length > SKETCH_MAX_CHARS) return;
     const content = this.pending;
     this.pending = null;

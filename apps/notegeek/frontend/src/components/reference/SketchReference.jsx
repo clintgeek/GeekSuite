@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress, useTheme } from '@mui/material';
+import { isEmptySketchBody, parseSketchBody } from '@geeksuite/ink';
 import { Box as TlBox, Tldraw, loadSnapshot as loadTldrawSnapshot, useEditor, useTldrawUser } from '@tldraw/tldraw';
 import '@tldraw/tldraw/tldraw.css';
 import { paperSheetOf } from '@geeksuite/ui';
@@ -85,17 +86,22 @@ function SketchReference({ content }) {
     const fitPendingRef = useRef(false);
     const [isLoading, setIsLoading] = useState(true);
     const [scheme, setScheme] = useState('light');
+    const [unreadable, setUnreadable] = useState(false);
     const user = useTldrawUser({ userPreferences: { id: 'reference', colorScheme: scheme }, setUserPreferences: noop });
 
     const load = useCallback((editor, serialized) => {
-        if (!serialized || loadedRef.current === serialized) return;
+        if (isEmptySketchBody(serialized)) { setUnreadable(false); return; }
+        if (loadedRef.current === serialized) return;
         try {
-            const snapshot = JSON.parse(serialized);
+            const snapshot = parseSketchBody(serialized);
             editor.store.mergeRemoteChanges(() => loadTldrawSnapshot(editor.store, snapshot));
             loadedRef.current = serialized;
             fitPendingRef.current = true;
+            setUnreadable(false);
         } catch (error) {
-            console.warn('SketchReference - invalid snapshot, ignoring.', error);
+            // Not a blank page: say so. Nothing here writes, so nothing is at risk.
+            console.warn('SketchReference - the saved writing could not be read.', error);
+            setUnreadable(true);
         }
     }, []);
 
@@ -114,7 +120,7 @@ function SketchReference({ content }) {
     // The note being shown changed (another note was picked).
     useEffect(() => {
         const editor = editorRef.current;
-        if (!editor || !content) return;
+        if (!editor || isEmptySketchBody(content)) return;
         load(editor, content);
         if (fitPendingRef.current && fitWidthFromTop(editor)) fitPendingRef.current = false;
     }, [content, load]);
@@ -173,6 +179,11 @@ function SketchReference({ content }) {
                 >
                     <ReferencePaper onScheme={setScheme} />
                 </Tldraw>
+                {unreadable && (
+                    <Box data-testid="reference-unreadable" sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', p: 2, bgcolor: surfaces(theme).elevated, zIndex: 10, textAlign: 'center', color: 'text.secondary' }}>
+                        This note could not be read.
+                    </Box>
+                )}
             </Box>
         </EditorErrorBoundary>
     );

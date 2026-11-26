@@ -77,6 +77,12 @@ const withTemplateSheet = (serialized, templateId) => {
   return JSON.stringify(snapshot);
 };
 const SKETCH_PAPER = { paperColor: 'warm', paperPattern: 'lined' };
+// A handwritten note whose stored body cannot be read (2026-11-25): truncated
+// JSON, as a cut-off write leaves it, or valid JSON that is not a tldraw
+// snapshot. Kept out of NOTES so no list or count changes. Scenes 29a-29c.
+export const UNREADABLE_TRUNCATED = '{"store":';
+export const unreadableNote = (content = UNREADABLE_TRUNCATED) => note('u1', 'Torn sketch', 'handwritten', ['product'], content, daysAgo(2));
+
 export const NOTE_SKETCH_TEMPLATE = note(
   'n3t', 'Fri 20 Nov', 'handwritten', ['daily'],
   withTemplateSheet(withDocumentMeta(SKETCH_CONTENT, SKETCH_PAPER), 'meeting'), daysAgo(1),

@@ -31,6 +31,8 @@ import { toDate } from '../utils/dateUtils';
 import { useDeleteNote } from '../hooks/useDeleteNote';
 import { onNoteCreated, onNoteUpdated } from '../graphql/cacheUpdates';
 import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
+import { isReadableSketchBody } from '@geeksuite/ink';
+import UnreadableSketch from '../components/notes/UnreadableSketch';
 import { applyInlineTags } from '../utils/inlineTags';
 import { buildMeeting, buildOneOnOne, oneOnOneRoot, personName, personOfNote, personTag } from '../utils/oneOnOne';
 import OpenItems from '../components/oneOnOne/OpenItems';
@@ -77,7 +79,7 @@ function NoteEditorPage({ editorKey } = {}) {
 
   const isNewNote = !id || id === 'new';
 
-  const { data, loading: isLoadingSelected, error: queryError } = useQuery(GET_NOTE_BY_ID, {
+  const { data, loading: isLoadingSelected, error: queryError, refetch } = useQuery(GET_NOTE_BY_ID, {
     variables: { id },
     skip: isNewNote || id === 'undefined',
     fetchPolicy: 'cache-and-network',
@@ -131,6 +133,18 @@ function NoteEditorPage({ editorKey } = {}) {
   isSavingRef.current = isSaving;
   // Set where readOnlyMeta is computed (below); read by automatic transcription.
   const readOnlyMetaRef = useRef(false);
+  // A handwritten note whose stored body could not be read. While true: no
+  // canvas, no title/tag edits, and handleSave / handleContentChange refuse,
+  // so nothing can be written over the original. A REF as well as state: a
+  // flush that runs after unmount must see it. Set when the form is seeded
+  // (a body that is not a snapshot) or by the editor (tldraw refused it).
+  const [unreadable, setUnreadable] = useState(false);
+  const unreadableRef = useRef(false);
+  const markUnreadable = useCallback((value) => {
+    unreadableRef.current = value;
+    setUnreadable(value);
+  }, []);
+  const [reopenNonce, setReopenNonce] = useState(0);
   // The note is in Recently deleted (set where `deletedAt` is read, below).
   const inBinRef = useRef(false);
   const [saveError, setSaveError] = useState(null);
@@ -277,6 +291,9 @@ function NoteEditorPage({ editorKey } = {}) {
     }
 
     if (noteToEdit && freshEnough) {
+      markUnreadable(
+        normalizeNoteType(noteToEdit.type) === NOTE_TYPES.HANDWRITTEN && !isReadableSketchBody(noteToEdit.content),
+      );
       setTitle(noteToEdit.title || '');
       setContent(noteToEdit.content || '');
       setTags(noteToEdit.tags || []);
@@ -298,7 +315,7 @@ function NoteEditorPage({ editorKey } = {}) {
       setDirty(false);
       initializedFor.current = identity;
     }
-  }, [id, noteToEdit, freshEnough, isNewNote, location.key, location.search, resetForm, getTypeFromQuery]);
+  }, [id, noteToEdit, freshEnough, isNewNote, location.key, location.search, resetForm, getTypeFromQuery, markUnreadable, reopenNonce]);
 
   /**
    * A draft on this device that differs from what the server holds is work
@@ -475,6 +492,9 @@ function NoteEditorPage({ editorKey } = {}) {
    */
   const handleSave = async () => {
     if (discardedRef.current) return;
+    // The stored writing could not be read: whatever the form holds is not
+    // the note. Nothing is sent, whatever the screen shows or who asks.
+    if (unreadableRef.current) return;
     // Waiting on the writer's choice (C3): saving again would only be
     // refused again, and must not pick a side for them.
     if (conflictRef.current) return;
@@ -741,6 +761,7 @@ function NoteEditorPage({ editorKey } = {}) {
   // 1.2), and that edit has to be saved right there — there may be no next
   // render, and no two seconds, before Android freezes the app.
   const handleContentChange = useCallback((newContent) => {
+    if (unreadableRef.current) return;
     contentRef.current = newContent;
     dirtyRef.current = true;
     setContent(newContent);
@@ -1016,7 +1037,17 @@ function NoteEditorPage({ editorKey } = {}) {
   }
 
   const isCanvas = isHandwritten;
-  const readOnlyMeta = inBin;
+  // "Try again": ask the server for the note again and open it from that copy.
+  const retryOpen = async () => {
+    try {
+      await refetch?.();
+    } catch {
+      return; // still offline or failing: stay as we are
+    }
+    initializedFor.current = null;
+    setReopenNonce((n) => n + 1);
+  };
+  const readOnlyMeta = inBin || unreadable;
   readOnlyMetaRef.current = readOnlyMeta;
   const saveState = {
     saving: isSaving,
@@ -1067,7 +1098,7 @@ function NoteEditorPage({ editorKey } = {}) {
               {deletedAt && savedNoteId ? (
                 <DeletedBanner noteId={savedNoteId} deletedAt={deletedAt} sx={{ mt: '8px' }} />
               ) : null}
-              {draftOffer ? (
+              {draftOffer && !unreadable ? (
                 <RestoreDraftBanner
                   savedAt={draftOffer.savedAt}
                   onRestore={restoreDraft}
@@ -1113,12 +1144,12 @@ function NoteEditorPage({ editorKey } = {}) {
                 onPin={savedNoteId ? handlePin : undefined}
                 pinned={pinned}
                 isPinning={isPinning}
-                onFoldIn={canFoldIn ? () => setFoldInOpen(true) : undefined}
-                onCompose={canCompose ? () => handleCompose() : undefined}
+                onFoldIn={canFoldIn && !unreadable ? () => setFoldInOpen(true) : undefined}
+                onCompose={canCompose && !unreadable ? () => handleCompose() : undefined}
                 isComposing={isComposing}
-                onTranscribe={isHandwritten ? () => handleTranscribe() : undefined}
-                onSendTasks={isHandwritten ? () => openSendTasks() : undefined}
-                canTranscribe={canTranscribe}
+                onTranscribe={isHandwritten && !unreadable ? () => handleTranscribe() : undefined}
+                onSendTasks={isHandwritten && !unreadable ? () => openSendTasks() : undefined}
+                canTranscribe={canTranscribe && !unreadable}
                 isTranscribing={transcribe?.stage === 'working'}
                 onPrint={handlePrint}
                 isPrinting={isPrinting}
@@ -1133,14 +1164,18 @@ function NoteEditorPage({ editorKey } = {}) {
         disableContentScroll={isHandwritten}
         footer={!isCanvas && savedNoteId ? <NoteFooter noteId={savedNoteId} /> : null}
       >
+        {unreadable ? (
+          <UnreadableSketch onRetry={retryOpen} />
+        ) : (
         <NoteTypeRouter
           type={noteType}
           content={content}
           onChange={handleContentChange}
           readOnly={readOnlyMeta}
           isLoading={isLoadingSelected}
-          {...(isHandwritten ? { sketchApiRef, onInkEdit, noteId: savedNoteId, startSheet: isNewNote ? startSheet : null } : {})}
+          {...(isHandwritten ? { sketchApiRef, onInkEdit, noteId: savedNoteId, startSheet: isNewNote ? startSheet : null, onLoadError: () => markUnreadable(true) } : {})}
         />
+        )}
       </NoteShell>
       </ReferencePane>
 

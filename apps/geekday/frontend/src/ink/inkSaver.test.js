@@ -132,4 +132,34 @@ describe('createInkSaver', () => {
     expect(saver.flush()).toBe(null); // an empty serialisation is "nothing to save"
     expect(saver.hasBody()).toBe(false);
   });
+
+  it('a page that failed to load is never written, whatever the canvas does, until a page loads', () => {
+    const { saver, serialize, emit, state } = setup();
+    saver.failed('{broken');
+    expect(saver.isBlocked()).toBe(true);
+    state.body = 'blank page plus a stroke';
+    saver.markDirty();
+    expect(saver.hasPending()).toBe(false);
+    vi.advanceTimersByTime(1000);
+    expect(saver.flush()).toBe(null);
+    expect(serialize).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+    expect(saver.isOwn('{broken')).toBe(true); // handed back as content: not reloaded
+
+    saver.loaded('v1'); // a page loaded: saving works again
+    expect(saver.isBlocked()).toBe(false);
+    state.body = 'v2';
+    saver.markDirty();
+    expect(saver.flush()).toBe('v2');
+    expect(emit).toHaveBeenCalledWith('v2');
+  });
+
+  it('failed() drops a pending edit: it belonged to the page being replaced', () => {
+    const { saver, emit, state } = setup();
+    state.body = 'v1';
+    saver.markDirty();
+    saver.failed('{broken');
+    vi.advanceTimersByTime(1000);
+    expect(emit).not.toHaveBeenCalled();
+  });
 });

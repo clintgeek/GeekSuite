@@ -1,15 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { MantineProvider } from '@mantine/core';
 import ThemeModeProvider from '../../../theme/ThemeModeProvider';
 import NoteMetaBar from '../../../components/notes/NoteMetaBar';
 
 const AllProviders = ({ children }) => (
     <ThemeModeProvider>
-        <MantineProvider>
             <MemoryRouter>{children}</MemoryRouter>
-        </MantineProvider>
     </ThemeModeProvider>
 );
 

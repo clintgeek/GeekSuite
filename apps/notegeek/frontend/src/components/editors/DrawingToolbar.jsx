@@ -64,7 +64,8 @@ import { graphiteTokens } from '../../theme/tokens';
 import { PaperPicker } from './Paper';
 import { usePaper } from './usePaper';
 import { popoverOrigins, tooltipPlacement, useSketchPortal } from './sketchPortal';
-import { BAR_POSITIONS, pushRecentPen, readRecentPens } from '../../utils/penPrefs';
+import { BAR_POSITIONS, isPalmTouch } from '@geeksuite/ink';
+import { pushRecentPen, readRecentPens } from '../../utils/penPrefs';
 
 /**
  * Before the bar can be measured (jsdom, the first frame): the viewport query
@@ -73,19 +74,6 @@ import { BAR_POSITIONS, pushRecentPen, readRecentPens } from '../../utils/penPre
 export const FULL_TOOLBAR_QUERY = '(min-width: 720px)';
 /** The full bar is ~760px of buttons: it needs this much container, along its edge. */
 export const FULL_BAR_MIN = 800;
-
-/**
- * A touch on the bar in pen mode is a palm when a pen was near a moment ago
- * (resting the hand to write), or the contact is wide. A deliberate fingertip
- * with the pen put down still works, so the bar is never locked out.
- */
-export const PALM_PEN_RECENT_MS = 1500;
-export const PALM_CONTACT_PX = 24;
-export function isPalmTouch(e, { penMode, lastPenAt, now = Date.now() }) {
-    if (!penMode || e.pointerType !== 'touch') return false;
-    if (now - (lastPenAt || 0) < PALM_PEN_RECENT_MS) return true;
-    return (e.width || 0) >= PALM_CONTACT_PX || (e.height || 0) >= PALM_CONTACT_PX;
-}
 
 // Material Symbols "ink_eraser" (Apache 2.0); MUI's icon set has no eraser.
 const EraserIcon = (props) => (
@@ -99,7 +87,7 @@ const DiamondIcon = (props) => <CropSquareIcon {...props} sx={{ transform: 'rota
 // covered the canvas on phones, Chef 2026-09-27), so this picker is the only
 // way to change the pen. White is left out: it's invisible on the page.
 const PEN_COLORS = ['black', 'grey', 'blue', 'light-blue', 'violet', 'light-violet', 'green', 'light-green', 'yellow', 'orange', 'red', 'light-red'];
-// "Fine" is finer than tldraw's smallest size: see utils/finePen.js.
+// "Fine" is finer than tldraw's smallest size: see finePen.js in @geeksuite/ink.
 const PEN_SIZES = [
     { value: 'fine', label: 'Fine', dot: 3 },
     { value: 's', label: 'Small', dot: 5 },

@@ -19,7 +19,7 @@ import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import FitScreenOutlinedIcon from '@mui/icons-material/FitScreenOutlined';
 import PageMenu from './PageMenu';
-import { isPalmTouch } from './palmTouch';
+import { isPalmTouch } from '@geeksuite/ink';
 
 // Material Symbols "ink_eraser" (Apache 2.0); MUI's icon set has no eraser.
 const EraserIcon = (props) => (

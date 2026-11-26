@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, within, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { MantineProvider } from '@mantine/core';
 import ThemeModeProvider from '../../../theme/ThemeModeProvider';
 import HandwrittenEditor from '../../../components/editors/HandwrittenEditor';
 import { DefaultColorStyle, DefaultSizeStyle } from '@tldraw/tldraw';
@@ -9,9 +8,7 @@ import userEvent from '@testing-library/user-event';
 
 const AllProviders = ({ children }) => (
     <ThemeModeProvider>
-        <MantineProvider>
             <MemoryRouter>{children}</MemoryRouter>
-        </MantineProvider>
     </ThemeModeProvider>
 );
 
@@ -536,6 +533,99 @@ describe('HandwrittenEditor', () => {
         render(<HandwrittenEditor content="" setContent={setContent} readOnly />, { wrapper: AllProviders });
         await screen.findByTestId('tldraw-mock');
         expect(screen.queryByRole('button', { name: 'Write' })).not.toBeInTheDocument();
+    });
+
+    it('a read-only sketch puts the editor itself in read-only mode, on the hand tool, and never saves', async () => {
+        // <Tldraw> has no readOnly prop in tldraw 2.4; read-only is instance state.
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        try {
+            render(<HandwrittenEditor content="" setContent={setContent} readOnly />, { wrapper: AllProviders });
+            await screen.findByTestId('tldraw-mock');
+            const editor = tl.editors.at(-1);
+            expect(editor.instance.isReadonly).toBe(true);
+            expect(editor.setCurrentTool).toHaveBeenLastCalledWith('hand');
+            expect(tl.renders.at(-1).props.readOnly).toBeUndefined();
+            // No document listener: nothing the reader does can schedule a save.
+            expect(editor.listeners).toHaveLength(1); // the camera only
+            await act(async () => { vi.advanceTimersByTime(5000); });
+            expect(setContent).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('a writable sketch is not read-only, and the state follows the prop both ways', async () => {
+        const { rerender } = render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+        await screen.findByTestId('tldraw-mock');
+        expect(tl.editors.at(-1).instance.isReadonly).toBe(false);
+        rerender(<HandwrittenEditor content="" setContent={setContent} readOnly />);
+        await waitFor(() => expect(tl.editors.at(-1).instance.isReadonly).toBe(true));
+        rerender(<HandwrittenEditor content="" setContent={setContent} />);
+        await waitFor(() => expect(tl.editors.at(-1).instance.isReadonly).toBe(false));
+        expect(tl.editors.at(-1).listeners).toHaveLength(2); // saving + camera again
+    });
+
+    describe('a stored body that cannot be read is not a blank page', () => {
+        const SNAP = JSON.stringify({ store: { 'shape:a': { id: 'shape:a', typeName: 'shape', type: 'draw', index: 'a1', x: 0, y: 0 } }, schema: {} });
+        const bodies = [
+            ['invalid JSON', 'this is not json'],
+            ['a truncated body', SNAP.slice(0, SNAP.length - 12)],
+            ['{}', '{}'],
+        ];
+
+        const expectLocked = async (onLoadError) => {
+            const editor = tl.editors.at(-1);
+            expect(await screen.findByTestId('sketch-unreadable')).toBeInTheDocument();
+            expect(editor.instance.isReadonly).toBe(true);
+            expect(onLoadError).toHaveBeenCalledTimes(1);
+            // No document listener: a change cannot schedule a save...
+            expect(editor.listeners).toHaveLength(1); // the camera only
+            editor.emit({ changes: { added: { 'shape:x': { id: 'shape:x' } }, updated: {}, removed: {} } });
+            await new Promise((r) => { setTimeout(r, 700); });
+            expect(setContent).not.toHaveBeenCalled();
+            expect(screen.queryByRole('button', { name: 'Write' })).not.toBeInTheDocument();
+        };
+
+        it.each(bodies)('%s: the editor is locked, says so, tells its owner, and never saves', async (_, body) => {
+            const onLoadError = vi.fn();
+            render(<HandwrittenEditor content={body} setContent={setContent} onLoadError={onLoadError} />, { wrapper: AllProviders });
+            await expectLocked(onLoadError);
+        });
+
+        it('a snapshot tldraw itself rejects is the same', async () => {
+            tl.loadSnapshot.mockImplementationOnce(() => { throw new Error('migration failed'); });
+            const onLoadError = vi.fn();
+            render(<HandwrittenEditor content={SNAP} setContent={setContent} onLoadError={onLoadError} />, { wrapper: AllProviders });
+            await expectLocked(onLoadError);
+        });
+
+        it('its API refuses to export or flush, and says the load failed (the background reader relies on it)', async () => {
+            const sketchApiRef = { current: null };
+            render(<HandwrittenEditor content="{}" setContent={setContent} readOnly sketchApiRef={sketchApiRef} />, { wrapper: AllProviders });
+            await screen.findByTestId('sketch-unreadable');
+            expect(sketchApiRef.current.loadFailed()).toBe(true);
+            await expect(sketchApiRef.current.exportPng()).rejects.toThrow(/could not be read/);
+            await expect(sketchApiRef.current.exportForPrint()).rejects.toThrow(/could not be read/);
+            expect(sketchApiRef.current.flush()).toBeNull();
+        });
+
+        it('an empty stored body is a note with no writing yet, not a failure', async () => {
+            const onLoadError = vi.fn();
+            render(<HandwrittenEditor content="" setContent={setContent} onLoadError={onLoadError} />, { wrapper: AllProviders });
+            await screen.findByTestId('tldraw-mock');
+            expect(screen.queryByTestId('sketch-unreadable')).not.toBeInTheDocument();
+            expect(onLoadError).not.toHaveBeenCalled();
+            expect(tl.editors.at(-1).instance.isReadonly).toBe(false);
+        });
+
+        it('a readable body opens as before (writable, saving)', async () => {
+            const onLoadError = vi.fn();
+            render(<HandwrittenEditor content={SNAP} setContent={setContent} onLoadError={onLoadError} />, { wrapper: AllProviders });
+            await screen.findByTestId('tldraw-mock');
+            expect(onLoadError).not.toHaveBeenCalled();
+            expect(tl.editors.at(-1).instance.isReadonly).toBe(false);
+            expect(tl.editors.at(-1).listeners).toHaveLength(2);
+        });
     });
 
     it('keeps <Tldraw> options and components stable across re-renders, so the editor is built once', async () => {

@@ -31,7 +31,7 @@
 import {
   PAPER_SHEET_TEMPLATES, PAPER_TEMPLATES, PAPER_TEMPLATE_META_KEY, PAPER_TEMPLATE_NONE, isPaperSheetTemplate,
 } from '@geeksuite/ui';
-import { readPref, writePref } from './penPrefs';
+import { readPref, writePref } from '@geeksuite/ink';
 
 /** GeekDay's plain ruled paper. */
 export const RULED = PAPER_TEMPLATE_NONE;

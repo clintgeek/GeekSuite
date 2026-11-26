@@ -26,7 +26,7 @@ const NoteSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: ['text', 'markdown', 'code', 'mindmap', 'handwritten'],
-      default: 'text',
+      default: 'markdown',
     },
     tags: {
       type: [String],
@@ -235,14 +235,14 @@ NoteSchema.pre('save', function markStaleOnSave() {
  */
 const SKETCH = 'handwritten';
 NoteSchema.pre('save', function keepDerivedOnSave() {
-  if (this.isNew || this.isModified('content') || this.isModified('type') || this.isModified('sketchTranscript')) {
+  if (this.isNew || this.isModified('content') || this.isModified('title') || this.isModified('type') || this.isModified('sketchTranscript')) {
     Object.assign(this, derivedFields(this));
   }
 });
 // insertMany skips 'save' middleware; an import or a script must still be searchable.
 NoteSchema.pre('insertMany', function keepDerivedOnInsertMany(next, docs) {
   for (const doc of Array.isArray(docs) ? docs : []) {
-    if (doc && doc.wordText === undefined) Object.assign(doc, derivedFields({ type: 'text', ...doc }));
+    if (doc && doc.wordText === undefined) Object.assign(doc, derivedFields({ type: 'markdown', ...doc }));
   }
   next();
 });
@@ -263,11 +263,12 @@ NoteSchema.pre('findOneAndUpdate', async function keepDerivedOnUpdate() {
   const field = (f) => (f in update ? update[f] : update.$set?.[f]);
   const content = field('content');
   const type = field('type');
-  if (content === undefined && type === undefined) return;
+  const title = field('title');
+  if (content === undefined && type === undefined && title === undefined) return;
   const stored = await this.model.findOne(this.getQuery(), {
-    type: 1, isLocked: 1, isEncrypted: 1, sketchTranscript: 1, ...(content === undefined ? { content: 1 } : {}),
+    type: 1, title: 1, isLocked: 1, isEncrypted: 1, sketchTranscript: 1, ...(content === undefined ? { content: 1 } : {}),
   }).lean();
-  const effectiveType = type ?? stored?.type ?? 'text';
+  const effectiveType = type ?? stored?.type ?? 'markdown';
   if (effectiveType === SKETCH && stored?.type === SKETCH) {
     if (typeof content === 'string' && !hasAnyShape(content)) {
       this.set({ wordText: '', preview: '', derivedV: DERIVED_VERSION });
@@ -279,6 +280,7 @@ NoteSchema.pre('findOneAndUpdate', async function keepDerivedOnUpdate() {
   }
   this.set(derivedFields({
     type: effectiveType,
+    title: title === undefined ? stored?.title : title,
     content: content ?? stored?.content,
     sketchTranscript: stored?.sketchTranscript,
     isLocked: stored?.isLocked,

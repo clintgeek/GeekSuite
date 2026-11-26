@@ -77,6 +77,9 @@ export default function BackgroundReader({ client = apolloClient }) {
         if (!next) return;
         setTimeout(async () => {
           try {
+            // A body that could not be read is not a blank page: reject, so no
+            // empty transcript is stored for it.
+            if (next.loadFailed?.()) throw new Error('The saved writing could not be read.');
             finish(resolve, next.hasShapes?.() ? await next.exportPng() : null);
           } catch (err) {
             finish(reject, err);
@@ -106,7 +109,7 @@ export default function BackgroundReader({ client = apolloClient }) {
     <div aria-hidden="true" inert="" data-testid="background-reader" style={offscreen}>
       <Quiet key={job.key} onError={job.fail}>
         <Suspense fallback={null}>
-          <HandwrittenEditor content={job.content} readOnly autoFocus={false} sketchApiRef={job.apiRef} />
+          <HandwrittenEditor content={job.content} readOnly autoFocus={false} sketchApiRef={job.apiRef} onLoadError={job.fail} />
         </Suspense>
       </Quiet>
     </div>

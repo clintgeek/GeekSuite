@@ -326,7 +326,7 @@ export async function fetchGlanceToday(context, date) {
       result.recentNotes = notes.map((n) => ({
         id: n._id.toString(),
         title: n.title || 'Untitled',
-        type: n.type || 'text',
+        type: n.type || 'markdown',
         tags: n.tags || [],
         updatedAt: n.updatedAt,
         snippet: noteSnippet(n),

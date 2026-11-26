@@ -18,7 +18,7 @@
  * Everything that touches the browser (decoding, canvas, FileReader) is
  * injectable, so the arithmetic is testable in jsdom, which has no canvas.
  */
-import { fitWithin, blobToBase64 } from './sketchExport';
+import { fitWithin, blobToBase64 } from '@geeksuite/ink';
 import { SNAPSHOT_CONTENT_MAX } from './saveGuards';
 
 /** Pages in one photo note. The 5 MB snapshot ceiling is why (see "Size" in §3). */

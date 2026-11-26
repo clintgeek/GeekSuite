@@ -1,6 +1,6 @@
 /** Two fingers tapped together on the canvas undo (review 2.12). */
 import { describe, it, expect, vi } from 'vitest';
-import { attachTwoFingerTap } from './twoFingerTap';
+import { attachTwoFingerTap } from '../twoFingerTap.js';
 
 function setup() {
   const container = document.createElement('div');
@@ -34,5 +34,36 @@ describe('two-finger tap', () => {
     fire('pointerup', 5, { at: 2100 }); fire('pointerup', 6, { at: 2100 }); fire('pointerup', 7, { at: 2100 });
     fire('pointerdown', 8, { pointerType: 'pen', at: 3000 }); fire('pointerdown', 9, { pointerType: 'pen' }); fire('pointerup', 8); fire('pointerup', 9);
     expect(onTap).not.toHaveBeenCalled();
+  });
+});
+
+describe('two-finger tap: what counts as the page', () => {
+  const tapOn = (el) => {
+    [1, 2].forEach((id) => el.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', pointerId: id, clientX: 10, clientY: 10, bubbles: true })));
+    [1, 2].forEach((id) => el.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'touch', pointerId: id, clientX: 10, clientY: 10, bubbles: true })));
+  };
+  const build = () => {
+    const container = document.createElement('div');
+    const layer = document.createElement('div');
+    layer.setAttribute('data-ink-surface', '');
+    container.appendChild(layer);
+    document.body.appendChild(container);
+    return { container, layer };
+  };
+
+  it('by default only tldraw\'s canvas: a layer over it is not the page', () => {
+    const { container, layer } = build();
+    const onTap = vi.fn();
+    attachTwoFingerTap(container, onTap, { now: () => 0 });
+    tapOn(layer);
+    expect(onTap).not.toHaveBeenCalled();
+  });
+
+  it('an app can name its own surface (GeekDay\'s lasso layer)', () => {
+    const { container, layer } = build();
+    const onTap = vi.fn();
+    attachTwoFingerTap(container, onTap, { now: () => 0, surface: '.tl-canvas, [data-ink-surface]' });
+    tapOn(layer);
+    expect(onTap).toHaveBeenCalledTimes(1);
   });
 });

@@ -200,42 +200,29 @@ describe('round trip — the client and the gateway agree', () => {
   });
 });
 
+/** A legacy note: a type the gateway no longer accepts on write, still stored until purged. */
+const legacyText = (content) => Note.create({ userId: USER, content, type: 'text' });
+
 describe('the resolvers actually sanitize', () => {
-  test('createNote stores a cleaned body for a text note', async () => {
-    const note = await Mutation.createNote(
-      null,
-      { title: 'pasted', content: '<p>keep</p><img src=x onerror=alert(1)><script>alert(2)</script>', type: 'text' },
-      ctx
-    );
-    expect(note.content).toContain('<p>keep</p>');
-    expect(note.content).not.toMatch(/onerror|<script/i);
-
-    const stored = await Note.findById(note._id).lean();
-    expect(stored.content).toBe(note.content);
+  test('createNote no longer accepts a text or mindmap note', async () => {
+    for (const type of ['text', 'code', 'mindmap']) {
+      // eslint-disable-next-line no-await-in-loop
+      await expect(Mutation.createNote(null, { content: '<p>x</p>', type }, ctx)).rejects.toThrow('Invalid input');
+    }
+    expect(await Note.countDocuments({})).toBe(0);
   });
 
-  test('createNote with no type is treated as text, because that is the schema default', async () => {
-    const note = await Mutation.createNote(
-      null,
-      { content: '<p>x</p><script>alert(1)</script>' },
-      ctx
-    );
-    expect(note.type).toBe('text');
-    expect(note.content).toBe('<p>x</p>');
-  });
-
-  test('createNote leaves a mindmap snapshot alone', async () => {
-    const snapshot = JSON.stringify({ nodes: [{ id: '1', data: { label: '<b>a</b> & b' } }], edges: [] });
-    const note = await Mutation.createNote(null, { content: snapshot, type: 'mindmap' }, ctx);
-    expect(note.content).toBe(snapshot);
-    expect(JSON.parse(note.content).nodes[0].data.label).toBe('<b>a</b> & b');
+  test('createNote with no type is a markdown note, because that is the schema default (never sanitized)', async () => {
+    const note = await Mutation.createNote(null, { content: '<p>x</p><script>alert(1)</script>' }, ctx);
+    expect(note.type).toBe('markdown');
+    expect(note.content).toBe('<p>x</p><script>alert(1)</script>');
   });
 
   test('updateNote sanitizes the new body', async () => {
-    const note = await Mutation.createNote(null, { content: '<p>start</p>', type: 'text' }, ctx);
+    const note = await legacyText('<p>start</p>');
     const updated = await Mutation.updateNote(
       null,
-      { id: String(note._id), content: '<p>next</p><a href="javascript:alert(1)">x</a>', type: 'text' },
+      { id: String(note._id), content: '<p>next</p><a href="javascript:alert(1)">x</a>' },
       ctx
     );
     expect(updated.content).toBe('<p>next</p><a>x</a>');
@@ -245,7 +232,7 @@ describe('the resolvers actually sanitize', () => {
     // No notegeek client does this — `NoteEditorPage` always sends `type` —
     // but the argument is optional, and a hole a hand-rolled request can walk
     // through is still a hole.
-    const note = await Mutation.createNote(null, { content: '<p>start</p>', type: 'text' }, ctx);
+    const note = await legacyText('<p>start</p>');
     const updated = await Mutation.updateNote(
       null,
       { id: String(note._id), content: '<p>next</p><img src=x onerror=alert(1)>' },
@@ -263,7 +250,7 @@ describe('the resolvers actually sanitize', () => {
   });
 
   test('a title-only update needs no type lookup and changes no body', async () => {
-    const note = await Mutation.createNote(null, { content: '<p>body</p>', type: 'text' }, ctx);
+    const note = await legacyText('<p>body</p>');
     const updated = await Mutation.updateNote(null, { id: String(note._id), title: 'renamed' }, ctx);
     expect(updated.title).toBe('renamed');
     expect(updated.content).toBe('<p>body</p>');

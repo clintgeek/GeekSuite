@@ -50,7 +50,7 @@ export const GEEK_TOAST_MAX = 3;
 export const GEEK_TOAST_DURATION = 4000;
 // A toast that carries an action (Undo) is the only way back from what it
 // reports, and four seconds is not long enough to read it and reach it with a
-// thumb. It gets twice as long unless the caller or the provider says otherwise.
+// thumb. It gets at least that long (never shorter than the toast's own life).
 export const GEEK_TOAST_ACTION_DURATION = 8000;
 
 const TONES = new Set(['info', 'success', 'warning', 'error']);
@@ -90,7 +90,7 @@ export function GeekToastProvider({
   children,
   max = GEEK_TOAST_MAX,
   duration = GEEK_TOAST_DURATION,
-  actionDuration = duration === GEEK_TOAST_DURATION ? GEEK_TOAST_ACTION_DURATION : duration,
+  actionDuration = Math.max(duration, GEEK_TOAST_ACTION_DURATION),
   // Escape hatch for a shell-less page that still wants centered toasts.
   anchorOrigin,
   sx,

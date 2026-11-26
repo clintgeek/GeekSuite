@@ -146,12 +146,12 @@ export async function fillMissingPreviews(rows) {
   if (!missing.length) return rows;
   const bodies = await Note.find(
     { _id: { $in: missing.map((r) => r._id) } },
-    { type: 1, content: 1, sketchTranscript: 1, isLocked: 1, isEncrypted: 1 },
+    { type: 1, title: 1, content: 1, sketchTranscript: 1, isLocked: 1, isEncrypted: 1 },
   ).lean();
   const byId = new Map(bodies.map((b) => [String(b._id), b]));
   for (const r of missing) {
     const b = byId.get(String(r._id));
-    r.preview = b ? previewFor({ type: 'text', ...b }) : '';
+    r.preview = b ? previewFor({ type: 'markdown', ...b }) : '';
   }
   return rows;
 }

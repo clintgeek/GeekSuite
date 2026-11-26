@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useMutation } from '@apollo/client';
 import { SKETCH_TRANSCRIPT } from '../../graphql/queries';
 import { TRANSCRIBE_SKETCH, SAVE_SKETCH_TRANSCRIPT_EDIT } from '../../graphql/mutations';
-import { sketchHasShapes } from '../../utils/sketchExport';
+import { sketchHasShapes } from '@geeksuite/ink';
 import { derivedNoteContent, derivedNoteTitle } from '../../utils/sketchToText';
 import { carryCorrections, rememberCorrections } from '../../utils/transcriptCorrections';
 import { saveErrorMessage } from '../../utils/saveGuards';

@@ -16,6 +16,13 @@ const InkCanvas = lazy(() => import('../ink/index.js').then((module) => ({ defau
 
 const RULE_PX = 44;
 
+/** Where a day's note opens in NoteGeek (as the day menu links it). */
+const noteGeekUrl = (noteId) => (noteId ? `https://notegeek.clintgeek.com/notes/${noteId}` : 'https://notegeek.clintgeek.com/');
+
+/** Copy for a page that was fetched but could not be drawn. */
+export const UNREADABLE_TITLE = "This page can't be opened";
+export const UNREADABLE_TEXT = "Its saved writing couldn't be read. It has not been changed, and GeekDay won't write on it until it opens.";
+
 /** The diary page's ruled lines, shown while the canvas (which draws its own) is not there. */
 const ruled = (theme) => ({
   backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${RULE_PX - 1}px, ${theme.palette.day.rule} ${RULE_PX - 1}px, ${theme.palette.day.rule} ${RULE_PX}px)`,
@@ -164,11 +171,28 @@ export default function InkPane({ dayLabel, state, store, inkRef, onLasso, onLas
         </Box>
       ) : null}
 
+      {state.phase === 'unreadable' ? (
+        <Box data-testid="ink-unreadable" sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', p: 2 }}>
+          <GeekLoadError
+            title={UNREADABLE_TITLE}
+            description={UNREADABLE_TEXT}
+            retryLabel="Try again"
+            onRetry={() => store.load()}
+            action={
+              <Button variant="text" href={noteGeekUrl(state.noteId)} data-testid="ink-unreadable-notegeek" sx={{ minHeight: 44 }}>
+                Open in NoteGeek
+              </Button>
+            }
+          />
+        </Box>
+      ) : null}
+
       {state.phase === 'ready' ? (
         <Suspense fallback={<PageWait label="Opening the page" />}>
           <InkCanvas
             content={content}
             onChange={(next) => store.write(next)}
+            onLoadError={(body) => store.unreadable(body)}
             apiRef={apiRef}
             onLasso={onLasso}
             onLassoError={onLassoError}

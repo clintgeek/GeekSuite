@@ -203,7 +203,10 @@ describe('backlinks', () => {
     expect((await linksOf(target))[0].noteId).toBe(String(target._id));
     const a = await create(ALICE, 'A', 'Buy brackets, see [[Garage plan]] for sizes.');
     await new Promise((r) => setTimeout(r, 5));
-    const b = await create(ALICE, 'B', `<p>Also in <a href="/notes/${ target._id }">the plan</a>.</p>`, 'text');
+    // A legacy rich-text note (not creatable any more, but stored until purged).
+    const html = `<p>Also in <a href="/notes/${ target._id }">the plan</a>.</p>`;
+    const { resolveLinks } = await import('../graphql/notegeek/links.js');
+    const b = await Note.create({ userId: ALICE, title: 'B', content: html, type: 'text', links: await resolveLinks({ userId: ALICE, content: html, type: 'text' }) });
     await create(ALICE, 'C', 'unrelated');
     await create(BOB, 'Bob', 'bob links [[Garage plan]]');
 

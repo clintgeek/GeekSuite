@@ -43,6 +43,8 @@ const { default: Note } = await import('../graphql/notegeek/models/Note.js');
 const { resolvers } = await import('../graphql/notegeek/resolvers.js');
 
 const { Mutation } = resolvers;
+/** A legacy `text` note: the gateway no longer creates them, but they stay stored until purged. */
+const legacyText = (content) => Note.create({ userId: USER, content, type: 'text' });
 const USER = new mongoose.Types.ObjectId();
 const ctx = { user: { id: String(USER) } };
 
@@ -92,10 +94,10 @@ describe('the ceiling is re-checked on what is actually stored (#6)', () => {
   });
 
   test('updateNote rejects a body whose sanitized form exceeds the limit, and names it', async () => {
-    const note = await Mutation.createNote(null, { content: '<p>start</p>', type: 'text' }, ctx);
+    const note = await legacyText('<p>start</p>');
 
     const err = await expectBadInput(
-      Mutation.updateNote(null, { id: String(note._id), content: GROWING_BODY, type: 'text' }, ctx)
+      Mutation.updateNote(null, { id: String(note._id), content: GROWING_BODY }, ctx)
     );
     expect(err.extensions.details[0].path).toBe('content');
     expect(err.extensions.details[0].message).toContain(String(DOC_MAX));
@@ -105,26 +107,21 @@ describe('the ceiling is re-checked on what is actually stored (#6)', () => {
   });
 
   test('createNote will not store a note it could never save again', async () => {
-    const err = await expectBadInput(
-      Mutation.createNote(null, { content: GROWING_BODY, type: 'text' }, ctx)
-    );
-    expect(err.extensions.details[0].message).toContain(String(DOC_MAX));
+    // `text` is no longer a creatable type, so the create is refused outright.
+    await expectBadInput(Mutation.createNote(null, { content: GROWING_BODY, type: 'text' }, ctx));
     expect(await Note.countDocuments({})).toBe(0);
   });
 
   test('a body that survives sanitization unchanged is still stored', async () => {
-    const note = await Mutation.createNote(
-      null,
-      { content: '<p>ordinary</p>'.repeat(100), type: 'text' },
-      ctx
-    );
+    const legacy = await legacyText('<p>start</p>');
+    const note = await Mutation.updateNote(null, { id: String(legacy._id), content: '<p>ordinary</p>'.repeat(100) }, ctx);
     expect(note.content).toBe('<p>ordinary</p>'.repeat(100));
   });
 });
 
 describe('the type is resolved before the ceiling is applied (#4)', () => {
   test('a 5 MB typeless update on a text row is rejected BEFORE the sanitizer is reached', async () => {
-    const note = await Mutation.createNote(null, { content: '<p>start</p>', type: 'text' }, ctx);
+    const note = await legacyText('<p>start</p>');
     sanitizeSpy.mockClear();
 
     const huge = 'x'.repeat(SNAPSHOT_MAX);
@@ -156,7 +153,7 @@ describe('the type is resolved before the ceiling is applied (#4)', () => {
   }, 120000);
 
   test('a 5 MB body with an explicit text type never gets past the schema', async () => {
-    const note = await Mutation.createNote(null, { content: '<p>start</p>', type: 'text' }, ctx);
+    const note = await legacyText('<p>start</p>');
     sanitizeSpy.mockClear();
     await expectBadInput(
       Mutation.updateNote(null, { id: String(note._id), content: 'x'.repeat(SNAPSHOT_MAX), type: 'text' }, ctx)

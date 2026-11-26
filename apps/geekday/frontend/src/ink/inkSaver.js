@@ -12,6 +12,10 @@
  *   - A load is not an edit: `loaded()` records the body, drops anything
  *     pending, and forgets the earlier saves (they belong to the page that
  *     was replaced).
+ *   - A page that failed to load is never written: `failed()` blocks every
+ *     save until a later `loaded()`. The canvas then shows a blank page over a
+ *     note that still holds the real one, and saving that blank page (plus the
+ *     next stroke) would replace it. This holds whatever the screen shows.
  */
 export const SAVE_DEBOUNCE_MS = 400;
 export const ECHOES_KEPT = 3;
@@ -26,6 +30,7 @@ export function createInkSaver({ serialize, emit, debounceMs = SAVE_DEBOUNCE_MS,
   let timer = null;
   let lastKnown = '';
   let emitted = [];
+  let blocked = false;
 
   const cancelTimer = () => {
     if (timer !== null) {
@@ -39,6 +44,7 @@ export function createInkSaver({ serialize, emit, debounceMs = SAVE_DEBOUNCE_MS,
     cancelTimer();
     if (!dirty) return null;
     dirty = false;
+    if (blocked) return null;
     let serialized;
     try {
       serialized = serialize();
@@ -56,6 +62,7 @@ export function createInkSaver({ serialize, emit, debounceMs = SAVE_DEBOUNCE_MS,
   return {
     /** The user changed the ink: save after the debounce. */
     markDirty() {
+      if (blocked) return;
       dirty = true;
       cancelTimer();
       timer = setTimeout(() => {
@@ -73,12 +80,23 @@ export function createInkSaver({ serialize, emit, debounceMs = SAVE_DEBOUNCE_MS,
     loaded(content) {
       cancelTimer();
       dirty = false;
+      blocked = false;
       lastKnown = content || '';
       // Saves made before a load are no longer echoes. Day A's last save,
       // handed back after day B was shown, is day A being opened again and
       // must load (found in the browser check: the page kept showing day B).
       emitted = [];
     },
+    /** `content` could not be put on the canvas: nothing is saved until a page loads. */
+    failed(content) {
+      cancelTimer();
+      dirty = false;
+      blocked = true;
+      lastKnown = content || '';
+      emitted = [];
+    },
+    /** Did the last load fail (so nothing may be saved)? */
+    isBlocked: () => blocked,
     hasPending: () => dirty,
     /** Has this page ever had a body (loaded with one, or saved one)? */
     hasBody: () => lastKnown !== '',

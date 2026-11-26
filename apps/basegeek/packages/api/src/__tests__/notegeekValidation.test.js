@@ -81,12 +81,19 @@ describe('createNote', () => {
   });
 
   test('accepts the empty title QuickCaptureHome sends', () => {
-    expect(validate({ title: '', content: 'captured', type: 'text' }).title).toBe('');
+    expect(validate({ title: '', content: 'captured', type: 'markdown' }).title).toBe('');
   });
 
   test('rejects an unknown key — including a payload userId', () => {
     expectBadInput(() => validate({ content: 'x', userId: ID }));
     expectBadInput(() => validate({ content: 'x', folderId: ID }));
+  });
+
+  test('writes accept only markdown and handwritten; the removed types are refused', () => {
+    for (const type of ['text', 'code', 'mindmap']) {
+      expect(expectBadInput(() => validate({ content: 'x', type })).extensions.details[0].path).toBe('type');
+    }
+    for (const type of ['markdown', 'handwritten']) expect(validate({ content: 'x', type }).type).toBe(type);
   });
 
   test('rejects an off-enum note type', () => {
@@ -133,18 +140,14 @@ describe('createNote / updateNote — the two content ceilings', () => {
   const snapshot = 'x'.repeat(100_001);
 
   test('prose types stop at 100 000 characters', () => {
-    for (const type of ['text', 'markdown', 'code']) {
-      const err = expectBadInput(() => create({ content: prose, type }));
-      expect(err.extensions.details[0].path).toBe('content');
-    }
-    // …and a create with no type at all is a `text` note by model default.
+    const err = expectBadInput(() => create({ content: prose, type: 'markdown' }));
+    expect(err.extensions.details[0].path).toBe('content');
+    // …and a create with no type at all is a `markdown` note by model default.
     expectBadInput(() => create({ content: prose }));
   });
 
   test('a snapshot type gets the larger ceiling', () => {
-    for (const type of ['mindmap', 'handwritten']) {
-      expect(create({ content: snapshot, type }).content).toHaveLength(100_001);
-    }
+    expect(create({ content: snapshot, type: 'handwritten' }).content).toHaveLength(100_001);
   });
 
   test('even a snapshot has a ceiling', () => {
@@ -161,8 +164,8 @@ describe('updateNote', () => {
   const validate = validateInput(updateNoteArgsSchema);
 
   test('accepts a normal update', () => {
-    const out = validate({ id: ID, title: 'Renamed', content: 'body', type: 'text', tags: [] });
-    expect(out).toEqual({ id: ID, title: 'Renamed', content: 'body', type: 'text', tags: [] });
+    const out = validate({ id: ID, title: 'Renamed', content: 'body', type: 'markdown', tags: [] });
+    expect(out).toEqual({ id: ID, title: 'Renamed', content: 'body', type: 'markdown', tags: [] });
   });
 
   test('allows content to be blanked — the editor saves a titled note with an empty body', () => {

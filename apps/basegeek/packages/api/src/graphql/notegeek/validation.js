@@ -48,7 +48,13 @@ export { validateInput };
  * whitespace in a markdown file or a JSON snapshot is the caller's business.
  */
 
-const NOTE_TYPES = ['text', 'markdown', 'code', 'mindmap', 'handwritten'];
+/** What a client may WRITE (2026-11-25: NoteGeek keeps two note types). */
+const NOTE_TYPES = ['markdown', 'handwritten'];
+/**
+ * Every type a stored note can still carry: recently deleted notes keep their
+ * old type until purged and can be restored. Reads (list filters) accept all.
+ */
+const STORED_NOTE_TYPES = ['text', 'markdown', 'code', 'mindmap', 'handwritten'];
 /** Types whose `content` is a serialized editor snapshot, not prose. */
 const SNAPSHOT_TYPES = new Set(['mindmap', 'handwritten']);
 
@@ -129,7 +135,7 @@ export function assertContentCeiling(content, type, { sanitized = false } = {}) 
  * whether to sanitize from this field: `HTML_NOTE_TYPES.has(null)` is false,
  * so a stored null made a later typeless update store HTML **unsanitized**
  * (BURN_REVIEW_2 #5). Omit the field to leave the type alone; `createNote`
- * falls back to `text`, which is the mongoose default, when it is absent.
+ * falls back to `markdown`, which is the mongoose default, when it is absent.
  */
 const noteTypeSchema = z.enum(NOTE_TYPES).optional();
 // `''` is a real value here: QuickCaptureHome saves a capture with no title.
@@ -242,7 +248,7 @@ export const notesPageArgsSchema = z
     prefix: z.string().max(200).nullish(),
     under: z.string().max(200).nullish(),
     notUnder: z.array(z.string().max(200)).max(20).nullish(),
-    type: z.enum(NOTE_TYPES).nullish(),
+    type: z.enum(STORED_NOTE_TYPES).nullish(),
     // Any case (`updatedat_desc` too, as the old `notes` query took it).
     sort: z
       .string()
@@ -357,35 +363,6 @@ export const renameTagArgsSchema = z
   .strict();
 
 export const deleteTagArgsSchema = z.object({ tag: tagSchema }).strict();
-
-/**
- * `suggestForNote` — the only READ in this module with a validated argument
- * list, and the only one whose ceiling is enforced by TRUNCATION.
- *
- * The excerpt is whatever the editor happens to be holding when the note is
- * saved. Rejecting an over-long one would turn a helpful strip into an error
- * toast on exactly the notes it is most useful for (long ones), so the schema
- * takes the first `EXCERPT_MAX` characters and says nothing. Same for the
- * title, whose 500-character ceiling `createNote` already enforces on the
- * write path — a suggestion request is not the place to relitigate it.
- *
- * `noteId` is nullable: the strip appears on an unsaved note too, and there is
- * nothing to exclude from the related-note candidates in that case.
- */
-/** The excerpt ceiling, enforced by truncation. `suggest.js` reads it from here. */
-export const EXCERPT_MAX = 500;
-/** The title ceiling — the same 500 `createNote` enforces on the write path. */
-export const TITLE_MAX = 500;
-
-export const suggestForNoteArgsSchema = z
-  .object({
-    noteId: idString.nullable().optional(),
-    title: z.string().transform((s) => s.slice(0, TITLE_MAX)),
-    excerpt: z.string().transform((s) => s.slice(0, EXCERPT_MAX)),
-    tags: z.array(z.string().trim().max(100)).max(50),
-  })
-  .strict();
-
 
 // ── transcribeSketch (apps/notegeek/DOCS/HANDWRITING.md §2) ─────────────────
 

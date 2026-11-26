@@ -2,13 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   EXPORT_MAX_EDGE,
   EXPORT_MAX_BYTES,
-  exportSketchPng,
-  exportSketchForPrint,
-  PRINT_MAX_EDGE,
   fitWithin,
   flattenOnWhite,
   sketchExportOptions,
   sketchHasShapes,
+} from '@geeksuite/ink';
+import {
+  exportSketchPng,
+  exportSketchForPrint,
+  PRINT_MAX_EDGE,
 } from '../../utils/sketchExport';
 import {
   backLinkLine,
@@ -257,7 +259,7 @@ describe('the derived note', () => {
 
 describe('a page too long to read well (review 2.7)', () => {
   it('flags ink whose longest edge shrinks below half a pixel per page unit', async () => {
-    const { tooLongToRead, readableScale, MIN_READABLE_SCALE } = await import('../../utils/sketchExport');
+    const { tooLongToRead, readableScale, MIN_READABLE_SCALE } = await import('@geeksuite/ink');
     expect(MIN_READABLE_SCALE).toBe(0.5);
     expect(tooLongToRead({ w: 900, h: 1400 })).toBe(false); // about two phone screens
     expect(tooLongToRead({ w: 900, h: 4200 })).toBe(true); // a meeting's worth

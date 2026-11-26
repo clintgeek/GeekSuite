@@ -11,6 +11,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { json } from '../../lib/net.mjs';
+import { readableDayNote } from './fixtures.ink.mjs';
 
 /** HARNESS_DUMP_DIR=/some/dir keeps what the scenes saw (saved pages, the lasso crop) for a human to look at. */
 const dump = process.env.HARNESS_DUMP_DIR || '';
@@ -737,6 +739,64 @@ export const scenes = [
         // Today's own page is untouched: still blank, still writable.
         await inkBox(page);
         if (ops.seen.some((r) => r.op === 'CreateDayNote' || r.op === 'SaveDayNote')) throw new Error('reading another page saved something');
+      } finally {
+        ops.stop();
+      }
+    },
+  },
+  {
+    // A day page whose stored body cannot be read (2026-11-25): "can't be
+    // opened", Try again and Open in NoteGeek, no canvas, and nothing is ever
+    // written. A pen drag over the pane saves and creates nothing. Then the
+    // body reads again and Try again opens the canvas.
+    name: '41-unreadable-day',
+    goto: '/?__fixture=unreadable',
+    wait: 1800,
+    viewports: tablet,
+    async setup(page) {
+      const ops = watchOps(page);
+      const errors = [];
+      page.on('pageerror', (err) => errors.push(String(err.message || err)));
+      try {
+        const panel = await must(page, '[data-testid="ink-unreadable"]', 'the unreadable state');
+        if (!(await panel.getByText("This page can't be opened").count())) throw new Error('the unreadable state has no "This page can\'t be opened"');
+        const retry = panel.getByRole('button', { name: 'Try again' });
+        const open = panel.getByRole('link', { name: 'Open in NoteGeek' });
+        if (!(await retry.count())) throw new Error('no "Try again" button');
+        if (!(await open.count())) throw new Error('no "Open in NoteGeek" button');
+        for (const [what, node] of [['Try again', retry], ['Open in NoteGeek', open]]) {
+          const b = await node.boundingBox();
+          if (!b || b.height < 43.5 || b.width < 43.5) throw new Error(`"${what}" is ${b ? `${Math.round(b.width)}x${Math.round(b.height)}` : 'not shown'}, under 44px`);
+        }
+        if (!/\/notes\//.test((await open.getAttribute('href')) || '')) throw new Error(`"Open in NoteGeek" links to ${await open.getAttribute('href')}`);
+        await mustNot(page, CANVAS, 'the ink canvas');
+        if (await page.locator('.tl-container').count()) throw new Error('an unreadable page mounted a tldraw canvas');
+        // A pen drag across the pane, and a tap.
+        const box = await panel.boundingBox();
+        await page.mouse.click(box.x + 12, box.y + 12);
+        await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.2);
+        await page.mouse.down();
+        await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.3, { steps: 10 });
+        await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.5, { steps: 10 });
+        await page.mouse.up();
+        await page.waitForTimeout(3800);
+        const writes = ops.seen.filter((r) => ['CreateDayNote', 'SaveDayNote'].includes(r.op));
+        if (writes.length) throw new Error(`an unreadable page was written: ${writes.map((r) => r.op).join(', ')}`);
+        if (errors.length) throw new Error(`page error: ${errors[0]}`);
+        await must(page, '[data-testid="ink-unreadable"]', 'the unreadable state, still');
+        // The body reads now: Try again opens the canvas.
+        await page.route('**/graphql', (route) => {
+          let body = {};
+          try { body = route.request().postDataJSON() || {}; } catch { /* not ours */ }
+          if (body.operationName !== 'FindDayNote') return route.fallback();
+          return json(route, { data: readableDayNote(body.variables?.tag) });
+        });
+        await retry.click();
+        await page.waitForSelector(CANVAS, { timeout: 15000 });
+        await inkBox(page);
+        await mustNot(page, '[data-testid="ink-unreadable"]', 'the unreadable state after Try again');
+        await page.waitForTimeout(600);
+        if (ops.seen.some((r) => ['CreateDayNote', 'SaveDayNote'].includes(r.op))) throw new Error('opening the retried page saved something');
       } finally {
         ops.stop();
       }

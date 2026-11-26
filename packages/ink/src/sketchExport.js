@@ -1,22 +1,26 @@
 /**
- * sketchExport.js — ink as an image a vision model can read.
+ * sketchExport.js — ink as an image a vision model (or a person) can read.
  *
- * Copied from apps/notegeek/frontend/src/utils/sketchExport.js (GeekDay keeps
- * its own copy; apps do not import each other). Trimmed: no print export.
- * Added for the lasso: `minShortEdge` (a few circled words are exported large
- * enough to read) and `LASSO_MIN_SHORT_EDGE`.
+ * Shared by NoteGeek (Convert, the background reader, share, print) and
+ * GeekDay (circle-to-task, the background reader). What differs between them
+ * is passed in: which shapes to leave out (`skipShape`: NoteGeek's model
+ * picture leaves the template sheet out), how small a selection may be
+ * (`minShortEdge`: GeekDay's lasso), and the words of the errors (`messages`).
  *
  * Two steps, both needed:
  *
- *   1. **tldraw's own export** (`exportToBlob`), not a screenshot, asked for
- *      light mode (`darkMode: false`), so dark-theme ink comes out dark.
+ *   1. **tldraw's own export** (`exportToBlob`), not a screenshot: every shape
+ *      asked for, wherever the camera happens to be, at a scale chosen so the
+ *      result stays under the size cap. It is asked for light mode
+ *      (`darkMode: false`), so dark-theme ink comes out dark.
  *   2. **Flattened onto white.** tldraw's `background: true` paints its own
- *      light page colour, and `false` leaves the PNG transparent, which a
- *      model reads as black. The export is drawn onto an opaque #ffffff canvas
- *      instead, which also enforces the longest-edge cap exactly.
+ *      light page colour (#f9fafb), and `false` leaves the PNG transparent,
+ *      which a model reads as black, so dark ink vanished into it. The export
+ *      is drawn onto an opaque #ffffff canvas instead, which also enforces
+ *      the longest-edge cap exactly, whatever tldraw's own rendering did.
  *
  * `exportToBlob` is passed in rather than imported, so this module stays free
- * of tldraw and testable in jsdom.
+ * of tldraw (no tldraw in the importing page's chunk, testable in jsdom).
  */
 
 /** The longest edge of the exported image, in pixels. */
@@ -65,9 +69,8 @@ export const LASSO_MIN_SHORT_EDGE = 300;
 /**
  * The options tldraw's export is asked for, given the page bounds of the ink.
  *
- * `scale` is chosen so tldraw's own 2x render already fits in `maxEdge`. For a
- * whole page it is never above 1 (NoteGeek's rule: upscaling a big sketch adds
- * pixels, not legibility). With `minShortEdge` a SMALL selection is rendered
+ * `scale` is chosen so tldraw's own 2x render already fits in `maxEdge`. It is
+ * never above 1 by default: upscaling a sketch adds pixels, not legibility. With `minShortEdge` a SMALL selection is rendered
  * larger, so its short side (padding included) reaches that many pixels: the
  * export is vector until it is rasterised, so this is real resolution. The
  * `maxEdge` cap always wins, so a long thin line of writing stays in bounds.
@@ -167,6 +170,12 @@ export async function blobToBase64(blob) {
   return comma === -1 ? '' : dataUrl.slice(comma + 1);
 }
 
+/** The default error wording; an app may pass its own (`messages`). */
+export const EXPORT_MESSAGES = {
+  empty: 'This sketch is empty. Write something first.',
+  tooLarge: (mb) => `This page is too big to send (${mb} MB as an image; the limit is 6 MB). Split it across two sketches.`,
+};
+
 /**
  * Export the current page of a tldraw editor as a white-backed PNG.
  *
@@ -174,11 +183,15 @@ export async function blobToBase64(blob) {
  * @param {object} deps
  * @param {Function} deps.exportToBlob  tldraw's `exportToBlob`
  * @param {Array} [deps.ids]        only these shapes (default: the whole page)
+ * @param {(shape: object) => boolean} [deps.skipShape]  shapes of the whole
+ *   page to leave out (NoteGeek: the template sheet in a model's picture).
+ *   Ignored when `ids` is given.
  * @param {number} [deps.maxEdge]   longest edge in pixels (print asks for more)
  * @param {number} [deps.maxBytes]  refused past this; `Infinity` for print,
  *   which never leaves the device
- * @param {boolean} [deps.base64=true]
+ * @param {boolean} [deps.base64=true]  print needs only the blob
  * @param {number} [deps.minShortEdge]  see sketchExportOptions (the lasso)
+ * @param {{ empty?: string, tooLarge?: (mb: string) => string }} [deps.messages]
  * @returns {Promise<{ blob: Blob, base64: string, mediaType: 'image/png', width: number, height: number, tooLong: boolean }>}
  * @throws {SketchExportError} code `empty` | `too_large` | `encode`
  */
@@ -187,16 +200,23 @@ export async function exportSketchPng(editor, {
   flatten = flattenOnWhite,
   toBase64 = blobToBase64,
   ids: only = null,
+  skipShape = null,
   maxEdge = EXPORT_MAX_EDGE,
   maxBytes = EXPORT_MAX_BYTES,
   base64 = true,
   minShortEdge = 0,
+  messages = {},
 } = {}) {
-  const ids = only ? [...only] : [...(editor.getCurrentPageShapeIds?.() || [])];
+  const say = { ...EXPORT_MESSAGES, ...messages };
+  const all = only ? [] : [...(editor.getCurrentPageShapeIds?.() || [])];
+  const ids = only ? [...only] : (skipShape ? all.filter((id) => !skipShape(editor.getShape?.(id))) : all);
   if (!ids.length) {
-    throw new SketchExportError('empty', 'There is no writing to read here.');
+    throw new SketchExportError('empty', say.empty);
   }
-  const bounds = only ? unionBounds(ids.map((id) => editor.getShapePageBounds?.(id))) : editor.getCurrentPageBounds?.();
+  // The whole page's bounds only when the whole page is exported.
+  const bounds = only || ids.length !== all.length
+    ? unionBounds(ids.map((id) => editor.getShapePageBounds?.(id)))
+    : editor.getCurrentPageBounds?.();
   const opts = sketchExportOptions(bounds, maxEdge, { minShortEdge });
 
   let raw;
@@ -209,10 +229,7 @@ export async function exportSketchPng(editor, {
 
   if (blob.size > maxBytes) {
     const mb = (blob.size / (1024 * 1024)).toFixed(1);
-    throw new SketchExportError(
-      'too_large',
-      `That is too much writing to send at once (${mb} MB as an image; the limit is 6 MB). Circle a smaller part.`
-    );
+    throw new SketchExportError('too_large', say.tooLarge(mb));
   }
 
   return {

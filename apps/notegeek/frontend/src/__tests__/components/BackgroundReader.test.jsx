@@ -13,8 +13,12 @@ vi.mock('../../components/editors/HandwrittenEditor', () => ({
     mounted.push(props);
     React.useEffect(() => {
       if (props.content === 'broken') return;
+      // An unreadable body: the editor tells its owner, and its API says so.
+      const unreadable = props.content === 'unreadable';
+      if (unreadable) props.onLoadError?.(new Error('unreadable'));
       props.sketchApiRef.current = {
-        hasShapes: () => props.content !== 'blank',
+        loadFailed: () => unreadable,
+        hasShapes: () => props.content !== 'blank' && !unreadable,
         exportPng: async () => ({ base64: `png:${props.content}`, mediaType: 'image/png' }),
       };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -83,6 +87,17 @@ describe('BackgroundReader', () => {
     await settle(FIRST_PASS_MS);
     await settle(SETTLE_MS);
     await settle(0);
+    expect(c.sent).toEqual([]);
+    expect(screen.queryByTestId('background-reader')).toBeNull();
+  });
+
+  it('a body that could not be read fails the job: not a blank page, nothing sent', async () => {
+    const c = client('unreadable');
+    render(<BackgroundReader client={c} />);
+    await settle(FIRST_PASS_MS);
+    await settle(SETTLE_MS);
+    await settle(0);
+    expect(c.mutate).not.toHaveBeenCalled();
     expect(c.sent).toEqual([]);
     expect(screen.queryByTestId('background-reader')).toBeNull();
   });

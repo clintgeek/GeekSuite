@@ -81,8 +81,40 @@
  * phone below 600 px gets the very same markup and no matching rule, so it is
  * unchanged. Desktop is untouched: `mode="auto"` is already a centred Dialog
  * from `md` (900 px) up. `tabletMaxWidth={false}` keeps the full-width sheet.
+ *
+ * Crossing `md` while open (a tablet rotating, 2026-11-25): sheet and dialog
+ * are two different MUI element trees (`SwipeableDrawer` vs `Dialog`), so
+ * rendering `children` inside either used to unmount and remount them — a
+ * half-typed form lost its draft, focus and scroll. `children` are therefore
+ * rendered ONCE, by `createPortal`, into a detached `<div style="display:
+ * contents">` host that this component owns, from a fixed position in its
+ * own output (a sibling of the Drawer/Dialog, so a mode change cannot touch
+ * it). The body element of whichever surface is current adopts the host
+ * through a ref callback (`appendChild` moves the live DOM; nothing is
+ * re-created). Consequences, all handled below:
+ *  - a DOM move blurs and resets scroll, so focus, text selection and the
+ *    body's scrollTop are snapshotted during the render that flips the mode
+ *    and put back afterwards;
+ *  - React events from a portal bubble to the portal's React parent, not
+ *    through the Paper/Modal, so Escape is handled on a wrapper inside the
+ *    portal (`handleContentKeyDown`), which also honours `defaultPrevented`;
+ *  - `children` must not exist while the sheet is closed, so they mount only
+ *    once a body exists (`bodyNode`) and unmount when the exit transition
+ *    ends (unless `keepMounted`);
+ *  - `initialFocus` fires once per open, not again on a mode flip.
+ * Without a `document` (SSR/node tests) children render inline, as before.
+ * DOM shape: `[data-geek-sheet="body"] > div(host) > div(wrapper) > children`.
  */
-import { Children, useEffect, useId, useRef } from 'react';
+import {
+  Children,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 import Box from '@mui/material/Box';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -196,10 +228,100 @@ export function GeekSheet({
   const titleId = useId();
   const paperRef = useRef(null);
   const bodyRef = useRef(null);
+  // The stable host `children` are portalled into (null without a document).
+  const [host] = useState(() => {
+    if (typeof document === 'undefined') return null;
+    const el = document.createElement('div');
+    el.style.display = 'contents';
+    return el;
+  });
+  // The body element of the current surface; children mount only once it exists.
+  const [bodyNode, setBodyNode] = useState(null);
+  const snapshotRef = useRef(null);
+  const lastModeRef = useRef(null);
+  const enteredRef = useRef(false);
   const handlePaperRef = useForkRef(paperRef, drawerProps?.PaperProps?.ref);
 
   const resolvedMode = mode === 'auto' ? (isBelowNavBreakpoint ? 'sheet' : 'dialog') : mode;
   const isSheet = resolvedMode === 'sheet';
+
+  // The render that flips the mode is the last moment the old DOM (and so
+  // focus and scroll) is still in the document — see the file header.
+  if (host && lastModeRef.current && lastModeRef.current !== resolvedMode) {
+    const active = host.ownerDocument.activeElement;
+    snapshotRef.current = {
+      scrollTop: bodyRef.current ? bodyRef.current.scrollTop : 0,
+      focused: host.isConnected && active && host.contains(active) ? active : null,
+      start: null,
+      end: null,
+    };
+    const f = snapshotRef.current.focused;
+    if (f) {
+      try {
+        snapshotRef.current.start = f.selectionStart;
+        snapshotRef.current.end = f.selectionEnd;
+      } catch {
+        /* inputs without a selection (checkbox, number...) */
+      }
+    }
+  }
+  lastModeRef.current = resolvedMode;
+
+  // Adopt the host into whichever body is current. Stable identity: React
+  // calls it with null for the old surface and the node for the new one.
+  const handleBodyRef = useCallback(
+    (node) => {
+      bodyRef.current = node;
+      if (!node || !host) return;
+      node.appendChild(host);
+      setBodyNode(node);
+    },
+    [host]
+  );
+
+  // After a flip: restore scroll before paint, then focus once the new
+  // surface's own focus trap has had its turn (passive effects run after).
+  useLayoutEffect(() => {
+    const snap = snapshotRef.current;
+    if (!snap || !bodyNode || !bodyNode.isConnected) return;
+    bodyNode.scrollTop = snap.scrollTop;
+  }, [bodyNode]);
+  useEffect(() => {
+    const snap = snapshotRef.current;
+    if (!snap || !bodyNode || !bodyNode.isConnected) return;
+    snapshotRef.current = null;
+    const el = snap.focused;
+    if (!el || !el.isConnected) return;
+    el.focus({ preventScroll: true });
+    if (snap.start !== null && snap.end !== null) {
+      try {
+        el.setSelectionRange(snap.start, snap.end);
+      } catch {
+        /* not a text field */
+      }
+    }
+  }, [bodyNode]);
+
+  // Closed and fully exited (or never opened on this surface): drop children.
+  const releaseBody = () => {
+    if (!keepMounted) setBodyNode(null);
+  };
+  useEffect(() => {
+    if (!open) enteredRef.current = false;
+    // Flipped while closing: the new surface renders nothing, so no exit
+    // transition will ever report back.
+    if (!open && !keepMounted) setBodyNode(null);
+  }, [open, keepMounted, resolvedMode]);
+  // Reopened on a surface MUI kept in the DOM (SwipeableDrawer keeps its
+  // modal mounted after the first open): the body node never left, so its ref
+  // callback does not fire again. Adopt it here, or the sheet reopens empty.
+  useLayoutEffect(() => {
+    const node = bodyRef.current;
+    if (!open || !host || !node) return;
+    if (host.parentNode !== node) node.appendChild(host);
+    setBodyNode((current) => (current === node ? current : node));
+  }, [open, host, resolvedMode]);
+
   const actionCount = actions ? Children.count(actions) : 0;
   const resolvedActionsAlign = actionsAlign ?? (actionCount === 1 ? 'stretch' : 'end');
   const actionsJustify =
@@ -229,9 +351,29 @@ export function GeekSheet({
     onClose?.(event, 'escapeKeyDown');
   };
 
+  // Escape from inside `children` (portalled, so it never reaches the Paper
+  // or MUI's modal root by React bubbling). Same contract as MUI's own.
+  const handleContentKeyDown = (event) => {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    const surface = isSheet ? drawerProps : dialogProps;
+    if (surface?.disableEscapeKeyDown) return;
+    event.stopPropagation();
+    onClose?.(event, 'escapeKeyDown');
+  };
+  const content = host
+    ? createPortal(
+        <div style={{ display: 'contents' }} onKeyDown={handleContentKeyDown}>
+          {bodyNode ? children : null}
+        </div>,
+        host
+      )
+    : null;
+
   // Fires once the open transition actually finishes, in either mode — see
   // the `initialFocus` note in the file header. A no-op with no target.
   const focusInitial = () => {
+    if (enteredRef.current) return; // a mode flip re-runs the transition
+    enteredRef.current = true;
     if (!initialFocus) return;
     const container = bodyRef.current;
     if (!container) return;
@@ -251,6 +393,7 @@ export function GeekSheet({
   if (isSheet) {
     const fullSnap = snap === 'full';
     return (
+      <>
       <SwipeableDrawer
         {...drawerProps}
         anchor="bottom"
@@ -271,6 +414,10 @@ export function GeekSheet({
           onEntered: (node, isAppearing) => {
             drawerProps?.SlideProps?.onEntered?.(node, isAppearing);
             focusInitial();
+          },
+          onExited: (node) => {
+            drawerProps?.SlideProps?.onExited?.(node);
+            releaseBody();
           },
         }}
         PaperProps={{
@@ -370,7 +517,7 @@ export function GeekSheet({
         </Box>
         <Box
           data-geek-sheet="body"
-          ref={bodyRef}
+          ref={handleBodyRef}
           sx={{
             flex: 1,
             minHeight: 0,
@@ -382,7 +529,7 @@ export function GeekSheet({
             ...bodySx,
           }}
         >
-          {children}
+          {host ? null : children}
         </Box>
         {actions ? (
           <Box
@@ -403,10 +550,13 @@ export function GeekSheet({
           </Box>
         ) : null}
       </SwipeableDrawer>
+      {host ? content : null}
+      </>
     );
   }
 
   return (
+    <>
     <Dialog
       {...dialogProps}
       open={open}
@@ -424,6 +574,10 @@ export function GeekSheet({
         onEntered: (node, isAppearing) => {
           dialogProps?.TransitionProps?.onEntered?.(node, isAppearing);
           focusInitial();
+        },
+        onExited: (node) => {
+          dialogProps?.TransitionProps?.onExited?.(node);
+          releaseBody();
         },
       }}
       PaperProps={{
@@ -469,10 +623,10 @@ export function GeekSheet({
       </DialogTitle>
       <DialogContent
         data-geek-sheet="body"
-        ref={bodyRef}
+        ref={handleBodyRef}
         sx={{ minHeight: 0, overflowY: 'auto', ...bodySx }}
       >
-        {children}
+        {host ? null : children}
       </DialogContent>
       {actions ? (
         <DialogActions
@@ -486,5 +640,7 @@ export function GeekSheet({
         </DialogActions>
       ) : null}
     </Dialog>
+    {host ? content : null}
+    </>
   );
 }

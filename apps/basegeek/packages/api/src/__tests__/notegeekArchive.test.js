@@ -21,7 +21,6 @@ const { default: Note } = await import('../graphql/notegeek/models/Note.js');
 const { default: NoteVersion } = await import('../graphql/notegeek/models/NoteVersion.js');
 const { userGeekConn } = await import('../models/user.js');
 const { resolvers } = await import('../graphql/notegeek/resolvers.js');
-const { suggestForNote } = await import('../graphql/notegeek/suggest.js');
 const { resolvers: glanceResolvers } = await import('../graphql/glance/resolvers.js');
 const { resolvers: suiteTagResolvers } = await import('../graphql/suitetags/resolvers.js');
 
@@ -273,18 +272,6 @@ describe('A2 — links', () => {
     const fresh = await create('Recipe', 'v2');
     const saved = await Mutation.updateNote(null, { id: String(src._id), content: 'see [[Recipe]] again' }, ctx(ALICE));
     expect(String(saved.links[0].noteId)).toBe(String(fresh._id));
-  });
-});
-
-// ── A2: suggest.js ─────────────────────────────────────────────────────────
-describe('A2 — suggest', () => {
-  test('an archived note is never suggested, nor evidence for a tag', async () => {
-    await make({ title: 'nginx layout', tags: ['homelab'] });
-    const gone = await make({ title: 'nginx archived', tags: ['retired-tag'] });
-    await Mutation.archiveNotes(null, { ids: [String(gone._id)] }, ctx(ALICE));
-    const out = await suggestForNote({ userId: String(ALICE), title: 'nginx proxy', excerpt: '', tags: [] });
-    expect(out.related.map((r) => r.title)).toEqual(['nginx layout']);
-    expect(out.tags.map((t) => t.tag)).not.toContain('retired-tag');
   });
 });
 

@@ -367,27 +367,6 @@ export const typeDefs = gql`
     lastOkAt: Date
   }
 
-  """A tag the user already has, scored against the note being written."""
-  type SuggestedTag {
-    tag: String!
-    score: Float!
-  }
-
-  """One of the user's own notes, scored against the note being written."""
-  type RelatedNote {
-    id: ID!
-    title: String!
-    score: Float!
-    """At most a few words on what the two notes share — only ever set when a model was consulted."""
-    why: String
-  }
-
-  type NoteSuggestions {
-    tags: [SuggestedTag!]!
-    related: [RelatedNote!]!
-    provenance: AIProvenance!
-  }
-
   """The notes an archiveNotes / restoreNotes call actually changed."""
   type ArchiveResult {
     ids: [ID!]!
@@ -467,7 +446,6 @@ export const typeDefs = gql`
     backlinks(noteId: ID!): [Backlink!]!
     """Titles containing q (case-insensitive), prefix matches first. For the [[ picker."""
     noteTitles(q: String, limit: Int): [NoteTitle!]!
-    suggestForNote(noteId: ID, title: String!, excerpt: String!, tags: [String!]!): NoteSuggestions!
     """The Archived view: archived notes, most recently archived first."""
     archivedNotes(limit: Int, offset: Int): [Note!]!
   }

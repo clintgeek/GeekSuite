@@ -46,11 +46,11 @@ import {
 import InkToolbar from './InkToolbar';
 import { INK_TOOLS } from './inkTools';
 import { createInkSaver } from './inkSaver';
-import { fineStrokeHandler } from './finePen';
-import { attachPenButton } from './penButton';
-import { attachPenKey } from './penKey';
-import { attachTwoFingerTap } from './twoFingerTap';
-import { readFingerDraws, readPenSeen, touchDraws, writeFingerDraws, writePenSeen } from './penPrefs';
+import {
+  attachPenButton, attachPenKey, attachTwoFingerTap, exportSketchPng, fineStrokeHandler, lassoSelection, parseSketchBody,
+  shapeSample, touchDraws, unionBounds, LASSO_MIN_SHORT_EDGE, TAP_TOLERANCE,
+} from '@geeksuite/ink';
+import { readFingerDraws, readPenSeen, writeFingerDraws, writePenSeen } from './penPrefs';
 import {
   MIN_SHEETS, SHEET_HEIGHT, cameraAfterResize, clampCamera, fitCamera, isZoomedIn, pageBoxToPane, pageHeightFor,
   setPageCamera, topOfPage,
@@ -62,12 +62,17 @@ import {
   NO_SHEET, RULED, paperToKeep, previewSheet, readDevicePaper, readDeviceSheet, resolvePaper, storedTemplate, withPaper,
   writeDevicePaper, writeDeviceSheet,
 } from './pageTemplate';
-import { lassoSelection, shapeSample, TAP_TOLERANCE } from './lassoGeometry';
-import { exportSketchPng, unionBounds, LASSO_MIN_SHORT_EDGE } from './sketchExport';
 
 export const LASSO_EMPTY_HINT = 'Circle some writing to make a task';
 export const LASSO_TOO_LONG = 'That is too much writing to read at once. Circle a smaller part.';
 export const LASSO_EXPORT_FAILED = 'The circled writing could not be turned into an image. Try again.';
+/** GeekDay's words for an export that cannot be sent (the lasso shows them). */
+const EXPORT_MESSAGES = {
+  empty: 'There is no writing to read here.',
+  tooLarge: (mb) => `That is too much writing to send at once (${mb} MB as an image; the limit is 6 MB). Circle a smaller part.`,
+};
+/** The lasso layer sits over the canvas and counts as the page for a two-finger tap. */
+const TAP_SURFACE = '.tl-canvas, [data-ink-surface]';
 const HINT_MS = 3500;
 /** A lasso drag shorter than this many CSS px, end to end, is a tap. */
 const TAP_SLOP_PX = 10;
@@ -249,6 +254,8 @@ function LassoLayer({ active, canDraw, highlight, onFinish, onStart }) {
  * @param {(message: string) => void} [props.onLassoError]
  * @param {(touchDraws: boolean) => void} [props.onTouchDrawsChange]
  * @param {(state: {zoomed: boolean}) => void} [props.onPanStateChange]  the page is zoomed in (a finger pans it sideways)
+ * @param {(content: string, error: Error) => void} [props.onLoadError]  `content` could not be put on the canvas.
+ *   The page is then blank and locked (read-only, nothing saved) until other content loads.
  * @param {boolean} [props.readOnly]
  * @param {boolean} [props.autoFocus]  false for a page drawn off-screen to be read (BackgroundReader): it must never take the keyboard
  * @param {string} [props.ariaLabel]
@@ -261,7 +268,8 @@ export default function InkCanvas({
   onLassoError = null,
   onTouchDrawsChange = null,
   onPanStateChange = null,
-  readOnly = false,
+  onLoadError = null,
+  readOnly: readOnlyProp = false,
   autoFocus = true,
   ariaLabel = 'Handwriting page',
 }) {
@@ -272,6 +280,12 @@ export default function InkCanvas({
   onLassoRef.current = onLasso;
   const onLassoErrorRef = useRef(onLassoError);
   onLassoErrorRef.current = onLassoError;
+  const onLoadErrorRef = useRef(onLoadError);
+  onLoadErrorRef.current = onLoadError;
+  // A page whose content failed to load is read-only: what is on screen is
+  // not the note, and the saver refuses to write it either way (inkSaver.js).
+  const [loadFailed, setLoadFailed] = useState(false);
+  const readOnly = readOnlyProp || loadFailed;
   const readOnlyRef = useRef(readOnly);
   readOnlyRef.current = readOnly;
   const initialContentRef = useRef(content);
@@ -415,28 +429,42 @@ export default function InkCanvas({
       }
     };
     try { ed.complete?.(); } catch { /* no stroke in progress */ }
+    let failure = null;
     if (!body) {
       blank();
     } else {
       try {
-        const snapshot = JSON.parse(body);
+        // parseSketchBody (@geeksuite/ink) throws unless it is a tldraw
+        // snapshot: tldraw's loadSnapshot takes any other object (`{}`) as
+        // an empty editor snapshot, which would pass for a blank page.
+        const snapshot = parseSketchBody(body);
         // As a REMOTE change: the store listener (source 'user') never sees a
         // load, so loading cannot echo back as a save.
         ed.store.mergeRemoteChanges(() => loadTldrawSnapshot(ed.store, snapshot));
       } catch (error) {
-        // Never leave another day's ink under a page that failed to load.
-        console.warn('InkCanvas - invalid snapshot; showing a blank page.', error);
+        // Never leave another day's ink (or half of this one) under a page
+        // that failed to load. The page is locked: see `onLoadError`.
+        console.warn('InkCanvas - unreadable snapshot; the page is locked.', error);
+        failure = error;
         blank();
       }
     }
     // Yesterday's strokes must not come back through Undo on today's page.
     ed.history?.clear?.();
-    saver.loaded(body);
+    if (failure) {
+      saver.failed(body);
+      readOnlyRef.current = true;
+      ed.updateInstanceState({ isReadonly: true });
+    } else {
+      saver.loaded(body);
+    }
+    setLoadFailed(Boolean(failure));
     previewOffRef.current = false;
     clearLasso();
     clearTimeout(pageSyncTimerRef.current);
     pageSyncTimerRef.current = null;
     syncPage(ed, { fresh: true });
+    if (failure) onLoadErrorRef.current?.(body, failure);
   }, [saver, clearLasso, syncPage]);
 
   const handleMount = useCallback((ed) => {
@@ -596,7 +624,7 @@ export default function InkCanvas({
     win.addEventListener('pointercancel', onLift, { capture: true });
     // A pen that does report a held button erases with it; an eraser end erases.
     const detachPen = attachPenButton(el, () => editorRef.current, { getPointerInfo });
-    const detachTap = attachTwoFingerTap(el, () => editorRef.current?.undo());
+    const detachTap = attachTwoFingerTap(el, () => editorRef.current?.undo(), { surface: TAP_SURFACE });
     // The Lenovo pen's button, double-clicked, arrives as a key: undo.
     const detachKey = attachPenKey(el.ownerDocument?.defaultView, () => editorRef.current);
     return () => {
@@ -754,7 +782,7 @@ export default function InkCanvas({
     setHighlight({ ids, bounds });
     setTool('pen');
     try {
-      const out = await exportSketchPng(ed, { exportToBlob, ids, minShortEdge: LASSO_MIN_SHORT_EDGE });
+      const out = await exportSketchPng(ed, { exportToBlob, ids, minShortEdge: LASSO_MIN_SHORT_EDGE, messages: EXPORT_MESSAGES });
       if (run !== lassoRunRef.current) return; // cleared, or the page changed, while exporting
       if (out.tooLong || !out.base64) {
         setHighlight(null);
@@ -786,7 +814,7 @@ export default function InkCanvas({
     exportPage: async () => {
       const ed = editorRef.current;
       if (!ed || !pageContent(ed).hasInk) return null;
-      return exportSketchPng(ed, { exportToBlob });
+      return exportSketchPng(ed, { exportToBlob, messages: EXPORT_MESSAGES });
     },
     undo: () => { editorRef.current?.undo(); },
     redo: () => { editorRef.current?.redo(); },

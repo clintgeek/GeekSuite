@@ -8,7 +8,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import { createNoteTheme } from '../../theme/createAppTheme';
 import PenLab from '../../pages/PenLab';
-import { penButtonTool } from '../../utils/penButton';
+import { penButtonTool } from '@geeksuite/ink';
 
 const show = () => render(<ThemeProvider theme={createNoteTheme('light')}><PenLab /></ThemeProvider>);
 const press = (init) => fireEvent(screen.getByRole('application', { name: 'Pen test area' }), new PointerEvent('pointerdown', { bubbles: true, pointerType: 'pen', ...init }));

@@ -4,7 +4,7 @@ import { noteTypeMeta, normalizeNoteType } from './noteTypeMeta';
 
 /**
  * TypeIcon — a note's type as a small graphite glyph with an accessible name
- * ("Sketch note"). Graphite's replacement for the Lab Notebook's coloured
+ * ("Handwritten note"). Graphite's replacement for the Lab Notebook's coloured
  * type stamps: the type is still there on every row, it just no longer
  * competes with the title.
  *

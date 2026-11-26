@@ -13,7 +13,7 @@ import { ThemeProvider, createTheme } from '@mui/material';
 
 const tl = vi.hoisted(() => ({ editors: [], renders: [], exportSketchPng: null }));
 
-vi.mock('./sketchExport', async (importOriginal) => ({
+vi.mock('@geeksuite/ink', async (importOriginal) => ({
   ...(await importOriginal()),
   exportSketchPng: (...args) => tl.exportSketchPng(...args),
 }));
@@ -159,7 +159,9 @@ vi.mock('@tldraw/tldraw', async () => {
 });
 
 import { paperSheetRecords } from '@geeksuite/ui';
-import { InkCanvas, LASSO_EMPTY_HINT, sketchHasShapes } from './index';
+import { loadSnapshot } from '@tldraw/tldraw';
+import { sketchHasShapes } from '@geeksuite/ink';
+import { InkCanvas, LASSO_EMPTY_HINT } from './index';
 
 const shapeRecord = (id, y = 300) => [id, { id, typeName: 'shape', type: 'draw', parentId: 'page:page', x: 300, y, rotation: 0, props: { segments: [{ type: 'free', points: [{ x: 0, y: 0 }, { x: 50, y: 0 }] }] } }];
 const snapshotWith = (...ids) => JSON.stringify({
@@ -401,14 +403,50 @@ describe('InkCanvas (tldraw mocked)', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
-  it('an unreadable snapshot shows a blank page rather than the previous one', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { rerender, apiRef, onChange } = mount({ content: snapshotWith('shape:a') });
-    rerender({ content: '{not json' });
-    expect(apiRef.current.hasShapes()).toBe(false);
-    act(() => { vi.advanceTimersByTime(1000); });
-    expect(onChange).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalled();
+  describe('a page that cannot be loaded', () => {
+    const toolbarGone = () => expect(screen.queryByTestId('ink-tool-pen')).toBe(null);
+
+    it.each([
+      ['invalid JSON', () => '{not json'],
+      ['a truncated body', () => snapshotWith('shape:a').slice(0, 40)],
+      ['JSON that is not a snapshot', () => '{}'],
+      ['a snapshot tldraw rejects', () => {
+        loadSnapshot.mockImplementationOnce(() => { throw new Error('Failed to migrate store snapshot: incompatible'); });
+        return snapshotWith('shape:a');
+      }],
+    ])('%s: reported, blank (never the previous page), locked, and a stroke saves nothing', (_name, makeBody) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onLoadError = vi.fn();
+      const { rerender, apiRef, onChange, editor, unmount } = mount({ content: snapshotWith('shape:prev'), onLoadError });
+      const body = makeBody();
+      rerender({ content: body });
+      expect(onLoadError).toHaveBeenCalledWith(body, expect.any(Error));
+      expect(apiRef.current.hasShapes()).toBe(false);
+      expect(editor.instance.isReadonly).toBe(true);
+      toolbarGone();
+      act(() => { editor.draw('shape:new'); }); // a stroke that got through anyway
+      act(() => { vi.advanceTimersByTime(1000); });
+      expect(apiRef.current.flush()).toBe(null);
+      unmount(); // leaving flushes
+      expect(onChange).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalled();
+    });
+
+    it('on first open too, and a page that then loads is writable again', () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const onLoadError = vi.fn();
+      const { rerender, onChange, editor } = mount({ content: '{not json', onLoadError });
+      expect(onLoadError).toHaveBeenCalledTimes(1);
+      expect(editor.instance.isReadonly).toBe(true);
+      toolbarGone();
+      rerender({ content: snapshotWith('shape:a') });
+      expect(editor.instance.isReadonly).toBe(false);
+      expect(screen.getByTestId('ink-tool-pen')).toBeInTheDocument();
+      act(() => { editor.draw('shape:b'); });
+      act(() => { vi.advanceTimersByTime(400); });
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(Object.keys(JSON.parse(onChange.mock.calls[0][0]).store)).toEqual(['page:page', 'shape:a', 'shape:b']);
+    });
   });
 
   it('flush() hands pending ink over now and returns it; unmount and hiding flush too', () => {

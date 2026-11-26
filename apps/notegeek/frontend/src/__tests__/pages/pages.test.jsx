@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { SlashFocusProvider } from '@geeksuite/ui';
 import { MemoryRouter } from 'react-router-dom';
-import { MantineProvider } from '@mantine/core';
 import ThemeModeProvider from '../../theme/ThemeModeProvider';
 
 // Pages to test
@@ -12,9 +11,7 @@ import useNoteStore from '../../store/noteStore';
 
 const AllProviders = ({ children }) => (
     <ThemeModeProvider>
-        <MantineProvider>
             <MemoryRouter>{children}</MemoryRouter>
-        </MantineProvider>
     </ThemeModeProvider>
 );
 
@@ -60,7 +57,7 @@ vi.mock('@geeksuite/user', () => ({
     usePreferences: vi.fn(() => ({ preferences: {}, loaded: true })),
 }));
 
-// Mock ResizeObserver for Mantine — a class: MUI's multi-line capture box
+// Mock ResizeObserver for a class: MUI's multi-line capture box
 // (TextareaAutosize) constructs one with `new`.
 global.ResizeObserver = class {
     observe() {}
