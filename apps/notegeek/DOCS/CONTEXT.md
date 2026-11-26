@@ -76,7 +76,7 @@ which exist.)
     (case-insensitive, regex-escaped), prefix matches first, then most recent; default 20, max 50.
     The `[[` picker's source — no bodies.
   - `Note.links` → `[NoteLink]` `{ key title noteId }`: the note's outgoing links (§12).
-  - `suggestForNote(noteId, title, excerpt, tags)`: AI tag and link suggestions. No client calls it since 2026-11-25 (§24); the gateway keeps it.
+  - `suggestForNote` is gone (removed from the gateway 2026-11-25, §25); the client stopped calling it earlier that day (§24).
 - **Mutations**:
   - `createNote(title, content, type, tags)`
   - `updateNote(id, title, content, type, tags, changeReason)`: each update writes a
@@ -142,7 +142,7 @@ Defined in `apps/notegeek/docker-compose.yml` and `.env.production`:
 ## 6. Testing & Quality Gates
 
 - **Backend Unit Tests**: Jest suites in `apps/notegeek/backend/__tests__/` (auth isolation, proxy headers, rate limiting).
-- **Frontend Unit Tests**: Vitest suites in `apps/notegeek/frontend/src/__tests__/` (components, stores, sanitizers).
+- **Frontend Unit Tests**: Vitest suites in `apps/notegeek/frontend/src/__tests__/` (components, stores, utils).
 - **Mobile UI Harness**: Tested and verified across 139 mobile scenes via `tools/mobile-harness` ensuring 44px touch targets and full dark/light theme contrast.
 
 ---
@@ -158,10 +158,10 @@ Replaced the Lab Notebook on 2026-09-29 (Chef-approved). TodoGeek became paper +
 - **Loud only when it matters.** The one other colour is the error ink, used by the save alert and nothing decorative.
 - **Type:** Spline Sans (titles, body, labels) + Spline Sans Mono (small metadata only: dates, counts, code), both self-hosted variable fonts (`@fontsource-variable/spline-sans`, `…/spline-sans-mono`, imported in `src/main.jsx`). Nothing is uppercased or letterspaced; section labels are sentence-case sans. Spline Sans sets a tight word space, so the theme adds `word-spacing: 0.06em` to body and form controls.
 - **The grid:** a faint 16px engineering grid (`gridBackground` in `theme/tokens.js`) on the desk from `md` up and behind Home's capture box. Copy that needs contrast sits on a solid sheet.
-- **Quiet rows** (`components/notes/NoteRow.jsx`): title, preview, then a meta line of the type as a small graphite glyph with an accessible name (`TypeIcon.jsx`, e.g. "Sketch note"), plain tags ("work · planning"), and lowercase mono time. The notes list filters by type with one row of quiet chips (icon + short plural label; the active one highlighted).
+- **Quiet rows** (`components/notes/NoteRow.jsx`): title, preview, then a meta line of the type as a small graphite glyph with an accessible name (`TypeIcon.jsx`, e.g. "Handwritten note"), plain tags ("work · planning"), and lowercase mono time. The notes list filters by type with one row of quiet chips (icon + short plural label; the active one highlighted).
 - **Save status** (`components/notes/SaveStatus.jsx`, states in `utils/saveStamp.js`): QUIET `SaveStatus` — small lowercase mono in the meta line under the title ("saved · 3m ago", "editing", "saving…"), always the page's one `role="status"`; LOUD `SaveAlert` — error ink on its tint with a Retry, in the head row beside ⋯, only when a save failed or you are offline with unsaved edits. On a phone the docked toolbar repeats the alert (via `store/editorChromeStore.js`). A repeated failure toasts once.
-- **One New.** A new note is Markdown: `/notes/new` opens straight into it (no type picker). Phone: the tab bar's New opens `components/new/NewNoteSheet.jsx` (note, photo of a page, sketch); Home's capture box also offers photo and sketch while empty and saves a Markdown note. Desktop: a split button in the top bar (`NewNoteMenu.jsx`). Any other `?type=` opens a plain new Markdown note (§24).
-- **Home is the capture box and your notes** — no greeting, no "Continue" cards; the first phone screen shows notes.
+- **One New.** A new note is a Typed (Markdown) note: `/notes/new` opens straight into it (no type picker). Phone: the tab bar's New opens `components/new/NewNoteSheet.jsx` (type a note, photo of a page, write by hand); Home's capture box saves a Typed note (§24). Desktop: a split button in the top bar (`NewNoteMenu.jsx`). Any other `?type=` opens a plain new Markdown note (§24).
+- **Home is capture, then a short list** — four start tiles (Write, 1:1, Meeting, Photo), the typing box, and six notes under "Pick up where you left off" (§24); no greeting, no "Continue" cards.
 - **Icons:** a graphite pencil drawing a line across a pass of highlighter, on the grid paper (`public/icons/*.svg`, rendered by `node tools/pwa-icons.mjs --app notegeek`). Manifest `theme_color` `#F1F4EF`, `background_color` `#E9EEE7`.
 
 Layout facts this pass depends on:
@@ -175,7 +175,7 @@ Layout facts this pass depends on:
 - **Targets are sized by the pointer.** The suite theme floors every `IconButton` at 44px on all widths. Compact controls (the toolbar, tag-tree chevrons and ⋯, tag rows, filter chips, menu items) are compact only under `(pointer: fine)` — `geekTarget()` from `@geeksuite/ui`, or `TOUCH_TARGET_MEDIA` (the old under-`md` rules plus any coarse pointer) as a drop-in. `ThemeModeProvider`'s "compact inputs" override is `(min-width: 600px) and (pointer: fine)`: on a touch tablet the title and tags fields keep their 44 px. `MuiMenuItem` is 44 px on a coarse pointer (theme).
 - The page-type formatting strip is `components/editors/EditorToolbar.jsx`: inline and sticky under the title on a tablet and a desktop; on a phone it is portalled to `<body>` and docked `bottom: keyboardInset` (`hooks/useKeyboardInset.js`, a copy of TodoGeek's visualViewport hook — apps do not import each other). It swallows `mousedown` on its buttons so a tap does not blur the text. `NoteShell` pads the page by the bar's height on phones only. The sketch editor's own `DrawingToolbar` modes were not touched by the tablet wave.
 - Sidebar tag counts come from `GetNoteTagCounts` (`notes { id tags }`) — `noteTags` is a bare string list. It is a `notes` root field, so every note write evicts and refetches it with the tag index. The gateway loads whole documents for it; fine at today's size, worth a dedicated `noteTagCounts` resolver if the library grows large.
-- List thumbnails (`components/notes/NotePreview.jsx`, geometry in `utils/thumbnails.js`) parse sketch / mind-map JSON only once a row nears the viewport, in an idle callback, memoised per note version. Measured 2026-09-26 in Chromium: 200 rows with 60 × 1MB sketches scroll with zero long tasks.
+- List thumbnails (`components/notes/NotePreview.jsx`, geometry in `utils/thumbnails.js`) parse handwritten-note JSON only once a row nears the viewport, in an idle callback, memoised per note version. Measured 2026-09-26 in Chromium: 200 rows with 60 × 1MB sketches scroll with zero long tasks.
 - List grouping (`utils/recency.js`) uses the writer's LOCAL calendar day — Today, Yesterday, This week, then months — and applies to the Recent and Created sorts only.
 
 ---
@@ -197,7 +197,7 @@ Added 2026-09-30. The browser's own print path, no PDF library: `window.print()`
 
 ## 9. Import a Markdown file
 
-Added 2026-09-30. Each `.md` / `.markdown` / `.txt` file becomes one new **Markdown** note through the ordinary `createNote` (title, body and type in one call; no backend change). A `.txt` becomes Markdown too, not `text`: `text` is TipTap HTML, where a plain file's line breaks and any `<` would be read as markup, while the Markdown editor shows a plain file exactly as written.
+Added 2026-09-30. Each `.md` / `.markdown` / `.txt` file becomes one new **Typed** (Markdown) note through the ordinary `createNote` (title, body and type in one call; no backend change). A `.txt` becomes a Typed note too: the Typed editor shows a plain file exactly as written (the old rich-text type, where line breaks and any `<` would be read as markup, is gone, §24).
 
 - **Desktop — drop:** drag files onto home, the notes list, a tag's list or search, or onto a brand-new note that is still empty (`NoteEditorPage` sets `editorDropOk` in `store/importStore.js`; any title or body, a saved draft, or a non-Markdown type withdraws it — a sketch's tldraw takes its own drops, and `/notes/photo` has its own image drop). A drop zone (desk-tinted scrim, dashed ink card, highlighter badge) covers the page while files are over it. Anywhere else a drop is left to the page.
 - **Phone — pick:** "Import a Markdown file" at the bottom of the New sheet (and "Import Markdown files" in desktop's New menu) opens a hidden `<input type="file" multiple accept=".md,.markdown,.txt,text/markdown,text/plain">`. Selection is by extension first: Android hands a `.md` over as `application/octet-stream`.
@@ -254,8 +254,9 @@ down, search is keyword-only and Related is empty; nothing else is asked.
   AI stack or any provider client (the test reads their sources), only `embeddings.js` calls `fetch`,
   and every embed call a full index + search cycle makes is asserted to target `EMBEDDINGS_URL`.
 - **What is embedded:** title + body in passages of ~250–350 words with a 40-word overlap, cut at
-  paragraphs and headings; the title opens the first passage. markdown as written; rich text with
-  the HTML stripped; code's code; a mind map's node labels; a sketch or photo note its title only
+  paragraphs and headings; the title opens the first passage. markdown as written (the client writes only
+  `markdown` and `handwritten` now, §24; the indexer still reads the old types, which only recently deleted notes can
+  hold); a handwritten or photo note its title only
   (an untitled one is `skipped`); a locked or encrypted note its title only. At most 60 passages.
 - **Stored:** `noteChunks` `{ userId, noteId, chunk, text, textHash, vector[1024], model, updatedAt }`,
   not on the Note (keeps list reads light). Bookkeeping on the Note (never in GraphQL):
@@ -364,7 +365,7 @@ down, search is keyword-only and Related is empty; nothing else is asked.
 
 Added 2026-09-30 (gateway: `apps/basegeek/packages/api/src/graphql/notegeek/links.js`).
 
-- **Syntax:** `[[Note title]]` and `[[Note title|shown text]]` in **markdown** and **rich-text** notes.
+- **Syntax:** `[[Note title]]` and `[[Note title|shown text]]` in Typed (**markdown**) notes.
   Matched case-insensitively (whitespace collapsed) against the owner's own titles. Fenced code, inline
   code and `<pre>`/`<code>` are skipped (`if [[ -f x ]]` in a script is not a link). An in-app link
   `[text](/notes/<id>)` / `<a href="/notes/<id>">` —
@@ -404,8 +405,8 @@ Added 2026-09-30 (gateway: `apps/basegeek/packages/api/src/graphql/notegeek/link
     syntax can't carry (`[`, `]`, `|`) is inserted as an id link `[Title](/notes/<id>)` instead.
     The rows are always narrowed client-side to what is typed right now, because the request lags the
     keyboard by a 120 ms debounce: Enter inside that window once chose from the previous query's list
-    (harness 18b found it). Rich-text (TipTap) notes have no picker; their `[[…]]` still resolves on
-    the gateway and counts as a backlink.
+    (harness 18b found it). A leftover rich-text note (only in recently deleted notes now) is opened as a Typed note,
+    so it has the picker; the gateway still resolves its `[[…]]` as a backlink.
   - **Rendered `[[links]]`** (viewer and editor preview; `utils/remarkWikiLinks.js`, resolution map
     from the small `NoteLinks` query in `hooks/useNoteLinks.js`, handed down by `WikiLinkContext`; the
     editor refetches it after every save, since links resolve on save): resolved → an ink link with a
@@ -461,10 +462,11 @@ to produce the note's text: it can only name a place and what to add there.
   `no_change`), and a dropped op's content is moved to `unplaced`, next to what the model itself could not place.
   A failed call (cap, unavailable, unparseable) is `stats.failed: true`, never an empty "nothing to add".
 - **Which notes:** Markdown. A "plain text" note in NoteGeek is a Markdown note without headings (imports become
-  Markdown, §9) — it gets list/table/replace/new-section-at-end. **Rich text (`text`) is refused**: the gateway
-  has no Markdown→HTML renderer, so an insert would be model-written HTML in a stored note, and `replace_text`
-  over HTML cannot honestly quote what the reader sees across tags and entities. Code, mind map and sketch are
-  refused ("Fold-in works on markdown and text notes"); locked/encrypted notes are never sent to a model.
+  Typed notes, §9) — it gets list/table/replace/new-section-at-end. **Only handwritten notes are refused** from the
+  client's point of view (the client writes just Typed and Handwritten now, §24). The gateway still refuses an old
+  rich-text note (it has no Markdown→HTML renderer, so an insert would be model-written HTML in a stored note) and
+  code and mind map notes; only recently deleted notes can still be one of those. Locked/encrypted notes are never sent
+  to a model.
 - **Long notes:** up to 14 000 characters the note goes whole. Past that: an OUTLINE (every heading, each
   section's first line, table header rows, each list's first/last item; ≤ 6 000 chars) plus the full text of the
   sections sharing the most words with the new info (heading words ×3), ≤ 14 000 chars. Anchors are still checked
@@ -487,8 +489,8 @@ to produce the note's text: it can only name a place and what to add there.
   only for explicit corrections; second run: list item for the brown widow, `replace_text` orange→red, a new table
   row for the sighting, 0 dropped. gpt-4.1-mini puts a replace's explanation in `reason`, so `why` falls back to it.
 - **UI (2026-10-01; needs the gateway above live first — the bundle sends `foldInPreview` / `foldInApply`):**
-  - **Entry points:** "Fold in new info" in the editor's ⋯ menu (a saved Markdown note only — an unsaved draft or
-    any other type gets no item); a merge glyph in the read-only viewer's action bar (Markdown, unlocked);
+  - **Entry points:** "Fold in new info" in the editor's ⋯ menu (a saved Typed note only — an unsaved draft or
+    a handwritten note gets no item); a merge glyph in the read-only viewer's action bar (Markdown, unlocked);
     **Share → NoteGeek** (`pages/ShareTarget.jsx`) now lands on a choice — "Save as a new note" (one tap; it used
     to create the note on arrival, which made "add this to my spiders note" impossible without a duplicate) or
     "Add to an existing note"; and on Home, a "Fold into an existing note" button beside Save while a capture is
@@ -496,7 +498,7 @@ to produce the note's text: it can only name a place and what to add there.
   - **Picking the note** (`components/foldin/FoldTargetPicker.jsx`): the shared/captured text's first 300
     characters go through `searchNotes(hybrid: true)` (keyword + local embeddings, §11 — nothing leaves the box
     for this); the best Markdown, unlocked hit is offered as **"Looks like it belongs in: Spiders"**, up to three
-    more below, then a "Find a note" title search (`noteTitles`). Rich text and other types are never offered.
+    more below, then a "Find a note" title search (`noteTitles`). Handwritten notes are never offered.
   - **The sheet** (`components/foldin/FoldInSheet.jsx`, a `GeekSheet`: full height on a phone, a dialog from `md`):
     a "New info" box (prefilled from a share or capture; over 12 000 characters disables Propose and says to use
     Compose) → "Propose changes" (a status line with elapsed seconds; the editor first SAVES any pending edit, and
@@ -534,7 +536,7 @@ Spec: `DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md` §3. Gateway facts:
   = `{ archived: { $ne: true } }` — never `archived: false`, because existing notes have no field (no migration).
   A function, not a constant: mongoose casts filters in place. **A new read site must get it or say why not.**
 - **Filtered:** `notes` (incl. tag/prefix/under), `noteTags`, `noteTagUsage` (count and sub-tags), `searchNotes`
-  (keyword rows and the meaning-only re-read), `noteTitles`, `backlinks`, `suggestForNote`, glance
+  (keyword rows and the meaning-only re-read), `noteTitles`, `backlinks`, glance
   `recentNotes` + `glanceSearch`, `suiteTags` / `taggedAcross` (the notegeek scope), legacy REST
   `GET /api/notes` and `/api/notes/tags`. Meaning search (`vectorSearchRanked`) and `relatedNotes` drop archived
   ids **before ranking** (`semantic.js#archivedNoteIds`, read fresh per query) so they can't move the cut or the
@@ -573,10 +575,11 @@ Spec: `DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md` §4. Gateway facts:
 - **Input shape:** per note `# <title or "Untitled">` + `Written <YYYY-MM-DD>` (the caller's
   `profile.timezone`, default America/Chicago) + blank line + body; joined by `\n\n---\n\n`. Oldest `createdAt`
   first. Duplicate ids count once.
-- **Sources:** owner-scoped load by id (archived notes are composable). Bodies: `markdown` as-is, `code` unwraps
-  the `{ code }` JSON form, `text` and the legacy null type are TipTap HTML stripped by jsdom's `DOMParser`
-  (`htmlToPlainText`, paragraph breaks kept, a literal `<` survives). **Skip reasons:** `locked` (locked or
-  encrypted, never sent), `unsupported_type` (handwritten, mindmap), `empty` (nothing after stripping),
+- **Sources:** owner-scoped load by id (archived notes are composable). Bodies: `markdown` as-is; the gateway still
+  unwraps an old `code` note's `{ code }` JSON form and strips an old `text` or legacy null-type note's HTML with jsdom's
+  `DOMParser` (`htmlToPlainText`, paragraph breaks kept, a literal `<` survives), but only recently deleted notes
+  can be those now (§24). **Skip reasons:** `locked` (locked or
+  encrypted, never sent), `unsupported_type` (handwritten; an old mindmap), `empty` (nothing after stripping),
   `not_found` (missing, malformed or another user's — title null). Fewer than 2 usable →
   `provenance.reason: 'not_enough_sources'`, `stats.strategy: 'refused'`, no model call.
 - **Logging:** one `[notegeek] compose-many` line of counts (requested/used/skipped/chars/chunks) — never text or
@@ -586,10 +589,12 @@ Spec: `DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md` §4. Gateway facts:
 
 ## 16. Select mode, Compose-many and Archive — UI
 
+*Select mode is no longer on Home (2026-11-25, §24); it remains on Notes, a tag page, search and Archived.*
+
 Spec: `DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md` §5 (U1–U9). Needs §14/§15's gateway live first — the bundle sends
 `archiveNotes` / `restoreNotes` / `archivedNotes` / `composeNotes` and reads `Note.archived`.
 
-- **Select mode** — one hook, `hooks/useNoteSelection.js`, used by Home (`QuickCaptureHome`), All notes and a tag page
+- **Select mode** — one hook, `hooks/useNoteSelection.js`, used by All notes and a tag page
   (both `NoteList`), search (`SearchResults`) and Archived. It holds the selected NOTES (types, titles, `createdAt`),
   not just ids; `resetKey` drops it when the same component shows a different list (another tag, a new query); Esc
   exits unless a dialog took the key. Enter by **long-press** (`hooks/useLongPress.js`: 500 ms, a 10 px move cancels,
@@ -601,13 +606,13 @@ Spec: `DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md` §5 (U1–U9). Needs §14/§15's g
   swallow the click that lands on the new element (and a hold in select mode toggles, like a tap).
 - **The action bar** (`components/select/SelectionBar.jsx`): fixed, just above the tab bar (`useGeekShell().bottomInset`)
   on a phone, right of the sidebar on desktop; leaves a spacer under the list. **Archive** (≥ 1) and **Compose N notes**
-  (≥ 2 selected AND ≥ 2 it can read, ≤ 20); "1 will be skipped" counts sketches, mind maps and locked/encrypted notes
+  (≥ 2 selected AND ≥ 2 it can read, ≤ 20); "1 will be skipped" counts handwritten and locked/encrypted notes
   from the selection (`composeSkipReason`; the list query carries no `isLocked`, so only search/Archived rows can say
   locked — the gateway's `sources.skipped` is the final word). Archived view: **Restore** only. It mounts its Apollo
   hooks only while selecting (Home's tests render without a client). A failed archive/restore keeps the selection.
 - **Compose-many** (`components/select/ComposeManyFlow.jsx` over the existing `ComposeDialog`): ids sent oldest first;
   the dialog's many-notes mode (`sourceCount`) shows "Composing 4 notes… 12s", the draft, the notes left out
-  ("2 notes left out: Garden plan (locked), Sketch 4 (a sketch)" — `utils/composeMany.js#skipSummary`), the
+  ("2 notes left out: Garden plan (locked), Handwritten 4 (handwritten)" — `utils/composeMany.js#skipSummary`), the
   chunksFailed / truncated warnings, and **Save as a new note** only. Refusals (`not_enough_sources`,
   `content_too_long` with the total, degenerate, empty) and errors say so with **Back to selection** — the selection
   survives. Save → one `createNote` (title = the draft's first `#` heading, kept in the body, else "Composed note";
@@ -695,8 +700,8 @@ confirm it live, then NoteGeek.
   date sorts, offset under an opaque cursor for title sorts (case-insensitive); sorts `updatedAt_desc` (default),
   `updatedAt_asc`, `createdAt_desc`, `createdAt_asc`, `title_asc`, `title_desc`. Index
   `{ userId, pinned: -1, updatedAt: -1, _id: -1 }`. `notes` keeps its old arguments.
-- **Word search (5.3–5.5, 5.10):** `wordText` holds words, not markup: rich text without tags, code without its
-  JSON wrapper, mind-map labels, Markdown without syntax, a sketch's transcript; encrypted notes none
+- **Word search (5.3–5.5, 5.10):** `wordText` holds words, not markup: Markdown without syntax, a handwritten note's transcript (the gateway still
+  strips old rich text, code and mind-map notes the same way, but only recently deleted ones can be those, §24); encrypted notes none
   (`noteDerived.js`, `DERIVED_VERSION` 2; older notes are re-derived at start-up). Text index weights
   `{ title: 10, tags: 5, wordText: 1 }`. Hybrid search fuses a third list — titles with a word starting with the
   query ("gar" → Garage door) — at weight 0.9. Snippets are plain text around the first word that STARTS with a
@@ -747,9 +752,8 @@ Client half of §17 (local, not deployed; the gateway goes first). `frontend/src
   `NoteArchiveState.deletedAt`).
 - **Lists (5.1, 5.2, 3.5).** Lists select `preview`, never `content`. The Notes page uses `notesPage(first: 100,
   after: nextCursor, sort)` with "Show more notes" (the count reads `100+` while more exist); sort is server-side
-  (`updatedAt_desc`, `createdAt_desc`, `title_asc`) and the client re-sort is gone. Sketch and mind-map row
-  thumbnails fetch their own body when scrolled near (`NoteThumbContent`, cache-first); code rows show the plain
-  preview. Home fetches `limit: 12`, shows a skeleton only with nothing on screen, shows list errors with Retry, and
+  (`updatedAt_desc`, `createdAt_desc`, `title_asc`) and the client re-sort is gone. Handwritten row
+  thumbnails fetch their own body when scrolled near (`NoteThumbContent`, cache-first). Home fetches `limit: 12`, shows a skeleton only with nothing on screen, shows list errors with Retry, and
   a store `deleteNote` drops the row instead of refetching every note.
 - **Open a note from cache (3.1).** `NotePage` shows a spinner only when `loading && !data` and an error only
   when there is no cached note; `apolloClient.js` adds a `Query.note` to `Note:<id>` redirect (not in the shared
@@ -883,7 +887,8 @@ What: `DOCS/REFERENCE_PANE_SPEC.md`. No gateway change, no stored field.
   (`useTldrawUser`) so a reference on white paper cannot switch the ink colours of a dark page
   being written on. Do not mount `PaperSync` in it.
 - **Landmine: `<Tldraw readOnly>` is not a prop in tldraw 2.4.** Read-only is
-  `editor.updateInstanceState({ isReadonly: true })`.
+  `editor.updateInstanceState({ isReadonly: true })`. `HandwrittenEditor` now does this (§25); before
+  2026-11-25 its `readOnly` prop was silently ignored.
 - **Not on a phone** (`useNoteFormFactor().phone`): no button, and an open pane closes.
 - **Harness.** `26a` (a 1:1 with an earlier 1:1 above it, both real canvases), `26b` (typed),
   `26c` (phone has no button).
@@ -919,8 +924,7 @@ What: `DOCS/NOTE_KINDS_SPEC.md`. No stored field; a kind is read off tags.
 ## 24. Two note types (client only, 2026-11-25)
 
 Chef only uses `markdown` and `handwritten`, so the FRONTEND no longer creates or edits `text` (rich text),
-`code` or `mindmap` notes. No gateway, GeekDay or `packages/*` change: the gateway still accepts and stores
-all five types, and on 2026-11-25 the five rich-text notes and one untyped note were converted to Markdown with
+`code` or `mindmap` notes. No gateway, GeekDay or `packages/*` change in that step (the gateway followed later the same day, §25), and on 2026-11-25 the five rich-text notes and one untyped note were converted to Markdown with
 `apps/basegeek/packages/api/scripts/migrate-notes-to-markdown.js` (dry run by default; originals are in each
 note's history), leaving only `markdown` and `handwritten` among live notes.
 
@@ -939,7 +943,7 @@ note's history), leaving only `markdown` and `handwritten` among live notes.
   HTML as text, and saving it writes `type: 'markdown'`.
 - **Suggestions strip removed.** `SuggestionStrip`, `utils/suggestions.js`, the `SuggestForNote` query and the
   "Suggest tags & links" setting are gone from the client. The `suggestOnSave` preference is no longer read or
-  written; the gateway's `suggestForNote` is untouched. Fold-in, compose, related notes, meaning search and
+  written; the gateway's `suggestForNote` was removed later that day (§25). Fold-in, compose, related notes, meaning search and
   handwriting-to-text are unchanged.
 - **Harness.** Scenes `05-suggestions`, `08-editor-code` and `09-editor-mindmap` are gone; the fixture notes
   that were rich text, code or mind map are Markdown notes with the same ids, so row counts are unchanged.
@@ -951,3 +955,28 @@ note's history), leaving only `markdown` and `handwritten` among live notes.
   `data-home-start`), then the typing box; on a phone the box comes first. Below, one short list, "Pick up
   where you left off" (6 rows). No Pinned group and no select mode on Home: browsing is Notes and Everything.
 
+## 25. 2026-11-25, later the same day (gateway + client, built 2026-11-25, not yet on a device)
+
+- **Gateway.** `suggestForNote` and its types are gone. `createNote` / `updateNote` accept only `markdown` and
+  `handwritten` (`NOTE_TYPES`, `validation.js`); list filters still accept the old stored types
+  (`STORED_NOTE_TYPES`) and the model enum keeps all five, so an old recently-deleted note loads and restores.
+  The default type is `markdown`. The HTML sanitizer stays, because a restored old rich-text note can still reach it.
+- **List previews (`DERIVED_VERSION` 3).** `previewFor` in `noteDerived.js` drops a leading heading that repeats
+  the title and joins any other heading to what follows with " — ". The rebuild runs at gateway boot
+  (`ensureNoteWordIndex` calls `backfillDerived` in `wordIndex.js`), in batches, without touching `updatedAt`.
+- **Mantine is gone.** `@mantine/*`, `postcss-preset-mantine`, `postcss-simple-vars` and `postcss.config.cjs`
+  were removed from the client.
+- **Read-only is real.** `HandwrittenEditor` sets `isReadonly` on mount, keys `<Tldraw>` on `readOnly`, and adds
+  no store listener when read-only.
+- **Unreadable handwritten notes.** A stored body that is not a tldraw snapshot (invalid JSON, truncated, `{}`)
+  shows `components/notes/UnreadableSketch.jsx` ("This note can't be opened", "Try again") instead of a blank
+  writable canvas. `handleSave` and `handleContentChange` in `NoteEditorPage` refuse, the editor's flush and
+  export refuse, `SketchReference` says "This note could not be read.", and `BackgroundReader` rejects the job so
+  nothing is transcribed or saved. There is no "start fresh" option: the gateway keeps a history version only some
+  of the time (first edit, after 10 quiet minutes, once per 10 minutes, before a large shrink). A whitespace-only
+  body counts as empty here (GeekDay treats it as unreadable).
+- **Shared pen code.** `packages/ink` (`@geeksuite/ink`) now holds `finePen`, `penButton`, `penKey`,
+  `twoFingerTap`, `palmTouch`, `lassoGeometry`, `sketchBody` and the core of `sketchExport`, with `createPenPrefs`.
+  Local and unchanged in role: `utils/penPrefs.js` (a binding of the same storage keys),
+  `utils/sketchExport.js` (a wrapper with the template sheet and print export), `utils/saveGuards.js`, and
+  `HandwrittenEditor.jsx`. Palm handling at canvas level still differs from GeekDay (here tldraw pen mode).

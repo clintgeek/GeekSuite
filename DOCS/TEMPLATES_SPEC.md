@@ -1,7 +1,7 @@
 # Specification: templates in NoteGeek and GeekDay
 
 Status: **page templates revised 2026-11-21 on Chef's test and confirmed by him
-(section 2a). Note templates (N1–N5) are still Sage's decisions, unconfirmed.**
+(section 2a). Note templates (N1–N5) were removed from NoteGeek on 2026-11-24 (N6); only page templates remain.**
 
 Provenance: there is no ticket. Chef, 2026-11-20: *"i also want to explore
 templates in both notegeek and geekday. make some useful ones in both. ...
@@ -31,10 +31,10 @@ meeting sheet with a column for actions, a note that already has the headings.
 Two kinds, because the two apps hold two kinds of page:
 
 - **Page templates** for handwriting: a printed sheet under the ink, for a
-  GeekDay day page and a NoteGeek sketch. One set, shared, so a day page looks
+  GeekDay day page and a NoteGeek handwritten note. One set, shared, so a day page looks
   the same in both apps.
 - **Note templates** for typed notes in NoteGeek: a new note that starts with
-  a title, tags and headings.
+  a title, tags and headings. *Removed 2026-11-24 (N6); kept below as the record.*
 
 ## 2. Requirements
 
@@ -118,7 +118,7 @@ N6. *(2026-11-24, Chef: "don't need any typed templates"; Recipe and Packing
 ## 3. Out of Scope
 
 - Templates the user writes or edits themselves, and sharing templates.
-- Templates for mind maps and code notes.
+- Templates for mind maps and code notes. (Both note types were removed from the NoteGeek client on 2026-11-25.)
 - Any behaviour attached to a template's regions (for example, treating ink
   in the Meeting actions column as tasks).
 - Gateway or schema changes. Templates are client-side.

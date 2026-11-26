@@ -18,7 +18,7 @@ the middle button (`button === 1` / `buttons & 4`), scrolls while held. That map
 unverified on a device: nothing documents how Chrome on Android reports a stylus's
 secondary button, and Lenovo's own pen settings may take the button before the browser
 sees it. The bullets below describe the 2026-09-29 behaviour where they say the side
-button scrolls; `utils/penButton.js` is current.*
+button scrolls; `packages/ink/src/penButton.js` is current.*
 
 *Changed 2026-09-29. Chef: "Button on the S-pen should let me scroll. That's way more
 useful." Until then the side button was the eraser; the toolbar eraser is still there.*
@@ -27,7 +27,7 @@ useful." Until then the side button was the eraser; the toolbar eraser is still 
   tip on Surface and Wacom pens) and restores the previous tool when the pen lifts
   (`Editor.ts`, `STYLUS_ERASER_BUTTON`). It also turns on pen mode the first time it sees a
   pen: from then on the pen draws and fingers only pan and zoom.
-- **What we add** (`utils/penButton.js`): Android browsers are expected to report the
+- **What we add** (`packages/ink/src/penButton.js`): Android browsers are expected to report the
   **S Pen side button as `button === 2`** (the same code as a right-click), with
   `buttons & 2` set during moves. This hasn't been checked on a device yet.
   - A pen `pointerdown` with the side button (button 2 or `buttons & 2`) switches to tldraw's
@@ -145,7 +145,7 @@ Where the spec was silent, these are the choices made, and why.
 
 ### §2 Handwriting to Markdown
 
-**Export** (`frontend/src/utils/sketchExport.js`, called through `HandwrittenEditor`'s
+**Export** (`frontend/src/utils/sketchExport.js`, a wrapper over `@geeksuite/ink`'s `exportSketchPng` that adds the template sheet and print; called through `HandwrittenEditor`'s
 `sketchApiRef`, so the editor page never imports tldraw):
 
 - tldraw's `exportToBlob({ editor, ids: every shape on the current page, format: 'png', opts })`
@@ -213,7 +213,7 @@ image is bare base64 PNG under the ceiling, prints its size, and checks that the
 the transcript don't overlap on a phone) and `12c-sketch-compose` (no Replace; Back to
 transcript present). `transcribeSketch` and `composeNote` are stubbed per page.
 
-### The Fine pen (added 2026-09-27) — `frontend/src/utils/finePen.js`
+### The Fine pen (added 2026-09-27) — `packages/ink/src/finePen.js`
 
 Chef: "Can we make that thin writing line even thinner?"
 
@@ -509,12 +509,12 @@ they differ (open position, listener, phone bar).
   shrinks the shape, not the bytes.)
 - **Fullscreen (2.2).** `components/editors/sketchPortal.js` is a context; every Popover gets
   `container` and every Tooltip `slotProps.popper.container` pointing at the sketch container.
-- **Pen mode at mount (2.3).** `utils/penPrefs.js`: a pen press sets
+- **Pen mode at mount (2.3).** `utils/penPrefs.js` (a binding over `@geeksuite/ink`'s `createPenPrefs`; keys unchanged): a pen press sets
   `notegeek:sketchPenSeen`. Mount and `PenModeSync` turn `isPenMode` on from the first touch
   on a device that has seen a pen. A "Finger draws" switch in More (per device) keeps it off.
 - **Palm rule and toolbar position (2.4).** In pen mode the toolbar ignores a touch (the
   pointerdown and the click after it) when a pen was near in the last 1.5 s or the contact is
-  24 px or more (`isPalmTouch`). A deliberate fingertip with the pen put away still works, so
+  24 px or more (`isPalmTouch`, `packages/ink/src/palmTouch.js`). A deliberate fingertip with the pen put away still works, so
   the bar cannot lock you out. The bar can sit bottom, top, left or right (vertical bar), per
   device, set in More; popovers open away from it. The bar uses `env(safe-area-inset-*)`.
   Thresholds are guesses until measured on the S26 and the Lenovo.
@@ -536,7 +536,7 @@ they differ (open position, listener, phone bar).
   effective paper into the document meta. `/labs/pen` calls `penButtonTool` and says "nothing
   mid-stroke" for chorded moves.
 - **Cheap wins (2.12).** Share as image (More): `navigator.share({files})` when available,
-  else a PNG download at print resolution; two-finger-tap undo (`utils/twoFingerTap.js`,
+  else a PNG download at print resolution; two-finger-tap undo (`packages/ink/src/twoFingerTap.js`,
   listen-only); a "Recent pens" strip (last 3, per device) in the pen picker.
 - **Not done:** lasso, scribble-to-erase, pages or a page boundary, a pressure toggle, search-hit
   location in a sketch; folding or tucking the chrome above the canvas (page layout); the
@@ -544,5 +544,5 @@ they differ (open position, listener, phone bar).
 - **Tests:** `HandwrittenEditor.test.jsx`'s tldraw mock now honours listen filters,
   `getStoreSnapshot`, a deprecated `getSnapshot`/`loadSnapshot` that throw, `mergeRemoteChanges`
   and the asset handler (20 s per-test timeout). New: `sketchImages`, `twoFingerTap`,
-  `palmTouch`. Harness scenes `10-editor-sketch` and `03q-sketch-paper-dark` change look and
+  `palmTouch` (both now tested in `packages/ink`). Harness scenes `10-editor-sketch` and `03q-sketch-paper-dark` change look and
   were not re-run.

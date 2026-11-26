@@ -216,7 +216,7 @@ button closest to the tip to erase".
    - If nothing changes with the button held: the tablet is not passing it on, and no web
      app can use it. The eraser is one tap away on the toolbar (tablet width shows it).
    - If something else shows (a different button number, or a key press): press **Copy
-     report** and paste it to me; mapping it is a two-line change in `utils/penButton.js`.
+     report** and paste it to me; mapping it is a two-line change in `packages/ink/src/penButton.js`.
 
 **Also changed:** a *second* pen button reported as the middle button scrolls while held.
 That mapping is a guess (no documentation exists) and harmless if it never arrives.
@@ -231,7 +231,7 @@ That mapping is a guess (no documentation exists) and harmless if it never arriv
 - **NoteGeek** (`apps/notegeek/frontend/src/`): `utils/journalLines.js`,
   `components/editors/SendTasksDialog.jsx`, `pages/NoteEditorPage.jsx` (the ⋯ entry and the
   send loop), `utils/sketchToText.js` (`journalMarkAsMarkdown`), `pages/PenLab.jsx`,
-  `utils/penButton.js`.
+  `packages/ink/src/penButton.js`.
 - **TodoGeek**: `utils/parseTaskInput.js` and `utils/quickAdd.js` re-export from the shared
   package.
 
@@ -242,7 +242,7 @@ That mapping is a guess (no documentation exists) and harmless if it never arriv
 - NoteGeek: `journalLines.test.js` (marks, glyphs, defaults, keys, TodoGeek's grammar);
   the Send dialog flow (reuse with no request spent, the tasks sent, already-sent, read-first,
   partial failure, no journal lines); Markdown marks; PenLab's verdict agreeing with
-  `penButton.js`.
+  `packages/ink/src/penButton.js`.
 - Mutation-checked: done → completed, the mark deciding the kind, sent lines unticked,
   failures not counted as sent, `x` → ticked checkbox, both pen-button mappings. One rule
   (`SKIP` for page markers) turned out to be dead code and was removed, not tested.
@@ -286,7 +286,7 @@ real handwriting.
 Chef, on the tablet with `/labs/pen`: a DOUBLE-CLICK of the pen's button reaches the page
 as a `keydown` with `key: "Unidentified"` (holding it still opens Lenovo's menu). There is
 no "held" state, so it cannot be erase-while-held. In a sketch a double-click is **undo**
-(Chef's call the same day; it switched pen and eraser for an hour) — `utils/penKey.js`, attached in `HandwrittenEditor`.
+(Chef's call the same day; it switched pen and eraser for an hour) — `packages/ink/src/penKey.js` (`@geeksuite/ink`), attached in `HandwrittenEditor`.
 Android's on-screen keyboard also sends "Unidentified" (keyCode 229), so it is ignored
 while anything is being typed.
 

@@ -152,7 +152,7 @@ cap. All tools carry `readOnlyHint: true`.
 ### Deliberately excluded
 
 - basegeek admin / aiGeek / API-key surface.
-- Anything that spends our AI quota: `whatNext`, `draftBookMetadata`, `suggestForNote`,
+- Anything that spends our AI quota: `whatNext`, `draftBookMetadata`,
   `reviewDraft`, `glanceAsk`, `glanceDraft`.
 - Journals, habits, note versions, collections, flock, fitness — not in v1 scope.
 

@@ -1,46 +1,16 @@
 # NoteGeek
-Notes, in MarkDown, as God intended.
 
-## System Requirements
+GeekSuite's note-taking app. A note is **Typed** (Markdown) or **Handwritten** (a tldraw
+canvas, optionally read into searchable text). Notes can be tagged, linked with `[[Title]]`,
+searched by words and by meaning, and printed.
 
-- Node.js: LTS version (v18.x or newer)
-  - The app will not work correctly with Node.js v14 (system default)
-  - Always use `nvm use --lts` before starting the frontend or backend
-
-## Development Setup
-
-1. Ensure you have Node.js LTS installed:
-   ```bash
-   nvm install --lts
-   nvm use --lts
-   ```
-
-2. Install dependencies:
-   ```bash
-   # In backend directory
-   cd backend
-   npm install
-
-   # In frontend directory
-   cd ../frontend
-   npm install
-   ```
-
-3. Start the development servers:
-   ```bash
-   # Start backend (in backend directory)
-   cd ../backend
-   nvm use --lts  # Important!
-   npm run dev
-
-   # Start frontend (in frontend directory)
-   cd ../frontend
-   nvm use --lts  # Important!
-   npm run dev
-   ```
-
-## Troubleshooting
-
-- If you see errors like `Unexpected token '||='`, you're using an outdated Node.js version
-- Always run `nvm use --lts` before starting either the frontend or backend
-- The unified app container defaults to port 9988 (override with `PORT`)
+- **Frontend:** React + Vite PWA in `frontend/` (`pnpm run dev` serves it on :5173).
+- **Backend:** a small Express server in `backend/` (:9988). It handles sign-in and
+  `/api/me`, and serves the built frontend as static files; it holds no notes.
+- **Data:** every note read and write goes through the basegeek gateway's GraphQL
+  (`/graphql`, `apps/basegeek/packages/api/src/graphql/notegeek`).
+- **Docs:** `DOCS/CONTEXT.md` is the architecture and the place to start; specs and
+  finished plans sit beside it in `DOCS/` and `DOCS/ARCHIVE/`.
+- **Tests:** `cd apps/notegeek/frontend && pnpm exec vitest run`.
+- **Deploy:** push to `main`; CI builds the image and Watchtower pulls it
+  (`DOCS/CICD.md`, `DOCS/RUNBOOK.md` at the repo root).

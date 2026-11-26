@@ -370,7 +370,6 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `noteIndexStatus` | `NoteIndexStatus!` |
 | `backlinks(noteId: ID!)` | `[Backlink!]!` |
 | `noteTitles(q: String, limit: Int)` | `[NoteTitle!]!` |
-| `suggestForNote(noteId: ID, title: String!, excerpt: String!, tags: [String!]!)` | `NoteSuggestions!` |
 | `archivedNotes(limit: Int, offset: Int)` | `[Note!]!` |
 
 **Mutations**
@@ -541,8 +540,8 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
   state first, so a restore is undoable. `composeNote` builds a NEW document from a pile
   of scraps and writes nothing; `ComposeStats.{chunksFailed, truncated, degenerate}` are
   the caller's to report. `tidyMarkdown` was removed 2026-09-22 — Compose replaced it.
-  Content is sanitized on save through `notegeek/sanitize.js` (same DOMPurify profile as
-  the client). `notes` `under` walks the nested-tag subtree (`house` → `house`,
+  Content is sanitized on save through `notegeek/sanitize.js` (the gateway is the only sanitizer;
+  the client no longer renders stored HTML). `notes` `under` walks the nested-tag subtree (`house` → `house`,
   `house/garage`, never `houseboat`); `searchNotes(hybrid: true)` fuses keyword with
   LOCAL embeddings and reports `matchedBy` + `why`. `foldInPreview`/`foldInApply`
   merge pasted content into an existing note behind a client-confirmed proposal;

@@ -5,7 +5,7 @@ remote (see [MEMORY: GitHub authoritative](../README.md)); workflows
 live under `.github/workflows/` and deploys are pull-based.
 
 > **Status 2026-08-30 — ROLLED OUT.** Tier 1 (`ci.yml`) and Tier 3.3
-> (`release.yml`) are live and green. All 8 apps run
+> (`release.yml`) are live and green. All 8 apps then ran (as of 2026-11-25 it is 12: `release.yml` builds every `apps/*/Dockerfile`) and run
 > `ghcr.io/clintgeek/<app>:latest` with the watchtower opt-in label, on
 > the shared `datageek_network`. Watchtower runs on the box
 > (`docker/watchtower/` mirrors it) polling every 5 min, anonymous public
@@ -29,7 +29,7 @@ live under `.github/workflows/` and deploys are pull-based.
 ## Docs-only commits (added 2026-09-02)
 
 Both `ci.yml` and `release.yml` carry `paths-ignore` for `**/*.md`, `DOCS/**`, `**/DOCS/**` and
-`LICENSE`, so documentation-only pushes neither run CI nor rebuild/redeploy the eight images.
+`LICENSE`, so documentation-only pushes neither run CI nor rebuild/redeploy the twelve images.
 Caveat: if `main` is ever protected with required status checks, a docs-only PR will show no
 checks at all and GitHub will block the merge — either exempt docs PRs, or add a no-op job that
 always runs. Until protection is enabled this is moot.

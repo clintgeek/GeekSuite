@@ -64,6 +64,8 @@ source."* ("compile" = **Compose**.)
   encrypted (`locked` — never sent to a model), `mindmap`/`handwritten` (`unsupported_type`), empty after
   stripping (`empty`), missing or not the caller's (`not_found`). Fewer than 2 usable notes → no model call,
   a clear refusal (`not_enough_sources`).
+  *As of 2026-11-25 the client writes only `markdown` and `handwritten`; the `code`, `text` and `mindmap` cases above
+  matter only for old notes in Recently deleted. Handwritten is the one type skipped as `unsupported_type`.*
 - **C3 Order** oldest `createdAt` first (D4).
 - **C4 Input shape.** Each note becomes `# <title or "Untitled">` + a `Written <YYYY-MM-DD>` line + its body,
   joined by `\n\n---\n\n` (Compose already segments on `---`, so note boundaries survive batching). The prompt
@@ -116,4 +118,4 @@ and is confirmed live**, then the UI. Both are additive; an old bundle never see
 ## 7. Out of scope
 
 Bulk delete, bulk tag edit, archiving from other apps, auto-archive, provenance in the composed note (D3),
-composing sketches/mind maps.
+composing handwritten notes (and mind maps, which were removed 2026-11-25).

@@ -25,8 +25,8 @@ This document defines the design language for all GeekSuite applications. It ens
 ### Backgrounds
 - Default: #F5F5F5
 - Paper: #FFFFFF
-- Code Editor (Light Mode): #f5f5f5
-- Mind Map: #f8f9fa
+- Code Editor (Light Mode): #f5f5f5 *(code editor removed 2026-11-25)*
+- Mind Map: #f8f9fa *(removed 2026-11-25: the mind map editor is gone from NoteGeek)*
 
 ### Semantic Colors
 
@@ -133,6 +133,8 @@ fills, so each mode carries its own value that clears 4.5:1 on that mode's paper
 
 ## 🧠 Mind Map Components
 
+*Removed 2026-11-25: NoteGeek no longer has a mind map editor. Kept as design history.*
+
 ### Nodes
 - Root Node: #e3f2fd
 - Regular Node: #ffffff
@@ -149,6 +151,8 @@ fills, so each mode carries its own value that clears 4.5:1 on that mode's paper
 - Snap Grid: 15px × 15px
 
 ## 💻 Code Editor
+
+*Removed 2026-11-25: NoteGeek no longer has a code editor. Kept as design history.*
 - Background: #f5f5f5
 - Font: Roboto Mono, 0.9rem, 1.5 line-height
 - Padding: 16px

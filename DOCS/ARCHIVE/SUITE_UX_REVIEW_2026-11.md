@@ -1,3 +1,5 @@
+> **Archived 2026-11-25.** Built 2026-11-18/19 (`DOCS/WORK_LOG_2026-11.md`, deployed 2026-11-19). What was left over is in `DOCS/SUITE_TODO.md` §13.
+
 # Suite design and UX review (2026-11-18)
 
 Chef asked for "a full review of the suite for any possible improvements in design

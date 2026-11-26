@@ -85,7 +85,7 @@ spec did not settle (Sage's, not yet seen by Chef):
   on the right.
 - **"Most recently opened"** is kept on the device (the server is never told a note was
   opened), topped up with the most recently edited notes.
-- **Mind maps are not offered** in the picker: they have no reading view.
+- **Mind maps are not offered** in the picker: they have no reading view. (Mind map notes were removed from the NoteGeek client on 2026-11-25, so only handwritten and Typed notes exist to pick.)
 - **While the pane is open, a 1:1's "Open with …" strip and the tag suggestions are hidden**,
   to give the page the height. They return when the pane closes.
 - **Search** in the picker is the ordinary keyword search (titles, text and transcripts).

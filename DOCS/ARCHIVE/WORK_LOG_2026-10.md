@@ -1,3 +1,5 @@
+> **Archived 2026-11-25.** Frozen log: October is over. The live log is `DOCS/WORK_LOG_2026-11.md`; open work is in `DOCS/SUITE_TODO.md`.
+
 # Work log — October 2026
 
 What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.

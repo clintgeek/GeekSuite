@@ -892,3 +892,18 @@ Tests 1117 → 1140. Harness `26a`–`26c`.
 - Details: `apps/notegeek/DOCS/CONTEXT.md` §24. Still to do, separately: share the ink code between GeekDay
   and NoteGeek.
 
+
+## 2026-11-25: cleanup after the two-note-types change
+
+All built 2026-11-25, uncommitted at the time of writing. Not yet on a device.
+
+- Gateway: `suggestForNote` and its types removed. `createNote` / `updateNote` accept only `markdown` and `handwritten` (`NOTE_TYPES`); list filters still accept the old stored types and the model enum keeps all five, so old recently-deleted notes restore. The HTML sanitizer stays for the same reason.
+- List previews: `previewFor` drops a leading heading that repeats the title and joins other headings with " — ". `DERIVED_VERSION` is 3; the rebuild runs at gateway boot, batched, without touching `updatedAt`.
+- NoteGeek client: Mantine and its PostCSS plugins removed. `HandwrittenEditor` read-only is now real. An unreadable handwritten body (not a tldraw snapshot) shows "This note can't be opened" and is never written over; the background reader rejects it. No "start fresh" option, because the gateway keeps a history version only some of the time.
+- GeekDay: the same fix (`failed()` in `inkSaver.js`, phase `unreadable` in `dayNoteStore.js`, "This page can't be opened" with Try again and Open in NoteGeek). Known difference: GeekDay treats a whitespace-only body as unreadable, NoteGeek as empty.
+- New `packages/ink` (`@geeksuite/ink`): pen button, pen key, two-finger tap, Fine pen, palm rule, `createPenPrefs`, lasso geometry, sketch body checks, sketch export core. Each app keeps a small `penPrefs.js` over its own storage keys. The two canvases stay per app. CI: an `ink` step in the `shared` job.
+- `packages/ui`: `GeekSheet` keeps one children instance across `md`, so a tablet rotation no longer loses typing, focus or scroll. `GeekToastProvider` `actionDuration` defaults to `Math.max(duration, GEEK_TOAST_ACTION_DURATION)`.
+- Docs tidied the same day: six archived, stale passages corrected.
+- Tests: gateway 195 suites / 3850 tests; packages/ui 27 files / 1038 tests; packages/ink 7 files / 61 tests; GeekDay 20 files / 319 tests; NoteGeek 107 files / 1071 tests.
+- Not yet on a device. Browser harness: <to be filled>
+- Details: `apps/notegeek/DOCS/CONTEXT.md` §25, `apps/geekday/DOCS/CONTEXT.md`, `DOCS/SUITE_TODO.md`.

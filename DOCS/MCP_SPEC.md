@@ -58,7 +58,7 @@ is a later stage with its own spec. **[confirmed]**
     cross-app search. **[stated]**
 15. Locked or encrypted notes never appear in any tool's output — not in search, lists or
     tag views. Fetching one by id answers "not found". **[confirmed]**
-16. No tool triggers an aiGeek/model call (e.g. `whatNext`, `suggestForNote`, `glanceAsk`,
+16. No tool triggers an aiGeek/model call (e.g. `whatNext`, `glanceAsk`,
     `reviewDraft`). **[confirmed]**
 17. Books and games return the whole household library, as the apps do. **[confirmed]**
 

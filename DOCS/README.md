@@ -1,6 +1,6 @@
 # DOCS — index
 
-What each file in this folder is, and whether it is live. Last sorted 2026-11-15.
+What each file in this folder is, and whether it is live. Last sorted 2026-11-25.
 Rule of thumb: a plan that is finished goes to `ARCHIVE/`, unless code comments cite it
 by section — those stay here as design records and say so in their first lines.
 
@@ -18,13 +18,16 @@ by section — those stay here as design records and say so in their first lines
 
 | File | Status |
 |---|---|
-| [NOTEGEEK_TODOGEEK_REVIEW_2026-11.md](NOTEGEEK_TODOGEEK_REVIEW_2026-11.md) | Current plan for both apps. Wave 1 built locally, not deployed |
-| [SUITE_REVIEW_2026-11.md](SUITE_REVIEW_2026-11.md) | Review of every other app. Plan only |
+| [NOTEGEEK_TODOGEEK_REVIEW_2026-11.md](NOTEGEEK_TODOGEEK_REVIEW_2026-11.md) | Current plan for both apps. Wave 1 built and deployed 2026-11-15 |
+| [SUITE_REVIEW_2026-11.md](SUITE_REVIEW_2026-11.md) | Review of every other app. Wave 2 built 2026-11-15/16; the rest is open |
 | [SUITE_FORM_FACTOR_PLAN_2026-11.md](SUITE_FORM_FACTOR_PLAN_2026-11.md) | Phone, tablet and desktop quality for every app. See its own status table |
 | [NEWSGEEK_PLAN.md](NEWSGEEK_PLAN.md) | Live app. Open: story assignment (N1 phase 2) and N2 |
 | [THINGGEEK_PLAN.md](THINGGEEK_PLAN.md) | Live app. Open: Phase 2 (AI Ask, MCP tools, insurance PDF) |
 | [GEEKDAY_SPEC.md](GEEKDAY_SPEC.md) | Live app, deployed 2026-11-20. §6 (week spread, scrolling page) built 2026-11-21; details are Sage's decisions awaiting Chef's test |
-| [TEMPLATES_SPEC.md](TEMPLATES_SPEC.md) | Page templates (NoteGeek sketches, GeekDay) and NoteGeek note templates. Built 2026-11-21; Sage's decisions awaiting Chef's test |
+| [TEMPLATES_SPEC.md](TEMPLATES_SPEC.md) | Page templates (NoteGeek handwritten notes, GeekDay); revised and confirmed 2026-11-21. Typed-note templates (N1–N5) were removed 2026-11-24 |
+| [NOTE_KINDS_SPEC.md](NOTE_KINDS_SPEC.md) | NoteGeek's notes list partitioned into notes, dailies, meetings, 1:1s and everything. Built 2026-11-24 |
+| [ONE_ON_ONE_SPEC.md](ONE_ON_ONE_SPEC.md) | 1:1 notes in NoteGeek. Built 2026-11-22; a first cut to correct in use |
+| [REFERENCE_PANE_SPEC.md](REFERENCE_PANE_SPEC.md) | Reference pane beside a note in NoteGeek. Built 2026-11-24 |
 | [GameGeekPlan.md](GameGeekPlan.md) | Live app. Open: phases G2–G6 |
 | [SUITE_HOUSEHOLDS_PLAN.md](SUITE_HOUSEHOLDS_PLAN.md) | Proposal, not started |
 | [REGISTRATION_GATE_PLAN.md](REGISTRATION_GATE_PLAN.md) | `closed` mode shipped and is the default. `invite` mode not built |
@@ -62,14 +65,16 @@ Finished, kept here because comments and tests point at them by section.
 
 ## Logs
 
-[WORK_LOG_2026-09.md](WORK_LOG_2026-09.md) · [WORK_LOG_2026-10.md](WORK_LOG_2026-10.md) ·
-[WORK_LOG_2026-11.md](WORK_LOG_2026-11.md). Written as the work landed and not edited
+[WORK_LOG_2026-11.md](WORK_LOG_2026-11.md) is live. September and October are frozen and in
+`ARCHIVE/` ([WORK_LOG_2026-09.md](ARCHIVE/WORK_LOG_2026-09.md), [WORK_LOG_2026-10.md](ARCHIVE/WORK_LOG_2026-10.md)). Written as the work landed and not edited
 afterwards, so paths in older entries may point at files that have since moved to `ARCHIVE/`.
 
 ## Archive
 
-[ARCHIVE/](ARCHIVE/) holds finished and superseded plans, reviews and step lists. Each file
-archived on 2026-11-15 opens with a line saying why and where anything still live went.
+[ARCHIVE/](ARCHIVE/) holds finished and superseded plans, reviews and step lists. On
+2026-11-25 it gained `SUITE_UX_REVIEW_2026-11.md` (built 2026-11-18/19; leftovers in SUITE_TODO §13),
+`TABLET_BASELINE_2026-11.md`, the September and October work logs, and `STATUS.md` (from the repo
+root). Each file archived on 2026-11-15 or later opens with a line saying why and where anything still live went.
 
 ## Not documents
 
@@ -81,4 +86,4 @@ archived on 2026-11-15 opens with a line saying why and where anything still liv
 Each app keeps its own under `apps/<app>/DOCS/` — `CONTEXT.md` first, with finished plans in
 `DOCS/ARCHIVE/`. StartGeek's is `apps/startgeek/CONTEXT.md`. ThingGeek has none of its own
 yet; its plan is `THINGGEEK_PLAN.md` here. Repo root: `README.md`, `DEPLOY.md` (layout and
-env), `STATUS.md` (frozen September snapshot).
+env), `ARCHIVE/STATUS.md` (frozen September snapshot, moved there 2026-11-25).

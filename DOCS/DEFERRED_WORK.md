@@ -53,7 +53,7 @@ per-app verification.
   subdomain mutating **basegeek**, whose allow-list has to contain every
   app origin. That one does need every app's client to send a token.
 
-- **HttpOnly cookies + stop persisting tokens in localStorage.**
+- ~~**HttpOnly cookies + stop persisting tokens in localStorage.**~~ — **Done** (`routes/auth.js` sets `httpOnly: true`, checked 2026-11-15). Was:
   [`DOCS/CONTEXT.md`](DOCS/CONTEXT.md) already flags `httpOnly: false`
   as the target-state problem. Frontend Zustand stores still persist
   JWTs to localStorage in some apps — XSS = full session theft. The
@@ -114,7 +114,7 @@ Likely rollout order once ready:
 3. Wire fitnessgeek Garmin creds.
 4. Wire notegeek note body encryption (per the TODO in `Note.js`).
 
-- **Circuit breakers on external APIs.** fitnessgeek calls USDA,
+- ~~**Circuit breakers on external APIs.**~~ — **Done** (`apps/fitnessgeek/backend/src/lib/breakers.js`, checked 2026-11-15). Was: fitnessgeek calls USDA,
   Nutritionix, OpenFoodFacts, Garmin. Today there's a 30s timeout
   per call but no circuit breaker — repeated upstream failures turn
   into a slow page for every user. Use a library like `opossum`
@@ -140,16 +140,16 @@ Likely rollout order once ready:
   can land without `markModified` persisting them. Pick one shape,
   migrate old docs.
 
-- **In-memory AI response cache in basegeek has no TTL or max size.**
+- ~~**In-memory AI response cache in basegeek has no TTL or max size.**~~ — **Done** (TTL + LRU in `services/aiService.js`, `AI_CACHE_TTL_MS`, checked 2026-11-15). Was:
   `services/aiService.js` accumulates forever under steady load.
   Wire TTL + LRU eviction.
 
-- **`/api/health` should report dependency status.** Right now it's
+- ~~**`/api/health` should report dependency status.**~~ — **Done** (`lib/healthCheck.js`, checked 2026-11-15). Was: right now it's
   always "up" even if Mongo or Redis is disconnected. Add a cheap
   ping to each dependency and return structured health info so
   orchestrators can tell "up but broken."
 
-- **Admin gate on `GET /api/users` in basegeek.** Paginated now
+- ~~**Admin gate on `GET /api/users` in basegeek.**~~ — **Done** (`routes/user.js`, `requireAdmin`, checked 2026-11-15). Was: paginated now
   (thanks to `b434848`) but still auth-only, not admin-scoped. No
   admin role exists yet — dependency on adding one.
 
@@ -182,6 +182,7 @@ Likely rollout order once ready:
 
 ## Apps still to migrate (consolidation, not hardening)
 
+- **Done:** todogeek and notegeek both live under `apps/` (checked 2026-11-15). Was:
 - `todogeek` — local Mongo data to migrate; first app with state
   that moves from `/mnt/Media/Docker/todogeek/` into the source
   tree. Do next.
@@ -189,7 +190,7 @@ Likely rollout order once ready:
   Either combine into one container or teach `build.sh` about apps
   with multiple services. Hardest of the remaining migrations.
 
-## bookgeek — format conversion feature (not yet implemented)
+## bookgeek — format conversion feature (done: `ebook-convert` is wired in `apps/bookgeek/api/src`, checked 2026-11-15)
 
 Current bookgeek only uses calibre's `ebook-meta` CLI — metadata reads
 and cover extraction. No format conversion has been wired up.
@@ -217,7 +218,7 @@ Out of scope until bookgeek enters the consolidation+hardening cycle.
 
 ## Apps still to harden (after consolidation)
 
-`storygeek`, `flockgeek`, `todogeek`, `notegeek` — migrated (or will
+**Done 2026-10-06** (`9725bb97`): all backends shut down through `installShutdownHooks`. Was: `storygeek`, `flockgeek`, `todogeek`, `notegeek` — migrated (or will
 be) but haven't had the same logging / boot-await / graceful-shutdown
 pass fitnessgeek just got. Each is probably a ~90-minute agent
 round, same shape as Item A of the fitnessgeek hardening plan.

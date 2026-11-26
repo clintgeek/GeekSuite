@@ -1,6 +1,6 @@
 # NoteGeek: Automatic Handwriting Transcription
 
-*Status: SPEC from Chef, 2026-11-14 (replaces LOCAL_INFERENCE_SPEC.md, now parked).
+*Status: SPEC from Chef, 2026-11-14 (replaces ARCHIVE/LOCAL_INFERENCE_SPEC.md, now parked).
 Option A APPROVED and BUILT the same day — see "Decisions" and "As built".*
 
 ---

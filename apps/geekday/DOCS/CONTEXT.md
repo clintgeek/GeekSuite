@@ -31,7 +31,7 @@ Every operation it sends is in `frontend/src/graphql/documents.js`.
 | `components/InkPane.jsx` | Hosts the canvas; shows saving, saved, not saved, conflict |
 | `components/ConfirmTaskDialog.jsx` | Circle to task: read, correct, create |
 | `components/DockedView.jsx` | The idle clock face |
-| `ink/` | The canvas: tldraw 2.4.6, trimmed from NoteGeek's sketch editor, plus the lasso, the scrolling page (`pageCamera.js`, `pageGestures.js`), and the paper and templates (`pageTemplate.js`, `PagePaper.jsx`, `paperLook.js`, `PageMenu.jsx`) |
+| `ink/` | The canvas: tldraw 2.4.6, trimmed from NoteGeek's sketch editor. The pen helpers it shares with NoteGeek (pen button, pen key, two-finger tap, Fine pen, palm rule, lasso geometry, sketch export, snapshot check) are `@geeksuite/ink` (`packages/ink`); `ink/penPrefs.js` binds that package's `createPenPrefs` to GeekDay's own keys. Local here: `InkCanvas.jsx`, `inkSaver.js`, the scrolling page (`pageCamera.js`, `pageGestures.js`), and the paper and templates (`pageTemplate.js`, `PagePaper.jsx`, `paperLook.js`, `PageMenu.jsx`) |
 | `store/dayNoteStore.js` | Finding, creating and saving a day's note; retries; conflicts |
 | `hooks/useDayTasks.js` | A day's tasks with optimistic tick / move / add |
 | `lib/tasks.js`, `lib/days.js`, `lib/capture.js` | Pure rules: grouping, day keys, text → task |
@@ -53,6 +53,15 @@ every update carries `baseUpdatedAt`. A failed save keeps the ink and retries
 (3 s, 10 s, 30 s, then every 60 s, and when the network returns), and keeps
 retrying after you flip to another day. A `CONFLICT` writes nothing and asks:
 keep this version, or use the other.
+
+**An unreadable page is never written over.** If the stored body is not a tldraw
+snapshot (invalid JSON, truncated, `{}`, or only whitespace), `InkCanvas` calls
+`onLoadError` and the store goes to phase `unreadable`: `pump()` refuses unless
+the phase is `ready`, and `inkSaver.failed(body)` blocks `markDirty` and `flush`
+until a later `loaded()`. A query answer with no `notes` list is a load error, not
+an empty day. `InkPane` shows "This page can't be opened" with "Try again" and
+"Open in NoteGeek". The background reader fails the job for such a page, so
+nothing is transcribed or saved.
 
 **Tasks** come from `dailyTasks(date, tzOffsetMinutes)`, one flat list, grouped
 in the browser (`lib/tasks.js`) by the same rules as TodoGeek's Today. Overdue
@@ -139,12 +148,16 @@ pictures are drawn as SVG from the note's stroke points, without tldraw.
 
 ## Known limits
 
+- There is no "start a fresh page" option for an unreadable page. The gateway keeps a
+  history version only some of the time (first edit, after 10 quiet minutes, once per
+  10 minutes, before a large shrink), so a fresh page could lose the only copy.
+- GeekDay treats a whitespace-only body as unreadable; NoteGeek treats it as empty.
 - Two devices that both put first ink on the same new day at the same moment
   each create a page (`createNote` has no idempotency key). The older note is
   the day's page from then on; the other stays in NoteGeek.
-- A day page is searchable by its words only after NoteGeek has transcribed
-  it, which happens when the note is open in NoteGeek. It is always findable
-  by tag and title.
+- A day page is searchable by its words once the background reader has
+  transcribed it (shipped 2026-11-22; see the "Background reader" section
+  below). It is always findable by tag and title.
 - No keyboard scrolling of the ink page; trackpad pinch does not zoom in desktop Safari (Ctrl + wheel does).
 - Tasks cannot be added from the week page. Its ink pictures come from the saved note, one fetch per day.
 - Phone and desktop are not designed for (spec §3). Below 600 px the agenda

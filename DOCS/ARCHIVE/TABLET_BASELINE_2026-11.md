@@ -1,3 +1,5 @@
+> **Archived 2026-11-25.** One-off measurement from 2026-11-15; nothing live remains here. The fix order it produced is tracked in `DOCS/SUITE_TODO.md`.
+
 # Tablet baseline — 2026-11-15
 
 First run of the mobile harness at tablet size, all 11 apps. Measurement only: no app code, scene or fixture was changed.

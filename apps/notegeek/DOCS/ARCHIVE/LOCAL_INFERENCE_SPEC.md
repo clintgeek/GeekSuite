@@ -1,3 +1,5 @@
+> **Archived 2026-11-25.** Parked 2026-11-14 and replaced by `apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md`; kept for when on-device inference comes back.
+
 # NoteGeek: Local-First AI Inference with OpenRouter Fallback
 
 *Status: **PARKED 2026-11-14** — Chef replaced this with AUTO_TRANSCRIBE_SPEC.md (automatic

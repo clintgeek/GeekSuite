@@ -6,8 +6,8 @@ built and deployed on 2026-11-15. See *Status — wave 1 built* just below.
 
 ## Status — wave 1 built and deployed (2026-11-15)
 
-Wave 1 was built by six agents in parallel and committed to local `main`. **Nothing
-is pushed, nothing is deployed.** The rest of this document is the original plan and
+Wave 1 was built by six agents in parallel and committed to local `main`, then
+pushed and deployed the same day (2026-11-15). The rest of this document is the original plan and
 is unchanged; this section says what happened to each item. "Done" means built, with a
 test that was seen to go red with the fix reverted (the agents' mutation checks) unless
 the note says otherwise. "Done" does not mean tried on a device: see *Needs a real
@@ -94,7 +94,7 @@ agent owned are Not started unless a report says otherwise.
 | 3.3 checklists are pictures | Not started | |
 | 3.4 new note three taps | Not started | |
 | 3.5 Home skeletons / 50 notes | Done | Fetches 12, skeleton only with nothing on screen, errors shown with Retry, delete drops the row |
-| 3.6 – 3.12 | Not started | Scroll/filter loss, version history on phone, dialogs, code editor keyboard, mind map, review dialogs, `[[` picker |
+| 3.6 – 3.12 | Not started | Scroll/filter loss, version history on phone, dialogs, code editor keyboard (editor removed 2026-11-25), mind map (removed 2026-11-25), review dialogs, `[[` picker |
 | 3.13 toasts on the add box | Done | Dock and Save footer register clearance; TaskContext's second snackbar removed. Harness only |
 | 3.14 editor taller than phone | Done | Bottom sheet below md, sticky Save, autofocus only with a fine pointer |
 | 3.15 hero and chips | Partly | Smaller phone hero, tag chips one scrolling row, top bar says "TodoGeek" on phone. **No collapse-on-scroll** |

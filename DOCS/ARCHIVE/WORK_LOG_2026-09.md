@@ -1,8 +1,10 @@
+> **Archived 2026-11-25.** Frozen log: September is over. The live log is `DOCS/WORK_LOG_2026-11.md`; open work is in `DOCS/SUITE_TODO.md`.
+
 # Work log — September 2026
 
 What shipped, why, and what it cost. Newest first.
 
-Outstanding work lives in [`SUITE_TODO.md`](SUITE_TODO.md); this file is the
+Outstanding work lives in [`SUITE_TODO.md`](../SUITE_TODO.md); this file is the
 record of what is already done, so neither has to be reconstructed from git log.
 
 Each entry names the commit, the finding it closes (where one exists), and
@@ -579,7 +581,7 @@ On production:
 
 ### ThingGeek — containment: everything is a Thing, `parentId` says where it is
 
-`39b5775e`. Spec: [`THINGGEEK_PLAN.md`](THINGGEEK_PLAN.md), "Containment".
+`39b5775e`. Spec: [`THINGGEEK_PLAN.md`](../THINGGEEK_PLAN.md), "Containment".
 
 - **Why:** Chef: "The Van has a VIN, but it might also contain an aftermarket stereo, or
   maybe I just want to remember where my damn jumper cables are."
@@ -638,7 +640,7 @@ gradient "covers" existed only in the harness fixtures.
 
 ### ThingGeek — the household inventory, live at thinggeek.clintgeek.com
 
-`1f46e6fd`. Spec: [`THINGGEEK_PLAN.md`](THINGGEEK_PLAN.md).
+`1f46e6fd`. Spec: [`THINGGEEK_PLAN.md`](../THINGGEEK_PLAN.md).
 
 - **What it holds:** things, editable types (nine starter types, with identifier fields
   flagged), a tree of places, photos and documents, and dates that drive "expiring / due".
@@ -669,7 +671,7 @@ gradient "covers" existed only in the harness fixtures.
 ### BookGeek — Phase C2: the library runs on `@geeksuite/collection`
 
 `218ff25c` `cf83cd3d` `f95bfef5` `0a241fe1` `bdafbd67`. Record in
-[`BOOKGEEK_CLEANUP_PLAN.md`](BOOKGEEK_CLEANUP_PLAN.md).
+[`BOOKGEEK_CLEANUP_PLAN.md`](../BOOKGEEK_CLEANUP_PLAN.md).
 
 - **What BookGeek gained:** the facet panel and phone sheet (shelf, author, series, tags
   any/all, format, language, own/has-file, year read, rating), live counts, chips, a sort

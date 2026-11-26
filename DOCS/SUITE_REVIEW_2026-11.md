@@ -2,7 +2,7 @@
 
 Companion to `NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`. Five read-only inspectors
 covered every other app and the shared plumbing, looking for the defect classes
-that review found. **This is a plan. Nothing here is built.**
+that review found. **As written this was a plan. Wave 2 of it was built 2026-11-15/16 (`DOCS/WORK_LOG_2026-11.md`, "Wave 2"); the review body below is unchanged.**
 
 **How far to trust it.** Each finding is marked by its inspector: **V** verified
 in code, **?** suspected and needs a device or a measurement. Sage re-checked

@@ -88,6 +88,6 @@ Dry run against production, 2026-10-01: NoteGeek (28 tagged notes) and ThingGeek
 - `taggedAcross(tag, under, apps)` → `[{ app, id, title, snippet, url, tags, updatedAt }]`, at most 50 per app,
   newest first; `under: true` takes the subtree. A **private** TodoGeek task is `Private task` with no snippet and
   no tags (as StartGeek's glance). A thing is its **name only** — no serial, plate, receipt, value or attribute.
-  Locked/encrypted notes and sketches/mind maps have no snippet. URLs: NoteGeek `/notes/<id>`, ThingGeek
+  Locked/encrypted notes and handwritten notes (and any old mind map) have no snippet. URLs: NoteGeek `/notes/<id>`, ThingGeek
   `/thing/<id>`, TodoGeek `/search?q=%23<tag>` (it has no per-task page).
 - Not yet used by any UI (the "Also tagged …" sections and suite-wide suggestions are the next step).

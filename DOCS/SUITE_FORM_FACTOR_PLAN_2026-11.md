@@ -43,7 +43,7 @@ Nothing has ever been looked at on a tablet. Find out before designing.
 - Run the harness with the new 800×1280 and 1280×800 viewports across all 11 apps.
 - Add the missing state scenes per app: empty, loading, error, offline (none exist today).
 - Triage into: broken (overflow, unreachable control, clipped), poor (small targets, stretched phone), fine.
-- **Output:** `DOCS/TABLET_BASELINE_2026-11.md` — per app, per viewport, with screenshots. This re-ranks Phases 4 and 5 with evidence.
+- **Output:** `DOCS/ARCHIVE/TABLET_BASELINE_2026-11.md` — per app, per viewport, with screenshots. This re-ranks Phases 4 and 5 with evidence.
 - **Exit:** every app has a tablet baseline; tablet runs in CI for at least NoteGeek and TodoGeek without blowing the job time.
 
 ## Phase 2 — Shared foundations (~3–4 days)

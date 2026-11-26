@@ -9,7 +9,7 @@ Maintained as the primary orientation and operating truth for Sage and the engin
 
 ## 1. System Architecture Overview
 
-GeekSuite is a self-hosted, multi-tenant productivity and life-management ecosystem composed of **12 applications** (11 running, plus GeekDay, built locally and not yet deployed), shared backend services, and a unified authentication and data access layer.
+GeekSuite is a self-hosted, multi-tenant productivity and life-management ecosystem composed of **12 applications** (all running; GeekDay deployed 2026-11-20), shared backend services, and a unified authentication and data access layer.
 
 ```mermaid
 graph TD
@@ -23,13 +23,13 @@ graph TD
         todogeek["todogeek (:5005)<br/>Tasks & Habits"]
         fitnessgeek["fitnessgeek (:4080)<br/>Nutrition, Vitals, Garmin"]
         flockgeek["flockgeek (:5001)<br/>Flock Management, Eggs"]
-        notegeek["notegeek (:9988)<br/>Notes, Code, Mindmaps"]
+        notegeek["notegeek (:9988)<br/>Typed and Handwritten notes"]
         startgeek["startgeek (:3000)<br/>Launcher, Hero, Dock"]
         storygeek["storygeek (:9977)<br/>Creative Writing, Codex"]
         gamegeek["gamegeek (:1810)<br/>Game Library (Playnite)"]
         thinggeek["thinggeek (:1820)<br/>Household Inventory, Attic"]
         newsgeek["newsgeek (:1830)<br/>Local-first News Briefing"]
-        geekday["geekday (:1840)<br/>Daily Page, Handwriting (not yet deployed)"]
+        geekday["geekday (:1840)<br/>Daily Page, Handwriting"]
     end
     
     Gateway --> Datastores
@@ -69,19 +69,19 @@ All containers run on `server` (`192.168.1.17`) attached to `datageek_network` (
 | **todogeek** | `5005` | `5005` | Vite + React + MUI 5 / Node | Tasks (pure GraphQL consumer) |
 | **fitnessgeek** | `4080` | `3001` | Vite + React / Node (ESM, v20) | Nutrition, weights, vitest suites, Garmin sync |
 | **flockgeek** | `5001` | `5001` | Vite + React / Node + Express | Poultry tracking, harvest logging |
-| **notegeek** | `9988` | `9988` | Vite + React / Node + Express | Note-taking, mind maps, tags |
+| **notegeek** | `9988` | `9988` | Vite + React / Node + Express | Note-taking (Typed and Handwritten notes), tags |
 | **startgeek** | `3000` | `3000` | Vite + React + Tailwind (serve) | Standalone launcher, quick-glance, dock |
 | **gamegeek** | `1810` | `1810` | Vite + React + MUI 5 / Node + Express | Game library fed by Playnite exports |
 | **thinggeek** | `1820` | `1820` | Vite + React + MUI 5 / Node + Express | Household inventory; the Attic (sealed documents) |
 | **newsgeek** | `1830` | `1830` | Vite + React + MUI 5 / Node + Express | Local-first news briefing; feed ingest worker |
-| **geekday** | `1840` | `1840` | Vite + React + MUI 5 / Node + Express | Running: no — built locally, not yet deployed. Pen-first daily page: a day's TodoGeek tasks beside a handwriting page stored in NoteGeek. No database; Vite dev port `1841` |
+| **geekday** | `1840` | `1840` | Vite + React + MUI 5 / Node + Express | Pen-first daily page: a day's TodoGeek tasks beside a handwriting page stored in NoteGeek. No database; Vite dev port `1841` |
 | **storygeek** | `9977` | `9977` | Vite + React / Node + Express | Interactive writing, narrative generation |
 
 ### 1.4 Shared Packages (`packages/*`)
 - **`@geeksuite/auth`**: SSO client hooks (`useAuth`, `AuthProvider`), Axios cookie/token interceptors, CSRF header attachment, BroadcastChannel logout.
 - **`@geeksuite/user`**: User store, ThemeProvider, `themePreboot` Vite plugin, server-side session validator (`localSessionValidator`, `optionalUser`, `requireUser`).
 - **`@geeksuite/api-client`**: `GeekSuiteApolloProvider` — shared Apollo Client preconfigured with auth link, CSRF headers, and error retry handlers.
-- **`@geeksuite/ui`**: Shared MUI component library, GeekShell, GeekTopBar, GeekSidebar, GeekBottomNav, GeekDialog, GeekSheet, GeekFab, themes.
+- **`@geeksuite/ui`**: Shared MUI component library, GeekShell, GeekTopBar, GeekSidebar, GeekBottomNav, GeekDialog, GeekSheet, GeekFab, themes. `GeekSheet` keeps one instance of its children across the `md` breakpoint (built 2026-11-25): they render once through a portal into a stable host that the current surface's body adopts, so a tablet rotation keeps typing, focus and scroll. The body gains two `display:contents` wrappers, and the enter animation replays on a flip. `GeekToastProvider`'s `actionDuration` now defaults to `Math.max(duration, GEEK_TOAST_ACTION_DURATION)`.
 - **`@geeksuite/utils`**: ISO-8601 calendar date (`toUtcMidnight`, `utcMidnightToday`, `utcDateString`) and local instant (`localDateString`) helpers.
 - **`@geeksuite/logger`**: Standardized Pino HTTP logger and serializers with automatic credential redaction (passwords, tokens, cookies).
 - **`@geeksuite/schemas`**: Canonical Mongoose schema definitions shared across apps and gateway (FitnessGeek models, tripwire tests).
@@ -89,6 +89,7 @@ All containers run on `server` (`192.168.1.17`) attached to `datageek_network` (
 - **`@geeksuite/tags`**: The suite tag standard (lowercase kebab, `/` nesting) — see `DOCS/TAG_STANDARD.md`.
 - **`@geeksuite/collection`**: Library/collection pieces shared by BookGeek and GameGeek.
 - **`@geeksuite/task-grammar`**: Task-input grammar shared by TodoGeek and NoteGeek's handwritten journal.
+- **`@geeksuite/ink`**: The pen and ink helpers NoteGeek's handwritten editor and GeekDay's day page share (pen button, pen key, two-finger tap, Fine pen, palm rule, `createPenPrefs`, lasso geometry, sketch body checks, sketch PNG export). Pure JS: no tldraw or React import.
 - **`@geeksuite/backdrop`**: Picks and preloads a wallpaper from basegeek's backdrop service.
 - **`@geeksuite/eslint-config`**: Shared ESLint 9 flat config across packages and applications.
 
@@ -110,7 +111,7 @@ For granular, domain-specific specifications and operational procedures, link di
 - [DOCS/GRAPHQL.md](file:///mnt/Media/Projects/GeekSuite/DOCS/GRAPHQL.md) — Apollo Gateway documentation: schema composition, shared types (`AIProvenance`, `DeleteResponse`), and complete per-app query/mutation surfaces.
 - [DOCS/CICD.md](file:///mnt/Media/Projects/GeekSuite/DOCS/CICD.md) — GitHub Actions workflows (`ci.yml`, `release.yml`, `mobile-harness.yml`), GHCR image tagging, and deployment mechanics.
 - [DOCS/GEEK_SUITE_DESIGN_LANGUAGE.md](file:///mnt/Media/Projects/GeekSuite/DOCS/GEEK_SUITE_DESIGN_LANGUAGE.md) — Visual standards: Studio Slate and GeekSuite tokens, typography, dark/light contrast rules, and mobile shell grammar.
-- [STATUS.md](file:///mnt/Media/Projects/GeekSuite/STATUS.md) — Live system health, recent wave completion logs, and active Chef decision items.
+- [DOCS/WORK_LOG_2026-11.md](file:///mnt/Media/Projects/GeekSuite/DOCS/WORK_LOG_2026-11.md) and [DOCS/SUITE_TODO.md](file:///mnt/Media/Projects/GeekSuite/DOCS/SUITE_TODO.md) — what shipped and what is open. (`STATUS.md` was a frozen September snapshot; it is in `DOCS/ARCHIVE/`.)
 - [DEPLOY.md](file:///mnt/Media/Projects/GeekSuite/DEPLOY.md) — Deployment instructions, shared secret requirements, and environment configuration.
 
 ---

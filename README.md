@@ -24,11 +24,11 @@ pulls new images via Watchtower — no inbound access from CI. Details in [DOCS/
 | **flockgeek** | Running | `5001` | Poultry flock management and egg production tracking |
 | **storygeek** | Running | `9977` | Creative writing tool with Codex and narrative generation |
 | **bookgeek** | Running | `1800` | Book library + reading tracker — on-demand format conversion, e-reader device baskets |
-| **notegeek** | Running | `9988` | Note-taking app — text, markdown, code, mind map, sketch |
+| **notegeek** | Running | `9988` | Note-taking app — Typed and Handwritten notes |
 | **newsgeek** | Running | `1830` | Local-first news briefing: Clark & Hot Spring County, then state, national, world, tech |
 | **gamegeek** | Running | `1810` | Game library, fed by Playnite exports |
 | **thinggeek** | Running | `1820` | Household inventory — things, where they are, and the sealed Attic |
-| **geekday** | No — built locally, not yet deployed | `1840` | Pen-first daily page: a day's TodoGeek tasks beside a handwriting page stored in NoteGeek |
+| **geekday** | Running | `1840` | Pen-first daily page: a day's TodoGeek tasks beside a handwriting page stored in NoteGeek |
 | **startgeek** | Running | `3000` | Personal-desktop launcher — clock, weather, world clocks, app dock |
 
 ---
@@ -44,7 +44,7 @@ GeekSuite/
 │   ├── fitnessgeek/       # Fitness tracking (:4080)
 │   ├── flockgeek/         # Flock management (:5001)
 │   ├── gamegeek/          # Game library (:1810)
-│   ├── geekday/           # Daily page: tasks + handwriting (:1840, not yet deployed)
+│   ├── geekday/           # Daily page: tasks + handwriting (:1840)
 │   ├── newsgeek/          # News briefing (:1830)
 │   ├── notegeek/          # Notes (:9988)
 │   ├── startgeek/         # App launcher (:3000)
@@ -65,6 +65,7 @@ GeekSuite/
 │   ├── logger/            # @geeksuite/logger — pino logging + automatic redaction
 │   ├── schemas/           # @geeksuite/schemas — Mongoose schemas shared by multiple writers
 │   ├── crypto-vault/      # @geeksuite/crypto-vault — AES-256-GCM secrets-at-rest
+│   ├── ink/               # @geeksuite/ink — pen and ink helpers shared by NoteGeek and GeekDay
 │   └── eslint-config/     # @geeksuite/eslint-config — shared flat ESLint 9 config
 ├── tools/                 # Developer & operational tooling
 │   ├── mobile-harness/    # Playwright phone screenshot & grammar probe (CI-enforcing)
@@ -73,7 +74,6 @@ GeekSuite/
 │   └── gql-arg-audit.mjs  # GraphQL query & argument schema auditor
 ├── DOCS/                  # Suite-wide documentation & architecture
 ├── DEPLOY.md              # Deployment reference & environment variables
-├── STATUS.md              # Live operational status and wave logs
 ├── build.sh               # Docker build + deploy script
 └── pnpm-workspace.yaml    # pnpm monorepo config
 ```
@@ -92,6 +92,7 @@ GeekSuite/
 | `@geeksuite/logger` | Standardized Pino logger (`createLogger`, `createHttpLogger`, `installShutdownHooks`) with automatic credential redaction across all seven backends |
 | `@geeksuite/schemas` | Canonical Mongoose schemas shared across apps and gateway — all 11 FitnessGeek pairs consolidated with parity tripwires |
 | `@geeksuite/crypto-vault` | AES-256-GCM encryption for secrets at rest (`KEY_VAULT_SECRET`) — basegeek provider keys and fitnessgeek Garmin password |
+| `@geeksuite/ink` | Pen and ink helpers shared by NoteGeek and GeekDay: pen button, pen key, two-finger tap, Fine pen, palm rule, lasso geometry, sketch body checks and PNG export (no tldraw or React import) |
 | `@geeksuite/eslint-config` | Shared ESLint 9 flat config across all apps and packages |
 
 ### Developer & Operational Tooling (`tools/`)
@@ -131,7 +132,7 @@ See `DEPLOY.md` for Docker Compose details and env var setup.
 | [DOCS/CICD.md](DOCS/CICD.md) | **CI/CD Pipeline** — GitHub Actions workflows, GHCR releases, Watchtower deployment, and test gates |
 | [DOCS/SUITE_TODO.md](DOCS/SUITE_TODO.md) | **Suite Backlog** — Active, queued, and prioritized tasks across all apps |
 | [DOCS/GEEK_SUITE_DESIGN_LANGUAGE.md](DOCS/GEEK_SUITE_DESIGN_LANGUAGE.md) | **Design System** — Studio Slate tokens, typography, dark/light contrast rules, and mobile shell grammar |
-| [STATUS.md](STATUS.md) | **Status snapshot, 2026-09-07** — frozen record of the September burn; current state is in `DOCS/WORK_LOG_*.md` and `DOCS/SUITE_TODO.md` |
+| [DOCS/ARCHIVE/STATUS.md](DOCS/ARCHIVE/STATUS.md) | **Status snapshot, 2026-09-07** — frozen record of the September burn (archived 2026-11-25); current state is in `DOCS/WORK_LOG_*.md` and `DOCS/SUITE_TODO.md` |
 | [DEPLOY.md](DEPLOY.md) | **Deployment Guide** — Container build/run instructions, environment variables, and shared secrets |
 | [DOCS/ARCHIVE/](DOCS/ARCHIVE/) | **Historical Archive** — Landed 2026 logs, retired sprint plans, decision records, and migration retrospectives |
 

@@ -126,7 +126,7 @@ One household, both current users as members, one of them (whoever registered fi
 Chef by convention) as owner. BookGeek's existing books all backfill to that one household's
 id in the same migration script — a single `updateMany` once the household exists and both
 users are confirmed members, following the same "migration runs before the schema requires the
-field" order the BP `measured_at` backfill used (`DOCS/WORK_LOG_2026-09.md`, "FitnessGeek —
+field" order the BP `measured_at` backfill used (`DOCS/ARCHIVE/WORK_LOG_2026-09.md`, "FitnessGeek —
 blood pressure gains `measured_at`, households become visible").
 
 **The landmine that backfill already taught, worth repeating here:** a backfill that *fills* a

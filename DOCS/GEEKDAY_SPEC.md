@@ -1,6 +1,6 @@
 # Specification: GeekDay — the pen-first daily page
 
-Status: **signed off by Chef in interview, 2026-11-20.** Not yet built.
+Status: **signed off by Chef in interview, 2026-11-20.** Built and deployed 2026-11-20 (see `DOCS/WORK_LOG_2026-11.md`).
 
 Provenance: there is no ticket. The conversation of 2026-11-20 is the ticket.
 Chef's ask: *"propose a very useful web app for a tablet"*, then *"i love the

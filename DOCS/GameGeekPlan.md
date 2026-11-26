@@ -1,6 +1,6 @@
 # GameGeek — Plan
 
-> **Status 2026-11-15:** the line below is the 2026-09-24 header and is out of date. GameGeek shipped overnight 2026-09-24/25 and is live (see "Deviations from the plan" near the end, and `DOCS/WORK_LOG_2026-09.md`). Imports are Playnite-only (`apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`). Still unbuilt: phases G2–G6 (§11), tracked in `DOCS/SUITE_TODO.md`. Kept as the design record: code comments cite it by section.
+> **Status 2026-11-15:** the line below is the 2026-09-24 header and is out of date. GameGeek shipped overnight 2026-09-24/25 and is live (see "Deviations from the plan" near the end, and `DOCS/ARCHIVE/WORK_LOG_2026-09.md`). Imports are Playnite-only (`apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`). Still unbuilt: phases G2–G6 (§11), tracked in `DOCS/SUITE_TODO.md`. Kept as the design record: code comments cite it by section.
 
 *Written 2026-09-24, revised the same day after Chef's calls. Status: **proposal, nothing
 built.** This isn't a spec yet. The open questions in §13 decide what the spec says.*

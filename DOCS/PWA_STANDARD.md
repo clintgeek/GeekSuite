@@ -9,7 +9,7 @@
 >
 > | Flavor | Apps |
 > |---|---|
-> | A — VitePWA/Workbox `generateSW` | basegeek, todogeek, fitnessgeek, notegeek, gamegeek, thinggeek, newsgeek, geekday (built locally, not yet deployed) |
+> | A — VitePWA/Workbox `generateSW` | basegeek, todogeek, fitnessgeek, notegeek, gamegeek, thinggeek, newsgeek, geekday |
 > | B — hand-rolled `public/sw.js` | bookgeek, flockgeek, storygeek, startgeek |
 >
 > The per-app tables further down (§1a and "Current Status") are 2026-09-05 snapshots of

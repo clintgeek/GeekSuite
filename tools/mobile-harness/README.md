@@ -445,7 +445,7 @@ came and went and not one of them was a false positive.
 | flockgeek | 16 | **0** | 0 | `Select` labels, form labels, accordion nesting |
 | bookgeek | 5 | 4 | **0** | both fixes upstream in `packages/ui` — sidebar rows, account menu |
 | basegeek | 2 | 2 | **0** | six `AccountPage` `Select`s wired `InputLabel id` ↔ `labelId` |
-| notegeek | 2 | 2 | **0** | the TipTap surface named through `editorProps.attributes` |
+| notegeek | 2 | 2 | **0** | the TipTap surface named through `editorProps.attributes` (since removed with the editor, 2026-11-25) |
 | startgeek | 2 | 2 | **0** | the forecast strip is a focusable, named scroll region |
 | **total** | **112** | **39** | **0** | |
 
@@ -520,7 +520,7 @@ the **end** of its app's `scenes` array:
 |---|---|---|---|
 | todogeek | `11-review-draft` | `appPreferences.todogeek.aiReviewDraft` (server) | `GetReviewDraft` |
 | fitnessgeek | `11-quickadd-proposal` | `ai.features.natural_language_food_logging` (server; `localStorage['fitnessgeek:quickAddNL']` at ship time, corrected R129 — see below) | `ParseFoodEntry`, `GET /api/foods` |
-| notegeek | `05-suggestions` | `appPreferences.notegeek.suggestOnSave` (server) | `SuggestForNote` |
+| notegeek | ~~`05-suggestions`~~ (scene removed 2026-11-25 with the suggestions strip) | ~~`appPreferences.notegeek.suggestOnSave`~~ (no longer read) | ~~`SuggestForNote`~~ |
 | bookgeek | `07-what-next`, `08-edit-metadata-draft` | `appPreferences.bookgeek.libraryAssistant` (server) | `GetWhatNext`, `DraftBookMetadata` |
 | startgeek | `05-brief` | `localStorage['startgeek.settings'].brief` (client) | `GlanceBrief` |
 

@@ -29,12 +29,15 @@ Pull from here when planning the next pass; update as work lands or priorities s
   - A provider may bill a request cancelled mid-flight; the per-call cap and OpenRouter's credit limit are the backstop.
   - ~~`goingOverFitnessGlance` DST case~~ fixed 2026-11-15 (counts in UTC days); `aiHardeningCancellation` was a load flake on 2026-11-15 and passes.
 - **GeekDay (deployed 2026-11-20; week spread, scrolling page and templates 2026-11-21)** — see `WORK_LOG_2026-11.md` and `apps/geekday/DOCS/CONTEXT.md`. Left open:
-  - **Chef's test of the 2026-11-21 build.** The details in `GEEKDAY_SPEC.md` §6 and `TEMPLATES_SPEC.md` are Sage's decisions, not yet confirmed: Monday-first weeks, the two-by-four spread, the eight note templates, a per-device default page for new days. (Page templates were revised with Chef on 2026-11-21.)
+  - **Chef's test of the 2026-11-21 build.** The details in `GEEKDAY_SPEC.md` §6 and `TEMPLATES_SPEC.md` are Sage's decisions, not yet confirmed: Monday-first weeks, the two-by-four spread, ~~the eight note templates~~ (typed-note templates removed 2026-11-24), a per-device default page for new days. (Page templates were revised with Chef on 2026-11-21.)
   - **Device session on the Lenovo:** pen latency, palm rejection while writing and while scrolling (`PEN_NEAR_MS` in `ink/pageGestures.js` if the page twitches as the hand lands), the pen double-click undo, real handwriting through circle-to-task, the wake lock, swiping between days and weeks, dragging a task with pen and finger, whether the Fine line and the template rules are too faint.
   - **Open a GeekDay page in NoteGeek** (with and without a template), edit it there, reopen it in GeekDay. Same snapshot format and meta key; never tried against live data.
   - Weekday abbreviations ("fri") are read in GeekDay only. Moving that into `@geeksuite/task-grammar` would give it to TodoGeek and NoteGeek, and changes their parsing: Chef's call.
-  - A day page is not searchable by its words until NoteGeek has transcribed it (only while open in NoteGeek). GeekDay could run the same auto-transcribe; it costs readings from the shared cap of 40 a day.
-  - A corrupt page snapshot opens as a blank page, and the next stroke would save over it. Wants a load-error state instead.
+  - ~~A day page is not searchable by its words until NoteGeek has transcribed it.~~ **Done 2026-11-22:** the background reader transcribes unread pages (`apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md`, "Background reader"); the one limit is the gateway's daily spending ceiling.
+  - ~~A corrupt page snapshot opens as a blank page, and the next stroke would save over it.~~ **Done 2026-11-25** (built, not yet on a device): an unreadable page shows "This page can't be opened" with Try again and Open in NoteGeek, and nothing is written to it (`apps/geekday/DOCS/CONTEXT.md`, Saving).
+  - A "start a fresh page" option for an unreadable page needs the gateway to guarantee a history version on demand (it keeps one only some of the time).
+  - GeekDay locks a whitespace-only body as unreadable; NoteGeek treats it as empty. Pick one.
+  - One canvas core for GeekDay and NoteGeek (`InkCanvas.jsx` and `HandwrittenEditor.jsx`): days of work plus a device pass. The pen helpers are already shared in `@geeksuite/ink` (2026-11-25).
   - Two devices putting first ink on the same new day at the same moment make two notes (`createNote` has no idempotency key).
   - Week page: no adding tasks; ink pictures are seven note fetches per week and do not show a page's template; no More menu.
   - The CI tablet shard is advisory and runs dark portrait + light landscape; GeekDay's scenes are portrait-only, so CI does not gate its light-portrait run. Run it locally before a UI push.
@@ -92,7 +95,7 @@ Pull from here when planning the next pass; update as work lands or priorities s
 
 ## 3. UI / UX & Design Language
 
-> **2026-11-18:** a full design and UX review of every app is in [`SUITE_UX_REVIEW_2026-11.md`](SUITE_UX_REVIEW_2026-11.md) — 30 ranked findings, five suite-wide patterns, 11 decisions for Chef. Plan only; nothing from it is built or queued here yet.
+> **2026-11-18:** a full design and UX review of every app is in [`ARCHIVE/SUITE_UX_REVIEW_2026-11.md`](ARCHIVE/SUITE_UX_REVIEW_2026-11.md) — 30 ranked findings, five suite-wide patterns, 11 decisions for Chef. Plan only; nothing from it is built or queued here yet.
 
 ### Highest Leverage / Follow-ups
 - ~~**FitnessGeek Food Search Rebuild**~~ — **shipped 2026-09-14**, and superseded as the primary path by **describe-and-log, shipped and verified live 2026-09-16** ([`THE_DESCRIBE_AND_LOG_PLAN.md`](../apps/fitnessgeek/DOCS/THE_DESCRIBE_AND_LOG_PLAN.md)). The four Phase-4 UI decisions were all settled 2026-09-14; this entry claimed otherwise until 2026-09-16. Search remains as the fallback for picking a specific branded item.
@@ -438,14 +441,14 @@ the app was down over its due time, should it arrive late or be skipped?
 
 ### NoteGeek
 
-- **2026-11-15 review, wave 1 built locally, not pushed or deployed** (gateway first;
+- **2026-11-15 review, wave 1 built and deployed 2026-11-15** (gateway first;
   first boot rebuilds the text index and re-embeds the library once). Plan and per-item
   status: `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md` (Status section; device checklist at
   its end). Cross-app context: `DOCS/SUITE_REVIEW_2026-11.md`,
   `DOCS/SUITE_FORM_FACTOR_PLAN_2026-11.md`. **Still open after wave 1:**
   - *Not started:* Tier 3 phone friction 3.2-3.4 and 3.6-3.12 (Back from share, tappable
     checklists, new-note focus, scroll/filter memory, version history on phone, dialogs,
-    code-editor keyboard, mind map, review dialogs, `[[` picker); Tier 4 layout 4.4-4.12
+    ~~code-editor keyboard, mind map~~ (editors removed 2026-11-25), review dialogs, `[[` picker); Tier 4 layout 4.4-4.12
     and the NoteGeek half of 4.3; 5.11 lazy routes; most Tier 6 NoteGeek polish; Tier 7.
   - *Sketch:* banded reading of long sketches (needs a gateway change: several images per
     call; today it only warns "page too long to read well"); chrome above the canvas still
@@ -491,9 +494,9 @@ the app was down over its due time, should it arrive late or be skipped?
   of them gives a poor answer.
 
 - **Compose follow-ups** (shipped 2026-09-21, worth watching):
-  - Compose is available on text, markdown and code notes. The canvas types
-    (sketch, mind map, handwritten) have no plain text to read, so the button
-    is hidden there rather than failing at the model.
+  - Compose is available on Typed (markdown) notes. Handwritten notes have no
+    plain text to read, so the button is hidden there rather than failing at the
+    model. (Code, rich text and mind map notes no longer exist in the client, 2026-11-25.)
   - The incremental workflow — paste scraps into a composed note, compose
     again, replace — has no affordance of its own yet. It works; it just
     isn't signposted. Worth watching whether that needs a "compose in" gesture
@@ -649,7 +652,7 @@ existing doc home, not just history:
   GameGeek; two-pane in NoteGeek, TodoGeek, ThingGeek; `useUnsavedGuard` on ThingGeek Edit/Attic,
   FitnessGeek recipe/food/meal, StoryGeek composer; `useRefetchOnResume` in FitnessGeek (Home's
   full load and `useMedsToday.reload`), NewsGeek, StartGeek; `GeekLoadError` in FlockGeek,
-  StartGeek, NewsGeek. Fix order: `TABLET_BASELINE_2026-11.md` § Fix first.
+  StartGeek, NewsGeek. Fix order: `ARCHIVE/TABLET_BASELINE_2026-11.md` § Fix first.
 - **Tablet baseline, untriaged FitnessGeek scene errors at tablet size:** `63b-meds-add-simple-filled`
   portrait "missing: Save in the footer" (may be an unreachable button), `07u-reports-body`
   tablet-dark, `45a` toast over the ribbon in landscape, one contrast hit on `60b`.
@@ -705,14 +708,14 @@ existing doc home, not just history:
 
 ## 13. Left from the UX review build (2026-11-19)
 
-From `SUITE_UX_REVIEW_2026-11.md`; the overnight build did the rest (work log, 2026-11-18 → 19).
+From `ARCHIVE/SUITE_UX_REVIEW_2026-11.md`; the overnight build did the rest (work log, 2026-11-18 → 19).
 
 ### Chef's decisions
 - **FlockGeek identity** — "Field Ledger" exists only in a theme comment; name it or pick another before any restyle. Is a bird known by name or by tag (which leads the row)?
 - **TodoGeek** — Phase 2 (make a task repeat after adding it; per-task reminders); may the add box appear outside Today; may the date numeral shrink on the phone (Today still shows ~3.5 rows); which states earn red; how Done is drawn.
 - **GameGeek** — is Couch co-op a status or a list; is per-game Progress used at all.
 - **StoryGeek** — which "new tale" form survives; which column gives way on desktop; may play hide the shell top bar on the phone.
-- **NoteGeek** — viewer versus editor (the one-surface bet); the word for a text note; pen palette; mind-map chrome.
+- **NoteGeek** — bring the lasso to NoteGeek (the geometry is shared in `@geeksuite/ink`; it needs the overlay layer, a toolbar tool and a target for the circled ink); per-user choice of what New offers, for a second (student) user; viewer versus editor (the one-surface bet); ~~the word for a text note~~ (settled 2026-11-25: Typed); pen palette; ~~mind-map chrome~~ (mind map removed 2026-11-25).
 - **FitnessGeek** — Weight page restructure (today's reading is five screens down; "behind" said four times); three things called "Your goal"; Food log opening on the add box; Medications' two forms.
 - **ThingGeek** — may the Where level header and its murals shrink on the phone.
 - **BookGeek** — is "owned" worth a tick on every card; Unread versus Want to read wording.
@@ -720,12 +723,12 @@ From `SUITE_UX_REVIEW_2026-11.md`; the overnight build did the rest (work log, 2
 - **StartGeek** — clock and weather fill the phone's first screen; which apps the launcher shows.
 
 ### Needs the gateway (deploy the gateway first)
-- **NoteGeek list previews** run the heading into the body: `previewFor` in `apps/basegeek/packages/api/src/graphql/notegeek/noteDerived.js` should shape like the client's `previewText`, with a `DERIVED_VERSION` bump (rebuilds stored previews).
+- ~~**NoteGeek list previews** run the heading into the body~~ — **done 2026-11-25** (built, deploys with the gateway): `previewFor` in `noteDerived.js` drops a leading heading that repeats the title and joins other headings with " — "; `DERIVED_VERSION` is 3 and the rebuild runs at gateway boot.
 - **FlockGeek delete → Undo** needs a `restoreFlockEntity` (clear `deletedAt`).
 - **NewsGeek** — a hidden-story count for Today under Free to read.
 
 ### Shared-component candidates (raised by the builders; none built except the two noted)
-- **`GeekSheet` re-mounts its children when it crosses `md`** (sheet ↔ dialog), losing typing on a tablet rotation. GameGeek's notes were lifted out of the way; Playthroughs and every other sheet form still lose a draft. Highest value of this list.
+- ~~**`GeekSheet` re-mounts its children when it crosses `md`**~~ — **done 2026-11-25** (built): children render once through a portal into a stable host, so a rotation keeps typing, focus and scroll. Open: GameGeek's workaround (its notes lifted out of the way) can now be removed.
 - `GeekSheet` close button sits below a short header and overlaps the body (NoteGeek worked around it per sheet).
 - `createGeekSuiteTheme` sets the text-field radius with a two-class selector, so an app override on `MuiOutlinedInput` loses (NewsGeek worked around it).
 - A visually-hidden helper: two builders wrote `width: 1` in `sx` (= 100%) in one night.
@@ -742,6 +745,7 @@ From `SUITE_UX_REVIEW_2026-11.md`; the overnight build did the rest (work log, 2
 - FlockGeek: move the per-page "Add X" into the FAB; bird age on the row.
 - ThingGeek: Type editor still stock; warning lights as tap targets.
 - NoteGeek: model id is tooltip-only, so invisible on touch; a Settings details line if wanted.
+- GameGeek: remove the `GeekSheet` remount workaround (notes lifted out of the way); a sheet no longer loses its children across `md` (2026-11-25).
 - GameGeek: the header comment in `frontend/src/utils/installDecision.js` is stale (the import no longer flags games); the "how did it end?" banner is legacy for games flagged before 2026-10-09.
 - BaseGeek: no show-password control on the login.
 
@@ -758,10 +762,10 @@ From `SUITE_UX_REVIEW_2026-11.md`; the overnight build did the rest (work log, 2
 - FlockGeek: focus ring on the page title / Today line after a delete or a harvest.
 
 ### Shared packages (not started)
-- `GeekSheet` re-mounts its children when the width crosses `md` (GameGeek notes carry a workaround).
+- ~~`GeekSheet` re-mounts its children when the width crosses `md`~~ done 2026-11-25 (see §13); GameGeek's workaround can now be removed.
 - One `visuallyHidden` style in `@geeksuite/ui` (four app copies; `width: 1` bug came from this).
 - `useUndoToast` / `UndoButton` (NoteGeek, FitnessGeek, ThingGeek hand-roll it).
-- `GeekToastProvider`: `actionDuration` should be `Math.max(duration, 8000)`; no hover/focus pause.
+- `GeekToastProvider`: ~~`actionDuration` should be `Math.max(duration, 8000)`~~ done 2026-11-25; still no hover/focus pause.
 - `GeekSearchField` clear button with focus return (six apps hand-roll one).
 - `GeekFab` option to keep its label at `xs` (FlockGeek reaches into its markup).
 - `@geeksuite/collection`: style hooks for pills, chips and facet headings (BookGeek skins by aria-label and DOM shape); the Filters sheet's "active first / hide dead options".
