@@ -198,7 +198,9 @@ function rectsFor(group, lines, blocks, occurrences, h) {
     }
     const rects = [...spans.entries()].sort((p, q) => p[0] - q[0]).map(([k, [x0, x1]]) => {
         const b = strip[k];
-        return { x: x0, y: b.y, w: x1 - x0, h: b.h, block: group.blocks[k] };
+        // A highlighter pass is taller than the letters: a quarter of h above and below.
+        const padY = b.kind === 'text' ? h * 0.25 : 0;
+        return { x: x0, y: b.y - padY, w: x1 - x0, h: b.h + 2 * padY, block: group.blocks[k] };
     });
     return { rects, exact };
 }

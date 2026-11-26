@@ -1537,7 +1537,7 @@ describe('HandwrittenEditor: a search hit on the page', () => {
         // The highlight is drawn on the canvas layer, not added to the store.
         const rects = container.querySelectorAll('.tl-shapes [data-find-rect]');
         expect(rects).toHaveLength(1);
-        expect(rects[0].style.transform).toMatch(/translate\(1\d\d(\.\d+)?px, 5\d(\.\d+)?px\)/);
+        expect(rects[0].style.transform).toMatch(/translate\(1\d\d(\.\d+)?px, [45]\d(\.\d+)?px\)/);
         expect(screen.getByText('1 of 1')).toBeInTheDocument();
         expect(screen.getByText('call back before Friday')).toHaveAttribute('aria-live', 'polite');
         // Nothing in the document changed and nothing was saved.

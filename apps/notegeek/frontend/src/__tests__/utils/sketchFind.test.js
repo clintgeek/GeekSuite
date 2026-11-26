@@ -24,7 +24,8 @@ function writeLine(text, { x = 20, baseline = 40 } = {}) {
     return boxes;
 }
 const inkOf = (lines, spacing = 30) => findInkLines(lines.flatMap((t, i) => (t ? writeLine(t, { baseline: 40 + i * spacing }) : [])));
-const inside = (r, b) => r.x >= b.x - 0.01 && r.x + r.w <= b.x + b.w + 0.01 && r.y >= b.y - 0.01 && r.y + r.h <= b.y + b.h + 0.01;
+// Inside the block across, and centred on it down (the highlight is padded above and below).
+const inside = (r, b) => r.x >= b.x - 0.01 && r.x + r.w <= b.x + b.w + 0.01 && Math.abs((r.y + r.h / 2) - (b.y + b.h / 2)) < 0.01;
 
 const PAGE = [
     'Garage door quote from Hendricks',

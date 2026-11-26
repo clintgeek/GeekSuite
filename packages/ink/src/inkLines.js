@@ -11,7 +11,9 @@
  *      same rules work at any writing size or zoom.
  *   2. A stroke taller than FIGURE (3) h is a figure: a box, an arrow, a
  *      drawing. Figures that touch become one figure block.
- *   3. A stroke flatter than MARK (0.35) h is a mark: an i-dot, a comma, a
+ *   3. A stroke flatter than MARK (0.35) h, or smaller than DOT (0.6) h both
+ *      ways (a pen dot is drawn as a round blob the width of the nib), is a
+ *      mark: an i-dot, a comma, a
  *      dash, a t-bar, an underline. Marks never start a line; each joins the
  *      nearest line within MARK_REACH (1.5) h, or is left out.
  *   4. The rest are joined into lines: two strokes are on one line when they
@@ -47,6 +49,7 @@
 export const INK_LINE_RULES = Object.freeze({
   FIGURE: 3,
   MARK: 0.35,
+  DOT: 0.6,
   OVERLAP: 0.5,
   CENTRE: 1,
   JOIN_GAP: 3,
@@ -176,7 +179,7 @@ export function findInkLines(boxes, options = {}) {
   const text = [];
   for (const b of clean) {
     if (b.figure || b.h > rules.FIGURE * h) figures.push(b);
-    else if (b.h < rules.MARK * h) marks.push(b);
+    else if (b.h < rules.MARK * h || (b.h < rules.DOT * h && b.w < rules.DOT * h)) marks.push(b);
     else text.push(b);
   }
 

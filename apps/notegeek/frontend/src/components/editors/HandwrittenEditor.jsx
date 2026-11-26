@@ -565,8 +565,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         const editor = editorRef.current;
         if (isLoading || !editor || !findQuery || findLoading) return;
         const f = findRef.current;
-        const result = blockedRef.current ? { status: 'none', hits: [] } : placeFind(editor, f);
-        const shown = result.status === 'placed' || result.status === 'unplaced';
+        const result = blockedRef.current ? { status: 'none', hits: [] } : placeFind(editor, f);        const shown = result.status === 'placed' || result.status === 'unplaced';
         setFindState(shown ? { status: result.status, hits: result.hits, index: 0 } : null);
         findActiveRef.current = result.status === 'placed';
         if (firstViewWaitingRef.current) {

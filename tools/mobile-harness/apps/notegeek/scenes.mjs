@@ -3343,9 +3343,13 @@ export const scenes = [
           : plain(r)), null);
         const shapes = [...document.querySelectorAll('.tl-shape')];
         const is = (e, o) => Math.abs(Number(getComputedStyle(e).opacity) - o) < 0.001;
+        // The drawn ink, not the shape's box: tldraw 2.4 places the box at the
+        // shape's origin and lets the stroke overflow it (points above the
+        // first one are negative), so the box is not where the ink is.
+        const ink = (els) => els.flatMap((e) => [...e.querySelectorAll('path')]);
         return {
-          line: unionOf(shapes.filter((e) => is(e, lineOp) || is(e, wordOp))),
-          word: unionOf(shapes.filter((e) => is(e, wordOp))),
+          line: unionOf(ink(shapes.filter((e) => is(e, lineOp) || is(e, wordOp)))),
+          word: unionOf(ink(shapes.filter((e) => is(e, wordOp)))),
           hl: unionOf([...document.querySelectorAll('[data-find-rect]')]),
           bar: plain(document.querySelector('[data-find-bar]')?.getBoundingClientRect()),
           canvas: plain(document.querySelector('.tl-container')?.getBoundingClientRect()),
@@ -3370,6 +3374,8 @@ export const scenes = [
       const hitsBar = geo.bar && !(geo.hl.bottom <= geo.bar.top || geo.hl.top >= geo.bar.bottom || geo.hl.right <= geo.bar.left || geo.hl.left >= geo.bar.right);
       if (hitsBar) throw new Error(`the find bar ${r(geo.bar)} covers the highlight ${r(geo.hl)}`);
       if (!/gate/.test(geo.live)) throw new Error(`the live line reads "${geo.live}"`);
+      // Six lines read as six lines: nothing about this page is a guess.
+      if (/approximate/.test(geo.live)) throw new Error(`a clean page's hit is called approximate: "${geo.live}"`);
     }
     return [
       {

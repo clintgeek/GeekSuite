@@ -71,6 +71,13 @@ describe('findInkLines', () => {
     for (const d of dots) expect(ids).toContain(d.id);
   });
 
+  it('a dot drawn as a blob the width of the nib is still a mark (seen in tldraw 2.4)', () => {
+    // tldraw draws a two-point stroke as a round dot: about 6 units across,
+    // nearly half a letter height. It must not become a line of its own.
+    const boxes = page(['pick paint', 'is it']).map((b) => (b.h <= 3 ? { ...b, x: b.x - 2, y: b.y - 2, w: 6, h: 6 } : b));
+    expect(findInkLines(boxes).blocks).toHaveLength(2);
+  });
+
   it('follows lines that climb across the page', () => {
     // A 5% climb: the end of each line sits higher than the start of the
     // line above it would allow a band-by-y rule to tell apart.
