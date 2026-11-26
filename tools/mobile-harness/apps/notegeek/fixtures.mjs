@@ -29,46 +29,25 @@ const note = (id, title, type, tags, content, updatedAt = hoursAgo(2), createdAt
 // migrations threw and the sketch scene showed tldraw's own error screen.
 export const SKETCH_CONTENT = readFileSync(new URL('./sketch-snapshot.json', import.meta.url), 'utf8');
 
-const mmNode = (id, label, x, y, isRoot = false) => ({
-  id, type: 'mindmap', position: { x, y }, data: { label, isRoot }, dragHandle: '.drag-handle',
-});
-export const MINDMAP_CONTENT = JSON.stringify({
-  nodes: [
-    mmNode('0', 'GeekSuite', 100, 250, true),
-    mmNode('1', 'NoteGeek', 350, 100),
-    mmNode('2', 'BookGeek', 350, 200),
-    mmNode('3', 'GameGeek', 350, 300),
-    mmNode('4', 'FitnessGeek', 350, 400),
-    mmNode('5', 'BaseGeek', 350, 500),
-  ],
-  edges: ['1', '2', '3', '4', '5'].map((t) => ({ id: `e0-${t}`, source: '0', target: t })),
-});
-
-export const CODE_CONTENT = JSON.stringify({
-  language: 'javascript',
-  code: [
-    '// Debounce a function: run it once the calls stop.',
-    'export function debounce(fn, wait = 200) {',
-    '  let timer = null;',
-    '  return (...args) => {',
-    '    clearTimeout(timer);',
-    '    timer = setTimeout(() => fn(...args), wait);',
-    '  };',
-    '}',
-  ].join('\n'),
-});
-
 export const NOTE_N1 = note(
   'n1',
   'Q3 roadmap notes',
-  'text',
+  'markdown',
   ['work', 'planning'],
-  '<h2>Roadmap</h2><p>Draft agenda for the <strong>Q3 planning</strong> session — see the bullet list below and the linked doc.</p><ul><li>Ship the mobile pass</li><li>Close out CSRF hardening</li><li>Decide on flockgeek bottom nav</li></ul><p>Follow-ups land in a separate note once triaged.</p>',
+  [
+    '## Roadmap',
+    '',
+    'Draft agenda for the **Q3 planning** session — see the bullet list below and the linked doc.',
+    '',
+    '- Ship the mobile pass',
+    '- Close out CSRF hardening',
+    '- Decide on flockgeek bottom nav',
+    '',
+    'Follow-ups land in a separate note once triaged.',
+  ].join('\n'),
   hoursAgo(2),
 );
 
-export const NOTE_CODE = note('n6', 'debounce.js', 'code', ['dev', 'dev/frontend'], CODE_CONTENT, hoursAgo(5));
-export const NOTE_MINDMAP = note('n4', 'Mind map: GeekSuite apps', 'mindmap', ['meta'], MINDMAP_CONTENT, daysAgo(3));
 export const NOTE_SKETCH = note('n3', 'Sketch: onboarding flow', 'handwritten', ['product'], SKETCH_CONTENT, daysAgo(1));
 
 // The same real snapshot with a template (DOCS/TEMPLATES_SPEC.md T1–T3): a
@@ -145,7 +124,7 @@ export const SEARCH_RESULTS = [
 // a quiet "similar", and the passage that matched). Scene 14h.
 export const HYBRID_RESULTS = [
   { __typename: 'SearchSnippet', bestMatch: false, _id: 'h1', title: 'Garage shelving plan', type: 'markdown', tags: ['house/garage'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(3), score: 0.0164, snippet: 'Four uprights, 18in deep. Fix the brackets to the garage studs.', message: null, matchedBy: 'both', why: 'Four uprights, 18in deep. Fix the brackets to the garage studs.' },
-  { __typename: 'SearchSnippet', bestMatch: false, _id: 'h2', title: 'Kitchen tap washer', type: 'text', tags: ['house/kitchen', 'finance'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(9), score: 0.0129, snippet: 'Replace the washer, not the tap. About £4.', message: null, matchedBy: 'meaning', why: 'Replace the washer, not the tap. About £4.' },
+  { __typename: 'SearchSnippet', bestMatch: false, _id: 'h2', title: 'Kitchen tap washer', type: 'markdown', tags: ['house/kitchen', 'finance'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(9), score: 0.0129, snippet: 'Replace the washer, not the tap. About £4.', message: null, matchedBy: 'meaning', why: 'Replace the washer, not the tap. About £4.' },
   { __typename: 'SearchSnippet', bestMatch: false, _id: 'h3', title: 'House insurance renewal', type: 'markdown', tags: ['house'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(14), score: 0.0127, snippet: 'Renews in October. Compare two quotes first.', message: null, matchedBy: 'meaning', why: 'Renews in October. Compare two quotes first.' },
 ];
 
@@ -165,7 +144,7 @@ export const BEST_MATCH_RESULTS = [
 // Near-tie — scene 14j: three good answers, none clearly first. No best
 // match, so the list is the plain list.
 export const NEAR_TIE_RESULTS = [
-  snip('t1', 'Server SSH key', 'code', ['dev/infra'], daysAgo(3), 'both', 'ssh -i ~/.ssh/homelab chef@server — key is in the password manager.'),
+  snip('t1', 'Server SSH key', 'markdown', ['dev/infra'], daysAgo(3), 'both', 'ssh -i ~/.ssh/homelab chef@server — key is in the password manager.'),
   snip('t2', 'Cloud SDK info', 'markdown', ['dev'], daysAgo(12), 'both', 'gcloud auth login, then set the project. Service account JSON lives in the vault.'),
   snip('t3', 'Backup box', 'markdown', ['dev/infra'], daysAgo(20), 'meaning', 'The backup box answers on the tailnet; log in as the backup user.'),
 ];
@@ -189,9 +168,9 @@ export const BACKLINKS_TO_NL = [
 
 // Related notes (local embeddings) for the Q3 roadmap note — scenes 17a/17b.
 export const RELATED_TO_N1 = [
-  { __typename: 'SimilarNote', id: 'n5', title: 'Standup snippets', type: 'text', updatedAt: hoursAgo(7), score: 0.71, snippet: 'Nothing blocking. Pairing on the sidebar tree after lunch.' },
+  { __typename: 'SimilarNote', id: 'n5', title: 'Standup snippets', type: 'markdown', updatedAt: hoursAgo(7), score: 0.71, snippet: 'Nothing blocking. Pairing on the sidebar tree after lunch.' },
   { __typename: 'SimilarNote', id: 'np', title: 'Deploy checklist', type: 'markdown', updatedAt: hoursAgo(1), score: 0.69, snippet: 'A Watchtower deploy never picks up new .env.production vars.' },
-  { __typename: 'SimilarNote', id: 'n4', title: 'Mind map: GeekSuite apps', type: 'mindmap', updatedAt: daysAgo(3), score: 0.67, snippet: null },
+  { __typename: 'SimilarNote', id: 'n4', title: 'Mind map: GeekSuite apps', type: 'markdown', updatedAt: daysAgo(3), score: 0.67, snippet: null },
 ];
 
 // Spread across the recency buckets: Today, Yesterday, This week, and two
@@ -239,20 +218,31 @@ export const NOTE_PRINT = note('np', 'Deploy checklist', 'markdown', ['dev', 'de
 // Tagged under `house` — the nested-tag scenes (16a-16c).
 export const HOUSE_NOTES = [
   note('h1', 'Garage shelving plan', 'markdown', ['house/garage'], 'Four uprights, 18in deep. Buy brackets #house/garage and ask about the #fff paint.', daysAgo(3)),
-  note('h2', 'Kitchen tap washer', 'text', ['house/kitchen', 'finance'], '<p>Replace the washer, not the tap. About £4.</p>', daysAgo(9)),
+  note('h2', 'Kitchen tap washer', 'markdown', ['house/kitchen', 'finance'], 'Replace the washer, not the tap. About £4.', daysAgo(9)),
   note('h3', 'House insurance renewal', 'markdown', ['house'], 'Renews in October. Compare two quotes first.', daysAgo(14)),
 ];
 
 export const NOTES = [
   NOTE_N1,
-  NOTE_CODE,
-  note('n5', 'Standup snippets', 'text', ['work', 'work/meetings'], '<p>Nothing blocking. Pairing on the sidebar tree after lunch; ask about the tag counts query.</p>', hoursAgo(7)),
+  note('n6', 'debounce.js', 'markdown', ['dev', 'dev/frontend'], [
+    '```js',
+    '// Debounce a function: run it once the calls stop.',
+    'export function debounce(fn, wait = 200) {',
+    '  let timer = null;',
+    '  return (...args) => {',
+    '    clearTimeout(timer);',
+    '    timer = setTimeout(() => fn(...args), wait);',
+    '  };',
+    '}',
+    '```',
+  ].join('\n'), hoursAgo(5)),
+  note('n5', 'Standup snippets', 'markdown', ['work', 'work/meetings'], 'Nothing blocking. Pairing on the sidebar tree after lunch; ask about the tag counts query.', hoursAgo(7)),
   NOTE_SKETCH,
   NOTE_MD,
-  NOTE_MINDMAP,
+  note('n4', 'Mind map: GeekSuite apps', 'markdown', ['meta'], '# GeekSuite\n\n- NoteGeek\n- BookGeek\n- GameGeek\n- FitnessGeek\n- BaseGeek', daysAgo(3)),
   note('n7', 'Nginx wildcard cert renewal', 'markdown', ['dev', 'dev/infra'], '## Renewal\n\nRun certbot with the DNS plugin, then `nginx -t` and reload.', daysAgo(5)),
   note('n8', 'Garden bed layout', 'handwritten', ['garden'], '', daysAgo(40)),
-  note('n9', 'Reading list', 'text', ['reading'], '<p>The Pragmatic Programmer, A Philosophy of Software Design, Thinking in Systems.</p>', daysAgo(75)),
+  note('n9', 'Reading list', 'markdown', ['reading'], 'The Pragmatic Programmer, A Philosophy of Software Design, Thinking in Systems.', daysAgo(75)),
   // Nested tags (2026-09-30): `house` is a notebook with two notebooks in it.
   // The parent view (/tags/house) lists all three; the rows name the sub-tag.
   ...HOUSE_NOTES,
@@ -294,26 +284,6 @@ export const TAGS = [
   'dev', 'dev/frontend', 'dev/infra', 'finance', 'garden', 'health', 'house', 'house/garage', 'house/kitchen', 'meta', 'planning',
   'product', 'reading', 'recipes', 'travel', 'work', 'work/meetings', 'writing', 'zettel',
 ];
-
-// Tag & link suggestions (DOCS/AI_IDEAS.md #3, Night 2 R116). Opt-in —
-// `appPreferences.notegeek.suggestOnSave` — so no existing scene renders the
-// strip; used only by scenes.mjs's page-scoped '05-suggestions' scene.
-export const NOTE_SUGGESTIONS = {
-  __typename: 'NoteSuggestions',
-  tags: [
-    { __typename: 'SuggestedTag', tag: 'work', score: 0.82 },
-    { __typename: 'SuggestedTag', tag: 'planning', score: 0.71 },
-    { __typename: 'SuggestedTag', tag: 'meta', score: 0.44 },
-  ],
-  related: [
-    { __typename: 'RelatedNote', id: 'n5', title: 'Standup snippets', score: 0.63, why: 'shares the "work" tag' },
-    { __typename: 'RelatedNote', id: 'n2', title: 'Recipe: brown butter chocolate chip cookies', score: 0.31, why: 'similar title terms' },
-  ],
-  provenance: {
-    __typename: 'AIProvenance',
-    source: 'model', reason: null, model: 'llama-3.1-8b-instant', provider: 'groq', cached: false, callsToday: 2, cap: 30,
-  },
-};
 
 // Fold-in (DOCS/CONTEXT.md §13) — scenes 19a-19e. The spiders note from the
 // 2026-10-01 live smoke, and the proposal the real model made for it
@@ -395,14 +365,14 @@ export const SPIDERS_FOLDED = SPIDERS_CONTENT
   .replace('- Red widow — Florida only\n', '- Red widow — Florida only\n- Brown widow — tan, orange hourglass, spiky egg sacs; found in the garage\n')
   .replace('| Zebra jumper | Garden wall | 6 mm |\n', '| Zebra jumper | Garden wall | 6 mm |\n| Zebra jumper | Mailbox | 5 mm |\n');
 export const SPIDERS_SEARCH = [
-  { __typename: 'SearchSnippet', bestMatch: false, _id: 'n1', title: 'Q3 roadmap notes', type: 'text', tags: ['work'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: hoursAgo(2), score: 0.02, snippet: 'Draft agenda', message: null, matchedBy: 'keyword', why: null },
+  { __typename: 'SearchSnippet', bestMatch: false, _id: 'n3', title: 'Sketch: onboarding flow', type: 'handwritten', tags: ['product'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(1), score: 0.02, snippet: 'Onboarding flow', message: null, matchedBy: 'keyword', why: null },
   { __typename: 'SearchSnippet', bestMatch: false, _id: 'ns', title: 'Spiders', type: 'markdown', tags: ['nature'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: hoursAgo(6), score: 0.031, snippet: 'Spiders I\'ve found around the house', message: null, matchedBy: 'both', why: 'Black widow — shiny black, orange hourglass underneath' },
   { __typename: 'SearchSnippet', bestMatch: false, _id: 'h1', title: 'Garage shelving plan', type: 'markdown', tags: ['house/garage'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(3), score: 0.016, snippet: 'Four uprights', message: null, matchedBy: 'keyword', why: null },
 ];
 
 // Compose from several notes + Archive (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md)
-// — scenes 20a-20f. Selected in /notes: the roadmap (rich text), the standup
-// snippets (rich text) and the onboarding sketch, which Compose skips.
+// — scenes 20a-20f. Selected in /notes: the roadmap, the standup
+// snippets and the onboarding sketch, which Compose skips.
 export const COMPOSE_MANY_MARKDOWN = [
   '# Q3 planning and standups',
   '',
@@ -439,7 +409,7 @@ const archivedNote = (id, title, type, tags, content, archivedHoursAgo) => ({
 });
 export const ARCHIVED = [
   archivedNote('xa1', 'Old roof quote', 'markdown', ['house'], 'Second quote came in lower; went with them in August.', 3),
-  archivedNote('xa2', 'Spring garden plan', 'text', ['garden'], '<p>Tomatoes along the fence, herbs by the door. Superseded by the autumn plan.</p>', 26),
+  archivedNote('xa2', 'Spring garden plan', 'markdown', ['garden'], 'Tomatoes along the fence, herbs by the door. Superseded by the autumn plan.', 26),
   archivedNote('xa3', 'Conference notes 2025', 'markdown', ['work'], 'Talks worth rewatching: the one on local-first sync, and the accessibility audit.', 24 * 9),
 ];
 
@@ -459,10 +429,9 @@ export const TAG_COUNT_NOTES = [
 // A list row carries `preview` (the gateway's plain-text excerpt) and never
 // `content`. These mirror basegeek's noteDerived.js / noteLists.js just far
 // enough that a row here reads the way a real one does: a sketch has no words
-// of its own, a code note previews its code, a mind map its labels.
+// of its own.
 const PREVIEW_CHARS = 200;
 const SKETCH_WORDS = 'Onboarding flow\nsign up -> verify email -> first note';
-const stripHtml = (html) => String(html || '').replace(/<[^>]+>/g, ' ');
 const stripMarkdown = (md) => String(md || '')
   .replace(/```[^\n]*\n/g, '\n').replace(/```/g, '')
   .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2').replace(/\[\[([^\]]+)\]\]/g, '$1')
@@ -471,13 +440,9 @@ const stripMarkdown = (md) => String(md || '')
   .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/gm, '').replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '')
   .replace(/(\*\*|__|~~|`)/g, '');
 const wordsOf = (n) => {
-  try {
-    // A sketch's words are its recognised handwriting, never the tldraw JSON.
-    if (n.type === 'handwritten') return n.id === 'n3' ? SKETCH_WORDS : '';
-    if (n.type === 'code') return JSON.parse(n.content).code || '';
-    if (n.type === 'mindmap') return JSON.parse(n.content).nodes.map((x) => x.data?.label).filter(Boolean).join(' ');
-  } catch { return ''; }
-  return n.type === 'markdown' ? stripMarkdown(n.content) : stripHtml(n.content);
+  // A sketch's words are its recognised handwriting, never the tldraw JSON.
+  if (n.type === 'handwritten') return n.id === 'n3' ? SKETCH_WORDS : '';
+  return stripMarkdown(n.content);
 };
 export const previewOf = (n) => {
   const words = wordsOf(n).replace(/\s+/g, ' ').trim();
@@ -546,7 +511,7 @@ const deletedNote = (id, title, type, tags, content, deletedHoursAgo) => ({
 });
 export const DELETED = [
   deletedNote('xd1', 'Old standup template', 'markdown', ['work'], '## Yesterday\n\n## Today\n\n## Blocked\n\nReplaced by the weekly planning ritual.', 1),
-  deletedNote('xd2', 'Paint colours for the hallway — the long list of every swatch we looked at before choosing', 'text', ['house'], '<p>Went with the warm grey in the end; the swatches are in the garage.</p>', 30),
+  deletedNote('xd2', 'Paint colours for the hallway — the long list of every swatch we looked at before choosing', 'markdown', ['house'], 'Went with the warm grey in the end; the swatches are in the garage.', 30),
   deletedNote('xd3', 'Scratch sketch', 'handwritten', [], '', 24 * 21),
 ];
 
@@ -560,8 +525,6 @@ export const transcriptState = (over = {}) => ({
   at: hoursAgo(20), retryAt: null, error: null, sentTaskKeys: [], autoEnabled: true,
   ...over,
 });
-
-const AI_PROVENANCE = { __typename: 'AIProvenance', source: 'model', reason: null, model: 'openai/gpt-4.1-mini', provider: 'openrouter', cached: false, callsToday: 1, cap: 60 };
 
 // Every note the fixtures know, by id (thumbnails, restores).
 const byId = (id) => [...NOTES, NOTE_WIDE_TABLE, NOTE_PRINT, NOTE_LINKED, NOTE_SPIDERS, ...ARCHIVED, ...DELETED].find((n) => n.id === id) || null;
@@ -591,7 +554,7 @@ export const conflictAnswer = (serverNote) => ({
         code: 'CONFLICT',
         serverNote: {
           id: serverNote.id, title: serverNote.title ?? null, content: serverNote.content ?? '',
-          tags: serverNote.tags || [], type: serverNote.type || 'text', updatedAt: serverNote.updatedAt,
+          tags: serverNote.tags || [], type: serverNote.type || 'markdown', updatedAt: serverNote.updatedAt,
         },
       },
     }],
@@ -646,8 +609,6 @@ export const OPS = {
   // History: nothing saved before, unless a scene says otherwise.
   GetNoteVersions: { noteVersions: [] },
   GetNoteVersion: { noteVersion: null },
-  // Opt-in (appPreferences.notegeek.suggestOnSave); nothing to suggest by default.
-  SuggestForNote: { suggestForNote: { __typename: 'NoteSuggestions', tags: [], related: [], provenance: { ...AI_PROVENANCE, source: 'none' } } },
   // Automatic sketch transcription: the open sketch has been read.
   SketchTranscript: () => ({ sketchTranscript: transcriptState() }),
   // The background reader (AUTO_TRANSCRIBE_SPEC.md): nothing is waiting by

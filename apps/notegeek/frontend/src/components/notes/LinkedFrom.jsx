@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@apollo/client';
-// Deep-import (see RichTextEditor.jsx for why).
+// Deep-import (see MarkdownEditor.jsx for why).
 import LinkIcon from '@mui/icons-material/Link';
 import { BACKLINKS } from '../../graphql/queries';
 import { findWikiLinks } from '../../utils/wikiLinks';

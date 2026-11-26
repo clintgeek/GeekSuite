@@ -173,8 +173,8 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       // jwt-decode: small CJS dep the scanner otherwise finds late.
       // @mui/material/styles + the emotion pair: notegeek's entry graph is
-      // the heaviest in the suite (tiptap, tldraw, reactflow, all with deep
-      // dynamic import graphs of their own), which makes esbuild's scanner
+      // the heaviest in the suite (tldraw has a deep dynamic import graph of
+      // its own), which makes esbuild's scanner
       // discover MUI's styled() chain across more than one optimize pass
       // ("Re-optimizing dependencies..."). Each pass can re-split chunks
       // differently, and MUI's styles module is lazy-initialized (CJS

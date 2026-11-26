@@ -2,10 +2,8 @@ import React, { memo, useDeferredValue } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { sanitizeNoteHtml } from '../../utils/sanitizeNoteHtml';
-import { decodeCodeNote } from '../../utils/previewText';
 import { toDate } from '../../utils/dateUtils';
-import { mindMapOutline } from '../../utils/printNote';
+import { normalizeNoteType } from './noteTypeMeta';
 import './notePrint.css';
 
 /**
@@ -20,9 +18,6 @@ import './notePrint.css';
  *
  * Per type:
  *   markdown    rendered, tables as real tables, links followed by their URL
- *   text        the sanitized rich-text HTML (plain legacy bodies wrap)
- *   code        monospace, long lines wrapped, language in the meta line
- *   mindmap     a nested outline (utils/printNote.js#mindMapOutline)
  *   handwritten `sketchImages`, exported by the page just before printing;
  *               a photo sketch is one image per photographed page
  */
@@ -65,82 +60,37 @@ function formatUpdated(value) {
   });
 }
 
-function Outline({ items }) {
-  if (!items.length) return null;
-  return (
-    <ul>
-      {items.map((it) => (
-        <li key={it.id}>
-          {it.label}
-          <Outline items={it.children} />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-const looksLikeHtml = (s) => /<([a-z][a-z0-9]*)\b[^>]*>/i.test(s || '');
-
 function PrintBody({ type, content, sketchImages, sketchError }) {
-  switch (type) {
-    case 'markdown':
+  if (type === 'handwritten') {
+    if (sketchImages?.length) {
       return (
-        <div className="ng-print-md">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={PRINT_MARKDOWN_COMPONENTS}>
-            {content || ''}
-          </ReactMarkdown>
-        </div>
-      );
-    case 'code': {
-      const { code } = decodeCodeNote(content || '');
-      return <pre className="ng-print-code"><code>{code}</code></pre>;
-    }
-    case 'mindmap': {
-      const outline = mindMapOutline(content);
-      if (!outline.length) return <p className="ng-print-empty">This mind map is empty.</p>;
-      return (
-        <div className="ng-print-outline">
-          <p className="ng-print-aside">Mind map, as an outline.</p>
-          <Outline items={outline} />
+        <div className="ng-print-sketch">
+          {sketchImages.map((img, i) => (
+            <img
+              key={img.url}
+              src={img.url}
+              width={img.width}
+              height={img.height}
+              alt={sketchImages.length > 1 ? `Page ${i + 1} of the handwriting` : 'The handwritten page'}
+            />
+          ))}
         </div>
       );
     }
-    case 'handwritten':
-      if (sketchImages?.length) {
-        return (
-          <div className="ng-print-sketch">
-            {sketchImages.map((img, i) => (
-              <img
-                key={img.url}
-                src={img.url}
-                width={img.width}
-                height={img.height}
-                alt={sketchImages.length > 1 ? `Page ${i + 1} of the sketch` : 'The sketch'}
-              />
-            ))}
-          </div>
-        );
-      }
-      return (
-        <p className="ng-print-empty">
-          {sketchError
-            || 'The drawing is added when you print from NoteGeek: ⋯ → Print or save as PDF, or Ctrl+P.'}
-        </p>
-      );
-    case 'text':
-    default:
-      // Stored TipTap HTML, sanitized by the app's one profile. A legacy
-      // plain body (no tags) keeps its line breaks.
-      if (!looksLikeHtml(content)) {
-        return <div className="ng-print-plain">{content || ''}</div>;
-      }
-      return (
-        <div
-          className="ng-print-rich"
-          dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(content || '') }}
-        />
-      );
+    return (
+      <p className="ng-print-empty">
+        {sketchError
+          || 'The drawing is added when you print from NoteGeek: ⋯ → Print or save as PDF, or Ctrl+P.'}
+      </p>
+    );
   }
+  return (
+    <div className="ng-print-md">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={PRINT_MARKDOWN_COMPONENTS}>
+        {content || ''}
+      </ReactMarkdown>
+    </div>
+  );
 }
 
 /**
@@ -154,13 +104,11 @@ function NotePrintView({ note, sketchImages = null, sketchError = null, rootRef 
   // The editor re-renders this on every keystroke; paper can lag a frame.
   const content = useDeferredValue(note?.content || '');
   if (typeof document === 'undefined') return null;
-  const type = note?.type || 'text';
+  const type = normalizeNoteType(note?.type);
   const updated = formatUpdated(note?.updatedAt);
   const tags = (note?.tags || []).filter(Boolean);
-  const language = type === 'code' ? decodeCodeNote(content).language : null;
   const meta = [
     updated ? `Updated ${updated}` : null,
-    language ? language : null,
     tags.length ? tags.join(' · ') : null,
   ].filter(Boolean);
 

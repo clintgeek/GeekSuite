@@ -17,8 +17,11 @@ import Code from '@mui/icons-material/Code';
 import LinkIcon from '@mui/icons-material/Link';
 import EditorToolbar, { ToolButton, ToolSeparator } from './EditorToolbar';
 import { insertLink, toggleLinePrefix, toggleWrap } from '../../utils/markdownFormat';
-// Deep-import (see RichTextEditor.jsx for why) instead of the
-// '@mui/icons-material' barrel.
+// Deep-import each icon (here and across notegeek) rather than the
+// '@mui/icons-material' barrel: it re-exports 2000+ icons and is
+// catastrophically slow to load under Vite's SSR module runner (the one
+// vitest uses for jsdom tests), which made whole test files take minutes to
+// tear down.
 import Edit from '@mui/icons-material/Edit';
 import Visibility from '@mui/icons-material/Visibility';
 import VerticalSplit from '@mui/icons-material/VerticalSplit';
@@ -179,9 +182,7 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
             }}
             sx={{
                 // The scroll lives on the input ROOT, and the textarea inside
-                // it is left alone to grow — the same shape RichTextEditor
-                // uses, where ProseMirror's content div grows and its wrapper
-                // scrolls.
+                // it is left alone to grow.
                 //
                 // This used to set `height: 100% !important` and
                 // `overflow: auto !important` on `.MuiInputBase-input`, which

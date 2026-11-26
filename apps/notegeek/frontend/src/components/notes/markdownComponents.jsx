@@ -12,7 +12,7 @@ import React from 'react';
 import { Link as RouterLink, useInRouterContext } from 'react-router-dom';
 import remarkGfm from 'remark-gfm';
 import remarkInlineTags from '../../utils/remarkInlineTags';
-// Deep imports (see RichTextEditor.jsx for why).
+// Deep imports (see MarkdownEditor.jsx for why).
 import CheckBoxOutlined from '@mui/icons-material/CheckBoxOutlined';
 import CheckBoxOutlineBlank from '@mui/icons-material/CheckBoxOutlineBlank';
 

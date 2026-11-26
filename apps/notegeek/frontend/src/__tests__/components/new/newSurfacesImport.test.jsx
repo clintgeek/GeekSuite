@@ -1,12 +1,13 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter } from 'react-router-dom';
 import { createNoteTheme } from '../../../theme/createAppTheme';
 import NewNoteSheet from '../../../components/new/NewNoteSheet';
 import NewNoteMenu from '../../../components/new/NewNoteMenu';
 import useImportStore from '../../../store/importStore';
+import { VIEWPORTS, setViewport, restoreViewport } from '../../helpers/viewport';
 
 /**
  * "Import a Markdown file" on the New surfaces (DOCS/CONTEXT.md §9). Both
@@ -23,7 +24,7 @@ beforeEach(() => {
   picker = vi.fn();
   useImportStore.setState({ picker });
 });
-afterEach(() => useImportStore.setState({ picker: null }));
+afterEach(() => { useImportStore.setState({ picker: null }); restoreViewport(); });
 
 describe('the phone\'s New sheet', () => {
   it('offers "Import a Markdown file", which opens the picker and closes the sheet', () => {
@@ -32,6 +33,23 @@ describe('the phone\'s New sheet', () => {
     fireEvent.click(screen.getByRole('button', { name: /import a markdown file/i }));
     expect(picker).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the New sheet\'s first row', () => {
+  const firstRow = () => within(screen.getByRole('list', { name: 'New' })).getAllByRole('listitem')[0];
+
+  it('leads with "Write by hand" off a phone', () => {
+    setViewport(VIEWPORTS.tabletPortrait);
+    wrap(<NewNoteSheet open onClose={vi.fn()} />);
+    expect(firstRow()).toHaveTextContent('Write by hand');
+    expect(within(screen.getByRole('list', { name: 'New' })).getAllByRole('listitem')[1]).toHaveTextContent('Type a note');
+  });
+
+  it('leads with "Type a note" on a phone', () => {
+    setViewport(VIEWPORTS.phone);
+    wrap(<NewNoteSheet open onClose={vi.fn()} />);
+    expect(firstRow()).toHaveTextContent('Type a note');
   });
 });
 

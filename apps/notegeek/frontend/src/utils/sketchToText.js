@@ -8,13 +8,13 @@
 import { noteLinkMarkup } from './noteLinks';
 import { readMarkDetailed } from './journalLines';
 
-const sketchLabel = (sketchTitle) => String(sketchTitle || '').trim() || 'Untitled sketch';
+const sketchLabel = (sketchTitle) => String(sketchTitle || '').trim() || 'Untitled';
 
 /**
  * Where the text came from: a sketch (§2), or photographed pages kept as a
  * photo sketch note (§3). Only the words change; the shape is the same.
  */
-const PREFIX = { sketch: 'From sketch', photo: 'From photos' };
+const PREFIX = { sketch: 'From handwritten note', photo: 'From photos' };
 const prefixFor = (source) => PREFIX[source] || PREFIX.sketch;
 
 /** The text of the first Markdown heading (any level), or null. */
@@ -25,7 +25,7 @@ export function firstHeading(markdown) {
 
 /**
  * The new note's title: the composed document's first heading, or
- * "From sketch: <sketch title>" (always that for the plain-text path;
+ * "From handwritten note: <its title>" (always that for the plain-text path;
  * "From photos: …" for photographed pages).
  */
 export function derivedNoteTitle({ sketchTitle, body, composed, source = 'sketch' }) {
@@ -35,7 +35,7 @@ export function derivedNoteTitle({ sketchTitle, body, composed, source = 'sketch
 
 /** The first line: a link back to the sketch, in NoteGeek's markdown link convention. */
 export function backLinkLine({ sketchId, sketchTitle, source = 'sketch' }) {
-  return `${prefixFor(source)}: ${noteLinkMarkup('markdown', { id: sketchId, title: sketchLabel(sketchTitle) })}`;
+  return `${prefixFor(source)}: ${noteLinkMarkup({ id: sketchId, title: sketchLabel(sketchTitle) })}`;
 }
 
 /**

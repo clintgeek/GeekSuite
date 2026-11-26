@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useParams, useMatch, useNavigate } from 'react-router-dom';
 import { CircularProgress, Box, Button, Typography } from '@mui/material';
 import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
@@ -24,24 +24,6 @@ function NotePage() {
 
     const noteToDisplay = data?.note;
 
-    // Add or remove 'mindmap-view' class from body when viewing mind maps
-    useEffect(() => {
-        const isMindMap = noteToDisplay?.type === 'mindmap';
-
-        if (isMindMap) {
-            document.body.classList.add('mindmap-view');
-        } else {
-            document.body.classList.remove('mindmap-view');
-        }
-
-        return () => {
-            document.body.classList.remove('mindmap-view');
-        };
-    }, [noteToDisplay?.type]);
-
-    // Helper to render the note editor
-    // Mind maps need full-height layout; handwritten uses position:fixed so no special wrapper needed
-    //
     // Keyed by the note: going from one note straight to another
     // (/notes/a -> /notes/b — a [[link]], Related notes, or the list beside
     // the note in two-pane) must be a NEW editor. Without the key React kept
@@ -50,39 +32,7 @@ function NotePage() {
     // itself for b. A new key unmounts a (flush) and mounts b fresh, as the
     // edit route (NoteEditorRoute) already does.
     const editorKey = `note:${id}`;
-    const renderEditor = () => {
-        if (noteToDisplay?.type === 'mindmap') {
-            return (
-                // `height: '100%'` rather than a viewport-relative magic
-                // number: this Box sits inside GeekAppFrame's route
-                // transition, which resolves a real height off the shell's
-                // own 100dvh chain (same pattern NoteEditorPage's root
-                // relies on), so it fills exactly what the shell gives it.
-                <Box sx={{
-                    display: 'flex',
-                    flexGrow: 1,
-                    minHeight: 0,
-                    height: '100%',
-                    width: '100%',
-                    overflow: 'hidden',
-                    position: 'relative'
-                }}>
-                    <Box component="main" sx={{
-                        flexGrow: 1,
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflow: 'hidden'
-                    }}>
-                        <NoteEditorPage key={editorKey} />
-                    </Box>
-                </Box>
-            );
-        }
-
-        // Standard editor for all other types (including handwritten, which handles its own layout)
-        return <NoteEditorPage key={editorKey} />;
-    };
+    const renderEditor = () => <NoteEditorPage key={editorKey} />;
 
     // For new notes, show the editor
     if (isNewNote) {
@@ -165,13 +115,13 @@ function NotePage() {
         );
     }
 
-    // For mind maps/handwritten, always show the editor (even in view mode)
-    // These are inherently interactive
-    if (noteToDisplay && (noteToDisplay.type === 'mindmap' || noteToDisplay.type === 'handwritten')) {
+    // Handwritten notes always show the editor (even in view mode): they are
+    // inherently interactive.
+    if (noteToDisplay && noteToDisplay.type === 'handwritten') {
         return renderEditor();
     }
 
-    // For other note types, use the regular viewer/editor pattern. The
+    // For Markdown notes, use the regular viewer/editor pattern. The
     // frame does not scroll on /notes/:id (Layout passes `fill` so the
     // editor can own its height), so the viewer brings its own scroller.
     return isEditRoute ? <NoteEditorPage key={editorKey} /> : (

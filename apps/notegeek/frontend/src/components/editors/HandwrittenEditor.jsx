@@ -221,7 +221,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         try {
             serialized = JSON.stringify(editor.store.getStoreSnapshot());
         } catch (error) {
-            console.warn('HandwrittenEditor - could not serialise the sketch.', error);
+            console.warn('HandwrittenEditor - could not serialise the page.', error);
             return null;
         }
         if (serialized === lastKnownRef.current) return null;
@@ -254,22 +254,22 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         if (!editor) return;
         try {
             const { blob } = await exportSketchPng(editor, { exportToBlob, sheet: true, maxEdge: PRINT_MAX_EDGE, maxBytes: Infinity, base64: false });
-            const file = typeof File === 'function' ? new File([blob], 'sketch.png', { type: 'image/png' }) : null;
+            const file = typeof File === 'function' ? new File([blob], 'handwritten.png', { type: 'image/png' }) : null;
             if (file && navigator.canShare?.({ files: [file] }) && navigator.share) {
-                await navigator.share({ files: [file], title: 'Sketch' });
+                await navigator.share({ files: [file], title: 'Handwritten note' });
                 return;
             }
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'sketch.png';
+            a.download = 'handwritten.png';
             document.body.appendChild(a);
             a.click();
             a.remove();
             setTimeout(() => URL.revokeObjectURL(url), 10_000);
         } catch (err) {
             if (err?.name === 'AbortError') return; // the share sheet was closed
-            setNotice(err?.message || 'The sketch could not be turned into an image.');
+            setNotice(err?.message || 'The page could not be turned into an image.');
         }
     }, []);
 

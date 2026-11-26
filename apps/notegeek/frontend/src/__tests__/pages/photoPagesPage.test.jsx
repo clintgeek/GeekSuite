@@ -332,7 +332,7 @@ describe('the result: two new notes, photos first, nothing replaced', () => {
     expect(mdVars.title).toBe('From photos: Shopping');
     expect(mdVars.content.split('\n')[0]).toBe('From photos: [Shopping](/notes/photo-1)');
     expect(mdVars.content).toContain('--- page 1 ---  \nmilk  \neggs\n\n--- page 2 ---  \nbread');
-    expect(notify).toHaveBeenCalledWith(expect.stringMatching(/photos as a sketch note, and the text as a new note/), { tone: 'success' });
+    expect(notify).toHaveBeenCalledWith(expect.stringMatching(/the photos as a handwritten note, and the text as a typed note/), { tone: 'success' });
     // The reviewed reading is also the photo note's own searchable text
     // (AUTO_TRANSCRIBE_SPEC.md, photo decision 1b) — free: no new request.
     // Sent WITH the create (C6, review 1.21), not as a follow-up that could fail.
@@ -373,7 +373,7 @@ describe('the result: two new notes, photos first, nothing replaced', () => {
     fireEvent.click(screen.getByRole('button', { name: /read the page/i }));
     await screen.findByRole('textbox', { name: 'Transcript' });
     fireEvent.click(screen.getByRole('button', { name: 'Keep as plain text' }));
-    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.stringMatching(/photos are saved as a sketch note, but the text note wasn't/), { tone: 'error' }));
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.stringMatching(/photos are saved as a handwritten note, but the text note wasn't/), { tone: 'error' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Keep as plain text' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Keep as plain text' }));
     await screen.findByText('opened note');

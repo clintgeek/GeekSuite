@@ -4,18 +4,12 @@ import { useAppPreferences } from '@geeksuite/user';
 
 // Lazy load editors to reduce initial bundle size
 // Critical for low-memory devices like Fire tablets
-const RichTextEditor = lazy(() => import('../editors/RichTextEditor'));
 const MarkdownEditor = lazy(() => import('../editors/MarkdownEditor'));
-const CodeEditor = lazy(() => import('../editors/CodeEditor'));
-const MindMapEditor = lazy(() => import('../editors/MindMapEditor'));
 const HandwrittenEditor = lazy(() => import('../editors/HandwrittenEditor'));
 
 // Note type constants
 export const NOTE_TYPES = {
-  TEXT: 'text',
   MARKDOWN: 'markdown',
-  CODE: 'code',
-  MINDMAP: 'mindmap',
   HANDWRITTEN: 'handwritten',
 };
 
@@ -53,61 +47,25 @@ function NoteTypeRouter({
   const editorFontSize = appPrefs?.editorFontSize ?? 14;
 
   const renderEditor = () => {
-    switch (type) {
-      case NOTE_TYPES.MARKDOWN:
-        return (
-          <MarkdownEditor
-            content={content}
-            setContent={onChange}
-            readOnly={readOnly}
-            fontSize={editorFontSize}
-            {...props}
-          />
-        );
-
-      case NOTE_TYPES.CODE:
-        return (
-          <CodeEditor
-            content={content}
-            setContent={onChange}
-            readOnly={readOnly}
-            fontSize={editorFontSize}
-            {...props}
-          />
-        );
-
-      case NOTE_TYPES.MINDMAP:
-        return (
-          <MindMapEditor
-            content={content}
-            setContent={onChange}
-            readOnly={readOnly}
-            {...props}
-          />
-        );
-
-      case NOTE_TYPES.HANDWRITTEN:
-        return (
-          <HandwrittenEditor
-            content={content}
-            setContent={onChange}
-            readOnly={readOnly}
-            {...props}
-          />
-        );
-
-      case NOTE_TYPES.TEXT:
-      default:
-        return (
-          <RichTextEditor
-            content={content}
-            setContent={onChange}
-            readOnly={readOnly}
-            fontSize={editorFontSize}
-            {...props}
-          />
-        );
+    if (type === NOTE_TYPES.HANDWRITTEN) {
+      return (
+        <HandwrittenEditor
+          content={content}
+          setContent={onChange}
+          readOnly={readOnly}
+          {...props}
+        />
+      );
     }
+    return (
+      <MarkdownEditor
+        content={content}
+        setContent={onChange}
+        readOnly={readOnly}
+        fontSize={editorFontSize}
+        {...props}
+      />
+    );
   };
 
   return (

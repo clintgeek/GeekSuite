@@ -1,6 +1,6 @@
 # NoteGeek — Architecture & Technical Context
 
-NoteGeek is GeekSuite's note-taking application, supporting rich markdown, plain text, code snippets, handwriting/sketches, and visual mind maps.
+NoteGeek is GeekSuite's note-taking application, supporting Markdown notes and handwriting/sketches (the client creates and edits only these two types; see §24).
 
 ---
 
@@ -76,7 +76,7 @@ which exist.)
     (case-insensitive, regex-escaped), prefix matches first, then most recent; default 20, max 50.
     The `[[` picker's source — no bodies.
   - `Note.links` → `[NoteLink]` `{ key title noteId }`: the note's outgoing links (§12).
-  - `suggestForNote(noteId, title, excerpt, tags)`: AI tag and link suggestions.
+  - `suggestForNote(noteId, title, excerpt, tags)`: AI tag and link suggestions. No client calls it since 2026-11-25 (§24); the gateway keeps it.
 - **Mutations**:
   - `createNote(title, content, type, tags)`
   - `updateNote(id, title, content, type, tags, changeReason)`: each update writes a
@@ -109,21 +109,17 @@ which exist.)
   - `transcribeSketch(image, mediaType, source)`: reads a sketch's exported PNG, or (`source: 'photo'`) a photographed notebook page as JPEG with a prompt that ignores ruled lines and printed text, with the vision model (`need: vision+prose:balanced`, 40/day, every page counts). It writes nothing; the client saves new notes that link back. See `HANDWRITING.md` §2 and §3 ("Photo of a page", route `/notes/photo`). It needs `client_max_body_size 12m` on the vhost's `/graphql` location, or images over 1 MB get a 413.
 
 ### HTML & Markdown Security
-Stored notes (`type: 'text'`) contain TipTap HTML. NoteGeek strictly sanitizes on both sides:
-1. **Frontend**: Rendered markup passes through `frontend/src/utils/sanitizeNoteHtml.js` (DOMPurify).
-2. **Gateway**: Mutations sanitize markdown/HTML on write via `apps/basegeek/packages/api/src/graphql/notegeek/sanitize.js`.
-
-The rule (carried over from the retired `CURSOR-CONTEXT.md`, 2026-11-15): **stored HTML reaches the DOM only through `sanitizeNoteHtml`.** The render layer is the one that has to hold, because rows written before the gateway sanitized are still in the database. There are two `dangerouslySetInnerHTML` sites, both behind it: `NoteViewer.jsx` and `notes/NotePrintView.jsx`. The Markdown renderers are not such a site only because neither loads `rehype-raw`; adding it would make them one. The longer account is in `DOCS/ARCHIVE/CURSOR-CONTEXT.md` (Q63).
+The gateway sanitizes markdown/HTML on write (`apps/basegeek/packages/api/src/graphql/notegeek/sanitize.js`). The frontend no longer renders stored HTML: the rich-text viewer and `sanitizeNoteHtml.js` were removed (§24). A leftover `text` note is shown as a Markdown note, so its HTML appears as text. Neither Markdown renderer loads `rehype-raw`; adding it would make stored HTML reach the DOM again and bring the need for a sanitizer back. The earlier account is in `DOCS/ARCHIVE/CURSOR-CONTEXT.md` (Q63).
 
 ---
 
 ## 4. Frontend Editor Engines
 
 NoteGeek provides multiple view and editor modes in `apps/notegeek/frontend/src/components/`:
-- **Markdown / Rich Text**: TipTap editor with markdown extensions, checklists, and code formatting.
+- **Markdown**: a textarea editor with a Markdown toolbar and preview (`MarkdownEditor.jsx`).
 - **Handwritten / Canvas**: Mobile-optimized touch sketch canvas (`HandwrittenEditor.jsx` with viewport-fit handling).
-- **Mind Map**: Node-based graph visualization.
-- **Code**: Monospace syntax-highlighted editor.
+
+The rich-text (TipTap), code and mind map (React Flow) editors were removed on 2026-11-25 (§24).
 
 ---
 
@@ -164,7 +160,7 @@ Replaced the Lab Notebook on 2026-09-29 (Chef-approved). TodoGeek became paper +
 - **The grid:** a faint 16px engineering grid (`gridBackground` in `theme/tokens.js`) on the desk from `md` up and behind Home's capture box. Copy that needs contrast sits on a solid sheet.
 - **Quiet rows** (`components/notes/NoteRow.jsx`): title, preview, then a meta line of the type as a small graphite glyph with an accessible name (`TypeIcon.jsx`, e.g. "Sketch note"), plain tags ("work · planning"), and lowercase mono time. The notes list filters by type with one row of quiet chips (icon + short plural label; the active one highlighted).
 - **Save status** (`components/notes/SaveStatus.jsx`, states in `utils/saveStamp.js`): QUIET `SaveStatus` — small lowercase mono in the meta line under the title ("saved · 3m ago", "editing", "saving…"), always the page's one `role="status"`; LOUD `SaveAlert` — error ink on its tint with a Retry, in the head row beside ⋯, only when a save failed or you are offline with unsaved edits. On a phone the docked toolbar repeats the alert (via `store/editorChromeStore.js`). A repeated failure toasts once.
-- **One New.** A new note is Markdown: `/notes/new` opens straight into it (no type picker). Phone: the tab bar's New opens `components/new/NewNoteSheet.jsx` (note, photo of a page, sketch; code and mind map under More); Home's capture box also offers photo and sketch while empty and saves a Markdown note. Desktop: a split button in the top bar (`NewNoteMenu.jsx`). Rich text (`type: 'text'`) still opens and edits; it is not offered as new (`?type=text` still works).
+- **One New.** A new note is Markdown: `/notes/new` opens straight into it (no type picker). Phone: the tab bar's New opens `components/new/NewNoteSheet.jsx` (note, photo of a page, sketch); Home's capture box also offers photo and sketch while empty and saves a Markdown note. Desktop: a split button in the top bar (`NewNoteMenu.jsx`). Any other `?type=` opens a plain new Markdown note (§24).
 - **Home is the capture box and your notes** — no greeting, no "Continue" cards; the first phone screen shows notes.
 - **Icons:** a graphite pencil drawing a line across a pass of highlighter, on the grid paper (`public/icons/*.svg`, rendered by `node tools/pwa-icons.mjs --app notegeek`). Manifest `theme_color` `#F1F4EF`, `background_color` `#E9EEE7`.
 
@@ -188,9 +184,9 @@ Layout facts this pass depends on:
 
 Added 2026-09-30. The browser's own print path, no PDF library: `window.print()` plus a print stylesheet. Android Chrome and the installed PWA offer **Save as PDF** in that dialog; so does desktop.
 
-- **Where:** "Print or save as PDF" in the editor's ⋯ menu (every type, including a mind map in view mode), a print button in the read-only viewer's action bar (`NoteViewer.jsx`), and **Ctrl/Cmd+P** while a note is open (`hooks/useNotePrint.js` takes the shortcut so it runs the same path).
+- **Where:** "Print or save as PDF" in the editor's ⋯ menu (every type), a print button in the read-only viewer's action bar (`NoteViewer.jsx`), and **Ctrl/Cmd+P** while a note is open (`hooks/useNotePrint.js` takes the shortcut so it runs the same path).
 - **The paper copy** is `components/notes/NotePrintView.jsx`, portalled to `<body>` and `display: none` on screen. In print, `notePrint.css` hides every other child of `<body>` (the app, MUI menus/dialogs/backdrops, toasts) and releases the frame's fixed-height layout, so a long note flows onto more pages. Black on white, `@page` margins 18/16/20mm, Spline Sans 11pt, 20pt title, a mono meta line (updated date, code language, tags). Because it is mounted whenever a note is open, even the browser menu's Print gets the note, not the chrome.
-- **Per type:** markdown renders with GFM (real tables, borders, header row repeats, rows don't split; code blocks wrap instead of clipping; links print their URL after them in 8pt; task boxes as ☑/☐); rich text is the sanitized TipTap HTML (link URLs via CSS `::after`); code is the decoded code, monospace, wrapped; a **mind map prints as a nested outline** (`mindMapOutline` in `utils/printNote.js`: root, children top-to-bottom as on the canvas, unconnected nodes appended) — React Flow has no image export and a screenshot would print whatever the camera shows; a **sketch** is exported by tldraw right before the dialog (`exportSketchForPrint` in `utils/sketchExport.js`: light ink on white, up to 3000px, no size cap) and printed scaled to the page; a **photo sketch** prints one page per photographed page, each with the ink that overlaps it.
+- **Per type:** markdown renders with GFM (real tables, borders, header row repeats, rows don't split; code blocks wrap instead of clipping; links print their URL after them in 8pt; task boxes as ☑/☐); any non-sketch type prints as Markdown (§24); a **sketch** is exported by tldraw right before the dialog (`exportSketchForPrint` in `utils/sketchExport.js`: light ink on white, up to 3000px, no size cap) and printed scaled to the page; a **photo sketch** prints one page per photographed page, each with the ink that overlaps it.
 - **Filename:** `document.title` becomes the note's title while printing (so "Save as PDF" suggests it) and is restored on `afterprint` — not after `print()` returns, because on Android it returns at once.
 - **Limit:** printing from the browser's own menu (not NoteGeek's ⋯ or Ctrl+P) cannot wait for a sketch export, so it prints the last export or a line saying where to print from. A very tall single sketch is scaled to fit one page.
 - **Checks:** unit tests in `__tests__/utils/printNote.test.js`, `components/notes/NotePrintView.test.jsx`, `pages/noteEditorPrint.test.jsx`; harness scenes `14a-print-markdown`, `14v-print-viewer`, `14b-print-sketch` (title swap, table and link URL in the paper copy, the sketch image loaded before the dialog, print media shows only the paper copy).
@@ -229,8 +225,8 @@ Added 2026-09-30. A tag is a `/` path: `house/garage` is a tag of its own **and*
 - **Delete** is a `GeekDialog mode="window"` (no `window.confirm`): "Removes #house and its 2 sub-tags from 7 notes. The notes stay.", counted by `noteTagUsage` when it opens. Deleting the tag being viewed goes back to `/notes`.
 - **tagStore** mirrors the gateway: subtree rename (`swapPrefix`, merged, sorted), subtree delete, and the same into-own-descendant refusal.
 - **Chips** (`TagSelector.jsx`): whatever is typed is normalized (`house / garage` → `house/garage`); options are full paths; `house/` lists `house/garage`, `house/kitchen` (prefix matches first; `filterTagOptions`).
-- **Inline `#tags`** (`utils/inlineTags.js`), `markdown` and `text` notes only. On save the body's tags are MERGED into the chips — additive; deleting the text does not remove a tag, the chip does. Rule: `#` at the start or after whitespace or `(`, then a letter, then letters/digits/`_`/`-`/`/` (Unicode letters and marks); stops at anything else; trailing `/` dropped; normalized like a stored tag. Ignored: `# Heading` (hash + space), fenced and inline code (`<pre>`/`<code>` in rich text), URLs and link targets (`https://x.com/#s`, `[a](#anchor)`, `<a href="#x">`, `[ref]: url`), a hash glued to a word (`C#`, `a#b`, `\#x`, `&#35;`), anything starting with a digit (`#1`, `#2nd`), hex colours (exactly 3/4/6/8 hex chars — so an all-hex word like `#cafe` or `#beef` is read as a colour; add it as a chip), tags over 100 characters, and anything past the 50-tag cap. Compared case-insensitively with the chips (`#work` does not add a second `Work`). Two session-only memories: a tag a save added from the body that has since grown into a longer one (`#hou` autosaved mid-word, now `#house`) is taken back off; and a chip removed by hand is not re-added from the body until the note is reopened. Known edge: `#Heading` with no space is a tag, since in CommonMark it is not a heading.
-- **Rendered Markdown** (viewer and editor preview; not print or Compose) turns inline `#tags` into links to their page (`utils/remarkInlineTags.js`, the same token rule; router links, secondary ink, `a.ng-inline-tag`). Rich-text notes are not linkified — their HTML is rendered sanitized, and rewriting it was out of scope.
+- **Inline `#tags`** (`utils/inlineTags.js`), `markdown` notes only. On save the body's tags are MERGED into the chips — additive; deleting the text does not remove a tag, the chip does. Rule: `#` at the start or after whitespace or `(`, then a letter, then letters/digits/`_`/`-`/`/` (Unicode letters and marks); stops at anything else; trailing `/` dropped; normalized like a stored tag. Ignored: `# Heading` (hash + space), fenced and inline code, URLs and link targets (`https://x.com/#s`, `[a](#anchor)`, `<a href="#x">`, `[ref]: url`), a hash glued to a word (`C#`, `a#b`, `\#x`, `&#35;`), anything starting with a digit (`#1`, `#2nd`), hex colours (exactly 3/4/6/8 hex chars — so an all-hex word like `#cafe` or `#beef` is read as a colour; add it as a chip), tags over 100 characters, and anything past the 50-tag cap. Compared case-insensitively with the chips (`#work` does not add a second `Work`). Two session-only memories: a tag a save added from the body that has since grown into a longer one (`#hou` autosaved mid-word, now `#house`) is taken back off; and a chip removed by hand is not re-added from the body until the note is reopened. Known edge: `#Heading` with no space is a tag, since in CommonMark it is not a heading.
+- **Rendered Markdown** (viewer and editor preview; not print or Compose) turns inline `#tags` into links to their page (`utils/remarkInlineTags.js`, the same token rule; router links, secondary ink, `a.ng-inline-tag`).
 - **Checks:** `__tests__/utils/tagPath.test.js`, `utils/inlineTags.test.js`, `components/markdownInlineTags.test.jsx`, `components/TagNotesList.test.jsx`, `components/TagContextMenu.test.jsx`, `components/TagSelector.test.jsx`, `pages/noteEditorInlineTags.test.jsx`, `store/tagStore.test.js`; gateway `notegeekNestedTags.test.js`; harness scenes `16a-tag-parent-view`, `16b-tag-rename-dialog`, `16c-tag-delete-dialog` (fixture tags `house`, `house/garage`, `house/kitchen`).
 
 ## 11. Meaning-based search and Related notes (local embeddings)
@@ -371,7 +367,7 @@ Added 2026-09-30 (gateway: `apps/basegeek/packages/api/src/graphql/notegeek/link
 - **Syntax:** `[[Note title]]` and `[[Note title|shown text]]` in **markdown** and **rich-text** notes.
   Matched case-insensitively (whitespace collapsed) against the owner's own titles. Fenced code, inline
   code and `<pre>`/`<code>` are skipped (`if [[ -f x ]]` in a script is not a link). An in-app link
-  `[text](/notes/<id>)` / `<a href="/notes/<id>">` — what the suggestion strip's "Insert link" writes —
+  `[text](/notes/<id>)` / `<a href="/notes/<id>">` —
   counts too, already resolved by id. Max 200 links a note; titles cut at 500 characters.
 - **Stored:** `Note.links: [{ key, title, noteId }]`, recomputed on every write of the body or type
   (createNote, updateNote, restoreNoteVersion). `key` = lowercased title, or `id:<hex>` for an id link;
@@ -919,4 +915,39 @@ What: `DOCS/NOTE_KINDS_SPEC.md`. No stored field; a kind is read off tags.
   first; both ship from the same push and BaseGeek restarts independently.
 - **Harness.** Scenes `27a`–`27b`; fixtures `KIND_NOTES` / `ALL_KINDS` are kept out of
   `NOTES`.
+
+## 24. Two note types (client only, 2026-11-25)
+
+Chef only uses `markdown` and `handwritten`, so the FRONTEND no longer creates or edits `text` (rich text),
+`code` or `mindmap` notes. No gateway, GeekDay or `packages/*` change: the gateway still accepts and stores
+all five types, and on 2026-11-25 the five rich-text notes and one untyped note were converted to Markdown with
+`apps/basegeek/packages/api/scripts/migrate-notes-to-markdown.js` (dry run by default; originals are in each
+note's history), leaving only `markdown` and `handwritten` among live notes.
+
+- **Removed.** The rich-text, code and mind map editors (`RichTextEditor`, `CodeEditor`, `MindMapEditor`,
+  `MindMapNode`), the unused `NoteTypeSelector`, `utils/sanitizeNoteHtml.js` (nothing renders stored HTML now),
+  the code and mind map branches in the viewer, print (`mindMapOutline`), list rows and thumbnails
+  (`CodePreview`, `mindMapGeometry`, `tintCodeLine`), the reference pane and picker ("mind maps not offered"),
+  compose, previews and the harness fixtures `NOTE_CODE` / `NOTE_MINDMAP`. The New sheet lost its "More" fold,
+  the New menu its code and mind map items, the list its Code / Mind maps / Rich text filter chips. The
+  dependencies `@tiptap/*`, `reactflow` and `dompurify` went with them.
+- **The normalising helper.** `normalizeNoteType(type)` in `components/notes/noteTypeMeta.js`: `handwritten`
+  stays, every other value (`text`, `code`, `mindmap`, null, unknown) is `markdown`. It is applied where a type
+  is read from a loaded note or a URL (the editor page and its draft/history restore, `?type=`, the viewer, print,
+  `TypeIcon`, list rows, the reference picker), so a removed type opens and renders as a Markdown note and
+  `/notes/new?type=<anything but handwritten>` is a plain new Markdown note. A leftover `text` note shows its
+  HTML as text, and saving it writes `type: 'markdown'`.
+- **Suggestions strip removed.** `SuggestionStrip`, `utils/suggestions.js`, the `SuggestForNote` query and the
+  "Suggest tags & links" setting are gone from the client. The `suggestOnSave` preference is no longer read or
+  written; the gateway's `suggestForNote` is untouched. Fold-in, compose, related notes, meaning search and
+  handwriting-to-text are unchanged.
+- **Harness.** Scenes `05-suggestions`, `08-editor-code` and `09-editor-mindmap` are gone; the fixture notes
+  that were rich text, code or mind map are Markdown notes with the same ids, so row counts are unchanged.
+- **Names (Chef, 2026-11-25).** A note is **Typed** or **Handwritten**; "Sketch" is gone from every label and
+  message (code identifiers such as `useSketchConvert` and the `sketchTranscript` field keep their names). The
+  New surfaces say "Type a note" and "Write by hand"; the New sheet leads with the pen off a phone
+  (`NEW_FRONT_PEN`) and with typing on one.
+- **Home is capture.** `pages/QuickCaptureHome.jsx`: four start tiles (Write, 1:1, Meeting, Photo;
+  `data-home-start`), then the typing box; on a phone the box comes first. Below, one short list, "Pick up
+  where you left off" (6 rows). No Pinned group and no select mode on Home: browsing is Notes and Everything.
 

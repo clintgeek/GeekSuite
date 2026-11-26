@@ -6,7 +6,6 @@ import {
   cssString,
   endPrintTitle,
   isPrintShortcut,
-  mindMapOutline,
   printTitleFor,
   runPrint,
   waitForImages,
@@ -110,43 +109,6 @@ describe('printNote', () => {
     expect(isPrintShortcut({ ctrlKey: true, altKey: true, key: 'p' })).toBe(false);
     expect(isPrintShortcut({ key: 'p' })).toBe(false);
     expect(isPrintShortcut({ ctrlKey: true, key: 's' })).toBe(false);
-  });
-});
-
-describe('mindMapOutline', () => {
-  const node = (id, label, y, isRoot = false) => ({ id, position: { x: 0, y }, data: { label, isRoot } });
-  const edge = (s, t) => ({ id: `${s}-${t}`, source: s, target: t });
-
-  it('nests children under their parent, top to bottom as on the canvas', () => {
-    const content = JSON.stringify({
-      nodes: [node('0', 'Trip', 200, true), node('2', 'Food', 300), node('1', 'Travel', 100), node('3', 'Train', 50)],
-      edges: [edge('0', '2'), edge('0', '1'), edge('1', '3')],
-    });
-    expect(mindMapOutline(content)).toEqual([
-      {
-        id: '0', label: 'Trip', children: [
-          { id: '1', label: 'Travel', children: [{ id: '3', label: 'Train', children: [] }] },
-          { id: '2', label: 'Food', children: [] },
-        ],
-      },
-    ]);
-  });
-
-  it('keeps nodes no edge reaches, and survives a cycle', () => {
-    const content = JSON.stringify({
-      nodes: [node('0', 'Root', 0, true), node('1', 'A', 10), node('9', 'Loose', 20)],
-      edges: [edge('0', '1'), edge('1', '0')],
-    });
-    const out = mindMapOutline(content);
-    expect(out.map((n) => n.label)).toEqual(['Root', 'Loose']);
-    expect(out[0].children.map((n) => n.label)).toEqual(['A']);
-    expect(out[0].children[0].children).toEqual([]);
-  });
-
-  it('is empty for anything that is not a mind map', () => {
-    expect(mindMapOutline('not json')).toEqual([]);
-    expect(mindMapOutline('{}')).toEqual([]);
-    expect(mindMapOutline('')).toEqual([]);
   });
 });
 

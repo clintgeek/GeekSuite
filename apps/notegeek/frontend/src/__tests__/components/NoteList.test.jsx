@@ -70,7 +70,7 @@ describe('NoteList Unit Tests', () => {
         renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes)] });
         const row = (await screen.findByText('Tagged')).closest('a');
         // The type is an icon with an accessible name, not a coloured stamp.
-        expect(within(row).getByRole('img', { name: 'Markdown note' })).toBeInTheDocument();
+        expect(within(row).getByRole('img', { name: 'Typed note' })).toBeInTheDocument();
         // Tags are plain words (the last path segment), no # and no chips.
         expect(row).toHaveTextContent('a · c +1');
         expect(row).not.toHaveTextContent('#');
@@ -85,9 +85,9 @@ describe('NoteList Unit Tests', () => {
         await screen.findByText('One');
         const group = screen.getByRole('group', { name: 'Filter by type' });
         const all = within(group).getByRole('button', { name: /all/i });
-        const sketches = within(group).getByRole('button', { name: /sketches/i });
+        const handwritten = within(group).getByRole('button', { name: /handwritten/i });
         expect(all).toHaveAttribute('aria-pressed', 'true');
-        expect(sketches).toHaveAttribute('aria-pressed', 'false');
+        expect(handwritten).toHaveAttribute('aria-pressed', 'false');
         // No Lab Notebook stamps left behind.
         expect(document.querySelector('.type-stamp')).toBeNull();
     });

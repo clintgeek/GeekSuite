@@ -185,7 +185,7 @@ export function taskInputFor(entry, { now = new Date(), today = now, sketch = nu
   // Tags the page itself gives every task (a 1:1's person), after the line's own.
   if (tags.length) input.tags = [...new Set([...(input.tags || []), ...tags])];
   if (sketch?.id) {
-    const where = `From sketch: ${String(sketch.title || '').trim() || 'Untitled sketch'} — ${origin}/notes/${sketch.id}`;
+    const where = `From handwritten note: ${String(sketch.title || '').trim() || 'Untitled'} — ${origin}/notes/${sketch.id}`;
     input.note = input.note ? `${input.note}\n${where}` : where;
   }
   return input;

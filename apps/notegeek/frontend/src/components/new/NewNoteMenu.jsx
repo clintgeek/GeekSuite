@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Button, Divider, ListItemIcon, ListItemText, Menu, MenuItem, useTheme } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import { IMPORT_ENTRY, NEW_FRONT, NEW_MORE, NEW_PAGES, ONE_ON_ONE_ENTRY, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
+import { IMPORT_ENTRY, NEW_FRONT, NEW_PAGES, ONE_ON_ONE_ENTRY, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
 import { openImportPicker } from '../../store/importStore';
 import { openOneOnOnePicker } from '../../store/oneOnOneStore';
 import { graphiteTokens } from '../../theme/tokens';
@@ -12,8 +12,7 @@ import { graphiteTokens } from '../../theme/tokens';
  * NewNoteMenu — desktop's compact New: a split button in the top bar. The
  * main half makes a note (Markdown) in one click; the caret opens the other
  * kinds — photo, sketch, the two handwritten pages written every day (1:1,
- * which asks who, and Meeting notes), then code and mind map, then Markdown
- * import.
+ * which asks who, and Meeting notes), then Markdown import.
  */
 function NewNoteMenu() {
   const navigate = useNavigate();
@@ -61,7 +60,7 @@ function NewNoteMenu() {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { minWidth: 220, mt: '4px' } } }}
       >
-        {[...others, ...NEW_PAGES, 'divider', ...NEW_MORE, 'divider2', IMPORT_ENTRY.key].map((key) => {
+        {[...others, ...NEW_PAGES, 'divider', IMPORT_ENTRY.key].map((key) => {
           if (key.startsWith('divider')) return <Divider key={key} />;
           if (key === ONE_ON_ONE_ENTRY.key) {
             const Icon = ONE_ON_ONE_ENTRY.Icon;

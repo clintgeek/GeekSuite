@@ -201,17 +201,17 @@ describe('NoteEditorPage — one New', () => {
     renderEditor('/notes/new');
     await screen.findByPlaceholderText(/untitled/i);
     expect(screen.queryByText(/what are you writing/i)).toBeNull();
-    expect(document.querySelector('[data-note-meta]')).toHaveTextContent(/^Note/);
+    expect(document.querySelector('[data-note-meta]')).toHaveTextContent(/^Typed/);
     await typeTitle('Roof quote');
     await act(async () => { pressSave(); await Promise.resolve(); });
     await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
     expect(createNote.mock.calls[0][0].variables.type).toBe('markdown');
   });
 
-  it('still opens rich text from an old ?type=text link', async () => {
+  it('opens a plain Markdown note from an old ?type=text (or code, or mindmap) link', async () => {
     renderEditor('/notes/new?type=text');
     await screen.findByPlaceholderText(/untitled/i);
-    expect(document.querySelector('[data-note-meta]')).toHaveTextContent(/^Rich text/);
+    expect(document.querySelector('[data-note-meta]')).toHaveTextContent(/^Typed/);
   });
 });
 

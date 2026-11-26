@@ -7,7 +7,6 @@ import {
 } from '../../utils/inlineTags';
 
 const md = (s) => extractInlineTags(s, 'markdown');
-const html = (s) => extractInlineTags(s, 'text');
 
 describe('what counts as an inline tag', () => {
   it.each([
@@ -82,38 +81,11 @@ describe('what counts as an inline tag', () => {
   });
 });
 
-describe('rich text (TipTap HTML)', () => {
-  it('reads tags from paragraphs, list items and after line breaks', () => {
-    expect(html('<p>one #house</p><p>#garden</p><ul><li><p>#shed</p></li></ul><p>a<br>#after</p>'))
-      .toEqual(['house', 'garden', 'shed', 'after']);
-  });
-
-  it('ignores code, pre, link targets and URLs', () => {
-    expect(html('<p><code>#code</code></p><pre><code>#block</code></pre>'
-      + '<p><a href="https://x.com/#section">https://x.com/#section</a></p>')).toEqual([]);
-  });
-
-  it('decodes entities and treats &nbsp; as a space', () => {
-    expect(html('<p>a&nbsp;#house &amp; #garden</p>')).toEqual(['house', 'garden']);
-  });
-
-  it('an inline mark between text and hash does not create a boundary', () => {
-    expect(html('<p><strong>bold</strong>#glued</p>')).toEqual([]);
-  });
-
-  it('an ATX-looking line in rich text is still not a tag', () => {
-    expect(html('<p># Heading</p>')).toEqual([]);
-  });
-});
-
 describe('which notes are read', () => {
-  it('markdown and text only', () => {
+  it('markdown only', () => {
     expect(supportsInlineTags('markdown')).toBe(true);
-    expect(supportsInlineTags('text')).toBe(true);
-    for (const type of ['code', 'mindmap', 'handwritten']) {
-      expect(supportsInlineTags(type)).toBe(false);
-      expect(extractInlineTags('#house', type)).toEqual([]);
-    }
+    expect(supportsInlineTags('handwritten')).toBe(false);
+    expect(extractInlineTags('#house', 'handwritten')).toEqual([]);
   });
 });
 
@@ -172,8 +144,8 @@ describe('applyInlineTags — merging on save', () => {
     expect(r.changed).toBe(false);
   });
 
-  it('leaves code notes alone', () => {
-    const r = applyInlineTags({ tags: ['a'], content: '#house', type: 'code' });
+  it('leaves sketches alone', () => {
+    const r = applyInlineTags({ tags: ['a'], content: '#house', type: 'handwritten' });
     expect(r.tags).toEqual(['a']);
     expect(r.changed).toBe(false);
   });

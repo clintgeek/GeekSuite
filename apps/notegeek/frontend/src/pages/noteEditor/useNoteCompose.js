@@ -20,25 +20,8 @@ export function useNoteCompose({
   const [composeNoteMutation, { loading: isComposing }] = useMutation(COMPOSE_NOTE);
   const [compose, setCompose] = useState(null);
 
-  /**
-   * Types Compose can read.
-   *
-   * `text` is TipTap HTML, so the markup is stripped before it goes out — the
-   * model should see the writing, not the tags, and tags are most of the
-   * tokens. `code` is already plain. A null type is the app's old default and
-   * behaves as text (six of sixteen live notes carry one). `mindmap` and
-   * `handwritten` are excluded: their content is not prose.
-   */
-  const COMPOSABLE = ['text', 'markdown', 'code', null, undefined];
-  const canCompose = COMPOSABLE.includes(noteType);
-
-  const plainTextForCompose = () => {
-    if (noteType !== 'text' && noteType !== null && noteType !== undefined) return content;
-    // A parser, not a regex: stripping tags by pattern mangles anything
-    // containing a literal `<`, which code fragments routinely do.
-    const doc = new DOMParser().parseFromString(content || '', 'text/html');
-    return (doc.body?.textContent || '').trim();
-  };
+  /** Compose reads Markdown notes; a sketch's content is not prose. */
+  const canCompose = noteType === 'markdown';
 
   /**
    * `override` is the handwriting path's reviewed transcript
@@ -48,7 +31,7 @@ export function useNoteCompose({
   const handleCompose = async (override) => {
     const fromSketch = typeof override === 'string';
     const origin = fromSketch ? 'sketch' : 'note';
-    const source = fromSketch ? override : plainTextForCompose();
+    const source = fromSketch ? override : content;
     if (!source || !source.trim() || isComposing) return;
     const show = (state) => setCompose({ ...state, origin });
     show({ open: true, loading: true, markdown: '', stats: null, error: null });

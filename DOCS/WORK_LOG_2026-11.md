@@ -882,3 +882,13 @@ Tests 1117 → 1140. Harness `26a`–`26c`.
   `/everything`; rail and sidebar entries are places, not "start a note" actions.
 - Details: `apps/notegeek/DOCS/CONTEXT.md` §23.
 
+## 2026-11-25: NoteGeek down to two note types; Home is capture
+
+- Rich text, code and mind map editors removed from the NoteGeek client, with the save-time suggestions strip.
+  Live data: 5 rich-text notes and 1 untyped note converted to Markdown
+  (`apps/basegeek/packages/api/scripts/migrate-notes-to-markdown.js --apply`, run in the basegeek container).
+- "Sketch" renamed: notes are Typed or Handwritten. The New sheet leads with the pen off a phone.
+- Home rebuilt around capture: Write / 1:1 / Meeting / Photo tiles, the typing box, six recent notes.
+- Details: `apps/notegeek/DOCS/CONTEXT.md` §24. Still to do, separately: share the ink code between GeekDay
+  and NoteGeek.
+

@@ -3,16 +3,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 export const noteKey = (note) => String(note?.id || note?._id || '');
 
 /**
- * Types Compose cannot read (spec §4 C2): their content is not prose.
+ * Compose cannot read a sketch (spec §4 C2): its content is not prose.
  * Locked / encrypted notes are never sent to a model either.
  */
-const UNCOMPOSABLE_TYPES = new Set(['handwritten', 'mindmap']);
-
 /** Why the gateway will leave this note out of a compose, if it will. */
 export function composeSkipReason(note) {
   if (!note) return null;
   if (note.isLocked || note.isEncrypted) return 'locked';
-  if (UNCOMPOSABLE_TYPES.has(note.type)) return 'unsupported_type';
+  if (note.type === 'handwritten') return 'unsupported_type';
   return null;
 }
 

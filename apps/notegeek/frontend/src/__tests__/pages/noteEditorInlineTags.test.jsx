@@ -112,22 +112,6 @@ describe('NoteEditorPage — inline #tags', () => {
     expect(screen.getByTestId('chip-list')).toHaveTextContent('house/garage');
   });
 
-  it('a rich-text note reads its HTML body too', async () => {
-    renderEditor('/notes/new?type=text');
-    await typeBody('<p>call about #roof</p>');
-    await save();
-    await waitFor(() => expect(createNote).toHaveBeenCalled());
-    expect(lastSavedTags()).toEqual(['roof']);
-  });
-
-  it('a code note never does', async () => {
-    renderEditor('/notes/new?type=code');
-    await typeBody('// #house');
-    await save();
-    await waitFor(() => expect(createNote).toHaveBeenCalled());
-    expect(lastSavedTags()).toEqual([]);
-  });
-
   it('is additive: deleting the text keeps the tag; removing the chip keeps it off', async () => {
     renderEditor('/notes/new?type=markdown');
     await typeBody('about #garden');

@@ -1,9 +1,6 @@
-// Deep-import (see RichTextEditor.jsx for why) instead of the
+// Deep-import (see MarkdownEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import SubjectIcon from '@mui/icons-material/Subject';
-import TextFieldsIcon from '@mui/icons-material/TextFields';
-import DataObjectIcon from '@mui/icons-material/DataObject';
-import AccountTreeIcon from '@mui/icons-material/AccountTreeOutlined';
 import GestureIcon from '@mui/icons-material/Gesture';
 import PhotoCameraOutlined from '@mui/icons-material/PhotoCameraOutlined';
 import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined';
@@ -12,36 +9,40 @@ import GroupsOutlined from '@mui/icons-material/GroupsOutlined';
 import { MEETING_PATH } from '../../utils/oneOnOne';
 
 /**
- * The five note types, in one table, so the rows, filters, editor head and
+ * The two note types, in one table, so the rows, filters, editor head and
  * viewer never disagree about a type's name or glyph.
  *
  * Graphite shows a type as a small graphite glyph with an accessible label
  * (TypeIcon.jsx), not as a coloured stamp: the chrome should be quieter than
- * the notes. Markdown is the default note ("Note"); rich text is kept for
- * the notes that already are rich text, but it is not offered as a new type.
+ * the notes.
+ *
+ * The names (Chef, 2026-11-25): a note is Typed or Handwritten. "Sketch"
+ * said a drawing; the pen is mostly for writing, and a handwritten note is
+ * not a lesser kind. `long` is what the New surfaces call starting one.
  */
 export const NOTE_TYPE_META = {
-  markdown:    { label: 'Note',      long: 'Note',      aria: 'Markdown note',      Icon: SubjectIcon,     description: 'Markdown, with a preview' },
-  text:        { label: 'Rich text', long: 'Rich text', aria: 'Rich text note', Icon: TextFieldsIcon,  description: 'Bold, italic, lists' },
-  code:        { label: 'Code',      long: 'Code',      aria: 'Code note',      Icon: DataObjectIcon,  description: 'Snippets in a monospace page' },
-  mindmap:     { label: 'Mind map',  long: 'Mind map',  aria: 'Mind map note',  Icon: AccountTreeIcon, description: 'Ideas on a canvas' },
-  handwritten: { label: 'Sketch',    long: 'Sketch',    aria: 'Sketch note',    Icon: GestureIcon,     description: 'Draw or write with a pen' },
+  markdown:    { label: 'Typed',       long: 'Type a note',   aria: 'Typed note',       Icon: SubjectIcon, description: 'With the keyboard, in Markdown' },
+  handwritten: { label: 'Handwritten', long: 'Write by hand', aria: 'Handwritten note', Icon: GestureIcon, description: 'With the pen: writing, and drawing too' },
 };
 
-/** Every type, for filters. Rich text last: nobody makes new ones. */
-export const NOTE_TYPE_ORDER = ['markdown', 'handwritten', 'code', 'mindmap', 'text'];
+/**
+ * Every type a note can be, for filters. A note read from the server may still
+ * carry a type that is no longer offered (text, code, mindmap): it is a
+ * Markdown note, so anything that reads `note.type` goes through this.
+ */
+export const NOTE_TYPE_ORDER = ['markdown', 'handwritten'];
+export const normalizeNoteType = (type) => (type === 'handwritten' ? 'handwritten' : 'markdown');
 
 /**
- * What the New surfaces offer. `front` is the phone's front door (a note,
- * a photo, a sketch); `more` is behind "More". Text is deliberately absent:
- * a new note is Markdown.
+ * What the New surfaces offer first. A phone is typed on, so typing leads;
+ * a tablet is written on with the pen, so writing does (`NEW_FRONT_PEN`).
  */
 export const NEW_FRONT = ['markdown', 'photo', 'handwritten'];
-export const NEW_MORE = ['code', 'mindmap'];
+export const NEW_FRONT_PEN = ['handwritten', 'markdown', 'photo'];
 
 /**
  * "Photo of a page" (DOCS/HANDWRITING.md §3) is not a sixth type: it makes a
- * sketch note (plus a Markdown one). It sits beside the types on the New
+ * handwritten note (plus a typed one). It sits beside the types on the New
  * surfaces with its own glyph and route.
  */
 export const PHOTO_ENTRY = {
@@ -72,7 +73,7 @@ export const IMPORT_ENTRY = {
 /**
  * The two pages written every day, on the New surfaces beside the types
  * (Chef, 2026-11-24: the typed templates are gone; these two stay). Neither
- * is a type: both are a sketch on a printed sheet. A 1:1 asks who first
+ * is a type: both are a handwritten note on a printed sheet. A 1:1 asks who first
  * (store/oneOnOneStore.js, DOCS/ONE_ON_ONE_SPEC.md req 1); a meeting opens
  * straight on the Meeting sheet (utils/oneOnOne.js MEETING_PATH).
  */
@@ -103,7 +104,7 @@ export function noteTypeMeta(type) {
   if (type === 'import') return IMPORT_ENTRY;
   if (type === ONE_ON_ONE_ENTRY.key) return ONE_ON_ONE_ENTRY;
   if (type === MEETING_ENTRY.key) return MEETING_ENTRY;
-  return NOTE_TYPE_META[type] || NOTE_TYPE_META.text;
+  return NOTE_TYPE_META[normalizeNoteType(type)];
 }
 
 /** Where a New entry goes. */

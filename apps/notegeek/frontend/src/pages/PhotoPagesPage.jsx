@@ -14,7 +14,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-// Deep imports (see RichTextEditor.jsx for why), not the barrel.
+// Deep imports (see MarkdownEditor.jsx for why), not the barrel.
 import PhotoCameraOutlined from '@mui/icons-material/PhotoCameraOutlined';
 import AddPhotoAlternateOutlined from '@mui/icons-material/AddPhotoAlternateOutlined';
 import RotateRight from '@mui/icons-material/RotateRight';
@@ -420,13 +420,13 @@ export default function PhotoPagesPage({ prepare = preparePhotoPageSet, loadSnap
       } catch (err) {
         // The photos are safe; only the text note failed. A retry reuses the
         // photo note rather than making a second one.
-        notify(`The photos are saved as a sketch note, but the text note wasn't: ${saveErrorMessage(err)}`, { tone: 'error' });
+        notify(`The photos are saved as a handwritten note, but the text note wasn't: ${saveErrorMessage(err)}`, { tone: 'error' });
         return false;
       }
       runRef.current += 1;
       setTranscribe(null);
       setCompose(null);
-      notify('Saved: the photos as a sketch note, and the text as a new note.', { tone: 'success' });
+      notify('Saved: the photos as a handwritten note, and the text as a typed note.', { tone: 'success' });
       if (created?.id) navigate(`/notes/${created.id}`);
       return true;
     } catch (err) {

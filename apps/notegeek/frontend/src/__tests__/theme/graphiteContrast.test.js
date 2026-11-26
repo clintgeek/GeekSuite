@@ -33,7 +33,7 @@ for (const [mode, p] of Object.entries(graphite)) {
     pairs.push([`${mode} error on ${gName}`, p.error, bg, 4.5]);
     // Links, focus rings and active icons are graphite primary.
     pairs.push([`${mode} primary.main on ${gName}`, p.primary.main, bg, 4.5]);
-    // Type glyphs, mind-map edges: graphics.
+    // Type glyphs: graphics.
     pairs.push([`${mode} lead (graphics) on ${gName}`, p.lead, bg, 3]);
     // The grid never pushes copy under AA: ink2 over a grid line.
     pairs.push([`${mode} ink2 on a grid line over ${gName}`, p.ink2, over(p.grid, bg), 4.5]);

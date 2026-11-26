@@ -67,8 +67,8 @@ export default function SendTasksDialog({
                 Send tasks to TodoGeek
                 <Typography variant="caption" component="p" sx={{ ...mono, color: 'text.secondary', letterSpacing: '0.04em', mt: 1 }}>
                     {stage === 'done'
-                        ? 'The sketch is unchanged'
-                        : 'Journal lines from this page · the sketch stays as it is'}
+                        ? 'The handwriting is unchanged'
+                        : 'Journal lines from this page · the handwriting stays as it is'}
                 </Typography>
             </DialogTitle>
 

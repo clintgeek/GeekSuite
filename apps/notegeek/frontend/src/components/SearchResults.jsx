@@ -13,7 +13,7 @@ import {
     useTheme,
 } from '@mui/material';
 import { GeekEmptyState, GeekErrorState, GeekSlashHint, slashFocusProps } from '@geeksuite/ui';
-// Deep-import (see RichTextEditor.jsx for why) instead of the
+// Deep-import (see MarkdownEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';

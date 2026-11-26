@@ -36,7 +36,7 @@ describe('NoteList — a long list with sketch thumbnails', () => {
         const heavy = sketch(40, 150); // ~250 KB each, ~15 MB in the list
         const now = Date.now();
         const notes = Array.from({ length: 200 }, (_, i) => {
-            const type = i % 10 < 3 ? 'handwritten' : i % 10 === 3 ? 'code' : 'text';
+            const type = i % 10 < 3 ? 'handwritten' : 'markdown';
             return {
                 id: `n${i}`,
                 title: `Note ${i}`,
@@ -69,11 +69,11 @@ describe('NoteList — a long list with sketch thumbnails', () => {
         // many of each is scheduling, not behaviour: on a slow CI runner the
         // 200 rows took long enough that every preview had landed first
         // (2026-09-27), so asserting "some placeholders" was a race.
-        const shown = () => screen.queryAllByRole('img', { name: 'Sketch thumbnail' }).length
-            + screen.queryAllByRole('img', { name: 'Sketch preview' }).length;
+        const shown = () => screen.queryAllByRole('img', { name: 'Handwritten note thumbnail' }).length
+            + screen.queryAllByRole('img', { name: 'Handwriting preview' }).length;
         expect(shown()).toBe(60);
         // …and every preview lands.
-        await waitFor(() => expect(screen.getAllByRole('img', { name: 'Sketch preview' })).toHaveLength(60), { timeout: 60000 });
+        await waitFor(() => expect(screen.getAllByRole('img', { name: 'Handwriting preview' })).toHaveLength(60), { timeout: 60000 });
 
         console.info(`[perf] 200 rows in ${rowsMs.toFixed(0)}ms; all 60 sketch previews by ${(performance.now() - started).toFixed(0)}ms`);
         expect(rowsMs).toBeLessThan(30000);

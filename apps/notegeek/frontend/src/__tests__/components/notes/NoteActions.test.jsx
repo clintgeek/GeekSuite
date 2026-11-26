@@ -21,12 +21,11 @@ function openMenu() {
 }
 
 describe('NoteActions', () => {
-    let mockOnSave, mockOnDelete, mockOnToggleEdit;
+    let mockOnSave, mockOnDelete;
 
     beforeEach(() => {
         mockOnSave = vi.fn();
         mockOnDelete = vi.fn();
-        mockOnToggleEdit = vi.fn();
         vi.clearAllMocks();
     });
 
@@ -43,15 +42,6 @@ describe('NoteActions', () => {
         expect(mockOnSave).toHaveBeenCalledTimes(1);
     });
 
-    it('offers no "Save now" in a mind map\'s view mode', () => {
-        render(
-            <NoteActions onSave={mockOnSave} onDelete={mockOnDelete} isEditMode={false} canToggleEdit onToggleEdit={mockOnToggleEdit} />,
-            { wrapper: ThemeWrapper },
-        );
-        const menu = openMenu();
-        expect(within(menu).queryByRole('menuitem', { name: /save now/i })).not.toBeInTheDocument();
-    });
-
     it('Delete is in the menu and calls back (the confirm dialog is the page\'s)', () => {
         render(<NoteActions onSave={mockOnSave} onDelete={mockOnDelete} />, { wrapper: ThemeWrapper });
         const menu = openMenu();
@@ -63,15 +53,6 @@ describe('NoteActions', () => {
         render(<NoteActions onSave={mockOnSave} onDelete={mockOnDelete} canDelete={false} />, { wrapper: ThemeWrapper });
         const menu = openMenu();
         expect(within(menu).queryByRole('menuitem', { name: /delete/i })).not.toBeInTheDocument();
-    });
-
-    it('shows the View/Edit toggle for mind maps', () => {
-        render(
-            <NoteActions onSave={mockOnSave} onDelete={mockOnDelete} canToggleEdit isEditMode onToggleEdit={mockOnToggleEdit} />,
-            { wrapper: ThemeWrapper },
-        );
-        fireEvent.click(screen.getByRole('button', { name: /view/i }));
-        expect(mockOnToggleEdit).toHaveBeenCalledTimes(1);
     });
 
     /**
@@ -185,14 +166,6 @@ describe('NoteActions — Print or save as PDF', () => {
         const menu = openMenu();
         fireEvent.click(within(menu).getByRole('menuitem', { name: /print or save as pdf/i }));
         expect(onPrint).toHaveBeenCalledTimes(1);
-    });
-
-    it('is offered in a mind map\'s view mode too (printing is not editing)', () => {
-        render(
-            <NoteActions onPrint={vi.fn()} isEditMode={false} canToggleEdit onToggleEdit={vi.fn()} />,
-            { wrapper: ThemeWrapper },
-        );
-        expect(within(openMenu()).getByRole('menuitem', { name: /print or save as pdf/i })).toBeInTheDocument();
     });
 
     it('is absent without a handler', () => {

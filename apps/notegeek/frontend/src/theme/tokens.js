@@ -10,7 +10,7 @@
  */
 import { alpha } from '@mui/material/styles';
 
-const FALLBACK_NOTE_TYPE = 'text';
+const FALLBACK_NOTE_TYPE = 'markdown';
 
 /** Editor surfaces: default page, card/chrome, and the writing sheet. */
 export function surfaces(theme) {
@@ -44,7 +44,7 @@ export function border(theme) {
 
 /**
  * Identity colour for a note type (the dot on rows, the type pill).
- * Falls back to the `text` type, then to the accent, so an unknown type
+ * Falls back to the `markdown` type, then to the accent, so an unknown type
  * from the API still renders something meaningful.
  */
 export function noteTypeColor(theme, type) {
@@ -54,7 +54,7 @@ export function noteTypeColor(theme, type) {
 }
 
 /**
- * Text-bearing type colour (stamp labels, code-preview tint). Same hue as
+ * Text-bearing type colour (stamp labels). Same hue as
  * `noteTypeColor`, darkened/lifted so 12px text clears 4.5:1 on the stamp's
  * own fill — see createAppTheme.js for the measured ratios.
  */

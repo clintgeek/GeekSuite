@@ -23,8 +23,8 @@ function Login() {
             appSuffix="geek"
             taglineLine1="Think clearly."
             taglineLine2="Write boldly."
-            description="A focused space for markdown, code, mind maps, and everything in between. Built for developers who think in text."
-            features={['Markdown', 'Code Snippets', 'Mind Maps', 'Rich Text', 'Handwritten']}
+            description="A focused space for markdown, handwriting, and everything in between. Built for developers who think in text."
+            features={['Markdown', 'Handwritten']}
             onLogin={handleLogin}
             loading={authLoading}
             // NoteGeek specific overrides to match original exactly

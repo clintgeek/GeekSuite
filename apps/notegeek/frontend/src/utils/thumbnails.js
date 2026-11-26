@@ -1,8 +1,8 @@
 /**
- * Cheap, pure geometry for the list's sketch and mind-map thumbnails.
+ * Cheap, pure geometry for the list's sketch thumbnails.
  *
- * Both note types store a JSON snapshot that can be large (a sketch's
- * ceiling is millions of characters), so:
+ * A sketch stores a JSON snapshot that can be large (the ceiling is millions
+ * of characters), so:
  *   - nothing here touches the DOM or React;
  *   - results are memoised by the caller's key (note id + updatedAt +
  *     content length) in a small bounded cache, so a re-render, a re-sort
@@ -38,8 +38,8 @@ function memo(key, compute) {
  * remounting row paint its thumbnail on the first frame instead of flashing
  * the placeholder while it waits for an idle slot.
  */
-export function cachedGeometry(kind, key) {
-  const k = key && `${kind === 'mindmap' ? 'm' : 's'}:${key}`;
+export function cachedGeometry(key) {
+  const k = key && `s:${key}`;
   return k && cache.has(k) ? cache.get(k) : undefined;
 }
 
@@ -162,86 +162,4 @@ export function sketchGeometry(content, key) {
       boxes: boxes.map((b) => ({ x: r(b.x), y: r(b.y), w: r(b.w), h: r(b.h) })),
     };
   });
-}
-
-/**
- * A mind map reduced to its root and the root's first few children, laid
- * out as a tiny diagram: root on the left, children stacked on the right,
- * one elbow edge each. Labels are returned for the accessible name only —
- * at thumbnail size they are drawn as bars, not text.
- *
- * @returns {{ root: string, children: string[], more: number } | null}
- */
-export function mindMapGeometry(content, key, maxChildren = 4) {
-  return memo(key && `m:${key}`, () => {
-    const data = parse(content);
-    const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
-    if (!nodes.length) return null;
-    const edges = Array.isArray(data?.edges) ? data.edges : [];
-    const root = nodes.find((n) => n?.data?.isRoot) || nodes[0];
-    const byId = new Map(nodes.map((n) => [String(n.id), n]));
-    const kids = edges
-      .filter((e) => String(e?.source) === String(root.id))
-      .map((e) => byId.get(String(e.target)))
-      .filter(Boolean)
-      .sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0));
-    const label = (n) => String(n?.data?.label ?? '').trim() || 'Untitled';
-    return {
-      root: label(root),
-      children: kids.slice(0, maxChildren).map(label),
-      more: Math.max(0, kids.length - maxChildren),
-    };
-  });
-}
-
-// ─── Code tint ──────────────────────────────────────────────────────────────
-
-const KEYWORDS = new Set((
-  'const let var function return if else for while do switch case break continue new class extends ' +
-  'import export from default async await try catch finally throw typeof instanceof in of yield ' +
-  'def elif lambda pass None True False self and or not is with as raise ' +
-  'fn pub mut impl struct enum trait use mod match loop ' +
-  'func package type interface go defer chan map range ' +
-  'public private protected static void int string bool boolean float double char ' +
-  'select insert update delete where join create table values set null true false undefined echo'
-).split(' '));
-
-const TOKEN = /(\/\/.*$|#.*$|--.*$|\/\*.*?\*\/)|("(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?|`(?:[^`\\]|\\.)*`?)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_$][\w$]*)/g;
-
-/**
- * Split ONE line of code into tinted tokens — a regex tint, not a parser.
- * Kinds: 'comment' | 'string' | 'number' | 'keyword' | 'plain'. `#` and
- * `--` count as comments only at the start of the (trimmed) line, so
- * `a # b` in a shell one-liner and `x--` in C are not eaten.
- *
- * @returns {Array<{ kind: string, text: string }>}
- */
-export function tintCodeLine(line) {
-  const out = [];
-  if (!line) return out;
-  let last = 0;
-  TOKEN.lastIndex = 0;
-  let m;
-  while ((m = TOKEN.exec(line)) !== null) {
-    if (m.index === TOKEN.lastIndex) TOKEN.lastIndex += 1;
-    let kind = 'plain';
-    if (m[1]) {
-      const startsLine = line.slice(0, m.index).trim() === '';
-      const isSlash = m[1].startsWith('//') || m[1].startsWith('/*');
-      if (!isSlash && !startsLine) {
-        // `#`/`--` mid-line: not a comment; let the rest tokenise normally.
-        TOKEN.lastIndex = m.index + 1;
-        continue;
-      }
-      kind = 'comment';
-    } else if (m[2]) kind = 'string';
-    else if (m[3]) kind = 'number';
-    else if (m[4]) kind = KEYWORDS.has(m[4]) ? 'keyword' : 'plain';
-    if (kind === 'plain') continue;
-    if (m.index > last) out.push({ kind: 'plain', text: line.slice(last, m.index) });
-    out.push({ kind, text: m[0] });
-    last = m.index + m[0].length;
-  }
-  if (last < line.length) out.push({ kind: 'plain', text: line.slice(last) });
-  return out;
 }

@@ -21,7 +21,7 @@ export function useSketchPrint({ isHandwritten, sketchApiRef, title }) {
     if (!api?.exportForPrint) {
       setPrintSketch((prev) => {
         revokePrintImages(prev.images);
-        return { images: null, error: 'The sketch was still loading, so the drawing is not on this page. Try again in a moment.' };
+        return { images: null, error: 'The page was still loading, so the handwriting is not on this print. Try again in a moment.' };
       });
       return;
     }
@@ -35,7 +35,7 @@ export function useSketchPrint({ isHandwritten, sketchApiRef, title }) {
     } catch (err) {
       next = {
         images: null,
-        error: err?.code === 'empty' ? 'This sketch is empty.' : `The drawing could not be exported (${err?.message || 'export failed'}).`,
+        error: err?.code === 'empty' ? 'This page is empty.' : `The handwriting could not be exported (${err?.message || 'export failed'}).`,
       };
     }
     setPrintSketch((prev) => {

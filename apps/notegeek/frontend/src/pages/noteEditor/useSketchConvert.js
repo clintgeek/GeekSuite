@@ -61,8 +61,8 @@ export function useSketchConvert({
 
   const transcribeErrorMessage = (err) => {
     const status = err?.networkError?.statusCode;
-    if (status === 413) return 'That page is too large for the server to accept (413). Your sketch is unchanged.';
-    if (err?.networkError && !err?.graphQLErrors?.length) return 'Could not reach the server. Your sketch is unchanged.';
+    if (status === 413) return 'That page is too large for the server to accept (413). Your handwriting is unchanged.';
+    if (err?.networkError && !err?.graphQLErrors?.length) return 'Could not reach the server. Your handwriting is unchanged.';
     return saveErrorMessage(err);
   };
 
@@ -103,11 +103,11 @@ export function useSketchConvert({
     let exported;
     try {
       const api = sketchApiRef.current;
-      if (!api) throw new Error('The sketch is still loading. Try again in a moment.');
+      if (!api) throw new Error('The page is still loading. Try again in a moment.');
       exported = await api.exportPng();
     } catch (err) {
       if (stale()) return;
-      setTranscribe((t) => ({ ...t, stage: 'error', error: err?.message || 'Could not turn the sketch into an image.' }));
+      setTranscribe((t) => ({ ...t, stage: 'error', error: err?.message || 'Could not turn the page into an image.' }));
       return;
     }
     if (stale()) return;
@@ -157,7 +157,7 @@ export function useSketchConvert({
     if (!savedNoteIdRef.current) await handleSaveRef.current();
     const sketchId = savedNoteIdRef.current;
     if (!sketchId) {
-      notify('Save the sketch first: the new note links back to it.', { tone: 'error' });
+      notify('Save this note first: the new note links back to it.', { tone: 'error' });
       return false;
     }
     try {
@@ -172,7 +172,7 @@ export function useSketchConvert({
       const created = data?.createNote;
       closeTranscribe();
       setCompose(null);
-      notify('Saved as a new note. The sketch is unchanged.', { tone: 'success' });
+      notify('Saved as a new note. The handwriting is unchanged.', { tone: 'success' });
       if (created?.id) navigate(`/notes/${created.id}`);
       return true;
     } catch (err) {

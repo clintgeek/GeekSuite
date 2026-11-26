@@ -217,8 +217,8 @@ export function PaperPicker() {
                             ? 'This page has writing on it, so its template stays. The writing is read together with the form.'
                             : 'This page has writing on it. A template can only be chosen for a blank page.')
                         : hasSheet
-                        ? 'Printed into this sketch on a white sheet. Your paper carries on around it. None takes it off.'
-                        : 'Prints a white sheet into this sketch. Your paper carries on around it.'}
+                        ? 'Printed into this note on a white sheet. Your paper carries on around it. None takes it off.'
+                        : 'Prints a white sheet into this note. Your paper carries on around it.'}
                 </Typography>
             </Popover>
         </>

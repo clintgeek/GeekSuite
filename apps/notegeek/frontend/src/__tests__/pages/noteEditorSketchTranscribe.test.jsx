@@ -265,10 +265,10 @@ describe('keeping it as plain text', () => {
     await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
     const { variables } = createNote.mock.calls[0][0];
     expect(variables.type).toBe('markdown');
-    expect(variables.title).toBe('From sketch: Tuesday');
+    expect(variables.title).toBe('From handwritten note: Tuesday');
     expect(variables.tags).toEqual(['house']);
     const lines = variables.content.split('\n');
-    expect(lines[0]).toBe('From sketch: [Tuesday](/notes/sketch-1)');
+    expect(lines[0]).toBe('From handwritten note: [Tuesday](/notes/sketch-1)');
     expect(variables.content).toContain('call the roofer  \nquote by Fri');
     expect(updateNote).not.toHaveBeenCalled();
     expect(await screen.findByText('viewer')).toBeInTheDocument();
@@ -292,7 +292,7 @@ describe('composing it', () => {
     expect(variables.title).toBe('Roof quote');
     expect(variables.type).toBe('markdown');
     expect(variables.tags).toEqual(['house']);
-    expect(variables.content.split('\n')[0]).toBe('From sketch: [Tuesday](/notes/sketch-1)');
+    expect(variables.content.split('\n')[0]).toBe('From handwritten note: [Tuesday](/notes/sketch-1)');
     expect(variables.content).toContain(COMPOSED.trim());
     expect(updateNote).not.toHaveBeenCalled();
   });
@@ -440,7 +440,7 @@ describe('Send tasks to TodoGeek (BUJO_HANDWRITING.md)', () => {
     const sent = createTodoTask.mock.calls.map(([{ variables }]) => variables);
     expect(sent[0]).toMatchObject({ content: 'call the roofer', signifier: '*', priority: 1, tags: ['house'] });
     expect(sent[0].dueDate).toMatch(/^\d{4}-\d{2}-\d{2}$/); // no date written: today, date-only
-    expect(sent[0].note).toMatch(/^From sketch: Tuesday — .*\/notes\/sketch-1$/);
+    expect(sent[0].note).toMatch(/^From handwritten note: Tuesday — .*\/notes\/sketch-1$/);
     expect(sent[1]).toMatchObject({ content: 'book flights', signifier: '*' });
     expect(sent[2]).toMatchObject({ content: 'dentist', signifier: '@' });
     expect(recordSketchTasksSent).toHaveBeenCalledTimes(1);

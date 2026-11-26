@@ -5,7 +5,7 @@ import ComposeDialog from '../../components/editors/ComposeDialog';
 import TranscribeDialog from '../../components/editors/TranscribeDialog';
 import FoldInSheet from '../../components/foldin/FoldInSheet';
 import NoteHistoryDialog from '../../components/notes/NoteHistoryDialog';
-import { NOTE_TYPES } from '../../components/notes';
+import { normalizeNoteType } from '../../components/notes/noteTypeMeta';
 
 /** The note editor's dialogs. Each is mounted only while open, as before. */
 export default function EditorDialogs({
@@ -34,7 +34,7 @@ export default function EditorDialogs({
             if (!note) return;
             setTitle(note.title || '');
             setContent(note.content || '');
-            setNoteType(note.type || NOTE_TYPES.TEXT);
+            setNoteType(normalizeNoteType(note.type));
             setDirty(false);
             setSaveError(null);
             setLastSavedAt(new Date());

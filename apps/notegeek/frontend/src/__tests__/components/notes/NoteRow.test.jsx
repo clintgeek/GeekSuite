@@ -15,7 +15,7 @@ const note = (extra = {}) => ({
   id: 'n1',
   title: 'Roof quote',
   content: 'call back',
-  type: 'text',
+  type: 'markdown',
   tags: [],
   createdAt: '2026-09-20T12:00:00.000Z',
   updatedAt: '2026-09-20T12:00:00.000Z',

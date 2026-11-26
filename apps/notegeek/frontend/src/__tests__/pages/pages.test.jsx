@@ -104,8 +104,8 @@ describe('Page Tests', () => {
         describe('with a signed-in writer and some notes', () => {
             const iso = (h) => new Date(Date.now() - h * 3600e3).toISOString();
             const NOTES = [
-                { id: '1', title: 'Roof quote', type: 'text', tags: [], content: '<p>Call Tuesday</p>', updatedAt: iso(1), createdAt: iso(90) },
-                { id: '2', title: 'debounce.js', type: 'code', tags: ['dev'], content: '{"language":"javascript","code":"const a = 1;"}', updatedAt: iso(2), createdAt: iso(90) },
+                { id: '1', title: 'Roof quote', type: 'markdown', tags: [], content: '<p>Call Tuesday</p>', updatedAt: iso(1), createdAt: iso(90) },
+                { id: '2', title: 'debounce.js', type: 'markdown', tags: ['dev'], content: 'const a = 1;', updatedAt: iso(2), createdAt: iso(90) },
                 { id: '3', title: 'Garden', type: 'handwritten', tags: [], content: '', updatedAt: iso(3), createdAt: iso(90) },
                 { id: '4', title: 'Older one', type: 'markdown', tags: [], content: '# x', updatedAt: iso(30), createdAt: iso(90) },
             ];
@@ -123,21 +123,20 @@ describe('Page Tests', () => {
                 expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
                 expect(screen.queryByText(/good (morning|afternoon|evening)/i)).toBeNull();
                 expect(screen.queryByRole('region', { name: /continue where you left off/i })).toBeNull();
-                // Every recent note, newest first, once each.
-                const recent = screen.getByRole('region', { name: /recent/i });
+                // Every recent note, in the server's order, once each.
+                const recent = screen.getByRole('region', { name: /pick up where you left off/i });
                 const titles = ['Roof quote', 'debounce.js', 'Garden', 'Older one'];
                 for (const t of titles) expect(within(recent).getAllByText(t)).toHaveLength(1);
                 expect(recent.textContent.indexOf('Roof quote')).toBeLessThan(recent.textContent.indexOf('Older one'));
             });
 
-            it('offers Photo and Sketch while the box is empty, and Save once there is a thought', () => {
+            it('offers Save once there is a thought, and no Photo or Sketch shortcuts inside the box', () => {
                 render(<QuickCaptureHome />, { wrapper: AllProviders });
-                expect(screen.getByRole('button', { name: 'New note from a photo of a page' })).toBeInTheDocument();
-                expect(screen.getByRole('button', { name: 'New sketch' })).toBeInTheDocument();
+                expect(screen.queryByRole('button', { name: 'New note from a photo of a page' })).toBeNull();
+                expect(screen.queryByRole('button', { name: 'New sketch' })).toBeNull();
                 expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
                 fireEvent.change(screen.getByLabelText('Quick capture'), { target: { value: 'buy nails' } });
                 expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
-                expect(screen.queryByRole('button', { name: 'New sketch' })).toBeNull();
                 fireEvent.change(screen.getByLabelText('Quick capture'), { target: { value: '   ' } });
                 expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
             });

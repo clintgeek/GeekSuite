@@ -48,7 +48,7 @@ export function useSendTasks({
     }
     try {
       const api = sketchApiRef.current;
-      if (!api) throw new Error('The sketch is still loading. Try again in a moment.');
+      if (!api) throw new Error('The page is still loading. Try again in a moment.');
       const exported = await api.exportPng();
       const { data } = await transcribeSketchMutation({
         variables: { image: exported.base64, mediaType: exported.mediaType, source: exported.form ? 'form' : undefined, noteId: savedNoteIdRef.current || undefined },

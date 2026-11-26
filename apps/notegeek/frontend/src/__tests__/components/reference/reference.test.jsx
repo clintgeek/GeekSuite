@@ -82,7 +82,6 @@ beforeEach(() => {
         ]
         : [
           { id: 'typed', title: 'Promo packet', type: 'markdown', updatedAt: '2026-11-23T10:00:00Z' },
-          { id: 'map', title: 'Org map', type: 'mindmap', updatedAt: '2026-11-22T10:00:00Z' },
           { id: 'now', title: '2026-11-24 Kin 1:1', type: 'handwritten', updatedAt: '2026-11-24T15:00:00Z' },
         ],
     }),
@@ -160,7 +159,7 @@ describe('what the picker offers', () => {
     expect(sections.map((s) => s.key)).toEqual(['person', 'recent']);
     expect(sections[0].label).toBe('Earlier 1:1s with Kin');
     expect(sections[0].rows.map((r) => r.id)).toEqual(['k2', 'k1']);
-    // Opened on this device first, then recently edited; no repeats, no mind map, not the open note.
+    // Opened on this device first, then recently edited; no repeats, not the open note.
     expect(sections[1].rows.map((r) => r.id)).toEqual(['boss', 'typed']);
   });
 
@@ -175,7 +174,6 @@ describe('what the picker offers', () => {
     wrap(<ReferencePicker open onClose={() => {}} onPick={onPick} currentNoteId="now" person={{ tag: 'fd/1on1/kin', name: 'Kin' }} />);
     expect(screen.getByText('Earlier 1:1s with Kin')).toBeInTheDocument();
     expect(screen.queryByText('2026-11-24 Kin 1:1')).not.toBeInTheDocument();
-    expect(screen.queryByText('Org map')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText(BOSS.title));
     expect(onPick).toHaveBeenCalledWith('boss');
     expect(queries).toHaveBeenCalledWith('GetNotes', expect.objectContaining({ tag: 'fd/1on1/kin' }));

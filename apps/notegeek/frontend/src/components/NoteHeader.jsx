@@ -7,7 +7,7 @@ import {
     Tooltip,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-// Deep-import (see RichTextEditor.jsx for why) instead of the
+// Deep-import (see MarkdownEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';

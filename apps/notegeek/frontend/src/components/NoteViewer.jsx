@@ -41,10 +41,8 @@ import NoteFooter from './notes/NoteFooter';
 import { useNoteLinks, markdownPluginsFor } from '../hooks/useNoteLinks';
 import useNotePrint from '../hooks/useNotePrint';
 import TypeIcon from './notes/TypeIcon';
-import { noteTypeMeta } from './notes/noteTypeMeta';
+import { noteTypeMeta, normalizeNoteType } from './notes/noteTypeMeta';
 import { border, glow, surfaces } from '../theme/tokens';
-import { decodeCodeNote } from '../utils/previewText';
-import { sanitizeNoteHtml } from '../utils/sanitizeNoteHtml';
 
 
 function NoteViewer() {
@@ -66,7 +64,7 @@ function NoteViewer() {
 
     const noteToView = data?.note;
     // Print / Save as PDF (DOCS/CONTEXT.md §8). Nothing to prepare: the
-    // viewer only shows markdown, rich text and code.
+    // viewer only shows Markdown (a sketch opens in the editor).
     // [[links]] in the body resolve through the gateway's stored links.
     const resolveLink = useNoteLinks(id);
     const markdownPlugins = useMemo(() => markdownPluginsFor(resolveLink), [resolveLink]);
@@ -113,7 +111,7 @@ function NoteViewer() {
         return <GeekEmptyState title="Note not found or not selected." />;
     }
 
-    const noteType = noteToView.type || 'text';
+    const noteType = normalizeNoteType(noteToView.type);
     // Use theme tokens — same source of truth as the rest of the app
 
 
@@ -475,37 +473,7 @@ function NoteViewer() {
                                 },
                             }}
                         >
-                            {noteToView.type === 'markdown' ? (
-                                <ReactMarkdown remarkPlugins={markdownPlugins} components={MARKDOWN_COMPONENTS}>{noteToView.content || ''}</ReactMarkdown>
-                            ) : noteToView.type === 'text' ? (
-                                // Stored TipTap HTML. It is rendered as
-                                // markup, so it is sanitized here — the one
-                                // `dangerouslySetInnerHTML` in the app, behind
-                                // the one profile (utils/sanitizeNoteHtml.js).
-                                // The gateway sanitizes the same string on
-                                // save; this is the layer that has to hold,
-                                // because rows written before that existed are
-                                // still in the database.
-                                <div
-                                    className="rich-text-viewer"
-                                    dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(noteToView.content) }}
-                                />
-                            ) : noteToView.type === 'code' ? (
-                                // The stored value is CodeEditor's
-                                // `{ language, code }` envelope; printing it
-                                // raw showed the reader the JSON rather than
-                                // their code. See utils/previewText.js.
-                                <pre role="region" aria-label="Code" tabIndex={0}>
-                                    <code>{decodeCodeNote(noteToView.content || '').code}</code>
-                                </pre>
-                            ) : (
-                                <Typography
-                                    component="pre"
-                                    sx={{ whiteSpace: 'pre-wrap', m: 0 }}
-                                >
-                                    {noteToView.content || ''}
-                                </Typography>
-                            )}
+                            <ReactMarkdown remarkPlugins={markdownPlugins} components={MARKDOWN_COMPONENTS}>{noteToView.content || ''}</ReactMarkdown>
                         </Box>
                     </Box>
                 </Paper>
@@ -520,7 +488,7 @@ function NoteViewer() {
                 {foldInOpen ? (
                     <FoldInSheet
                         open
-                        note={{ id: noteToView.id || noteToView._id, title: noteToView.title, type: noteToView.type }}
+                        note={{ id: noteToView.id || noteToView._id, title: noteToView.title, type: noteType }}
                         onClose={() => setFoldInOpen(false)}
                     />
                 ) : null}

@@ -16,7 +16,8 @@ import { useArchiveNotes } from '../hooks/useArchiveNotes';
 import { usePinNote } from '../hooks/usePinNote';
 import { useToast } from '@geeksuite/ui';
 import { useAppPreferences } from '@geeksuite/user';
-import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES, SuggestionStrip } from '../components/notes';
+import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES } from '../components/notes';
+import { normalizeNoteType } from '../components/notes/noteTypeMeta';
 import NoteFooter from '../components/notes/NoteFooter';
 import { WikiLinkContext, useNoteLinks } from '../hooks/useNoteLinks';
 import { BackButton } from '../components/notes/NoteActions';
@@ -31,7 +32,6 @@ import { useDeleteNote } from '../hooks/useDeleteNote';
 import { onNoteCreated, onNoteUpdated } from '../graphql/cacheUpdates';
 import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
 import { applyInlineTags } from '../utils/inlineTags';
-import { containsNoteLink, insertLink, noteLinkMarkup, supportsLinkInsertion } from '../utils/noteLinks';
 import { buildMeeting, buildOneOnOne, oneOnOneRoot, personName, personOfNote, personTag } from '../utils/oneOnOne';
 import OpenItems from '../components/oneOnOne/OpenItems';
 import { useNoteCompose } from './noteEditor/useNoteCompose';
@@ -51,9 +51,10 @@ import { rememberOpened } from '../utils/recentNotes';
  *
  * A new note is Markdown. `/notes/new` opens straight into it — there is no
  * "what are you writing?" picker any more (Graphite, 2026-09-29): the New
- * surfaces (NewNoteSheet, NewNoteMenu) offer Photo and Sketch beside it and
- * Code / Mind map under "More", and each links here with `?type=`. Rich text
- * (`type: 'text'`) still opens and edits; it is just not offered as new.
+ * surfaces (NewNoteSheet, NewNoteMenu) offer Photo and Sketch beside it, and
+ * Sketch links here with `?type=handwritten`. Any other note type (a leftover
+ * text / code / mindmap note, or a `?type=` that is not offered) is a Markdown
+ * note (normalizeNoteType).
  */
 /** A server `updatedAt` (ISO, millis or numeric string) as the ISO string C3 compares. */
 const isoOf = (value) => toDate(value)?.toISOString() || null;
@@ -75,10 +76,6 @@ function NoteEditorPage({ editorKey } = {}) {
   const apollo = useContext(getApolloContext())?.client || null;
 
   const isNewNote = !id || id === 'new';
-  // This mount began as a new note. The URL becomes /notes/<id>/edit after
-  // the first autosave (1.20) without remounting, so `isNewNote` alone no
-  // longer says how the page started.
-  const startedNewRef = useRef(isNewNote);
 
   const { data, loading: isLoadingSelected, error: queryError } = useQuery(GET_NOTE_BY_ID, {
     variables: { id },
@@ -125,7 +122,7 @@ function NoteEditorPage({ editorKey } = {}) {
   // and the chips the user removed (so the body can't put them straight back).
   const inlineProvisionalRef = useRef(new Set());
   const inlineSuppressedRef = useRef(new Set());
-  const [noteType, setNoteType] = useState(isNewNote ? NOTE_TYPES.MARKDOWN : NOTE_TYPES.TEXT);
+  const [noteType, setNoteType] = useState(NOTE_TYPES.MARKDOWN);
   // Save state, shown by the SaveStamp. Four facts rather than one status
   // string: the old string reached only a button that compared it against
   // 'Saved', so every error message it was ever set to rendered nowhere.
@@ -161,9 +158,8 @@ function NoteEditorPage({ editorKey } = {}) {
   // The page is going away: an edit that arrives now (a sketch flushing its
   // last strokes on unmount) is saved at once instead of scheduled.
   const unmountedRef = useRef(false);
-  // Bumped after every successful save; SuggestionStrip watches it and asks
-  // the gateway for a fresh set. A counter rather than a boolean so two saves
-  // in a row are two requests.
+  // Bumped after every successful save, so [[links]] are re-resolved. A
+  // counter rather than a boolean so two saves in a row are two refetches.
   const [saveToken, setSaveToken] = useState(0);
   // [[links]] in this note resolve through the gateway; refetched after each
   // save, since that is when links are (re)resolved.
@@ -171,11 +167,7 @@ function NoteEditorPage({ editorKey } = {}) {
 
   const { notify } = useToast();
 
-  // "Suggest tags & links" — off by default, and stored where notegeek's other
-  // preferences live (the gateway reads the same flag before it consults a
-  // model, so switching it off is not merely a client-side courtesy).
   const { preferences: appPrefs } = useAppPreferences('notegeek');
-  const suggestEnabled = appPrefs?.suggestOnSave === true;
   // 1:1s: the tag people live under, and the person this note belongs to.
   const oneOnOneTag = oneOnOneRoot(appPrefs);
   const oneOnOneTagRef = useRef(oneOnOneTag);
@@ -185,13 +177,6 @@ function NoteEditorPage({ editorKey } = {}) {
   // A second note, read-only, above this one (DOCS/REFERENCE_PANE_SPEC.md).
   // Page state only: nothing about it is saved, and it never touches this form.
   const reference = useReferenceNote();
-
-  // Where the caret was in the body's textarea the last time it moved. Markdown
-  // and code notes are plain textareas, so a related-note link can land where
-  // the writer is actually typing; the rich-text editor is a ProseMirror
-  // document with no meaningful offset into its HTML, so its links go on the
-  // end (see utils/noteLinks.js).
-  const caretRef = useRef(null);
 
   // Track which note this form has been initialized from. Keyed by identity,
   // not by object: the init effect below used to depend on `noteToEdit`, whose
@@ -218,23 +203,13 @@ function NoteEditorPage({ editorKey } = {}) {
   // The user discarded this note. Suppresses the unmount flush, which would
   // otherwise dutifully save the draft they just threw away.
   const discardedRef = useRef(false);
-  const isMindMap = noteType === NOTE_TYPES.MINDMAP;
   const isHandwritten = noteType === NOTE_TYPES.HANDWRITTEN;
-
-  // Mind maps start in view mode for existing notes
-  const [isEditMode, setIsEditMode] = useState(() => {
-    if (isNewNote) return true;
-    if (noteToEdit?.type === NOTE_TYPES.MINDMAP) return false;
-    return true;
-  });
 
   // Parse type from URL query for new notes
   const getTypeFromQuery = useCallback(() => {
     if (!isNewNote) return null;
     const params = new URLSearchParams(location.search);
-    const t = params.get('type');
-    if (t && Object.values(NOTE_TYPES).includes(t)) return t;
-    return null;
+    return normalizeNoteType(params.get('type'));
   }, [isNewNote, location.search]);
 
   // Reset form for new notes
@@ -245,7 +220,6 @@ function NoteEditorPage({ editorKey } = {}) {
     inlineProvisionalRef.current = new Set();
     inlineSuppressedRef.current = new Set();
     setNoteType(NOTE_TYPES.MARKDOWN);
-    setIsEditMode(true);
     setSavedNoteId(null);
   }, []);
 
@@ -269,7 +243,7 @@ function NoteEditorPage({ editorKey } = {}) {
       savedNoteIdRef.current = null;
       baseUpdatedAtRef.current = null;
       lastSavedTagsRef.current = [];
-      setNoteType(getTypeFromQuery() || NOTE_TYPES.MARKDOWN);
+      setNoteType(getTypeFromQuery());
       // `?title=` — an unresolved [[link]]'s "create this note". Seeded, not
       // dirty: nothing is saved until the writer actually writes.
       const params = new URLSearchParams(location.search);
@@ -319,14 +293,7 @@ function NoteEditorPage({ editorKey } = {}) {
       // On this device only: what the reference picker offers first.
       rememberOpened({ id, title: noteToEdit.title, type: noteToEdit.type });
 
-      if (noteToEdit.type && Object.values(NOTE_TYPES).includes(noteToEdit.type)) {
-        setNoteType(noteToEdit.type);
-        if (noteToEdit.type === NOTE_TYPES.MINDMAP) {
-          setIsEditMode(false);
-        }
-      } else {
-        setNoteType(NOTE_TYPES.TEXT);
-      }
+      setNoteType(normalizeNoteType(noteToEdit.type));
 
       setDirty(false);
       initializedFor.current = identity;
@@ -358,7 +325,7 @@ function NoteEditorPage({ editorKey } = {}) {
     setTitle(draft.title || '');
     setContent(draft.content || '');
     if (Array.isArray(draft.tags)) setTags(draft.tags);
-    if (draft.type && Object.values(NOTE_TYPES).includes(draft.type)) setNoteType(draft.type);
+    if (draft.type) setNoteType(normalizeNoteType(draft.type));
     if (draft.baseUpdatedAt) baseUpdatedAtRef.current = draft.baseUpdatedAt;
     setDirty(true);
   };
@@ -637,9 +604,6 @@ function NoteEditorPage({ editorKey } = {}) {
           // Typed during the round trip: keep the newer text on the device.
           writeDraftNowRef.current();
         }
-        if (isMindMap && !isNewNote && !startedNewRef.current) {
-          setIsEditMode(false);
-        }
       } else {
         const message = 'Failed to save — the server returned nothing.';
         if (saveErrorRef.current !== message) notify(message, { tone: 'error' });
@@ -787,41 +751,6 @@ function NoteEditorPage({ editorKey } = {}) {
       handleSaveRef.current();
     }
   }, []);
-
-  /**
-   * Remember the caret whenever it moves inside the body. React's synthetic
-   * events bubble out of the editor's own textarea, so this needs no change to
-   * any of the five editors — and an editor that has no textarea simply never
-   * fires it, which is exactly the "append instead" case.
-   */
-  const rememberCaret = useCallback((event) => {
-    const el = event.target;
-    if (el && typeof el.selectionStart === 'number' && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) {
-      caretRef.current = el.selectionStart;
-    }
-  }, []);
-
-  /** A tag chip: the tag joins the note's tags, and the ordinary save writes it. */
-  const handleApplySuggestedTag = useCallback((tag) => {
-    setTags((current) =>
-      current.some((t) => t.toLowerCase() === String(tag).toLowerCase()) ? current : [...current, tag]
-    );
-    setDirty(true);
-  }, []);
-
-  /** A related-note chip: a link to that note, in this note's own markup. */
-  const handleInsertNoteLink = useCallback((related) => {
-    if (!supportsLinkInsertion(noteType)) return;
-    setContent((current) =>
-      containsNoteLink(current, related.id)
-        ? current
-        : insertLink(current, noteLinkMarkup(noteType, related), {
-          caret: caretRef.current,
-          noteType,
-        })
-    );
-    setDirty(true);
-  }, [noteType]);
 
 
   // ── The device copy (1.2) ─────────────────────────────────────────────
@@ -1086,8 +1015,8 @@ function NoteEditorPage({ editorKey } = {}) {
     return <NoteLoadError message={selectedError} onBack={() => navigate('/notes')} />;
   }
 
-  const isCanvas = isMindMap || isHandwritten;
-  const readOnlyMeta = (!isEditMode && isMindMap) || inBin;
+  const isCanvas = isHandwritten;
+  const readOnlyMeta = inBin;
   readOnlyMetaRef.current = readOnlyMeta;
   const saveState = {
     saving: isSaving,
@@ -1133,10 +1062,7 @@ function NoteEditorPage({ editorKey } = {}) {
                 </>
               : <SaveStatus {...saveState} />}
             alert={<SaveAlert {...saveState} onRetry={() => handleSaveRef.current()} reportInView />}
-            // Mounted only when the writer has switched suggestions on: the
-            // strip owns a lazy query, and a feature that is off should cost
-            // the editor nothing at all, not even a hook.
-            belowMeta={archived || suggestEnabled || draftOffer || deletedAt || oneOnOnePerson ? (
+            belowMeta={archived || draftOffer || deletedAt || oneOnOnePerson ? (
               <>
               {deletedAt && savedNoteId ? (
                 <DeletedBanner noteId={savedNoteId} deletedAt={deletedAt} sx={{ mt: '8px' }} />
@@ -1169,19 +1095,6 @@ function NoteEditorPage({ editorKey } = {}) {
                   />
                 </Box>
               ) : null}
-              {suggestEnabled && !reference.noteId ? (
-              <SuggestionStrip
-                enabled
-                noteId={savedNoteId}
-                title={title}
-                content={content}
-                noteType={noteType}
-                tags={tags}
-                saveToken={saveToken}
-                onApplyTag={handleApplySuggestedTag}
-                onInsertLink={handleInsertNoteLink}
-              />
-              ) : null}
               </>
             ) : null}
             actions={inBin ? null : (
@@ -1195,10 +1108,7 @@ function NoteEditorPage({ editorKey } = {}) {
                 // 2026-11-18 #8). Only a saved note offers Delete; unsaved
                 // edits are saved before it goes (handleDeleteNote).
                 onDelete={handleDeleteNote}
-                onToggleEdit={() => setIsEditMode(!isEditMode)}
                 canDelete={!isNewNote || !!savedNoteId}
-                canToggleEdit={isMindMap && !isNewNote && !!savedNoteId}
-                isEditMode={isEditMode}
                 onHistory={savedNoteId ? () => setHistoryOpen(true) : undefined}
                 onPin={savedNoteId ? handlePin : undefined}
                 pinned={pinned}
@@ -1223,26 +1133,14 @@ function NoteEditorPage({ editorKey } = {}) {
         disableContentScroll={isHandwritten}
         footer={!isCanvas && savedNoteId ? <NoteFooter noteId={savedNoteId} /> : null}
       >
-        {/* `display: contents` — this wrapper exists only to catch the caret
-            events bubbling out of whichever editor is mounted. It must not
-            become a layout box: NoteShell's content zone sizes the editors
-            directly, and an extra flex box in between resized the sketch and
-            mind-map canvases. */}
-        <Box
-          onSelect={rememberCaret}
-          onKeyUp={rememberCaret}
-          onClick={rememberCaret}
-          sx={{ display: 'contents' }}
-        >
-          <NoteTypeRouter
-            type={noteType}
-            content={content}
-            onChange={handleContentChange}
-            readOnly={readOnlyMeta}
-            isLoading={isLoadingSelected}
-            {...(isHandwritten ? { sketchApiRef, onInkEdit, noteId: savedNoteId, startSheet: isNewNote ? startSheet : null } : {})}
-          />
-        </Box>
+        <NoteTypeRouter
+          type={noteType}
+          content={content}
+          onChange={handleContentChange}
+          readOnly={readOnlyMeta}
+          isLoading={isLoadingSelected}
+          {...(isHandwritten ? { sketchApiRef, onInkEdit, noteId: savedNoteId, startSheet: isNewNote ? startSheet : null } : {})}
+        />
       </NoteShell>
       </ReferencePane>
 

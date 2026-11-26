@@ -31,11 +31,8 @@ export const NOTE_PAGE_SIZE = 100;
 // type's glyph. One quiet row; the active one is highlighted.
 const TYPE_FILTERS = [null, ...NOTE_TYPE_ORDER];
 const FILTER_LABELS = {
-    markdown: 'Notes',
-    handwritten: 'Sketches',
-    code: 'Code',
-    mindmap: 'Mind maps',
-    text: 'Rich text',
+    markdown: 'Typed',
+    handwritten: 'Handwritten',
 };
 
 function FilterChip({ type, active, onClick }) {

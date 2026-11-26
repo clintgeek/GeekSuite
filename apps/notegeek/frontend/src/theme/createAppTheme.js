@@ -28,22 +28,16 @@ function buildNoteOverrides(mode) {
   const surfaces = { default: g.desk, paper: g.paper, elevated: g.sheet };
 
   // Type identity is an icon now, not a colour: every type draws in the
-  // same soft graphite. The map survives because mind-map edges, code-preview
-  // rules and thumbnails still ask for "the colour of this type".
+  // same soft graphite. The map survives because thumbnails still ask for
+  // "the colour of this type".
   const noteTypes = {
-    text: g.lead,
     markdown: g.lead,
-    code: g.lead,
-    mindmap: g.lead,
     handwritten: g.lead,
   };
-  // Text-bearing type colour (the code preview's keyword tint etc.): plain
-  // secondary ink, so it clears 4.5:1 everywhere secondary text does.
+  // Text-bearing type colour: plain secondary ink, so it clears 4.5:1
+  // everywhere secondary text does.
   const noteTypeInk = {
-    text: g.ink,
     markdown: g.ink2,
-    code: g.ink2,
-    mindmap: g.ink2,
     handwritten: g.ink2,
   };
 
@@ -106,20 +100,6 @@ function buildNoteOverrides(mode) {
     components: {
       MuiCssBaseline: {
         styleOverrides: {
-          // The page's tokens as CSS variables, for the plain stylesheet the
-          // rich-text surface uses (src/index.css).
-          ':root': {
-            '--ng-ink': g.ink,
-            '--ng-ink2': g.ink2,
-            '--ng-hl': g.hl,
-            '--ng-hl-soft': g.hlSoft,
-            '--ng-on-hl': g.onHl,
-            '--ng-rule': g.rule,
-            '--ng-border': g.border,
-            '--ng-desk': g.desk,
-            '--ng-sheet': g.sheet,
-            '--ng-mono': MONO,
-          },
           // Spline Sans sets a tight word space; at 13–16px on a phone
           // "below and" read as "belowand". A hair more, everywhere the sans
           // is used (form controls reset word-spacing, so they are named).

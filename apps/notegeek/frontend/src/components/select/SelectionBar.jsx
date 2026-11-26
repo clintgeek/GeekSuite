@@ -21,7 +21,7 @@ export const SELECTION_BAR_SPACE = 120;
  *
  *   lists     → Archive (≥ 1) · Compose N notes (≥ 2 it can read; N counts
  *               only those, and the hint says how many it will skip —
- *               sketches, mind maps, locked notes)
+ *               sketches, locked notes)
  *   Archived  → Restore (≥ 1)
  *   Recently deleted (`deleted`, review 2026-11-18 #8: both bins work one
  *             way) → Delete forever (≥ 1, error ink; the page asks first)

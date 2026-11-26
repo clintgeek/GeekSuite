@@ -6,7 +6,7 @@ import { SKETCH_TRANSCRIPT_FIELDS } from './mutations';
  * server's plain-text excerpt, and `content` is deliberately NOT selected — a
  * list of 200 notes used to carry every multi-MB sketch body on every visit
  * (the gateway does not even read `content` when it is not selected). A
- * sketch or mind-map row's thumbnail fetches its own note's body lazily, once
+ * sketch row's thumbnail fetches its own note's body lazily, once
  * it scrolls into view (components/notes/NotePreview.jsx).
  *
  * `sort` is the server's: updatedAt_desc (default) | updatedAt_asc |
@@ -161,35 +161,6 @@ export const RELATED_NOTES = gql`
             updatedAt
             score
             snippet
-        }
-    }
-`;
-
-// "You already have a note about this" — DOCS/AI_IDEAS.md #3. A read that
-// writes nothing: the tag chips go through `updateNote` like any other tag
-// edit, and the link chips through the ordinary body edit.
-export const SUGGEST_FOR_NOTE = gql`
-    query SuggestForNote($noteId: ID, $title: String!, $excerpt: String!, $tags: [String!]!) {
-        suggestForNote(noteId: $noteId, title: $title, excerpt: $excerpt, tags: $tags) {
-            tags {
-                tag
-                score
-            }
-            related {
-                id
-                title
-                score
-                why
-            }
-            provenance {
-                source
-                reason
-                model
-                provider
-                cached
-                callsToday
-                cap
-            }
         }
     }
 `;

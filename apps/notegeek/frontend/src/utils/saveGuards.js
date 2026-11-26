@@ -14,8 +14,8 @@ import { NOTE_TYPES } from '../components/notes/NoteTypeRouter';
  * The gateway's `content` ceilings, mirrored.
  *
  * `apps/basegeek/packages/api/src/graphql/notegeek/validation.js` caps prose
- * (`text` / `markdown` / `code`) at 100 000 characters and editor snapshots
- * (`mindmap` / `handwritten`) at 5 000 000. A tldraw sketch is the realistic
+ * (`markdown`) at 100 000 characters and editor snapshots (`handwritten`) at
+ * 5 000 000. A tldraw sketch is the realistic
  * way to hit this — the snapshot grows with every stroke — and the failure was
  * invisible: autosave retried on each new stroke, failed each time, and the
  * work was lost on navigation.
@@ -23,14 +23,14 @@ import { NOTE_TYPES } from '../components/notes/NoteTypeRouter';
 export const DOC_CONTENT_MAX = 100_000;
 export const SNAPSHOT_CONTENT_MAX = 5_000_000;
 
-const SNAPSHOT_TYPES = new Set([NOTE_TYPES.MINDMAP, NOTE_TYPES.HANDWRITTEN]);
+const SNAPSHOT_TYPES = new Set([NOTE_TYPES.HANDWRITTEN]);
 
 /** The ceiling that applies to a note of this type. */
 export function contentMaxFor(type) {
   return SNAPSHOT_TYPES.has(type) ? SNAPSHOT_CONTENT_MAX : DOC_CONTENT_MAX;
 }
 
-/** True when this body is a snapshot (a sketch or a map), not prose. */
+/** True when this body is a snapshot (a sketch), not prose. */
 export function isSnapshotType(type) {
   return SNAPSHOT_TYPES.has(type);
 }
@@ -46,7 +46,7 @@ export function overSizeMessage(content, type) {
   const max = contentMaxFor(type);
   if (content.length <= max) return null;
   return isSnapshotType(type)
-    ? 'This sketch is too large to save. Try removing some strokes.'
+    ? 'This handwritten note is too large to save. Try removing some strokes.'
     : `This note is too long to save (${ content.length.toLocaleString() } of ${ max.toLocaleString() } characters).`;
 }
 

@@ -289,7 +289,7 @@ describe('the Paper menu\'s Template choice', () => {
     const lines = within(menu).getByRole('group', { name: 'Paper lines' });
     expect(within(lines).getByRole('button', { name: 'Lines: Graph' })).toBeInTheDocument();
     expect(within(lines).getByRole('button', { name: 'Lines: Dot grid' })).toBeInTheDocument();
-    expect(screen.getByText(/Prints a white sheet into this sketch/)).toBeInTheDocument();
+    expect(screen.getByText(/Prints a white sheet into this note/)).toBeInTheDocument();
   });
 
   it('picking one prints the sheet; the menu shows it chosen and says how to take it off', async () => {

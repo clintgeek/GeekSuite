@@ -23,7 +23,7 @@ const note = (id, title, type = 'markdown', h = 1) => ({
 });
 const NOTES = [
   note('a', 'Alpha plan', 'markdown', 1),
-  note('b', 'Beta notes', 'text', 2),
+  note('b', 'Beta notes', 'markdown', 2),
   note('s', 'Sketch of the shed', 'handwritten', 3),
 ];
 const VARS = { tag: undefined, prefix: undefined, under: undefined, type: null, sort: 'updatedAt_desc', first: 100 };

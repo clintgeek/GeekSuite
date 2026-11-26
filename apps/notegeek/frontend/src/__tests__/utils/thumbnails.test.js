@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   sketchGeometry,
-  mindMapGeometry,
-  tintCodeLine,
   thumbnailKey,
   _clearThumbnailCache,
 } from '../../utils/thumbnails';
@@ -54,51 +52,6 @@ describe('sketchGeometry', () => {
   it('parses a given note version once', () => {
     const content = JSON.stringify({ store: { 'shape:a': drawShape('shape:a', 0, 0, [[0, 0], [1, 1]]) } });
     expect(sketchGeometry(content, 'same')).toBe(sketchGeometry(content, 'same'));
-  });
-});
-
-describe('mindMapGeometry', () => {
-  it('takes the root and its first children, top to bottom', () => {
-    const content = JSON.stringify({
-      nodes: [
-        { id: '0', position: { x: 0, y: 0 }, data: { label: 'Root', isRoot: true } },
-        { id: '1', position: { x: 0, y: 200 }, data: { label: 'Second' } },
-        { id: '2', position: { x: 0, y: 100 }, data: { label: 'First' } },
-        { id: '3', position: { x: 0, y: 300 }, data: { label: 'Grandchild' } },
-      ],
-      edges: [
-        { source: '0', target: '1' }, { source: '0', target: '2' }, { source: '1', target: '3' },
-      ],
-    });
-    expect(mindMapGeometry(content, 'm1')).toEqual({ root: 'Root', children: ['First', 'Second'], more: 0 });
-  });
-
-  it('is null for an empty map', () => {
-    expect(mindMapGeometry('{}', 'm2')).toBeNull();
-  });
-});
-
-describe('tintCodeLine', () => {
-  const kinds = (line) => tintCodeLine(line).filter((t) => t.kind !== 'plain').map((t) => [t.kind, t.text]);
-
-  it('tints keywords, strings, numbers and comments', () => {
-    expect(kinds('const x = "hi" + 42; // note')).toEqual([
-      ['keyword', 'const'], ['string', '"hi"'], ['number', '42'], ['comment', '// note'],
-    ]);
-  });
-
-  it('does not treat a URL inside a string as a comment', () => {
-    expect(kinds("fetch('https://x.dev')")).toEqual([['string', "'https://x.dev'"]]);
-  });
-
-  it('treats # as a comment only at the start of a line', () => {
-    expect(kinds('# heading')).toEqual([['comment', '# heading']]);
-    expect(kinds('echo a # b').map(([k]) => k)).not.toContain('comment');
-  });
-
-  it('reassembles to the original line', () => {
-    const line = 'export function debounce(fn, wait = 200) {';
-    expect(tintCodeLine(line).map((t) => t.text).join('')).toBe(line);
   });
 });
 

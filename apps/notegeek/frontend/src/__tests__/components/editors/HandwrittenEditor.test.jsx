@@ -1363,7 +1363,7 @@ describe('HandwrittenEditor — the 2026-11 review', () => {
                 await user.click(await screen.findByRole('button', { name: 'Share as image' }));
                 await waitFor(() => expect(navigator.share).toHaveBeenCalledTimes(1));
                 const [{ files }] = navigator.share.mock.calls[0];
-                expect(files[0].name).toBe('sketch.png');
+                expect(files[0].name).toBe('handwritten.png');
                 expect(files[0].type).toBe('image/png');
             } finally {
                 HTMLCanvasElement.prototype.getContext = realGetContext;

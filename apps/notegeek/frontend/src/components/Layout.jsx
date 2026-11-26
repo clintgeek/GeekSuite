@@ -162,15 +162,7 @@ function Layout({ children }) {
                     </Box>
                 ) : (
                     /* Main content with route transitions */
-                    <GeekAppFrame
-                        fill={fillFrame}
-                        sx={{
-                            // NoteGeek specific: Mindmap editor wants overflow: hidden
-                            '&.mindmap-container': {
-                                overflow: 'hidden',
-                            },
-                        }}
-                    >
+                    <GeekAppFrame fill={fillFrame}>
                         {children}
                     </GeekAppFrame>
                 )}

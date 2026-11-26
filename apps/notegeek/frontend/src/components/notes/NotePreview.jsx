@@ -1,22 +1,16 @@
-import React, { memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useContext, useEffect, useRef, useState } from 'react';
 import { getApolloContext } from '@apollo/client';
 import { NOTE_THUMB_CONTENT } from '../../graphql/queries';
 import { Box, useTheme, alpha } from '@mui/material';
-import { decodeCodeNote } from '../../utils/previewText';
-import { cachedGeometry, mindMapGeometry, sketchGeometry, thumbnailKey, tintCodeLine } from '../../utils/thumbnails';
-import { noteTypeColor, noteTypeInk, stampFill, surfaces } from '../../theme/tokens';
+import { cachedGeometry, sketchGeometry, thumbnailKey } from '../../utils/thumbnails';
+import { noteTypeInk, stampFill, surfaces } from '../../theme/tokens';
 import { noteTypeMeta } from './noteTypeMeta';
 
 /**
- * Type-appropriate previews for list rows.
+ * The sketch thumbnail for list rows.
  *
- *   CodePreview  — the first two lines of code, in mono, with a regex tint
- *                  (keywords in the code ink, strings in markdown blue,
- *                  comments muted). Every tint colour is a `noteTypeInk` or
- *                  `text.secondary`, all of which clear 4.5:1 on the row.
- *   NoteThumb    — a 64x48 tile: sketch strokes as an SVG, a mind map's root
- *                  and first children as a mini diagram, or — when there is
- *                  nothing cheap to draw — the type's glyph.
+ *   NoteThumb    — a 64x48 tile: sketch strokes as an SVG or, when there is
+ *                  nothing cheap to draw, the type's glyph.
  *
  * Performance: thumbnails parse JSON that can be megabytes, so a tile does
  * nothing until it scrolls into view (IntersectionObserver, with a margin so
@@ -46,65 +40,6 @@ function useInView(rootMargin = '200px') {
     return () => io.disconnect();
   }, [inView, rootMargin]);
   return [ref, inView];
-}
-
-// ─── Code ───────────────────────────────────────────────────────────────────
-
-export function CodePreview({ content, lines = 2 }) {
-  const theme = useTheme();
-  const { code, language } = useMemo(() => decodeCodeNote(content), [content]);
-  const shown = useMemo(
-    () => code.split(/\r?\n/).filter((l) => l.trim().length > 0).slice(0, lines),
-    [code, lines]
-  );
-  if (!shown.length) return null;
-
-  const colors = {
-    keyword: noteTypeInk(theme, 'code'),
-    string: noteTypeInk(theme, 'markdown'),
-    number: noteTypeInk(theme, 'mindmap'),
-    comment: theme.palette.text.secondary,
-    plain: theme.palette.text.primary,
-  };
-
-  return (
-    <Box
-      component="pre"
-      data-language={language || undefined}
-      sx={{
-        m: 0,
-        mt: '4px',
-        py: '4px',
-        pl: '8px',
-        borderLeft: `2px solid ${alpha(noteTypeColor(theme, 'code'), 0.5)}`,
-        fontFamily: theme.typography.fontFamilyMono,
-        fontSize: '0.75rem',
-        lineHeight: 1.55,
-        overflow: 'hidden',
-        whiteSpace: 'pre',
-        textOverflow: 'ellipsis',
-        fontVariantLigatures: 'none',
-        color: colors.plain,
-      }}
-    >
-      {shown.map((line, i) => (
-        <Box component="span" key={i} sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {tintCodeLine(line.slice(0, 160)).map((tok, j) => (
-            <span
-              key={j}
-              style={tok.kind === 'plain' ? undefined : {
-                color: colors[tok.kind],
-                fontStyle: tok.kind === 'comment' ? 'italic' : undefined,
-                fontWeight: tok.kind === 'keyword' ? 600 : undefined,
-              }}
-            >
-              {tok.text}
-            </span>
-          ))}
-        </Box>
-      ))}
-    </Box>
-  );
 }
 
 // ─── Thumbnails ─────────────────────────────────────────────────────────────
@@ -181,47 +116,9 @@ function SketchSvg({ geometry, color }) {
   );
 }
 
-function MindMapSvg({ geometry, color, muted }) {
-  const n = Math.max(geometry.children.length, 1);
-  const w = THUMB_W - 8;
-  const h = THUMB_H - 8;
-  const rootW = 18;
-  const rootH = 10;
-  const rootX = 2;
-  const rootY = h / 2 - rootH / 2;
-  const kidX = 34;
-  const kidW = w - kidX - 2;
-  const gap = h / n;
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden focusable="false">
-      {geometry.children.map((_, i) => {
-        const cy = gap * i + gap / 2;
-        const midX = (rootX + rootW + kidX) / 2;
-        return (
-          <path
-            key={`e${i}`}
-            d={`M${rootX + rootW} ${h / 2} H${midX} V${cy} H${kidX}`}
-            fill="none"
-            stroke={color}
-            strokeWidth="1"
-            opacity="0.7"
-          />
-        );
-      })}
-      <rect x={rootX} y={rootY} width={rootW} height={rootH} rx="2" fill={color} />
-      {geometry.children.map((label, i) => {
-        const cy = gap * i + gap / 2;
-        // Bar length hints at label length without drawing unreadable text.
-        const len = Math.max(8, Math.min(kidW, 6 + label.length * 1.1));
-        return <rect key={`k${i}`} x={kidX} y={cy - 2.5} width={len} height="5" rx="2" fill={muted} />;
-      })}
-    </svg>
-  );
-}
-
 function NoteThumbInner({ note }) {
   const theme = useTheme();
-  const type = note.type || 'text';
+  const type = 'handwritten';
   const [ref, inView] = useInView();
   const key = thumbnailKey(note);
   const meta = noteTypeMeta(type);
@@ -234,66 +131,49 @@ function NoteThumbInner({ note }) {
   const body = typeof note.content === 'string' ? note.content : fetched;
   useEffect(() => {
     if (typeof note.content === 'string' || !inView || !apollo) return undefined;
-    if (type !== 'handwritten' && type !== 'mindmap') return undefined;
-    if (cachedGeometry(type, key) !== undefined) return undefined;
+    if (cachedGeometry(key) !== undefined) return undefined;
     let alive = true;
     apollo.query({ query: NOTE_THUMB_CONTENT, variables: { id: note.id || note._id }, fetchPolicy: 'cache-first' })
       .then(({ data }) => { if (alive) setFetched(data?.note?.content || ''); })
       .catch(() => {});
     return () => { alive = false; };
-  }, [apollo, inView, type, key, note.content, note.id, note._id]);
+  }, [apollo, inView, key, note.content, note.id, note._id]);
 
   // Parse off the render path: once the tile is near the viewport, in an
   // idle slot, one note per task. A 1MB sketch is ~10ms of JSON.parse; eight
   // of them inside one render was a visible hitch, eight idle tasks is not.
   // A version parsed before (a remount, a re-sort) paints on the first frame.
-  const [geometry, setGeometry] = useState(() => cachedGeometry(type, key));
+  const [geometry, setGeometry] = useState(() => cachedGeometry(key));
   useEffect(() => {
-    if (!inView || (type !== 'handwritten' && type !== 'mindmap')) return undefined;
-    const hit = cachedGeometry(type, key);
+    if (!inView) return undefined;
+    const hit = cachedGeometry(key);
     if (hit !== undefined) {
       setGeometry(hit);
       return undefined;
     }
     if (typeof body !== 'string') return undefined; // still fetching
-    const run = () => setGeometry(
-      type === 'handwritten' ? sketchGeometry(body, key) : mindMapGeometry(body, key)
-    );
+    const run = () => setGeometry(sketchGeometry(body, key));
     if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(run, { timeout: 500 });
       return () => window.cancelIdleCallback(id);
     }
     const id = window.setTimeout(run, 0);
     return () => window.clearTimeout(id);
-  }, [inView, type, key, body]);
+  }, [inView, key, body]);
 
-  const color = noteTypeColor(theme, type);
-
-  if (type === 'handwritten' && geometry) {
+  if (geometry) {
     return (
-      <Tile type={type} label="Sketch preview" innerRef={ref}>
+      <Tile type={type} label="Handwriting preview" innerRef={ref}>
         <SketchSvg geometry={geometry} color={theme.palette.text.primary} />
       </Tile>
     );
   }
-  if (type === 'mindmap' && geometry) {
-    const extra = geometry.more ? ` and ${geometry.more} more` : '';
-    return (
-      <Tile
-        type={type}
-        label={`Mind map: ${geometry.root}${geometry.children.length ? ` → ${geometry.children.join(', ')}${extra}` : ''}`}
-        innerRef={ref}
-      >
-        <MindMapSvg geometry={geometry} color={color} muted={alpha(theme.palette.text.primary, 0.35)} />
-      </Tile>
-    );
-  }
   return (
-    <Tile type={type} label={`${meta.long} thumbnail`} innerRef={ref}>
+    <Tile type={type} label={`${meta.aria} thumbnail`} innerRef={ref}>
       <Glyph type={type} />
     </Tile>
   );
 }
 
 /** Re-renders only when this note's version changes. */
-export const NoteThumb = memo(NoteThumbInner, (a, b) => thumbnailKey(a.note) === thumbnailKey(b.note) && a.note.type === b.note.type);
+export const NoteThumb = memo(NoteThumbInner, (a, b) => thumbnailKey(a.note) === thumbnailKey(b.note));

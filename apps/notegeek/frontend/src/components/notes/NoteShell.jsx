@@ -30,7 +30,7 @@ function useWritingFocus() {
  *
  * Two shapes, one chrome:
  *
- *   variant="page"   (rich text, markdown, code)
+ *   variant="page"   (markdown)
  *     A sheet of pale paper, centred on the gridded desk at desktop and
  *     edge to edge on a phone, as tall as the viewport at least. The WHOLE
  *     sheet scrolls — head, toolbar and body together — so the title
@@ -39,7 +39,7 @@ function useWritingFocus() {
  *     of `layout.measure` (~70ch), so the title, the toolbar and the first
  *     line of the body all start on the same edge.
  *
- *   variant="canvas" (mind map, sketch)
+ *   variant="canvas" (sketch)
  *     The same head, on the same column, above a full-bleed canvas that
  *     does NOT scroll: tldraw computes pointer positions off its own
  *     bounding box, and a scrolling ancestor put strokes an inch below the

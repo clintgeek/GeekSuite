@@ -11,12 +11,10 @@ import { graphiteTokens, tapTarget44 } from '../../theme/tokens';
 import { formatRelativeTime, toDate } from '../../utils/dateUtils';
 import { recentlyOpened } from '../../utils/recentNotes';
 import TypeIcon from '../notes/TypeIcon';
+import { normalizeNoteType } from '../notes/noteTypeMeta';
 
 /** How many rows a section shows before the search box is the better tool. */
 const SECTION_MAX = 8;
-
-/** Mind maps have no reading view to put in the pane. */
-const showable = (note) => note && note.type !== 'mindmap';
 
 /**
  * The picker's sections, before anything is typed (req 5, decision 10):
@@ -30,9 +28,9 @@ export function referenceSections({ currentId, person, personNotes = [], opened 
     const rows = [];
     for (const note of notes) {
       const id = note && (note.id || note._id);
-      if (!id || seen.has(String(id)) || !showable(note)) continue;
+      if (!id || seen.has(String(id))) continue;
       seen.add(String(id));
-      rows.push({ id: String(id), title: note.title || '', type: note.type || 'text', at: note.createdAt || note.updatedAt || note.at || null });
+      rows.push({ id: String(id), title: note.title || '', type: normalizeNoteType(note.type), at: note.createdAt || note.updatedAt || note.at || null });
       if (rows.length >= limit) break;
     }
     return rows;

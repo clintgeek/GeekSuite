@@ -1,12 +1,9 @@
-// NoteGeek — the M2 pilot surfaces (MOBILE_UI_PLAN.md), the Night 2 AI
-// tag/link suggestion scene (R116/R126), the Lab Notebook pass (2026-09-26):
-// the editor's ⋯ menu, the tag tree, one editor scene per non-text page
-// type — and the Graphite pass (2026-09-29): one New (sheet on a phone, split
+// NoteGeek — the M2 pilot surfaces (MOBILE_UI_PLAN.md), the Lab Notebook pass
+// (2026-09-26): the editor's ⋯ menu, the tag tree, one editor scene per page
+// type (Markdown and Sketch) — and the Graphite pass (2026-09-29): one New (sheet on a phone, split
 // button on desktop), the phone's Tags sheet, the markdown editor writing
 // with its toolbar docked, the loud save states, and search with its marks.
 
-// Page-scoped stubs for the scenes after '05-suggestions': switch the
-// suggestion opt-in back off and answer GetNoteById with a given note.
 // Fails when a rendered markdown table (or any wide block) sticks out past an
 // ancestor that neither scrolls nor clips it. The page-wide overflow probe
 // can't see this, because the editor's sheet contains its own content.
@@ -36,7 +33,7 @@ async function openNote(page, h, noteFixture, path) {
     identity: { username: 'chef', email: 'chef@example.com' },
     profile: { displayName: 'Chef Crocker' },
     preferences: {},
-    appPreferences: { notegeek: { suggestOnSave: false } },
+    appPreferences: { notegeek: {} },
   }));
   await graphqlRoute(page, { ...OPS, GetNoteById: { note: noteFixture } });
   await page.goto(h.base + path, { waitUntil: 'networkidle' });
@@ -73,7 +70,7 @@ async function openSketchToTranscribe(page, h) {
     identity: { username: 'chef', email: 'chef@example.com' },
     profile: { displayName: 'Chef Crocker' },
     preferences: {},
-    appPreferences: { notegeek: { suggestOnSave: false } },
+    appPreferences: { notegeek: {} },
   }));
   const sent = [];
   await graphqlRoute(page, {
@@ -136,7 +133,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, ALL_KINDS, ARCHIVED, DELETED, NOTES, conflictAnswer, transcriptState, notesPage, listRow, NOTE_COMPOSED, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_SKETCH_TEMPLATE, NOTE_SKETCH_LEGACY_TEMPLATE, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
+import { OPS, ALL_KINDS, ARCHIVED, DELETED, NOTES, conflictAnswer, transcriptState, notesPage, listRow, NOTE_COMPOSED, NOTE_SKETCH, NOTE_SKETCH_TEMPLATE, NOTE_SKETCH_LEGACY_TEMPLATE, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
 
 // ── Fold-in helpers (scenes 19a-19e) ────────────────────────────────────────
 // The gateway is stubbed with the proposal the real model made for this note
@@ -220,7 +217,7 @@ async function bootstrapChef(page) {
     identity: { username: 'chef', email: 'chef@example.com' },
     profile: { displayName: 'Chef Crocker' },
     preferences: {},
-    appPreferences: { notegeek: { suggestOnSave: false } },
+    appPreferences: { notegeek: {} },
   }));
 }
 
@@ -601,7 +598,7 @@ const withCleanDrafts = (scene) => ({
 });
 
 export const scenes = [
-  // Home (QuickCaptureHome): the capture box and the notes, nothing else.
+  // Home (QuickCaptureHome): the start tiles, the capture box and the notes.
   // The first note must be on the first screen of a phone.
   {
     name: '01-home',
@@ -613,8 +610,7 @@ export const scenes = [
   },
   {
     // One New. Phone: the tab bar's New opens a sheet — a note, a photo, a
-    // sketch — with code and mind map under More (opened here). Desktop:
-    // the top bar's split button menu.
+    // sketch. Desktop: the top bar's split button menu.
     name: '01n-new',
     goto: '/',
     wait: 1200,
@@ -627,15 +623,18 @@ export const scenes = [
         for (const k of ['markdown', 'photo', 'handwritten']) {
           if (!(await sheet.locator(`[data-new-entry="${k}"]`).count())) throw new Error(`the New sheet has no ${k} entry`);
         }
-        if (await sheet.locator('[data-new-entry="text"]').count()) throw new Error('the New sheet still offers rich text');
-        await sheet.getByRole('button', { name: /^more/i }).click();
-        await h.settle(500);
-        if (!(await sheet.locator('[data-new-entry="code"]').isVisible())) throw new Error('More did not show Code');
+        for (const k of ['text', 'code', 'mindmap']) {
+          if (await sheet.locator(`[data-new-entry="${k}"]`).count()) throw new Error(`the New sheet still offers ${k}`);
+        }
+        if (await sheet.getByRole('button', { name: /^more/i }).count()) throw new Error('the New sheet still has a More fold');
       } else {
         await page.getByRole('button', { name: 'More kinds of note' }).click();
         await h.settle(400);
-        for (const k of ['photo', 'handwritten', 'code', 'mindmap']) {
+        for (const k of ['photo', 'handwritten']) {
           if (!(await page.locator(`[role="menu"] [data-new-entry="${k}"]`).count())) throw new Error(`the New menu has no ${k}`);
+        }
+        for (const k of ['code', 'mindmap']) {
+          if (await page.locator(`[role="menu"] [data-new-entry="${k}"]`).count()) throw new Error(`the New menu still offers ${k}`);
         }
       }
     },
@@ -653,31 +652,27 @@ export const scenes = [
     },
   },
   {
-    // A pinned note (NOTE_MD, "Recipe: ...") gets its own quiet "Pinned"
-    // group above "Recent" — and must not also show up inside Recent.
+    // A pinned note (NOTE_MD, "Recipe: ...") is simply first in Home's one
+    // list, with its pin glyph: no "Pinned" group, no "Recent" heading, and
+    // it is not repeated.
     name: '01p-home-pinned',
     goto: '/',
     wait: 1200,
     async setup(page, h) {
-      const pinnedHeading = page.getByRole('heading', { name: 'Pinned' });
-      if (!(await pinnedHeading.count())) throw new Error('home has no "Pinned" heading with a pinned note present');
-      const pinnedRow = page.locator('[data-note-row]').filter({ has: page.getByRole('img', { name: 'Pinned' }) });
-      if (!(await pinnedRow.count())) throw new Error('no note row under "Pinned" carries the pin glyph');
-      const recentHeading = page.getByRole('heading', { name: 'Recent' });
-      if (await recentHeading.count()) {
-        const recentSection = page.locator('section', { has: recentHeading });
-        if (await recentSection.getByText('Recipe: brown butter chocolate chip cookies').count()) {
-          throw new Error('the pinned note is repeated inside "Recent"');
-        }
-      }
+      if (await page.getByRole('heading', { name: 'Pinned' }).count()) throw new Error('home still has a "Pinned" heading');
+      if (await page.getByRole('heading', { name: 'Recent' }).count()) throw new Error('home still has a "Recent" heading');
+      const first = page.locator('[data-note-row]').first();
+      if (!(await first.getByText('Recipe: brown butter chocolate chip cookies').count())) throw new Error('the pinned note is not first in the list');
+      if (!(await first.getByRole('img', { name: 'Pinned' }).count())) throw new Error('the first row does not carry the pin glyph');
+      if ((await page.getByText('Recipe: brown butter chocolate chip cookies').count()) !== 1) throw new Error('the pinned note appears more than once');
     },
   },
   // Notes list — bottom nav still visible, "Notes" tab active.
   { name: '02-notes-list', goto: '/notes', wait: 1200 },
-  // Editor route — an existing text note, so the sticky bar shows
+  // Editor route — an existing Markdown note, so the sticky bar shows
   // Back + Save + Delete (a new note has no Delete). Toolbar + sticky bar.
   { name: '03-editor', goto: '/notes/n1/edit', wait: 1200 },
-  // The read-only viewer (/notes/:id for a text note) — the frame no longer
+  // The read-only viewer (/notes/:id for a Markdown note) — the frame no longer
   // scrolls on single-note routes, so the viewer brings its own scroller.
   { name: '03v-viewer', goto: '/notes/n1', wait: 1200 },
   {
@@ -922,31 +917,6 @@ export const scenes = [
     },
   },
   {
-    // Tag & link suggestions (DOCS/AI_IDEAS.md #3, Night 2 R116). The opt-in
-    // (`appPreferences.notegeek.suggestOnSave`) and `suggestForNote` are
-    // stubbed at the PAGE level, not in fixtures.mjs's context-wide routes(),
-    // so scenes 01-04 above (which include this same /notes/n1/edit route)
-    // are unaffected. Must come after every scene that uses the context-wide
-    // routes: the page-scoped scenes below it re-stub bootstrap themselves.
-    //
-    // No click is needed: the strip also fires ~1.5s after the writer pauses
-    // on the title (`SuggestionStrip.jsx`), and n1 already has a title on
-    // load, so the settle below is enough to trigger it.
-    name: '05-suggestions',
-    async setup(page, h) {
-      await page.route('**/api/users/bootstrap', (r) => json(r, {
-        identity: { username: 'chef', email: 'chef@example.com' },
-        profile: { displayName: 'Chef Crocker' },
-        preferences: {},
-        appPreferences: { notegeek: { suggestOnSave: true } },
-      }));
-      await graphqlRoute(page, { ...OPS, SuggestForNote: { suggestForNote: NOTE_SUGGESTIONS } });
-
-      await page.goto(h.base + '/notes/n1/edit', { waitUntil: 'networkidle' });
-      await h.settle(2400);
-    },
-  },
-  {
     // A markdown note (the default type, and most of Chef's notes) being
     // written. Phone: the caret is in the body, so the suite top bar has
     // tucked away and the formatting toolbar is docked at the bottom.
@@ -1013,25 +983,6 @@ export const scenes = [
     teardown: async (page, h) => {
       await page.context().setOffline(false);
       await h.settle(200);
-    },
-  },
-  {
-    // A code note: the same page, a slim language strip, a growing code sheet.
-    name: '08-editor-code',
-    async setup(page, h) {
-      await openNote(page, h, NOTE_CODE, '/notes/n6/edit');
-    },
-  },
-  {
-    // A mind map (view mode, as opened from a list): the page head over a
-    // full-bleed canvas. Desktop only for now: on a phone, ReactFlow's own
-    // nodes (22px tall) and zoom controls (26px) are under the 44px floor —
-    // a pre-existing canvas finding in MindMapEditor, not page chrome, and
-    // not something to waive quietly (see the Lab Notebook report).
-    name: '09-editor-mindmap',
-    viewports: ['desktop'],
-    async setup(page, h) {
-      await openNote(page, h, NOTE_MINDMAP, '/notes/n4');
     },
   },
   {
@@ -1153,8 +1104,7 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
-    // The way in: the camera in Home's capture box, which opens the (empty)
-    // page tray. (The New sheet / menu entries are checked in '01n-new'.)
+    // The way in: Home's Photo tile, which opens the (empty) page tray. (The New sheet / menu entries are checked in '01n-new'.)
     // /notes/new itself is now straight into a Markdown note, no picker.
     name: '13a-photo-entry',
     async setup(page, h) {
@@ -1166,7 +1116,7 @@ export const scenes = [
       if (!(await page.getByRole('textbox', { name: 'Note body' }).count())) throw new Error('/notes/new did not open a markdown note');
       await page.goto(h.base + '/', { waitUntil: 'networkidle' });
       await h.settle(800);
-      await page.getByRole('button', { name: 'New note from a photo of a page' }).click();
+      await page.locator('[data-home-start="photo"]').click();
       await page.waitForURL(/\/notes\/photo$/);
       await h.settle(600);
     },
@@ -1419,7 +1369,7 @@ export const scenes = [
         identity: { username: 'chef', email: 'chef@example.com' },
         profile: { displayName: 'Chef Crocker' },
         preferences: {},
-        appPreferences: { notegeek: { suggestOnSave: false } },
+        appPreferences: { notegeek: {} },
       }));
       await graphqlRoute(page, {
         ...OPS,
@@ -1445,7 +1395,7 @@ export const scenes = [
         identity: { username: 'chef', email: 'chef@example.com' },
         profile: { displayName: 'Chef Crocker' },
         preferences: {},
-        appPreferences: { notegeek: { suggestOnSave: false } },
+        appPreferences: { notegeek: {} },
       }));
       await graphqlRoute(page, {
         ...OPS,
@@ -1516,7 +1466,7 @@ export const scenes = [
         identity: { username: 'chef', email: 'chef@example.com' },
         profile: { displayName: 'Chef Crocker' },
         preferences: {},
-        appPreferences: { notegeek: { suggestOnSave: false } },
+        appPreferences: { notegeek: {} },
       }));
       await graphqlRoute(page, {
         ...OPS,
@@ -1553,7 +1503,7 @@ export const scenes = [
         identity: { username: 'chef', email: 'chef@example.com' },
         profile: { displayName: 'Chef Crocker' },
         preferences: {},
-        appPreferences: { notegeek: { suggestOnSave: false } },
+        appPreferences: { notegeek: {} },
       }));
       let creates = 0;
       await graphqlRoute(page, {
@@ -1744,8 +1694,8 @@ export const scenes = [
   },
   {
     // Share -> NoteGeek, "Add to an existing note": the hybrid search's best
-    // Markdown hit first ("Looks like it belongs in: Spiders"), a rich-text
-    // hit not offered, and a title search below.
+    // Markdown hit first ("Looks like it belongs in: Spiders"), a sketch hit
+    // not offered, and a title search below.
     name: '19d-share-existing',
     async setup(page, h) {
       const calls = await stubShareFold(page);
@@ -1754,7 +1704,7 @@ export const scenes = [
       const best = page.getByRole('button', { name: 'Looks like it belongs in: Spiders' });
       if (!(await best.count())) throw new Error('no "Looks like it belongs in: Spiders"');
       if (!calls.search.length || calls.search[0].hybrid !== true) throw new Error(`search calls ${JSON.stringify(calls.search)}`);
-      if (await page.getByText('Q3 roadmap notes').count()) throw new Error('a rich-text note is offered as a fold target');
+      if (await page.getByText('Sketch: onboarding flow').count()) throw new Error('a sketch is offered as a fold target');
       if (!(await page.getByRole('button', { name: 'Save as a new note' }).count())) throw new Error('Save as a new note is missing');
       if (calls.create.length) throw new Error('the share created a note on arrival');
     },
@@ -1817,7 +1767,7 @@ export const scenes = [
     async setup(page, h) {
       const calls = await stubSelect(page);
       await openComposeMany(page, h, calls);
-      if (!(await page.getByText('1 note left out: Sketch: onboarding flow (a sketch)').count())) throw new Error('the skipped sketch is not named');
+      if (!(await page.getByText('1 note left out: Sketch: onboarding flow (handwritten)').count())) throw new Error('the skipped sketch is not named');
       if (await page.getByRole('button', { name: /replace/i }).count()) throw new Error('compose-many offers Replace');
       if (calls.create.length) throw new Error('a note was created before Save');
     },
@@ -2903,7 +2853,7 @@ export const scenes = [
       await h.settle(1000);
       const list = page.getByRole('region', { name: 'Notes' });
       if (!(await list.count())) throw new Error('no list pane at this width');
-      await list.locator('[data-type-filter="text"]').click();
+      await list.locator('[data-type-filter="markdown"]').click();
       await h.settle(600);
       await list.evaluate((el) => { el.scrollTop = 40; });
       const before = await list.evaluate((el) => el.scrollTop);
@@ -2912,7 +2862,7 @@ export const scenes = [
       await h.settle(900);
       const note = page.getByRole('region', { name: 'Note' });
       if (!(await note.getByText('Standup snippets').count())) throw new Error('the note pane does not show the note');
-      if ((await list.locator('[data-type-filter="text"]').getAttribute('aria-pressed')) !== 'true') throw new Error('the list lost its filter');
+      if ((await list.locator('[data-type-filter="markdown"]').getAttribute('aria-pressed')) !== 'true') throw new Error('the list lost its filter');
       const after = await list.evaluate((el) => el.scrollTop);
       if (Math.abs(after - before) > 2) throw new Error(`the list scrolled from ${before} to ${after} when a note opened`);
       if ((await list.locator('[aria-current="page"]').count()) !== 1) throw new Error('the open note\'s row is not marked');
@@ -3112,6 +3062,45 @@ export const scenes = [
       await openNote(page, h, NOTE_MD, '/notes/n2/edit');
       if (await page.locator('[data-testid="reference-button"]').count()) throw new Error('a phone offers the Reference button');
       if (!(await page.getByRole('button', { name: /more note actions/i }).count())) throw new Error('the note head is missing');
+    },
+  },
+  {
+    // Home is built around capture (2026-11-25): four start tiles, the typing
+    // box, one list. The pen leads off a phone (tiles above the box); a phone
+    // is typed on (box above the tiles).
+    name: '28a-home-capture',
+    goto: '/',
+    wait: 1200,
+    async setup(page, h) {
+      const group = page.getByRole('group', { name: 'Start a note' });
+      if (!(await group.count())) throw new Error('home has no "Start a note" group');
+      const boxes = {};
+      for (const key of ['handwritten', 'one-on-one', 'meeting', 'photo']) {
+        const tile = group.locator(`[data-home-start="${key}"]`);
+        if ((await tile.count()) !== 1) throw new Error(`home has ${await tile.count()} "${key}" tiles, not one`);
+        const box = await tile.boundingBox();
+        if (!box || box.height < 44 || box.width < 44) throw new Error(`the ${key} tile is ${box ? `${Math.round(box.width)}x${Math.round(box.height)}` : 'not shown'}, under 44px`);
+        if (box.height < 83.5) throw new Error(`the ${key} tile is ${Math.round(box.height)}px high, under 84`);
+        boxes[key] = box;
+      }
+      const typing = await page.getByLabel('Quick capture').boundingBox();
+      const tiles = await group.boundingBox();
+      if (!typing || !tiles) throw new Error('the typing box or the tiles are not shown');
+      if (phoneLayout(h)) {
+        if (!(typing.y + typing.height <= tiles.y + 1)) throw new Error('on a phone the typing box should come before the tiles');
+      } else if (!(tiles.y + tiles.height <= typing.y + 1)) {
+        throw new Error('the tiles should come before the typing box');
+      }
+      if (await page.getByRole('heading', { name: 'Pinned' }).count()) throw new Error('home has a "Pinned" heading');
+      const rows = await page.locator('[data-note-row]').count();
+      if (rows > 6) throw new Error(`home shows ${rows} note rows, more than 6`);
+      await group.locator('[data-home-start="handwritten"]').click();
+      await page.waitForURL(/\/notes\/new\?type=handwritten$/, { timeout: 10000 });
+      await page.waitForSelector('.tl-container', { timeout: 20000 });
+      await h.settle(600);
+      // Back to Home for the screenshot.
+      await page.goto(h.base + '/', { waitUntil: 'networkidle' });
+      await h.settle(800);
     },
   },
 ].map(withCleanDrafts);

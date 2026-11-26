@@ -121,7 +121,7 @@ function TagSelector({ selectedTags, onChange, disabled = false }) {
         },
         '& .MuiInputBase-input::placeholder': { color: theme.palette.text.secondary, opacity: 1 },
         '& .MuiChip-root': { height: 26, bgcolor: 'transparent', fontSize: '0.8125rem' },
-        // Read-only (a mind map in view mode): the tags are still content to
+        // Read-only (a note in Recently deleted): the tags are still content to
         // read, so no 38%-opacity "disabled" wash — that put 12px labels at
         // 3.0:1. Full-strength secondary ink instead, and no delete glyph.
         '& .MuiChip-root.Mui-disabled': { opacity: 1, color: theme.palette.text.secondary },

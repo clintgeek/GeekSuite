@@ -117,10 +117,10 @@ describe("the task each line becomes — TodoGeek's own grammar", () => {
     expect(input('> finish the report').status).toBeUndefined();
   });
 
-  it('says which sketch it came from, after any note the line carried', () => {
+  it('says which handwritten note it came from, after any note the line carried', () => {
     const got = input('* call Bob ^about the fence', { sketch: { id: 'abc', title: 'Standup' }, origin: 'https://notegeek.example' });
-    expect(got.note).toBe('about the fence\nFrom sketch: Standup — https://notegeek.example/notes/abc');
-    expect(input('* call Bob', { sketch: { id: 'abc', title: '' }, origin: 'https://n' }).note).toBe('From sketch: Untitled sketch — https://n/notes/abc');
+    expect(got.note).toBe('about the fence\nFrom handwritten note: Standup — https://notegeek.example/notes/abc');
+    expect(input('* call Bob', { sketch: { id: 'abc', title: '' }, origin: 'https://n' }).note).toBe('From handwritten note: Untitled — https://n/notes/abc');
   });
 
   it('a line that is only modifiers has no task in it', () => {

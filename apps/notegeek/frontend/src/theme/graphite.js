@@ -26,7 +26,7 @@
  *   rule     hairlines between rows (divider)
  *   border   control outlines (≥3:1 is NOT claimed; borders are decoration,
  *            every bordered control also has a label)
- *   lead     a softer graphite for graphics: type icons, mind-map edges
+ *   lead     a softer graphite for graphics: type icons
  *   grid     the engineering-paper grid lines (decoration, never under copy
  *            that needs the contrast)
  */

@@ -8,9 +8,6 @@ import { registerSW } from 'virtual:pwa-register'
 import '@fontsource-variable/spline-sans'
 import '@fontsource-variable/spline-sans-mono'
 
-// Import ReactFlow styles
-import 'reactflow/dist/style.css';
-
 import { ApolloProvider } from '@apollo/client';
 import { apolloClient } from './apolloClient';
 

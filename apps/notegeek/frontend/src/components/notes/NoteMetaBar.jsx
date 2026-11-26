@@ -14,7 +14,7 @@ import { noteTypeMeta } from './noteTypeMeta';
  *          — on a phone (not a canvas) it sits in row 1, between Back and
  *          the menu, so the note's text starts one row higher
  *   Row 4: tags, as a quiet inline field
- *   Row 5: `belowMeta` — the suggestion strip, when there is one
+ *   Row 5: `belowMeta` — the banners, when there are any
  *
  * Graphite moved the save status out of row 1: when things are fine it is
  * small lowercase metadata in row 3 ("saved · 3m ago"), and row 1 carries

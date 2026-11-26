@@ -56,18 +56,17 @@
   .ng-print-head { margin: 0 0 14pt; padding-bottom: 6pt; border-bottom: 0.75pt solid #000; break-after: avoid; }
   .ng-print-title { font-size: 20pt; line-height: 1.2; font-weight: 650; margin: 0 0 4pt; }
   .ng-print-meta { font-family: 'Spline Sans Mono Variable', ui-monospace, Menlo, Consolas, monospace; font-size: 8.5pt; margin: 0; }
-  .ng-print-aside, .ng-print-empty { font-size: 9pt; font-style: italic; }
+  .ng-print-empty { font-size: 9pt; font-style: italic; }
 
   /* ── Body text ─────────────────────────────────────────────────────── */
   .ng-print-root h1, .ng-print-root h2, .ng-print-root h3,
   .ng-print-root h4, .ng-print-root h5, .ng-print-root h6 {
     line-height: 1.25; font-weight: 650; margin: 14pt 0 5pt; break-after: avoid; break-inside: avoid;
   }
-  .ng-print-md h1, .ng-print-rich h1 { font-size: 16pt; }
-  .ng-print-md h2, .ng-print-rich h2 { font-size: 14pt; }
-  .ng-print-md h3, .ng-print-rich h3 { font-size: 12pt; }
-  .ng-print-md h4, .ng-print-md h5, .ng-print-md h6,
-  .ng-print-rich h4, .ng-print-rich h5, .ng-print-rich h6 { font-size: 11pt; }
+  .ng-print-md h1 { font-size: 16pt; }
+  .ng-print-md h2 { font-size: 14pt; }
+  .ng-print-md h3 { font-size: 12pt; }
+  .ng-print-md h4, .ng-print-md h5, .ng-print-md h6 { font-size: 11pt; }
   .ng-print-root p { margin: 0 0 7pt; orphans: 3; widows: 3; }
   .ng-print-root ul, .ng-print-root ol { margin: 0 0 7pt; padding-left: 18pt; }
   .ng-print-root li { margin: 0 0 2pt; }
@@ -77,9 +76,6 @@
   .ng-print-root hr { border: 0; border-top: 0.75pt solid #000; margin: 10pt 0; }
   .ng-print-root a { text-decoration: underline; }
   .ng-print-url { font-size: 8pt; overflow-wrap: anywhere; }
-  /* Rich text's links carry no React wrapper; the URL is printed by CSS. */
-  .ng-print-rich a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 8pt; overflow-wrap: anywhere; }
-  .ng-print-plain { white-space: pre-wrap; }
 
   /* ── Code ──────────────────────────────────────────────────────────── */
   .ng-print-root code {
@@ -97,7 +93,6 @@
     line-height: 1.4;
   }
   .ng-print-root pre code { font-size: 9pt; }
-  .ng-print-code { break-inside: auto; } /* a whole code note may run pages */
 
   /* ── Tables (pipe tables are tables) ───────────────────────────────── */
   .ng-print-root table { width: 100%; border-collapse: collapse; margin: 0 0 8pt; font-size: 9.5pt; }

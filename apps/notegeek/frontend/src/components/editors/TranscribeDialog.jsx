@@ -100,7 +100,7 @@ export default function TranscribeDialog({
                     >
                         {reviewing
                             ? `An approximation · check it against the ${strip && pages.length > 1 ? 'pages' : 'page'}`
-                            : photo ? 'The photos are kept as a sketch note' : 'The sketch stays as it is'}
+                            : photo ? 'The photos are kept as a handwritten note' : 'The handwriting stays as it is'}
                     </Typography>
                     {reviewing && reused ? (
                         <>
@@ -164,7 +164,7 @@ export default function TranscribeDialog({
                                 <Box
                                     component="img"
                                     src={imageUrl}
-                                    alt="The sketch page that was read"
+                                    alt="The handwritten page that was read"
                                     sx={{
                                         width: '100%',
                                         maxHeight: { xs: '28vh', md: 520 },

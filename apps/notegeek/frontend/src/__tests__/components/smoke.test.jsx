@@ -8,7 +8,6 @@ import { GET_NOTES_PAGE } from '../../graphql/queries';
 import ThemeModeProvider from '../../theme/ThemeModeProvider';
 
 // Component Imports
-import NoteTypeSelector from '../../components/NoteTypeSelector';
 import TagSelector from '../../components/TagSelector';
 import NoteHeader from '../../components/NoteHeader';
 import Header from '../../components/Header';
@@ -120,12 +119,6 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
 }));
 
 describe('Smoke Tests - Basic UI Components', () => {
-
-    describe('NoteTypeSelector', () => {
-        it('should render without crashing', () => {
-            render(<NoteTypeSelector onSelect={vi.fn()} />, { wrapper: AllProviders });
-        });
-    });
 
     describe('TagSelector', () => {
         it('should render without crashing', () => {

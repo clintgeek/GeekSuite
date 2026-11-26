@@ -8,7 +8,7 @@ import {
     TextField,
     DialogContentText,
 } from '@mui/material';
-// Deep-import (see RichTextEditor.jsx for why) instead of the
+// Deep-import (see MarkdownEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';

@@ -25,7 +25,7 @@ import SelectionBar from '../../../components/select/SelectionBar';
 // Selected newest-first on purpose: the request must go oldest-first (C3).
 const NOTES = [
   { id: 'n3', title: 'Roof quote', type: 'markdown', createdAt: '2026-10-05T10:00:00Z' },
-  { id: 'n1', title: 'Roof leak', type: 'text', createdAt: '2026-09-01T10:00:00Z' },
+  { id: 'n1', title: 'Roof leak', type: 'markdown', createdAt: '2026-09-01T10:00:00Z' },
   { id: 'sk', title: 'Shed sketch', type: 'handwritten', createdAt: '2026-09-20T10:00:00Z' },
 ];
 const ORDERED_IDS = ['n1', 'sk', 'n3'];
@@ -119,7 +119,7 @@ describe('the happy path', () => {
   it('says which notes were left out, and why', async () => {
     renderFlow([composeMock(composed())]);
     await startCompose();
-    expect(await screen.findByText('1 note left out: Shed sketch (a sketch)')).toBeInTheDocument();
+    expect(await screen.findByText('1 note left out: Shed sketch (handwritten)')).toBeInTheDocument();
     // The chip counts the notes that went in (harness 20b showed the ids).
     expect(screen.getByText('From 2 notes')).toBeInTheDocument();
   });
@@ -201,7 +201,7 @@ describe('refusals and errors keep the selection (U3)', () => {
     }))]);
     await startCompose();
     expect(await screen.findByText(/needs at least two notes it can read/i)).toBeInTheDocument();
-    expect(screen.getByText('2 notes left out: Shed sketch (a sketch), Roof quote (empty)')).toBeInTheDocument();
+    expect(screen.getByText('2 notes left out: Shed sketch (handwritten), Roof quote (empty)')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save as a new note' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Back to selection' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

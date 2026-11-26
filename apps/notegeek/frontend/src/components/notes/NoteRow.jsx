@@ -12,8 +12,9 @@ import { rowTagLabels } from '../../utils/tagPath';
 import { highlightTerms } from '../../utils/highlightTerms';
 import { graphiteTokens } from '../../theme/tokens';
 import TypeIcon from './TypeIcon';
-import { CodePreview, NoteThumb } from './NotePreview';
-// Deep-import (see RichTextEditor.jsx for why) instead of the
+import { NoteThumb } from './NotePreview';
+import { normalizeNoteType } from './noteTypeMeta';
+// Deep-import (see MarkdownEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import PushPin from '@mui/icons-material/PushPin';
 import CheckBox from '@mui/icons-material/CheckBox';
@@ -23,12 +24,10 @@ import { useCurrentNoteId } from '../../hooks/useNoteFormFactor';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-const VISUAL_TYPES = ['handwritten', 'mindmap'];
-
 function getPreview(note, maxLen = 120) {
     if (note.snippet) return note.snippet;
-    const type = note.type || 'text';
-    if (VISUAL_TYPES.includes(type)) return '';
+    const type = normalizeNoteType(note.type);
+    if (type === 'handwritten') return '';
     // List rows carry the server's plain-text `preview`, not the body (5.1).
     if (typeof note.content !== 'string') {
         const p = typeof note.preview === 'string' ? note.preview.trim() : '';
@@ -119,7 +118,7 @@ function MeaningMark() {
  * Quiet by design (Graphite): the type is a small graphite glyph with an
  * accessible label, tags are plain words, and the time is small lowercase
  * mono at the end of the line. The title is the loudest thing in the row.
- * Sketch and mind-map notes get a thumbnail (NotePreview.jsx), lazily
+ * Sketch notes get a thumbnail (NotePreview.jsx), lazily
  * rendered.
  *
  * Props:
@@ -148,17 +147,14 @@ function NoteRow({
     selectMode = false, selected = false, onToggleSelect, onLongPress,
 }) {
     const theme = useTheme();
-    const type = note.type || 'text';
-    const isVisual = VISUAL_TYPES.includes(type);
+    const type = normalizeNoteType(note.type);
+    const isVisual = type === 'handwritten';
     // Hybrid search: a row matched by meaning alone shows the passage that
     // matched and is marked, and nothing in it is highlighted — the typed
     // words are, by definition, not what found it.
     const byMeaning = note.matchedBy === 'meaning';
     const why = (byMeaning || prominent) && note.why ? note.why : null;
-    // The tinted code preview needs the body; a list row (preview only)
-    // shows the server's plain excerpt instead.
-    const isCode = type === 'code' && !note.snippet && !why && typeof note.content === 'string';
-    const preview = isCode ? '' : (why || getPreview(note, maxPreview));
+    const preview = why || getPreview(note, maxPreview);
     const highlight = byMeaning ? null : query;
     const g = graphiteTokens(theme);
 
@@ -265,10 +261,8 @@ function NoteRow({
                         : (note.title || 'Untitled')}
                 </Typography>
 
-                {/* Preview — prose or code */}
-                {isCode ? (
-                    <CodePreview content={note.content} />
-                ) : preview ? (
+                {/* Preview */}
+                {preview ? (
                     <Typography
                         component="div"
                         sx={{

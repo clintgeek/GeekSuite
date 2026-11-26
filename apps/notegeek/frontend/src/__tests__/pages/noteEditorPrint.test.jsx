@@ -177,7 +177,7 @@ describe('Print or save as PDF', () => {
     renderEditor();
     await clickPrint();
     await waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
-    expect(seenAtPrint.text).toContain('This sketch is empty.');
+    expect(seenAtPrint.text).toContain('This page is empty.');
   });
 
   it('a second click while printing does not open a second dialog', async () => {

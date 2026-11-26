@@ -209,16 +209,16 @@ describe('the derived note', () => {
   it('is titled from the composed first heading, or after the sketch', () => {
     expect(firstHeading('intro\n\n## Roof quote\n\n# Later')).toBe('Roof quote');
     expect(derivedNoteTitle({ sketchTitle: 'Tuesday', body: '# Roof quote\n\n- call', composed: true })).toBe('Roof quote');
-    expect(derivedNoteTitle({ sketchTitle: 'Tuesday', body: 'no heading here', composed: true })).toBe('From sketch: Tuesday');
+    expect(derivedNoteTitle({ sketchTitle: 'Tuesday', body: 'no heading here', composed: true })).toBe('From handwritten note: Tuesday');
     // The plain path never promotes a line to a title, even one that looks like a heading.
-    expect(derivedNoteTitle({ sketchTitle: 'Tuesday', body: '# written with a hash', composed: false })).toBe('From sketch: Tuesday');
-    expect(derivedNoteTitle({ sketchTitle: '  ', body: '', composed: false })).toBe('From sketch: Untitled sketch');
+    expect(derivedNoteTitle({ sketchTitle: 'Tuesday', body: '# written with a hash', composed: false })).toBe('From handwritten note: Tuesday');
+    expect(derivedNoteTitle({ sketchTitle: '  ', body: '', composed: false })).toBe('From handwritten note: Untitled');
   });
 
   it('opens with a link back to the sketch', () => {
-    expect(backLinkLine({ sketchId: 'n3', sketchTitle: 'Sketch: [draft] flow' })).toBe('From sketch: [Sketch: \\[draft\\] flow](/notes/n3)');
+    expect(backLinkLine({ sketchId: 'n3', sketchTitle: 'Sketch: [draft] flow' })).toBe('From handwritten note: [Sketch: \\[draft\\] flow](/notes/n3)');
     const body = derivedNoteContent({ sketchId: 'n3', sketchTitle: 'Tuesday', body: '# Doc\n\ntext', composed: true });
-    expect(body.split('\n')[0]).toBe('From sketch: [Tuesday](/notes/n3)');
+    expect(body.split('\n')[0]).toBe('From handwritten note: [Tuesday](/notes/n3)');
     expect(body).toContain('# Doc\n\ntext');
   });
 

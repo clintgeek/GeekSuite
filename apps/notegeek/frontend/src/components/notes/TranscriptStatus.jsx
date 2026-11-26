@@ -32,7 +32,7 @@ const LABELS = {
 /** Statuses from which "Transcribe now" makes sense. */
 const CAN_READ_NOW = new Set(['waiting', 'retry', 'failed']);
 
-export const TOO_LONG_NOTE = 'This page is long: its writing is shrunk to fit one image, and the model may misread it. A second sketch keeps each page legible.';
+export const TOO_LONG_NOTE = 'This page is long: its writing is shrunk to fit one image, and the model may misread it. A second note keeps each page legible.';
 
 function when(iso) {
   if (!iso) return '';

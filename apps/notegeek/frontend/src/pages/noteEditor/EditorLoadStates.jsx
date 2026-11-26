@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, CircularProgress, Typography, Button } from '@mui/material';
-// Deep-import (see RichTextEditor.jsx for why) instead of the
+// Deep-import (see MarkdownEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import BackIcon from '@mui/icons-material/ArrowBack';
 

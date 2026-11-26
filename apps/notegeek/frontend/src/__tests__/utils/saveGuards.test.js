@@ -19,10 +19,7 @@ import { NOTE_TYPES } from '../../components/notes/NoteTypeRouter';
 describe('contentMaxFor — mirrors the gateway ceilings', () => {
   // graphql/notegeek/validation.js: DOC_CONTENT_MAX / SNAPSHOT_CONTENT_MAX.
   it.each([
-    [NOTE_TYPES.TEXT, DOC_CONTENT_MAX],
     [NOTE_TYPES.MARKDOWN, DOC_CONTENT_MAX],
-    [NOTE_TYPES.CODE, DOC_CONTENT_MAX],
-    [NOTE_TYPES.MINDMAP, SNAPSHOT_CONTENT_MAX],
     [NOTE_TYPES.HANDWRITTEN, SNAPSHOT_CONTENT_MAX],
   ])('%s → %i', (type, expected) => {
     expect(contentMaxFor(type)).toBe(expected);
@@ -41,8 +38,8 @@ describe('contentMaxFor — mirrors the gateway ceilings', () => {
 describe('overSizeMessage', () => {
   it('says nothing when the body fits, including exactly at the ceiling', () => {
     expect(overSizeMessage('x'.repeat(DOC_CONTENT_MAX), NOTE_TYPES.MARKDOWN)).toBeNull();
-    expect(overSizeMessage('', NOTE_TYPES.TEXT)).toBeNull();
-    expect(overSizeMessage(undefined, NOTE_TYPES.TEXT)).toBeNull();
+    expect(overSizeMessage('', NOTE_TYPES.MARKDOWN)).toBeNull();
+    expect(overSizeMessage(undefined, NOTE_TYPES.MARKDOWN)).toBeNull();
   });
 
   it('names the numbers for prose, one character past the ceiling', () => {
@@ -52,9 +49,9 @@ describe('overSizeMessage', () => {
     expect(msg).toMatch(/100,000/);
   });
 
-  it('speaks about strokes, not characters, for a sketch', () => {
+  it('speaks about strokes, not characters, for a handwritten note', () => {
     const msg = overSizeMessage('x'.repeat(SNAPSHOT_CONTENT_MAX + 1), NOTE_TYPES.HANDWRITTEN);
-    expect(msg).toMatch(/sketch is too large/);
+    expect(msg).toMatch(/handwritten note is too large/);
   });
 
   it('does not hold a sketch to the prose ceiling', () => {

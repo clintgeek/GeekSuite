@@ -11,7 +11,7 @@
 /** The new-info ceiling the gateway enforces (`foldin.js#MAX_FOLD_INPUT_CHARS`). */
 export const FOLD_IN_INPUT_MAX = 12000;
 
-/** Note types Fold-in works on. Rich text is refused by the gateway, so it is not offered. */
+/** Note types Fold-in works on: Markdown only. */
 export const canFoldInto = (note) => Boolean(note)
   && note.type === 'markdown'
   && !note.isLocked

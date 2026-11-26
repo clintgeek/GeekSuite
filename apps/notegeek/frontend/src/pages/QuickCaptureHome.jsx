@@ -19,14 +19,22 @@ import FoldTargetPicker from '../components/foldin/FoldTargetPicker';
 import FoldInSheet from '../components/foldin/FoldInSheet';
 import NoteRow from '../components/notes/NoteRow';
 import useNoteStore from '../store/noteStore';
-import { newNotePath, noteTypeMeta } from '../components/notes/noteTypeMeta';
+import { MEETING_ENTRY, ONE_ON_ONE_ENTRY, newNotePath, noteTypeMeta } from '../components/notes/noteTypeMeta';
 import { graphiteTokens, gridBackground, layout, tapTarget44 } from '../theme/tokens';
-import { useNoteSelection, rowSelectProps } from '../hooks/useNoteSelection';
-import { SelectButton, SelectingHeader } from '../components/select/SelectControl';
-import SelectionBar from '../components/select/SelectionBar';
 import { useListWidth } from '../components/notes/ListColumn';
+import { usePhoneLayout } from '../hooks/useNoteFormFactor';
+import { openOneOnOnePicker } from '../store/oneOnOneStore';
 
-const RECENT_COUNT = 12;
+// A handful to pick up from; reading is what Notes and Everything are for.
+const RECENT_COUNT = 6;
+
+/** The pen's ways to start, as big targets: the note is one tap from opening the app. */
+const STARTS = [
+  { key: 'handwritten', label: 'Write' },
+  { key: ONE_ON_ONE_ENTRY.key, label: '1:1' },
+  { key: MEETING_ENTRY.key, label: 'Meeting' },
+  { key: 'photo', label: 'Photo' },
+];
 
 /** Section heading: a sentence-case label with a hairline running to the edge. */
 function SectionHeading({ children, action, id }) {
@@ -42,34 +50,56 @@ function SectionHeading({ children, action, id }) {
   );
 }
 
-/** A photo / sketch shortcut inside the capture box. */
-function CaptureShortcut({ entryKey, label }) {
+/** One way to start a note: a big tile. The first is the primary one, on the highlighter. */
+function StartTile({ entryKey, label, primary = false }) {
   const navigate = useNavigate();
-  const Icon = noteTypeMeta(entryKey).Icon;
+  const theme = useTheme();
+  const g = graphiteTokens(theme);
+  const meta = noteTypeMeta(entryKey);
+  const Icon = meta.Icon;
+  const start = () => (entryKey === ONE_ON_ONE_ENTRY.key ? openOneOnOnePicker() : navigate(newNotePath(entryKey)));
   return (
-    <Tooltip title={label}>
-      <IconButton
-        aria-label={label}
-        onClick={() => navigate(newNotePath(entryKey))}
-        sx={{ ...tapTarget44, borderRadius: '10px', color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
-      >
-        <Icon sx={{ fontSize: 22 }} />
-      </IconButton>
-    </Tooltip>
+    <ButtonBase
+      onClick={start}
+      data-home-start={entryKey}
+      aria-label={label === meta.long ? label : `${label}: ${meta.long}`}
+      aria-haspopup={entryKey === ONE_ON_ONE_ENTRY.key ? 'dialog' : undefined}
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '6px',
+        minHeight: 84,
+        borderRadius: '12px',
+        border: `1px solid ${primary ? g.ink : g.border}`,
+        bgcolor: primary ? g.hl : g.sheet,
+        color: primary ? g.onHl : 'text.primary',
+        fontSize: '0.9375rem',
+        fontWeight: 650,
+        '&:hover': { borderColor: g.ink },
+        '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: 2 },
+      }}
+    >
+      <Icon aria-hidden sx={{ fontSize: 26 }} />
+      {label}
+    </ButtonBase>
   );
 }
 
 /**
- * Home — the capture box and your notes. Nothing else.
+ * Home — capture. (Chef, 2026-11-25: "home should be easy access to
+ * capture. I open the app to record notes more often than to read them. Or
+ * at least I'm in a bigger hurry when recording than reading.")
  *
- * Graphite (2026-09-29) dropped the greeting block and the "Continue where
- * you left off" cards: both pushed the notes below the fold of a phone, and
- * the cards were the first three rows of Recent again. The first phone
- * screen is now a place to write and the notes you wrote last.
+ * Two ways in, both on the first screen at every size:
+ *   - the start tiles: Write (a handwritten note), 1:1, Meeting, Photo;
+ *   - the typing box, which makes a typed note and stays here.
+ * The pen leads on a tablet and a desktop; on a phone the typing box does.
  *
- * The capture box makes a Markdown note (the app's default type) and stays
- * here; with nothing typed it offers Photo and Sketch instead, so the
- * phone's three front-door kinds of note all start on this screen.
+ * Under them, the last few notes to pick up from. Browsing is Notes and
+ * Everything (DOCS/NOTE_KINDS_SPEC.md), so there is no select mode and no
+ * pinned group here any more.
  */
 function QuickCaptureHome() {
   const navigate = useNavigate();
@@ -87,8 +117,7 @@ function QuickCaptureHome() {
   const [foldPicking, setFoldPicking] = useState(false);
   const [foldTarget, setFoldTarget] = useState(null);
   const { notify } = useToast();
-  // Select mode over the notes on Home (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U1).
-  const selection = useNoteSelection();
+  const phone = usePhoneLayout();
 
   // Only what Home shows (3.5): it used to fetch 50 notes to draw 12.
   useEffect(() => {
@@ -126,18 +155,29 @@ function QuickCaptureHome() {
   };
 
   const recentNotes = notes.slice(0, RECENT_COUNT);
-  // Pinned notes get their own quiet group above Recent — the server already
-  // sorts them first, so this is a client-side split of the same slice, not
-  // a resort, and they are pulled out so Recent never repeats them.
-  const pinnedNotes = recentNotes.filter((n) => n.pinned);
-  const otherNotes = recentNotes.filter((n) => !n.pinned);
   const canCapture = captureText.trim().length > 0;
 
   return (
     <Box sx={{ minHeight: '100%' }}>
       {/* The capture band: a strip of engineering paper with the box on it. */}
       <Box sx={{ ...gridBackground(theme), borderBottom: `1px solid ${g.rule}` }}>
-        <Box sx={{ width: '100%', maxWidth: listWidth, mx: 'auto', px: { xs: '12px', sm: '24px' }, py: { xs: '12px', sm: '24px' } }}>
+        <Box sx={{ width: '100%', maxWidth: listWidth, mx: 'auto', px: { xs: '12px', sm: '24px' }, py: { xs: '12px', sm: '24px' }, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <Box
+            role="group"
+            aria-label="Start a note"
+            data-testid="home-starts"
+            sx={{
+              // The pen leads where there is one; a phone is typed on.
+              order: phone ? 2 : 0,
+              display: 'grid',
+              gap: '8px',
+              gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' },
+            }}
+          >
+            {STARTS.map((start, i) => (
+              <StartTile key={start.key} entryKey={start.key} label={start.label} primary={i === 0 && !phone} />
+            ))}
+          </Box>
           <Box
             component="form"
             onSubmit={handleQuickCapture}
@@ -162,7 +202,7 @@ function QuickCaptureHome() {
             <InputBase
               value={captureText}
               onChange={(e) => setCaptureText(e.target.value)}
-              placeholder="Write something down…"
+              placeholder="Type something down…"
               fullWidth
               multiline
               maxRows={8}
@@ -192,12 +232,7 @@ function QuickCaptureHome() {
                   {capturing ? 'Saving…' : 'Save'}
                 </Button>
               </>
-            ) : (
-              <>
-                <CaptureShortcut entryKey="photo" label="New note from a photo of a page" />
-                <CaptureShortcut entryKey="handwritten" label="New sketch" />
-              </>
-            )}
+            ) : null}
           </Box>
         </Box>
       </Box>
@@ -221,74 +256,44 @@ function QuickCaptureHome() {
         ) : notes.length === 0 ? (
           <GeekEmptyState
             title="Nothing here yet"
-            description="Write a thought in the box above and press Save. The camera makes a note from a photo of a page; the pen starts a sketch."
+            description="Write starts a handwritten note. Or type a thought in the box and press Save."
           />
         ) : (
-          <>
-            {selection.active && <SelectingHeader selection={selection} />}
-            {pinnedNotes.length > 0 && (
-              <Box component="section" aria-labelledby="home-pinned">
-                <SectionHeading id="home-pinned" action={selection.active ? null : <SelectButton selection={selection} />}>Pinned</SectionHeading>
-                <Box>
-                  {pinnedNotes.map((note, idx) => (
-                    <React.Fragment key={note.id || note._id}>
-                      {idx > 0 && <Divider sx={{ borderColor: theme.palette.divider, mx: '8px' }} />}
-                      <NoteRow
-                        note={note}
-                        onClick={() => navigate(`/notes/${note.id || note._id}`)}
-                        {...rowSelectProps(selection, note)}
-                      />
-                    </React.Fragment>
-                  ))}
-                </Box>
-              </Box>
-            )}
-            {otherNotes.length > 0 && (
-              <Box component="section" aria-labelledby="home-recent">
-                <SectionHeading
-                  id="home-recent"
-                  action={
-                    <>
-                    {pinnedNotes.length === 0 && !selection.active && <SelectButton selection={selection} />}
-                    <ButtonBase
-                      onClick={() => navigate('/notes')}
-                      sx={{
-                        ...tapTarget44,
-                        gap: '4px',
-                        px: '6px',
-                        borderRadius: '8px',
-                        fontSize: '0.8125rem',
-                        fontWeight: 500,
-                        color: 'text.secondary',
-                        '&:hover': { color: 'text.primary' },
-                        '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: 2 },
-                      }}
-                    >
-                      All notes
-                      <ArrowForward aria-hidden sx={{ fontSize: 15 }} />
-                    </ButtonBase>
-                    </>
-                  }
+          <Box component="section" aria-labelledby="home-recent">
+            <SectionHeading
+              id="home-recent"
+              action={
+                <ButtonBase
+                  onClick={() => navigate('/notes')}
+                  sx={{
+                    ...tapTarget44,
+                    gap: '4px',
+                    px: '6px',
+                    borderRadius: '8px',
+                    fontSize: '0.8125rem',
+                    fontWeight: 500,
+                    color: 'text.secondary',
+                    '&:hover': { color: 'text.primary' },
+                    '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: 2 },
+                  }}
                 >
-                  Recent
-                </SectionHeading>
-                <Box>
-                  {otherNotes.map((note, idx) => (
-                    <React.Fragment key={note.id || note._id}>
-                      {idx > 0 && <Divider sx={{ borderColor: theme.palette.divider, mx: '8px' }} />}
-                      <NoteRow
-                        note={note}
-                        onClick={() => navigate(`/notes/${note.id || note._id}`)}
-                        {...rowSelectProps(selection, note)}
-                      />
-                    </React.Fragment>
-                  ))}
-                </Box>
-              </Box>
-            )}
-          </>
+                  Notes
+                  <ArrowForward aria-hidden sx={{ fontSize: 15 }} />
+                </ButtonBase>
+              }
+            >
+              Pick up where you left off
+            </SectionHeading>
+            <Box>
+              {recentNotes.map((note, idx) => (
+                <React.Fragment key={note.id || note._id}>
+                  {idx > 0 && <Divider sx={{ borderColor: theme.palette.divider, mx: '8px' }} />}
+                  <NoteRow note={note} onClick={() => navigate(`/notes/${note.id || note._id}`)} />
+                </React.Fragment>
+              ))}
+            </Box>
+          </Box>
         )}
-        <SelectionBar selection={selection} />
       </Box>
       <GeekSheet
         open={foldPicking}

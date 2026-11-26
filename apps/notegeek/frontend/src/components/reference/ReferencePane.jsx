@@ -10,8 +10,6 @@ import { GET_NOTE_BY_ID, SKETCH_TRANSCRIPT } from '../../graphql/queries';
 import { useNoteLinks, markdownPluginsFor } from '../../hooks/useNoteLinks';
 import { MARKDOWN_COMPONENTS, markdownOverflowSx } from '../notes/markdownComponents';
 import TypeIcon from '../notes/TypeIcon';
-import { decodeCodeNote } from '../../utils/previewText';
-import { sanitizeNoteHtml } from '../../utils/sanitizeNoteHtml';
 import { border, glow, surfaces, tapTarget44 } from '../../theme/tokens';
 import {
   SPLIT_BAR_HEIGHT, SPLIT_DEFAULT, SPLIT_MAX, fractionAt, settleFraction, stepFraction,
@@ -30,7 +28,6 @@ const Centered = ({ children }) => (
 function TextBody({ note, transcript = null }) {
   const resolveLink = useNoteLinks(note.id);
   const plugins = useMemo(() => markdownPluginsFor(resolveLink), [resolveLink]);
-  const type = transcript !== null ? 'plain' : note.type;
   return (
     <Box
       data-testid="reference-text"
@@ -47,17 +44,12 @@ function TextBody({ note, transcript = null }) {
       }}
     >
       <Box sx={{ maxWidth: 680, mx: 'auto' }}>
-        {type === 'markdown' ? (
-          <ReactMarkdown remarkPlugins={plugins} components={MARKDOWN_COMPONENTS}>{note.content || ''}</ReactMarkdown>
-        ) : type === 'text' || !type ? (
-          // Stored TipTap HTML, through the app's one sanitizing profile (NoteViewer has the note on why).
-          <div className="rich-text-viewer" dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(note.content) }} />
-        ) : type === 'code' ? (
-          <pre><code>{decodeCodeNote(note.content || '').code}</code></pre>
-        ) : (
+        {transcript !== null ? (
           <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', m: 0, fontFamily: 'inherit', fontSize: 'inherit' }}>
-            {transcript ?? note.content ?? ''}
+            {transcript}
           </Typography>
+        ) : (
+          <ReactMarkdown remarkPlugins={plugins} components={MARKDOWN_COMPONENTS}>{note.content || ''}</ReactMarkdown>
         )}
       </Box>
     </Box>
@@ -199,8 +191,6 @@ export default function ReferencePane({ noteId = null, onClose, onChange, onOpen
             ) : <Centered><Typography variant="body2" color="text.secondary">Nothing is written on this page.</Typography></Centered>
           ) : isSketch ? (
             <TextBody note={note} transcript={transcript} />
-          ) : note.type === 'mindmap' ? (
-            <Centered><Typography variant="body2" color="text.secondary">A mind map cannot be shown here. Use “Open this note”.</Typography></Centered>
           ) : (
             <TextBody note={note} />
           )}

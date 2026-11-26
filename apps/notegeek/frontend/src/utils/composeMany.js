@@ -29,13 +29,11 @@ export function oldestFirst(notes) {
   return [...(notes || [])].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
 }
 
-const TYPE_WORD = { handwritten: 'a sketch', mindmap: 'a mind map' };
-
 /** Why one note was left out, in the words the dialog uses. */
 export function skipLabel(skip, note) {
   switch (skip?.reason) {
     case 'locked': return 'locked';
-    case 'unsupported_type': return TYPE_WORD[note?.type] || 'not text';
+    case 'unsupported_type': return note?.type === 'handwritten' ? 'handwritten' : 'not text';
     case 'empty': return 'empty';
     case 'not_found': return 'not found';
     default: return skip?.reason || 'left out';
@@ -63,5 +61,5 @@ export function skipSummary(skipped, notesById = new Map()) {
  */
 export function skipHint(skipCount) {
   if (!skipCount) return '';
-  return `${skipCount} will be skipped — sketches, mind maps and locked notes can't be composed`;
+  return `${skipCount} will be skipped — handwritten and locked notes can't be composed`;
 }

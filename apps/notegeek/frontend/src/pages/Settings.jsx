@@ -14,7 +14,7 @@ import {
     useTheme,
     alpha,
 } from '@mui/material';
-// Deep-import (see RichTextEditor.jsx for why) instead of the
+// Deep-import (see MarkdownEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import ThemeIcon from '@mui/icons-material/Brightness4Outlined';
 import LightIcon from '@mui/icons-material/Brightness7Outlined';
@@ -23,7 +23,6 @@ import LogoutIcon from '@mui/icons-material/LogoutOutlined';
 import InfoIcon from '@mui/icons-material/InfoOutlined';
 import AccountIcon from '@mui/icons-material/PersonOutlined';
 import FontSizeIcon from '@mui/icons-material/TextFields';
-import SuggestIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import SketchIcon from '@mui/icons-material/GestureOutlined';
 import { useAppPreferences, useUser } from '@geeksuite/user';
 import { normalizeTag } from '@geeksuite/tags';
@@ -104,10 +103,6 @@ function Settings() {
     const { reset } = useUser();
     const { preferences: appPrefs, updateAppPreferences } = useAppPreferences('notegeek');
     const editorFontSize = appPrefs?.editorFontSize ?? 14;
-    // Off unless the user has said yes — DOCS/AI_IDEAS.md's first rule. The
-    // gateway reads the same flag before it consults a model, so this switch
-    // is the real gate and not just a hidden UI.
-    const suggestOnSave = appPrefs?.suggestOnSave === true;
     const theme = useTheme();
     const isDark = mode === 'dark';
 
@@ -130,10 +125,6 @@ function Settings() {
         const next = normalizeTag(event.target.value) || DEFAULT_ONE_ON_ONE_TAG;
         event.target.value = next;
         if (next !== oneOnOneTag) await updateAppPreferences({ oneOnOneTag: next });
-    };
-
-    const handleSuggestToggle = async (event) => {
-        await updateAppPreferences({ suggestOnSave: event.target.checked });
     };
 
     const handleLogout = async () => {
@@ -212,48 +203,20 @@ function Settings() {
                 />
             </SettingsSection>
 
-            {/* Suggestions */}
-            <SettingsSection title="Suggestions">
-                <SettingsRow
-                    icon={<SuggestIcon sx={{ fontSize: 20, color: 'text.secondary' }} />}
-                    primary="Suggest tags & links"
-                    secondary={suggestOnSave
-                        ? 'On — after a save, tags you already use and notes that look related'
-                        : 'Off — nothing is suggested and no note leaves this machine'}
-                    action={
-                        <Switch
-                            edge="end"
-                            checked={suggestOnSave}
-                            onChange={handleSuggestToggle}
-                            inputProps={{ 'aria-label': 'Suggest tags and links' }}
-                            sx={{
-                                '& .MuiSwitch-switchBase.Mui-checked': {
-                                    color: 'primary.main',
-                                },
-                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                                    backgroundColor: 'primary.main',
-                                },
-                            }}
-                        />
-                    }
-                    divider={false}
-                />
-            </SettingsSection>
-
             {/* Sketches */}
-            <SettingsSection title="Sketches">
+            <SettingsSection title="Handwriting">
                 <SettingsRow
                     icon={<SketchIcon sx={{ fontSize: 20, color: 'text.secondary' }} />}
-                    primary="Make sketches searchable automatically"
+                    primary="Make handwriting searchable automatically"
                     secondary={autoTranscribe
-                        ? 'On — about 90 seconds after you stop writing, the page is sent to OpenRouter to read the handwriting. Your drawing is never changed.'
-                        : 'Off — sketches are only read when you use Convert handwriting to text'}
+                        ? 'On — about 90 seconds after you stop writing, the page is sent to OpenRouter to read the handwriting. Your writing is never changed.'
+                        : 'Off — handwriting is only read when you use Convert handwriting to text'}
                     action={
                         <Switch
                             edge="end"
                             checked={autoTranscribe}
                             onChange={handleAutoTranscribeToggle}
-                            inputProps={{ 'aria-label': 'Make sketches searchable automatically' }}
+                            inputProps={{ 'aria-label': 'Make handwriting searchable automatically' }}
                             sx={{
                                 '& .MuiSwitch-switchBase.Mui-checked': {
                                     color: 'primary.main',

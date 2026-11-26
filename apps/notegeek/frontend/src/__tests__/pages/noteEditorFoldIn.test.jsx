@@ -109,8 +109,8 @@ describe('Fold in, from the editor', () => {
     expect(await screen.findByRole('menuitem', { name: 'Fold in new info' })).toBeInTheDocument();
   });
 
-  it('is not offered on a code note', async () => {
-    NOTE = base({ type: 'code', content: JSON.stringify({ language: 'js', code: 'x' }) });
+  it('is not offered on a sketch', async () => {
+    NOTE = base({ type: 'handwritten', content: '{}' });
     renderEditor();
     openMenu();
     await screen.findByRole('menuitem', { name: /version history/i });

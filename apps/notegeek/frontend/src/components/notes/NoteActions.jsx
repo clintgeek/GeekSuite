@@ -12,15 +12,13 @@ import {
   useTheme,
 } from '@mui/material';
 import { glow, tapTarget44 } from '../../theme/tokens';
-// Deep-import (see RichTextEditor.jsx for why) instead of the
+// Deep-import (see MarkdownEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import MoreHoriz from '@mui/icons-material/MoreHoriz';
 import SaveOutlined from '@mui/icons-material/SaveOutlined';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
-import Edit from '@mui/icons-material/Edit';
 import AutoAwesomeMosaic from '@mui/icons-material/AutoAwesomeMosaic';
 import HistoryIcon from '@mui/icons-material/History';
-import Visibility from '@mui/icons-material/Visibility';
 import ArrowBack from '@mui/icons-material/ArrowBack';
 import ChecklistOutlined from '@mui/icons-material/ChecklistOutlined';
 import TextSnippetOutlined from '@mui/icons-material/TextSnippetOutlined';
@@ -43,7 +41,6 @@ const PRINT_SHORTCUT = isMac ? '⌘P' : 'Ctrl+P';
  * shows where that stands). What remains:
  *
  *   - `BackButton` — flushes a pending save and leaves (the page's handler).
- *   - the View/Edit toggle, for mind maps only — a mode, not an action.
  *   - the ⋯ menu: Print or save as PDF, Pin, Version history, Save now,
  *     Fold in new info (saved Markdown notes), Compose, Convert handwriting
  *     to text (sketches only), Delete.
@@ -83,10 +80,7 @@ export function BackButton({ onBack }) {
 function NoteActions({
   onSave,
   onDelete,
-  onToggleEdit,
   canDelete = true,
-  canToggleEdit = false,
-  isEditMode = true,
   // Compose is offered only when the page can act on the result; no
   // handler means no menu item, so a note type that cannot be composed does
   // not advertise it.
@@ -146,19 +140,6 @@ function NoteActions({
 
   return (
     <>
-      {canToggleEdit && (
-        <Button
-          variant="text"
-          color="primary"
-          startIcon={isEditMode ? <Visibility /> : <Edit />}
-          onClick={onToggleEdit}
-          size="small"
-          sx={{ [TOUCH_TARGET_MEDIA]: { ...tapTarget44 } }}
-        >
-          {isEditMode ? 'View' : 'Edit'}
-        </Button>
-      )}
-
       <IconButton
         aria-label="More note actions"
         aria-haspopup="menu"
@@ -217,7 +198,7 @@ function NoteActions({
         )}
         {/* Save now is an escape hatch in an app that autosaves, not the
             first thing offered (review 2026-11-18). */}
-        {isEditMode && onSave && (
+        {onSave && (
           <MenuItem onClick={run(onSave)} sx={itemSx}>
             <ListItemIcon><SaveOutlined fontSize="small" /></ListItemIcon>
             <ListItemText>Save now</ListItemText>

@@ -54,17 +54,17 @@ describe('NoteMetaBar', () => {
             <NoteMetaBar title="" noteType="markdown" tags={[]} />,
             { wrapper: AllProviders }
         );
-        // Markdown is the default note, so the meta line just says "Note".
-        expect(screen.getByText('Note')).toBeInTheDocument();
+        // A typed note is the default, so the meta line says "Typed".
+        expect(screen.getByText('Typed')).toBeInTheDocument();
 
         // rerender reuses the original `wrapper`; re-wrapping would nest routers.
-        rerender(<NoteMetaBar title="" noteType="code" tags={[]} />);
-        expect(screen.getByText('Code')).toBeInTheDocument();
+        rerender(<NoteMetaBar title="" noteType="handwritten" tags={[]} />);
+        expect(screen.getByText('Handwritten')).toBeInTheDocument();
     });
 
     it('passes down props to TagSelector', () => {
         render(
-            <NoteMetaBar title="" noteType="text" tags={['work', 'important']} />,
+            <NoteMetaBar title="" noteType="markdown" tags={['work', 'important']} />,
             { wrapper: AllProviders }
         );
         expect(screen.getByTestId('tag-selector-mock')).toHaveTextContent('active - Tags: work, important');

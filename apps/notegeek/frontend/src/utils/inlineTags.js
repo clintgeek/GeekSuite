@@ -8,8 +8,7 @@
  * add box reads `#tags` the same way). What is read comes out in the suite
  * standard: `#GeekSuite` tags the note `geek-suite`.
  *
- * Applies to `markdown` and `text` (rich-text HTML) notes only — code, mind
- * maps and sketches have no prose to read. Additive only: deleting the text
+ * Applies to `markdown` notes only — sketches have no prose to read. Additive only: deleting the text
  * does not delete the tag; the chip is how a tag is removed.
  */
 import { findTagTokens, parseInlineTags, normalizeTag, TAG_MAX_LENGTH, TAGS_MAX } from '@geeksuite/tags';
@@ -17,16 +16,14 @@ import { findTagTokens, parseInlineTags, normalizeTag, TAG_MAX_LENGTH, TAGS_MAX 
 export { findTagTokens, TAG_MAX_LENGTH, TAGS_MAX };
 
 /** Which note types have inline tags read from their body. */
-export const INLINE_TAG_TYPES = new Set(['markdown', 'text']);
-export const supportsInlineTags = (type) => INLINE_TAG_TYPES.has(type || 'text');
+export const supportsInlineTags = (type) => type === 'markdown';
 
 /**
  * The inline tags in a note body, normalized, in first-seen order, deduped.
- * `markdown` notes are read as Markdown; `text` notes as their TipTap HTML.
  */
 export function extractInlineTags(content, type) {
   if (typeof content !== 'string' || !content || !supportsInlineTags(type)) return [];
-  return parseInlineTags(content, { format: type === 'markdown' ? 'markdown' : 'html' });
+  return parseInlineTags(content, { format: 'markdown' });
 }
 
 /** `geek-s` is a prefix of `geek-suite`; so is `https` of `http-server` (hyphens are word breaks, not typing). */

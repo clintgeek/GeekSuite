@@ -66,44 +66,10 @@ describe('NotePrintView', () => {
     expect(root.textContent).toContain('☐');
   });
 
-  it('rich text: the sanitized HTML', () => {
-    render(
-      <NotePrintView note={{ title: 'Rich', type: 'text', content: '<h2>Hello</h2><p>Body <strong>bold</strong></p><script>window.bad=1</script>' }} />,
-    );
+  it('a note of a type that is no longer offered prints as a markdown note', () => {
+    render(<NotePrintView note={{ title: 'Old', type: 'mindmap', content: '# Heading\n\nbody' }} />);
     const root = printRoot();
-    expect(root.querySelector('.ng-print-rich h2').textContent).toBe('Hello');
-    expect(root.querySelector('strong').textContent).toBe('bold');
-    expect(root.querySelector('script')).toBeNull();
-  });
-
-  it('a legacy plain body keeps its line breaks', () => {
-    render(<NotePrintView note={{ title: 'Old', type: null, content: 'line one\nline two' }} />);
-    const plain = printRoot().querySelector('.ng-print-plain');
-    expect(plain.textContent).toBe('line one\nline two');
-  });
-
-  it('code: the code, not the JSON envelope, and its language in the meta line', () => {
-    const content = JSON.stringify({ language: 'python', code: 'def f():\n    return 1' });
-    render(<NotePrintView note={{ title: 'Snippet', type: 'code', content }} />);
-    const root = printRoot();
-    expect(root.querySelector('pre.ng-print-code code').textContent).toBe('def f():\n    return 1');
-    expect(root.textContent).not.toContain('"language"');
-    expect(root.querySelector('.ng-print-meta').textContent).toContain('python');
-  });
-
-  it('mind map: a nested outline', () => {
-    const content = JSON.stringify({
-      nodes: [
-        { id: '0', position: { x: 0, y: 0 }, data: { label: 'GeekSuite', isRoot: true } },
-        { id: '1', position: { x: 0, y: 10 }, data: { label: 'NoteGeek' } },
-      ],
-      edges: [{ id: 'e', source: '0', target: '1' }],
-    });
-    render(<NotePrintView note={{ title: 'Map', type: 'mindmap', content }} />);
-    const root = printRoot();
-    const top = root.querySelector('.ng-print-outline > ul > li');
-    expect(top.firstChild.textContent).toBe('GeekSuite');
-    expect(top.querySelector('ul > li').textContent).toBe('NoteGeek');
+    expect(root.querySelector('.ng-print-md h1').textContent).toBe('Heading');
   });
 
   it('sketch: the exported images, one per page', () => {
@@ -115,7 +81,7 @@ describe('NotePrintView', () => {
     );
     const imgs = [...printRoot().querySelectorAll('.ng-print-sketch img')];
     expect(imgs.map((i) => i.getAttribute('src'))).toEqual(['blob:a', 'blob:b']);
-    expect(imgs[0]).toHaveAttribute('alt', 'Page 1 of the sketch');
+    expect(imgs[0]).toHaveAttribute('alt', 'Page 1 of the handwriting');
   });
 
   it('sketch without an export says so honestly, and shows the error when there is one', () => {

@@ -45,16 +45,16 @@ describe('skipSummary (U3)', () => {
     expect(skipSummary([
       { id: 'g', title: 'Garden plan', reason: 'locked' },
       { id: 's4', title: 'Sketch 4', reason: 'unsupported_type' },
-    ], byId)).toBe('2 notes left out: Garden plan (locked), Sketch 4 (a sketch)');
+    ], byId)).toBe('2 notes left out: Garden plan (locked), Sketch 4 (handwritten)');
   });
 
-  it('calls a mind map a mind map, and says empty / not found', () => {
+  it('says empty / not found, and "not text" for a type it cannot name', () => {
     const byId = new Map([['m', { id: 'm', type: 'mindmap' }]]);
     expect(skipSummary([
       { id: 'm', title: 'Apps', reason: 'unsupported_type' },
       { id: 'e', title: '', reason: 'empty' },
       { id: 'x', title: 'Gone', reason: 'not_found' },
-    ], byId)).toBe('3 notes left out: Apps (a mind map), Untitled (empty), Gone (not found)');
+    ], byId)).toBe('3 notes left out: Apps (not text), Untitled (empty), Gone (not found)');
   });
 
   it('is empty when nothing was left out', () => {
@@ -64,15 +64,14 @@ describe('skipSummary (U3)', () => {
 });
 
 describe('what the action bar counts as skipped (U2)', () => {
-  it('counts sketches, mind maps and locked or encrypted notes', () => {
+  it('counts sketches and locked or encrypted notes', () => {
     expect(composeSkipReason({ type: 'handwritten' })).toBe('unsupported_type');
-    expect(composeSkipReason({ type: 'mindmap' })).toBe('unsupported_type');
     expect(composeSkipReason({ type: 'markdown', isLocked: true })).toBe('locked');
-    expect(composeSkipReason({ type: 'text', isEncrypted: true })).toBe('locked');
+    expect(composeSkipReason({ type: 'markdown', isEncrypted: true })).toBe('locked');
   });
 
-  it('does not count prose: markdown, rich text, code, the legacy null type', () => {
-    for (const type of ['markdown', 'text', 'code', null, undefined]) {
+  it('does not count prose: markdown, the legacy null type', () => {
+    for (const type of ['markdown', null, undefined]) {
       expect(composeSkipReason({ type })).toBe(null);
     }
   });

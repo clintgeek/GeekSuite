@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box } from '@mui/material';
-import { noteTypeMeta } from './noteTypeMeta';
+import { noteTypeMeta, normalizeNoteType } from './noteTypeMeta';
 
 /**
  * TypeIcon — a note's type as a small graphite glyph with an accessible name
@@ -13,7 +13,8 @@ import { noteTypeMeta } from './noteTypeMeta';
  * every ground (graphics only need 3:1).
  */
 function TypeIcon({ type, size = 16, sx, ...rest }) {
-  const meta = noteTypeMeta(type || 'text');
+  const kind = normalizeNoteType(type);
+  const meta = noteTypeMeta(kind);
   const Icon = meta.Icon;
   return (
     <Box
@@ -21,7 +22,7 @@ function TypeIcon({ type, size = 16, sx, ...rest }) {
       role="img"
       aria-label={meta.aria || `${meta.long} note`}
       title={meta.long}
-      data-note-type={type || 'text'}
+      data-note-type={kind}
       sx={{
         display: 'inline-flex',
         alignItems: 'center',
