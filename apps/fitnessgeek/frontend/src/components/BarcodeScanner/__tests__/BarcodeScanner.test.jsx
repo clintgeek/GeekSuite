@@ -13,14 +13,11 @@ vi.mock('../../../services/fitnessGeekService', () => ({
 import { fitnessGeekService } from '../../../services/fitnessGeekService';
 import BarcodeScanner from '../BarcodeScanner.jsx';
 
-// None of this exercises a real camera (no getUserMedia ever succeeds) —
-// jsdom has no `navigator.mediaDevices`, so the component's own existing
-// fallback takes over on mount (`detectCameras()` sees
-// `!navigator.mediaDevices?.enumerateDevices`, sets a camera error and drops
-// to manual mode) and everything below tests that manual path: the
-// 8-14-digit validation, the barcode lookup, and the localStorage-backed
-// scan history. That fallback is what makes this component testable without
-// a camera at all.
+// This file is the camera-less half: jsdom has no `navigator.mediaDevices`, so
+// the scanner reports that it can't use the camera and drops to typing the
+// number. Everything below tests that path — the 8–14 digit rule, the lookup,
+// and the localStorage-backed history. The camera, the decoders and the photo
+// fallback are in BarcodeScannerCamera.test.jsx.
 
 const setup = (props = {}) =>
   render(
@@ -35,38 +32,24 @@ const setup = (props = {}) =>
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
-  // The mount effect always retries the camera ~100ms after
-  // detectCameras() settles, regardless of which mode it landed on (see
-  // BarcodeScanner.jsx's `useEffect` — it isn't gated on `mode`). Without a
-  // native BarcodeDetector, that retry falls into the ZXing branch, which
-  // appends a real `<script src="https://unpkg.com/...">` tag; jsdom never
-  // fires its onload/onerror, so the promise (and `isLoading`) hangs
-  // forever. Stubbing a native BarcodeDetector keeps the retry on the fast,
-  // synchronous-failure path (`navigator.mediaDevices` is undefined in
-  // jsdom, so `getUserMedia` throws immediately and the retry's `catch`
-  // clears `isLoading` right away) instead of the hanging one.
-  window.BarcodeDetector = class {
-    static getSupportedFormats() {
-      return Promise.resolve(['ean_13']);
-    }
-    detect() {
-      return Promise.resolve([]);
-    }
-  };
 });
 
 afterEach(() => {
   localStorage.clear();
-  delete window.BarcodeDetector;
 });
 
 describe('BarcodeScanner (camera-less environment)', () => {
   test('falls back to manual entry when the environment has no camera support', async () => {
     setup();
 
-    // jsdom exposes no navigator.mediaDevices, so detectCameras() reports
-    // "not supported" and the component switches itself to manual mode.
+    // jsdom exposes no navigator.mediaDevices, so the scanner says so and
+    // switches itself to typing.
     expect(await screen.findByPlaceholderText('8–14 digits')).toBeInTheDocument();
+    expect(
+      screen.getByText('FitnessGeek can’t use the camera here. Type the barcode instead.')
+    ).toBeInTheDocument();
+    // The photo route needs no camera permission, so it is still offered.
+    expect(screen.getByRole('button', { name: 'Take a photo instead' })).toBeInTheDocument();
   });
 
   test('rejects a barcode that fails the 8-14 digit format before calling the lookup service', async () => {

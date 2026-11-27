@@ -101,6 +101,15 @@ export default defineConfig({
         // updateSW) when the page is hidden, so the swap and reload happen
         // out of sight.
         skipWaiting: false,
+        // `wasm` is the barcode decoder (zxing-cpp, ~0.9 MB, emitted from
+        // components/BarcodeScanner/wasmDecoder.js). It is listed here so the
+        // worker PRECACHES it: the scanner is used in shops, where the signal
+        // is at its worst, and an iPhone has no other decoder. Workbox's
+        // default patterns are js/css/html only, so leaving it out would mean
+        // a network fetch the first time the scanner opens after each deploy.
+        // It must stay under `maximumFileSizeToCacheInBytes` below, or workbox
+        // drops it from the precache with only a build warning.
+        globPatterns: ['**/*.{js,css,html,wasm}'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',
         // Workbox's NavigationRoute (what navigateFallback registers) matches
@@ -174,8 +183,9 @@ export default defineConfig({
                   //
                   // Every hashed .js/.css is precached, so the exposure is the
                   // 38 hashed @fontsource .woff/.woff2 files (generateSW's
-                  // globPatterns do not match them) plus the cross-origin
-                  // ZXing script BarcodeScanner appends. Returning null from
+                  // globPatterns do not match them). (The barcode decoder used
+                  // to be a second one — a cross-origin script from unpkg; it
+                  // is bundled and precached now.) Returning null from
                   // cacheWillUpdate declines the write: the response still
                   // reaches the page, it just never becomes the cached copy.
                   //

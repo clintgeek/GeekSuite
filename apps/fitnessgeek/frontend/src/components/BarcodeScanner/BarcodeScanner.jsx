@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -7,26 +7,26 @@ import {
   Chip,
   CircularProgress,
   Alert,
-  IconButton,
-  Divider,
   Tabs,
   Tab,
-  useTheme,
-  useMediaQuery
+  ToggleButton,
+  ToggleButtonGroup
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
-  Close as CloseIcon,
   Keyboard as KeyboardIcon,
   CheckCircle as CheckCircleIcon,
   CameraAlt as CameraIcon,
+  PhotoCamera as PhotoIcon,
   FlashlightOn as TorchOnIcon,
   FlashlightOff as TorchOffIcon
 } from '@mui/icons-material';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
-import { loadZXing } from '../../utils/zxingLoader.js';
 import { errorMessage } from '../../utils/errorMessage.js';
-import './BarcodeScanner.css';
+import { normalizeProductCode } from './productCode.js';
+import { openRearCamera, prepareTrack, stopStream, guideRegion } from './camera.js';
+import { createDetector, decodePhotoFile } from './detector.js';
 
 // The scan history is a per-device convenience. Private windows and blocked
 // site data throw on access, and that must not take the add sheet down.
@@ -40,6 +40,35 @@ const readScanHistory = () => {
 };
 
 const CAMERA_UNAVAILABLE = 'FitnessGeek can’t use the camera here. Type the barcode instead.';
+const CAMERA_BLOCKED = 'FitnessGeek needs your camera to scan. Allow it in your browser settings, or type the barcode.';
+const SCANNER_NOT_LOADED = 'The scanner didn’t load. Check your signal and try again, or type the barcode.';
+const PHOTO_UNREADABLE = 'I couldn’t read a barcode in that photo. Try again a little further away, or type the number.';
+
+// How often the camera frame is checked. Ten looks a second is as fast as a
+// hand can settle a pack in the box; every animation frame (the old Android
+// loop) is six times the work for the same result and a warm phone.
+const SCAN_INTERVAL_MS = 100;
+
+// Every control is at least a thumb wide.
+const TAP = 44;
+
+const hasCameraApi = () => Boolean(navigator.mediaDevices?.getUserMedia);
+
+/** The first read that is a real product number, as the number to look up. */
+const firstProductCode = (reads) => {
+  for (const read of reads || []) {
+    const code = normalizeProductCode(read?.rawValue, read?.format);
+    if (code) return code;
+  }
+  return null;
+};
+
+const waitForElement = async (ref, tries = 40) => {
+  for (let i = 0; i < tries && !ref.current; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return ref.current;
+};
 
 const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
   const [error, setError] = useState(null);
@@ -47,136 +76,67 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
   const [scanHistory, setScanHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [mode, setMode] = useState('camera'); // 'camera' or 'manual'
-  const [isScanning, setIsScanning] = useState(false);
-  const [cameraDevices, setCameraDevices] = useState([]);
-  const [selectedCamera, setSelectedCamera] = useState(null);
+  // 'off' | 'starting' | 'scanning' | 'got'
+  const [phase, setPhase] = useState('off');
   const [cameraError, setCameraError] = useState(null);
-  const [torchOn, setTorchOn] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
-
-  // Reticle/viewport sizing keyed to the theme's own breakpoints (not a raw
-  // CSS media query — see BarcodeScanner.css, which used to carry its own
-  // 600/480/360px cutoffs independent of MUI's `sm` and could drift from it).
-  // `sm` is MUI's default 600px, so `down('sm')` reproduces the old 600px
-  // step exactly; 480/360 have no named breakpoint so `down(480)`/`down(360)`
-  // read them straight off the theme instead of a hardcoded stylesheet value.
-  const theme = useTheme();
-  const isPhone = useMediaQuery(theme.breakpoints.down('sm'));       // <600
-  const isSmallPhone = useMediaQuery(theme.breakpoints.down(480));   // <480
-  const isTinyPhone = useMediaQuery(theme.breakpoints.down(360));    // <360
-
-  let reticleSize = 200;
-  let cornerSize = 20;
-  let cornerBorderWidth = 3;
-  let scanLineDuration = '2s';
-  if (isPhone) {
-    reticleSize = 280;
-    cornerSize = 30;
-    cornerBorderWidth = 4;
-    scanLineDuration = '1.5s';
-  }
-  if (isSmallPhone) {
-    reticleSize = 240;
-    cornerSize = 25;
-    cornerBorderWidth = 3;
-  }
-  if (isTinyPhone) {
-    reticleSize = 200;
-    cornerSize = 20;
-    cornerBorderWidth = 2;
-  }
+  const [torchOn, setTorchOn] = useState(false);
+  const [zoom, setZoom] = useState(null); // null, or { base, close }
+  const [zoomedIn, setZoomedIn] = useState(false);
+  const [readingPhoto, setReadingPhoto] = useState(false);
 
   const videoRef = useRef(null);
+  const boxRef = useRef(null);
+  const guideRef = useRef(null);
+  const photoInputRef = useRef(null);
+  const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const scannerRef = useRef(null);
   const trackRef = useRef(null);
-  const isScanningRef = useRef(false); // For async callbacks
+  const timerRef = useRef(null);
+  // Each start gets a number; anything still running under an older number
+  // (a camera that opened after the dialog closed, a frame mid-decode) sees it
+  // has been overtaken and lets go.
+  const runRef = useRef(0);
+  const lastReadRef = useRef(null);
+  const resumeRef = useRef(false);
+  const phaseRef = useRef('off');
+  const modeRef = useRef(mode);
 
-  // Device detection
-  const isSamsungDevice = /Samsung|SM-|Galaxy/i.test(navigator.userAgent);
-  const isIOSDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const showPhase = (next) => {
+    phaseRef.current = next;
+    setPhase(next);
+  };
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   // Load scan history on mount
   useEffect(() => {
-    const history = readScanHistory();
-    setScanHistory(history.slice(0, 5));
+    setScanHistory(readScanHistory().slice(0, 5));
   }, []);
 
-  // Detect cameras and auto-start when dialog opens
-  useEffect(() => {
-    if (open && mode === 'camera') {
-      detectCameras().then(() => {
-        // Auto-start camera after a brief delay for state to settle
-        setTimeout(() => {
-          if (open && !isScanning) {
-            startScanner();
-          }
-        }, 100);
-      });
+  const stopScanner = useCallback(() => {
+    runRef.current += 1;
+    clearTimeout(timerRef.current);
+    timerRef.current = null;
+    lastReadRef.current = null;
+    stopStream(streamRef.current);
+    streamRef.current = null;
+    trackRef.current = null;
+    if (videoRef.current) {
+      try {
+        videoRef.current.srcObject = null;
+      } catch {
+        // Nothing attached.
+      }
     }
-    return () => {
-      stopScanner();
-    };
-  }, [open, mode]);
-
-  const detectCameras = async () => {
-    try {
-      if (!navigator.mediaDevices?.enumerateDevices) {
-        setCameraError('Camera access not supported in this browser');
-        setMode('manual');
-        return;
-      }
-
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(device => device.kind === 'videoinput');
-      setCameraDevices(videoDevices);
-
-      console.log('All cameras found:', videoDevices.map(d => ({ label: d.label, id: d.deviceId.substring(0, 8) })));
-
-      if (videoDevices.length === 0) {
-        setCameraError('No camera found');
-        setMode('manual');
-        return;
-      }
-
-      // Find back cameras - be more inclusive
-      const backCameras = videoDevices.filter(device => {
-        const label = device.label.toLowerCase();
-        // Include if it mentions back/rear, OR if it doesn't mention front
-        return label.includes('back') || label.includes('rear') ||
-               label.includes('environment') || !label.includes('front');
-      });
-
-      // Try to find the main camera (avoid ultra-wide for initial selection)
-      let optimalCamera = null;
-      if (backCameras.length > 1) {
-        optimalCamera = backCameras.find(device => {
-          const label = device.label.toLowerCase();
-          // Prefer cameras that don't have these keywords
-          const isProblematic = label.includes('ultra') ||
-                                label.includes('wide') ||
-                                label.includes('macro') ||
-                                label.includes('depth');
-          return !isProblematic;
-        });
-
-        if (!optimalCamera) {
-          optimalCamera = backCameras[0];
-        }
-      }
-
-      const selectedCam = optimalCamera || backCameras[0] || videoDevices[0];
-      setSelectedCamera(selectedCam);
-
-      console.log('Available cameras:', videoDevices.map(d => d.label));
-      console.log('Selected camera:', selectedCam?.label);
-    } catch (err) {
-      console.error('Error detecting cameras:', err);
-      setCameraError(CAMERA_UNAVAILABLE);
-      setMode('manual');
-    }
-  };
+    setHasTorch(false);
+    setTorchOn(false);
+    setZoom(null);
+    setZoomedIn(false);
+    if (phaseRef.current !== 'got') showPhase('off');
+  }, []);
 
   const saveToHistory = (barcode) => {
     const history = readScanHistory();
@@ -196,6 +156,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
     stopScanner();
 
     if (!/^[0-9]{8,14}$/.test(barcode)) {
+      showPhase('off');
       setError('A barcode is 8–14 digits. Check the number and try again.');
       return;
     }
@@ -232,179 +193,232 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
       setError(errorMessage(err, 'Couldn’t look up that barcode. Try again, or type the food.'));
     } finally {
       setIsLoading(false);
+      showPhase('off');
     }
   };
 
-  const startScanner = async () => {
+  // Kept in a ref so the scan loop, which outlives the render that started
+  // it, always calls the current one.
+  const detectedRef = useRef(handleBarcodeDetected);
+  detectedRef.current = handleBarcodeDetected;
+
+  /** A camera or photo read we believe: say so, then look it up. */
+  const acceptRead = (code) => {
+    showPhase('got');
+    try {
+      navigator.vibrate?.(60);
+    } catch {
+      // No buzzer (every iPhone). The frame says "Got it" instead.
+    }
+    detectedRef.current(code);
+  };
+
+  /** The slice of the live picture behind the guide box, on a canvas. */
+  const grabFrame = () => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2) return null;
+    const box = boxRef.current?.getBoundingClientRect?.();
+    const guide = guideRef.current?.getBoundingClientRect?.();
+    const region = guideRegion({
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
+      boxWidth: box?.width || 0,
+      boxHeight: box?.height || 0,
+      guideWidth: guide?.width || 0,
+      guideHeight: guide?.height || 0
+    });
+    if (!region) return null;
+    if (!canvasRef.current) canvasRef.current = document.createElement('canvas');
+    const canvas = canvasRef.current;
+    if (canvas.width !== region.w) canvas.width = region.w;
+    if (canvas.height !== region.h) canvas.height = region.h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(video, region.x, region.y, region.w, region.h, 0, 0, region.w, region.h);
+    return canvas;
+  };
+
+  const startScanner = useCallback(async () => {
+    stopScanner();
+    const run = runRef.current;
+    const current = () => run === runRef.current;
+
     setCameraError(null);
-    setIsLoading(true);
+    setError(null);
+    showPhase('starting');
+
+    // The decoder downloads (first time only) while the person is still
+    // answering the camera prompt.
+    const detectorPromise = hasCameraApi() ? createDetector() : null;
+    detectorPromise?.catch(() => {});
 
     try {
-      // Check for native BarcodeDetector API (Chrome 83+ on Android)
-      const hasNativeBarcodeDetector = 'BarcodeDetector' in window;
-      let useNativeDetector = false;
+      // THE one stream. Nothing else in the scanner opens a camera.
+      const camera = await openRearCamera();
+      if (!current()) {
+        stopStream(camera.stream);
+        return;
+      }
+      streamRef.current = camera.stream;
+      trackRef.current = camera.track;
 
-      if (hasNativeBarcodeDetector) {
+      const abilities = await prepareTrack(camera.track);
+      if (!current()) return;
+      setHasTorch(abilities.torch);
+      setZoom(abilities.zoom);
+
+      const video = await waitForElement(videoRef);
+      if (!current()) return;
+      if (video) {
+        video.srcObject = camera.stream;
         try {
-          const formats = await window.BarcodeDetector.getSupportedFormats();
-          useNativeDetector = formats.length > 0;
-          console.log('Native BarcodeDetector formats:', formats);
-        } catch (e) {
-          console.log('Native BarcodeDetector check failed:', e);
+          await video.play();
+        } catch {
+          // autoPlay starts it; a second play() racing the first is harmless.
         }
+        if (!current()) return;
       }
 
-      if (!useNativeDetector) {
-        // Load ZXing library as fallback. Pinned to an exact version and
-        // integrity-checked — see `utils/zxingLoader.js`.
-        const { BrowserMultiFormatReader, BarcodeFormat } = await loadZXing();
-
-        // Configure hints for better barcode detection
-        const hints = new Map();
-        hints.set(2, [  // DecodeHintType.POSSIBLE_FORMATS = 2
-          BarcodeFormat.EAN_13,
-          BarcodeFormat.EAN_8,
-          BarcodeFormat.UPC_A,
-          BarcodeFormat.UPC_E,
-          BarcodeFormat.CODE_128,
-          BarcodeFormat.CODE_39
-        ]);
-        hints.set(3, true);  // DecodeHintType.TRY_HARDER = 3
-
-        scannerRef.current = new BrowserMultiFormatReader(hints);
+      let detector;
+      try {
+        detector = await detectorPromise;
+      } catch {
+        if (!current()) return;
+        stopScanner();
+        setCameraError(SCANNER_NOT_LOADED);
+        setMode('manual');
+        return;
       }
+      if (!current()) return;
 
-      // Request camera with high resolution for better scanning
-      const constraints = {
-        video: {
-          ...(selectedCamera?.deviceId
-            ? { deviceId: { exact: selectedCamera.deviceId } }
-            : { facingMode: 'environment' }
-          ),
-          width: { ideal: 1920, min: 1280 },
-          height: { ideal: 1080, min: 720 },
-          frameRate: { ideal: 30, min: 15 },
-          focusMode: { ideal: 'continuous' }
+      showPhase('scanning');
+
+      // One look at a time: the next is only booked once this one has
+      // answered, so a slow phone falls behind instead of piling up.
+      const look = async () => {
+        if (!current()) return;
+        const began = Date.now();
+        try {
+          const frame = grabFrame();
+          if (frame) {
+            const reads = await detector.detect(frame);
+            if (!current()) return;
+            const code = firstProductCode(reads);
+            if (code) {
+              // A check digit catches nine misreads in ten. Seeing the same
+              // number twice running catches the tenth.
+              if (lastReadRef.current === code) {
+                acceptRead(code);
+                return;
+              }
+              lastReadRef.current = code;
+            }
+          }
+        } catch {
+          // A frame that would not decode is just a miss.
         }
+        if (!current()) return;
+        timerRef.current = setTimeout(look, Math.max(0, SCAN_INTERVAL_MS - (Date.now() - began)));
       };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-
-      const videoTrack = stream.getVideoTracks()[0];
-      trackRef.current = videoTrack;
-
-      // Check for torch capability
-      const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-      setHasTorch(!!capabilities.torch);
-      setTorchOn(false);
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-
-      setIsScanning(true);
-      isScanningRef.current = true;
-
-      // Start scanning - use native or ZXing
-      if (useNativeDetector) {
-        // Use native BarcodeDetector API
-        const barcodeDetector = new window.BarcodeDetector({
-          formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code']
-        });
-
-        console.log('Starting native BarcodeDetector scan loop');
-
-        const scanFrame = async () => {
-          if (!isScanningRef.current || !videoRef.current) {
-            return;
-          }
-
-          try {
-            const barcodes = await barcodeDetector.detect(videoRef.current);
-            if (barcodes.length > 0) {
-              const barcode = barcodes[0];
-              console.log('Barcode detected:', barcode.rawValue);
-              isScanningRef.current = false;
-              handleBarcodeDetected(barcode.rawValue);
-              return;
-            }
-          } catch (e) {
-            // Ignore detection errors
-          }
-
-          if (isScanningRef.current) {
-            requestAnimationFrame(scanFrame);
-          }
-        };
-
-        scannerRef.current = {
-          isNative: true,
-          stop: () => { isScanningRef.current = false; }
-        };
-
-        requestAnimationFrame(scanFrame);
-
-      } else {
-        // Use ZXing fallback
-        scannerRef.current.decodeFromVideoDevice(
-          null,
-          videoRef.current,
-          (result, error) => {
-            if (result) {
-              console.log('Barcode detected:', result.text);
-              handleBarcodeDetected(result.text);
-            }
-          }
-        );
-      }
+      look();
     } catch (err) {
-      console.error('Error starting scanner:', err);
-      setCameraError(err?.name === 'NotAllowedError'
-        ? 'FitnessGeek needs your camera to scan. Allow it in your browser settings, or type the barcode.'
-        : CAMERA_UNAVAILABLE);
+      if (!current()) return;
+      stopScanner();
+      setCameraError(err?.name === 'NotAllowedError' ? CAMERA_BLOCKED : CAMERA_UNAVAILABLE);
       setMode('manual');
-    } finally {
-      setIsLoading(false);
     }
-  };
+    // grabFrame/acceptRead only touch refs and setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopScanner]);
 
-  const stopScanner = () => {
-    setIsScanning(false);
-    isScanningRef.current = false;
-    trackRef.current = null;
+  // A fresh open starts on the camera with nothing left over from last time:
+  // a camera that was blocked then may have been allowed since.
+  useEffect(() => {
+    if (!open) return;
+    setError(null);
+    setCameraError(null);
+    setManualBarcode('');
+    showPhase('off');
+    if (hasCameraApi()) setMode('camera');
+  }, [open]);
 
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
+  // The camera runs only while the dialog is open on the camera tab, and is
+  // let go the moment either stops being true (and on unmount).
+  useEffect(() => {
+    if (open && mode === 'camera') startScanner();
+    return () => {
+      resumeRef.current = false;
+      stopScanner();
+    };
+  }, [open, mode, startScanner, stopScanner]);
 
-    // Handle both native detector and ZXing cleanup
-    if (scannerRef.current) {
-      if (scannerRef.current.isNative) {
-        scannerRef.current = null;
-      } else if (scannerRef.current.reset) {
-        scannerRef.current.reset();
-        scannerRef.current = null;
+  // Phone locked, app switched away: let the camera go, and pick it back up on
+  // return. iOS freezes a camera it finds running in the background.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (phaseRef.current === 'starting' || phaseRef.current === 'scanning') {
+          resumeRef.current = true;
+          stopScanner();
+        }
+      } else if (resumeRef.current) {
+        resumeRef.current = false;
+        if (modeRef.current === 'camera') startScanner();
       }
-    }
-
-    setTorchOn(false);
-    setHasTorch(false);
-  };
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [open, startScanner, stopScanner]);
 
   const toggleTorch = async () => {
     if (!trackRef.current) return;
-
     try {
-      const newTorchState = !torchOn;
-      await trackRef.current.applyConstraints({
-        advanced: [{ torch: newTorchState }]
-      });
-      setTorchOn(newTorchState);
-    } catch (e) {
-      console.log('Could not toggle torch:', e.message);
+      const next = !torchOn;
+      await trackRef.current.applyConstraints({ advanced: [{ torch: next }] });
+      setTorchOn(next);
+    } catch {
+      // The light stays as it was.
+    }
+  };
+
+  const changeZoom = async (event, wantClose) => {
+    if (wantClose === null || !trackRef.current || !zoom) return;
+    try {
+      await trackRef.current.applyConstraints({ advanced: [{ zoom: wantClose ? zoom.close : zoom.base }] });
+      setZoomedIn(wantClose);
+    } catch {
+      // The zoom stays as it was.
+    }
+  };
+
+  const openPhotoCamera = () => {
+    // The phone's own camera wants the lens to itself.
+    stopScanner();
+    setError(null);
+    photoInputRef.current?.click();
+  };
+
+  const handlePhotoChosen = async (event) => {
+    const file = event.target.files?.[0];
+    // Empty the input so choosing the same photo again still fires.
+    event.target.value = '';
+    if (!file) return;
+
+    stopScanner();
+    setError(null);
+    setReadingPhoto(true);
+    try {
+      const code = firstProductCode(await decodePhotoFile(file));
+      if (code) {
+        acceptRead(code);
+      } else {
+        setError(PHOTO_UNREADABLE);
+      }
+    } catch {
+      setError(PHOTO_UNREADABLE);
+    } finally {
+      setReadingPhoto(false);
     }
   };
 
@@ -420,6 +434,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
 
   const handleClose = () => {
     stopScanner();
+    showPhase('off');
     setError(null);
     setCameraError(null);
     setManualBarcode('');
@@ -435,99 +450,164 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
     }
   };
 
-  const renderCameraScanner = () => (
-    <Box sx={{ p: 2 }}>
-      {cameraError && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          {cameraError}
-        </Alert>
-      )}
+  const busy = isLoading || readingPhoto;
+  const got = phase === 'got';
 
-      <Box sx={{
-        position: 'relative',
-        width: '100%',
-        // Full width below `sm` (phone); constrained and centered at `sm`+ so
-        // the video doesn't stretch edge-to-edge in a wide dialog/tablet.
-        maxWidth: { xs: '100%', sm: 480 },
-        mx: { sm: 'auto' },
-        height: { xs: 280, sm: 320 },
-        backgroundColor: '#000',
-        borderRadius: 2,
-        overflow: 'hidden'
-      }}>
+  const photoButton = (
+    <Button
+      variant="outlined"
+      fullWidth
+      onClick={openPhotoCamera}
+      disabled={busy}
+      startIcon={readingPhoto ? <CircularProgress size={18} /> : <PhotoIcon />}
+      sx={{ minHeight: TAP }}
+    >
+      {readingPhoto ? 'Reading the photo…' : 'Take a photo instead'}
+    </Button>
+  );
+
+  const renderCameraScanner = () => (
+    <Box sx={{ p: 4 }}>
+      <Box
+        ref={boxRef}
+        data-testid="scanner-view"
+        sx={{
+          position: 'relative',
+          width: '100%',
+          // Full width on a phone; held to a sensible size in a wide dialog.
+          maxWidth: { xs: '100%', sm: 480 },
+          mx: 'auto',
+          height: { xs: 260, sm: 320 },
+          bgcolor: 'common.black',
+          borderRadius: '12px',
+          overflow: 'hidden'
+        }}
+      >
         <video
           ref={videoRef}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover'
-          }}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           autoPlay
           playsInline
           muted
         />
 
-        {isScanning && (
-          <div className="scanner-overlay" style={{ width: reticleSize, height: reticleSize }}>
-            <div
-              className="scanner-corners scanner-corner-tl"
-              style={{ width: cornerSize, height: cornerSize, borderWidth: cornerBorderWidth }}
-            ></div>
-            <div
-              className="scanner-corners scanner-corner-tr"
-              style={{ width: cornerSize, height: cornerSize, borderWidth: cornerBorderWidth }}
-            ></div>
-            <div
-              className="scanner-corners scanner-corner-bl"
-              style={{ width: cornerSize, height: cornerSize, borderWidth: cornerBorderWidth }}
-            ></div>
-            <div
-              className="scanner-corners scanner-corner-br"
-              style={{ width: cornerSize, height: cornerSize, borderWidth: cornerBorderWidth }}
-            ></div>
-            <div className="scan-line" style={{ animationDuration: scanLineDuration }}></div>
-          </div>
+        {/* The guide box. Wide and short, the shape of a barcode. What is
+            behind it (plus a margin) is the only part of the picture read. */}
+        {(phase === 'scanning' || got) && (
+          <Box
+            ref={guideRef}
+            data-testid="scanner-guide"
+            data-state={got ? 'got' : 'scanning'}
+            sx={(theme) => ({
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 'min(84%, 360px)',
+              height: '48%',
+              borderRadius: '12px',
+              border: '3px solid',
+              borderColor: got ? theme.palette.success.main : theme.palette.common.white,
+              boxShadow: `0 0 0 9999px ${alpha(theme.palette.common.black, got ? 0.7 : 0.45)}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: theme.palette.common.white,
+              transition: theme.transitions.create(['border-color', 'box-shadow'], { duration: 150 }),
+              '@media (prefers-reduced-motion: reduce)': { transition: 'none' }
+            })}
+          >
+            {got && (
+              <Box role="status" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                <CheckCircleIcon sx={{ fontSize: 40, color: 'success.light' }} />
+                <Typography sx={{ fontWeight: 700 }}>Got it</Typography>
+                {isLoading && (
+                  <Typography variant="body2" sx={{ opacity: 0.85 }}>Looking it up…</Typography>
+                )}
+              </Box>
+            )}
+          </Box>
         )}
 
-        {isLoading && (
-          <Box sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)'
-          }}>
-            <CircularProgress sx={{ color: 'white' }} />
+        {phase === 'starting' && (
+          <Box
+            role="status"
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 2,
+              color: 'common.white'
+            }}
+          >
+            <CircularProgress size={28} sx={{ color: 'common.white' }} />
+            <Typography variant="body2">Starting the camera…</Typography>
+          </Box>
+        )}
+
+        {phase === 'off' && (
+          <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {busy ? (
+              <CircularProgress size={28} sx={{ color: 'common.white' }} />
+            ) : (
+              <Button
+                variant="contained"
+                onClick={startScanner}
+                startIcon={<CameraIcon />}
+                sx={{ minHeight: TAP }}
+              >
+                Start camera
+              </Button>
+            )}
           </Box>
         )}
       </Box>
 
-      <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
-        <Button
-          variant={isScanning ? 'outlined' : 'contained'}
-          onClick={isScanning ? stopScanner : startScanner}
-          startIcon={isScanning ? <CloseIcon /> : <CameraIcon />}
-          disabled={isLoading}
-          sx={{ flex: 1 }}
-        >
-          {isScanning ? 'Stop camera' : 'Start camera'}
-        </Button>
-        {isScanning && hasTorch && (
-          <Button
-            variant={torchOn ? 'contained' : 'outlined'}
-            onClick={toggleTorch}
-            color={torchOn ? 'warning' : 'primary'}
-            aria-label={torchOn ? 'Turn the light off' : 'Turn the light on'}
-            sx={{ minWidth: 'auto', px: 2 }}
-          >
-            {torchOn ? <TorchOnIcon /> : <TorchOffIcon />}
-          </Button>
-        )}
-      </Box>
+      <Typography
+        variant="body2"
+        sx={{ mt: 3, color: 'text.secondary', textAlign: 'center', maxWidth: 480, mx: 'auto' }}
+      >
+        Hold the barcode inside the box. If it’s blurry, move back a little.
+      </Typography>
+
+      {phase === 'scanning' && (hasTorch || zoom) && (
+        <Box sx={{ mt: 3, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 2 }}>
+          {hasTorch && (
+            <Button
+              variant={torchOn ? 'contained' : 'outlined'}
+              onClick={toggleTorch}
+              aria-pressed={torchOn}
+              aria-label={torchOn ? 'Turn the light off' : 'Turn the light on'}
+              startIcon={torchOn ? <TorchOnIcon /> : <TorchOffIcon />}
+              sx={{ minHeight: TAP }}
+            >
+              Light
+            </Button>
+          )}
+          {zoom && (
+            <ToggleButtonGroup
+              exclusive
+              value={zoomedIn}
+              onChange={changeZoom}
+              aria-label="Zoom"
+              color="primary"
+            >
+              <ToggleButton value={false} aria-label="Normal zoom" sx={{ minHeight: TAP, minWidth: 56 }}>1×</ToggleButton>
+              <ToggleButton value aria-label="Zoom in" sx={{ minHeight: TAP, minWidth: 56 }}>2×</ToggleButton>
+            </ToggleButtonGroup>
+          )}
+        </Box>
+      )}
+
+      <Box sx={{ mt: 3, maxWidth: 480, mx: 'auto' }}>{photoButton}</Box>
     </Box>
   );
 
   const renderManualEntry = () => (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: 4 }}>
       <TextField
         label="Barcode"
         value={manualBarcode}
@@ -540,29 +620,33 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
         fullWidth
         autoFocus
         placeholder="8–14 digits"
-        disabled={isLoading}
+        inputProps={{ inputMode: 'numeric' }}
+        disabled={busy}
       />
       <Button
         variant="contained"
         onClick={handleManualSubmit}
-        disabled={!manualBarcode.trim() || isLoading}
+        disabled={!manualBarcode.trim() || busy}
         startIcon={isLoading ? <CircularProgress size={20} /> : <CheckCircleIcon />}
         fullWidth
-        sx={{ mt: 2 }}
+        sx={{ mt: 4, minHeight: TAP }}
       >
         {isLoading ? 'Looking up…' : 'Look up barcode'}
       </Button>
 
+      <Box sx={{ mt: 3 }}>{photoButton}</Box>
+
       {scanHistory.length > 0 && (
-        <Box sx={{ mt: 3 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>Recent scans</Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        <Box sx={{ mt: 6 }}>
+          <Typography variant="subtitle2" sx={{ mb: 2 }}>Recent scans</Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
             {scanHistory.map((b, i) => (
               <Chip
                 key={i}
                 label={b}
                 onClick={() => handleHistoryClick(b)}
                 variant="outlined"
+                sx={{ height: TAP, borderRadius: `${TAP / 2}px` }}
               />
             ))}
           </Box>
@@ -581,14 +665,14 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
       secondaryAction={<Button onClick={handleClose}>Cancel</Button>}
     >
         {/* Mode selector tabs */}
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 4 }}>
           <Tabs value={mode} onChange={handleModeChange} variant="fullWidth">
             <Tab
               value="camera"
               label="Camera"
               icon={<CameraIcon />}
               iconPosition="start"
-              disabled={cameraDevices.length === 0}
+              disabled={!hasCameraApi()}
             />
             <Tab
               value="manual"
@@ -599,11 +683,27 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
           </Tabs>
         </Box>
 
+        {cameraError && (
+          <Alert severity="warning" sx={{ m: 4, mb: 0 }}>{cameraError}</Alert>
+        )}
+
         {error && (
-          <Alert severity="error" sx={{ m: 2, mb: 0 }}>{error}</Alert>
+          <Alert severity="error" sx={{ m: 4, mb: 0 }}>{error}</Alert>
         )}
 
         {mode === 'camera' ? renderCameraScanner() : renderManualEntry()}
+
+        {/* The phone's own camera app. It focuses properly where the live
+            view cannot, and it needs no camera permission from the browser. */}
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handlePhotoChosen}
+          data-testid="scanner-photo-input"
+          hidden
+        />
     </PremiumDialog>
   );
 };
