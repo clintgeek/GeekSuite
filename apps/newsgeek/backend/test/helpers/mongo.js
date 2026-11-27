@@ -9,15 +9,16 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import Place from '../../src/models/Place.js';
 import Source from '../../src/models/Source.js';
 import Article from '../../src/models/Article.js';
+import Story from '../../src/models/Story.js';
 
 let server = null;
 
-export const models = { Place, Source, Article };
+export const models = { Place, Source, Article, Story };
 
 export async function startMongo() {
   server = await MongoMemoryServer.create();
   await mongoose.connect(server.getUri('newsgeek'));
-  await Promise.all([Place.init(), Source.init(), Article.init()]);
+  await Promise.all([Place.init(), Source.init(), Article.init(), Story.init()]);
   return models;
 }
 
@@ -28,5 +29,5 @@ export async function stopMongo() {
 }
 
 export async function clearAll() {
-  await Promise.all([Place.deleteMany({}), Source.deleteMany({}), Article.deleteMany({})]);
+  await Promise.all([Place.deleteMany({}), Source.deleteMany({}), Article.deleteMany({}), Story.deleteMany({})]);
 }

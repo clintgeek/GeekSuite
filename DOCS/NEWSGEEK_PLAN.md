@@ -4,7 +4,7 @@
 reader you wish Google News were") and the decisions below. Status: N0 live (ingest,
 Latest, Sources, reader-added sources, the Source sheet); the front page (Today, per-reader
 ranking) built 2026-10-11 ahead of clustering; ingest hygiene (platform throttle, path
-rules, excerpt boilerplate, display-time duplicate collapse) built 2026-10-11; N1 phase 1 (embeddings and the golden-set tools, `apps/newsgeek/DOCS/CLUSTERING.md`) built 2026-10-11; N1 phase 2 (story assignment) and N2 not started.*
+rules, excerpt boilerplate, display-time duplicate collapse) built 2026-10-11; N1 phase 1 (embeddings and the golden-set tools, `apps/newsgeek/DOCS/CLUSTERING.md`) built 2026-10-11; **N1 phase 2 (story assignment), coverage in the ranking and Top Stories built 2026-11-27** ("Stories on the front page" below); N2 (the story page, read state, Saved, follows) not started.*
 
 ## What it is
 
@@ -613,6 +613,11 @@ input NewsSourceInput { pathExclude: [String!] }   # admin only; replaces the li
 different events into one card destroys trust in the whole app. Every threshold leans
 toward keeping stories apart.
 
+*As built on 2026-11-27 this differs in four places; `apps/newsgeek/DOCS/CLUSTERING.md` "Phase 2"
+is the truth: (1) an unclustered article still shows; (2) candidates are every open story, not
+only those of one section; (3) the guard is a second cosine test against the story's first
+article, not a shared term; (4) no merge pass and no admin split yet.*
+
 Per new article:
 1. Embed `title + excerpt` (mxbai passage, 1024 dims). If the embeddings service is down,
    the article waits in a queue and doesn't appear until it's clustered. No fallback
@@ -692,29 +697,39 @@ page. Every article carries `section` and `why`. The duplicate wire rule (dedupe
 unchanged.
 
 ### The score (within a section)
+*Changed 2026-11-27 ("Stories on the front page" has the reasons and the measurements). Before:
+`(0.6 · freshness + 0.4 · locality) × priority`, with the gap clamped to [1 h, 3 days].*
 ```
-score     = (0.6 · freshness + 0.4 · locality) × priority
+score     = (0.4 · freshness + 0.3 · locality + 0.3 · coverage) × priority × kind
 freshness = exp(−(age / typicalGap) / 3) × max(0, 1 − age / window)
-typicalGap(source) = 7 days / max(1, its stories in the last 7 days), clamped to [1 h, 3 days]
+typicalGap(source) = 7 days / max(1, its stories in the last 7 days), clamped to [6 h, 1 day]
 window    = 10 days for Local, 7 days for every other section (nothing older shows)
-locality  = ring weight of the best matching entry: 1.0, 0.9, 0.75, 0.65, 0.55, 0.5, 0.45,
-            then 0.4 for entries 8–12; else 0.25 if any place is in Arkansas; else 0
+locality  = in Local: the ring weight of the best matching entry: 1.0, 0.9, 0.75, 0.65, 0.55,
+            0.5, 0.45, then 0.4 for entries 8–12;
+            in State and Around: 0.25 for any Arkansas place;
+            in National / World / Tech: 0.25 only when the story names an Arkansas place itself
+coverage  = log2(outlets that told the story in the last 48 h) / log2(8), at most 1 (alone = 0)
 priority  = ★ Favorite 3 · Normal 1 · Less 0.3
+kind      = a notice (official, not an active alert) 0.6 · a lone search result (an aggregator
+            item nobody else reported) 0.6 · a lone post from a title-only source 0.6 · else 1
 ```
-Freshness is **pace-normalised**: a 2-day-old story from a 7-a-week paper scores 0.37, a
-6-hour-old story from a 40-a-day wire 0.13, so the weekly paper's story is "fresh for it".
-The second factor is the hard absolute decay.
+Freshness is still **pace-normalised**, inside a tighter clamp: every story lives between 18 h
+and 3 days. At the same age the weekly paper's story is fresher than the firehose's, and a daily
+paper's evening story is still alive at breakfast. The second factor is the hard absolute decay.
+Age runs from when the story's words were first published: a paper that runs Tuesday's wire
+story on Thursday has not made it fresh.
 
 ### The fill (per section, greedy)
 1. **Active official alerts that are Local lead Local** (official source, `expiresAt` in the
    future), newest first. They are exempt from the per-source cap.
 2. Then **favourites' stories no older than 7 days**, by score.
 3. Then everything else by score (ties: newer first).
-- **The per-source cap depends on the block size** (`perSourceCap(quota)`, Chef 2026-10-11):
-  `PER_SOURCE_CAP` (5) for a block with a quota of 8 or more, otherwise `ceil(quota / 2)`. With
-  the defaults that is Local 5, State 3, National 3, World 2, Tech 2 and Around 2, so one busy
-  paper can't fill a five-slot block. A Google News item counts against its real publisher's
-  domain, not against the aggregator.
+- **The per-source cap** (`sourceCap(quota, priority)`, 2026-11-27; before, Chef 2026-10-11:
+  5 for a block of 8 or more, else half the block). A ★ Favorite may take **half the block**
+  (at most 5); any other source **a quarter of it**, at least one story. With the defaults a
+  favourite gets Local 4, State 3, National 3, World 2, Tech 2, Around 2, and every other source
+  Local 2 and 1 everywhere else. A Google News item counts against its real publisher's domain,
+  not against the aggregator.
 - **Quotas are caps, never targets.** Defaults: Local 8, State 5, National 5, World 3,
   Tech 4, Around 3 (`sectionQuotas`, per reader; 0–20). A quiet section stays short, an empty
   section is left out, and `moreCount` says how many stories in the window didn't fit.
@@ -725,8 +740,8 @@ The second factor is the hard absolute decay.
 `newsFrontPage` costs six reads: prefs, sources, the gazetteer, one 7-day count
 aggregation, the candidates (one find, scoring fields only) and the chosen stories.
 
-### Not yet (when clustering and read state land)
-- **coverage**: log(distinct publishers), so syndication can't inflate it;
+### Not yet (when read state lands)
+- ~~coverage~~: built 2026-11-27, see "Stories on the front page";
 - **follows**: a boost for followed terms; **mutes** remove a story outright;
 - a **briefing floor** (a minimum score), **spill-over** of unused slots, the
   `chronological` order, and read state (below). Until then the page ends honestly:
@@ -760,6 +775,106 @@ extend type Mutation {
 - **Source sheet + source page**: a Priority control, ★ Favorite / Normal / Less.
 - **Settings → Home places**: the ring, closest first, with move up/down, remove and
   "Add a place".
+
+## Stories on the front page (2026-11-27)
+
+*Chef, 2026-11-27: "tell me exactly what the hell is wrong with it and why I keep turning to an
+ad riddled Google News", then "Do whatever you think will fix this app before I give up on it."
+Everything in this section was decided by Sage under that mandate. Each rule is one constant or
+one function, so any of it can be turned back on Chef's word.*
+
+### What was measured (production, 2026-11-27)
+- **The big stories were not on the page.** The eight most-covered stories of each morning
+  (articles grouped by the vectors already stored) against that morning's Today, 7am Central:
+  Nov 23 **0 of 8** (Democrats clinch the House, 11 outlets: not shown), Nov 24 3 of 8, Nov 25
+  1 of 8, Nov 26 0 of 8.
+- **All 48,672 articles had a vector and none had a story.** N1 phase 2 was never built.
+- **The ranking rewarded whoever publishes least.** With the gap clamped to [1 h, 3 days], a
+  Sentinel-Record story was dead in three hours and an agenda feed's stayed fresh for nine
+  days. Over ten mornings Local was five Arkadelphian stories plus three notices, search results
+  or press releases ("Civil Service Commission Meeting", a MaxPreps listing, openPR), and held
+  **no** Sentinel-Record, KATV, KARK, THV11 or Democrat-Gazette story.
+- 38 % of a week's articles had no excerpt and 32 % were Google News redirect links (7 of the
+  27 stories on Today). World was always exactly two BBC stories: BBC was the only world-first
+  source. Eight sources were `broken` and had not been polled for six weeks.
+
+### Stories
+- The backend gives articles about one event the same `storyId`
+  (`apps/newsgeek/DOCS/CLUSTERING.md` "Phase 2"). The gateway reads only `Article.storyId`; it
+  never reads the `stories` collection.
+- **An article with no story yet still shows, on its own.** (The plan's "doesn't appear until
+  it's clustered" was dropped: a dead embeddings service must not empty the paper.)
+- On **Today**, every article of one story is ONE item (`dedupe.js` `collapseStories`). The
+  title-key duplicate collapse still runs first, so copies of one headline are one *telling*.
+- **Voices** = the distinct outlets that told the story. A telling is credited to whoever had it
+  first, so AP copy on three stations is one voice (AP's), and twelve articles from The Hill are
+  one voice. Official sources never join a story.
+- The item shows **"N sources"** as its first why-chip (N = outlets in the last 48 h, when 2 or
+  more) and lists the other outlets under "Also in", one link per outlet, at most 5.
+- **Everything and the section pages are unchanged**: one article per row, the title-key collapse
+  within a page. So "More Local →" can list as separate rows what Today showed as one story.
+
+### The story's section: a vote, one per outlet
+- A **strong** vote is earned by the article: Local by a ring place of its own, State by an own
+  Arkansas place, or the label of a national / world / tech newsroom.
+- A **weak** vote is a label that says where the paper is, not where the story is: the hometown
+  paper or a statewide station with no place of its own in the text, and anything through an
+  aggregator (AP and Reuters reach us as searches labelled national, whatever they report).
+- Strong votes decide. With none: the wire rule (nobody names an Arkansas place and some source
+  is national or world first → that section); else agreement; else, when home papers disagree,
+  **Local** if the reader's own paper ran it and no more statewide outlets did than hometown
+  ones, otherwise **State**. Ties go to the earlier front-page section.
+- So: four Little Rock stations on one arson arrest → Local, one item. A national story with one
+  "Little Rock reacts" piece → National. A Medicaid bill in The Arkadelphian, KATV and KARK →
+  State.
+
+### The story's representative (the headline shown)
+In order: words that are in the story's section (a station's copy of a wire story counts as the
+wire's words); a ★ Favorite whose own telling is in that section; one from the story's last
+24 h; the report over a live blog, video or podcast; anything over a hard paywall; a typical
+headline over an angle (word overlap with the other outlets' headlines); a link that serves the
+reader (direct and free, then metered, then a search result or a title-only post, then a hard
+paywall); an outlet that is itself in the section; a newsroom whose beat it is; then the newest
+words.
+
+**The ★ Favorite boost is for the favourite's own beat.** When the favourite's copy of a story
+from another section is the one shown (The Arkadelphian's copy of a statehouse story, in State),
+it gets no ×3, no lead and no chip there.
+
+### Wire copy (Today only)
+An article whose byline is a wire service (Associated Press, Reuters, Stateline…) inherits
+nothing from the paper that carried it. Naming no Arkansas place, it is **National**, with no
+town chip. Before, the Sentinel-Record's AP story on tariffs was Local with a "Hot Springs" chip.
+The section pages do not apply this (their Mongo filter has no byline rule).
+
+### Top Stories
+- The first block of Today, key `top`, title "Top Stories", at most **5**.
+- A story qualifies with **3 or more outlets in the last 48 h**, ranked by
+  `log2(outlets) × exp(−hours since its newest telling / 18) × (1 + 0.5 · locality)`.
+- A story printed there is **not printed again** in its own section. Its chips say how many told
+  it and where it would otherwise be: "12 sources · National".
+- No "More →" link: it has no section page. A reader whose sources never overlap gets no Top
+  Stories, and the paper is as before. An active alert stays at the head of Local.
+- Local still comes straight after it. This is the one place the paper stops being "local
+  first"; move `top` after `local` in `rankFrontPage` to turn that back.
+
+### Sources and ingest
+- **Four world sources** (each fetched 2026-11-27 with the honest UA, free to read): The
+  Guardian world feed (`guardian-world`, the same outlet as `guardian-us`), Al Jazeera, DW,
+  France 24. 99 seeded sources.
+- **A broken source is still tried once a day** and goes back to `active` when it answers.
+  Before, only `active` sources were polled, so broken was for ever.
+- An item whose title is only a media file's name ("IMG_7944#2.jpg") is dropped
+  (`drops.file_title`). Capital-letter entities are decoded ("&Aacute;brego").
+
+### Not built (the honest list)
+- The story page (`/story/:id`), read state, Saved, follows and mutes: N2, as before.
+- Story grouping on Everything and the section pages.
+- Google News links are still redirect wrappers with no excerpt. A story told only by AP or
+  Reuters is still shown through one.
+- No images. No LLM summaries.
+- The significant-term guard from "Clustering" below: the October golden set showed it barely
+  helps. A seed test replaced it (CLUSTERING.md).
 
 ## Read state (written down so it can't drift)
 
@@ -869,7 +984,7 @@ deserts, and that's the honest picture.
 | Phase | Done when |
 |---|---|
 | **N0 Skeleton + ingest** | Scaffold, schemas, gateway module, full registration checklist, deployed. Backend polls the verified starter feeds and stores articles. The Sources screen shows live health. A week of real data starts piling up. |
-| **N1 Clustering** | Embeddings + join/merge running. Golden set labelled from N0's week, thresholds chosen from it, and tests that go red when the threshold or guard is broken (revert-and-confirm-red). |
+| **N1 Clustering** | Embeddings + join/merge running. Golden set labelled from N0's week, thresholds chosen from it, and tests that go red when the threshold or guard is broken (revert-and-confirm-red). **Built 2026-11-27** without the nightly merge pass and the admin split; the threshold was read on live stories, not re-measured on the golden set (CLUSTERING.md). |
 | **N2 Briefing** | Briefing, Story, Section, Saved, Settings, read state, follow/mute, why-chips. Harness scenes, run locally with `--enforce-a11y`. |
 | **N3 Coverage + polish** | Coverage table, stale-feed detection, retention purge, StartGeek dock (Chef's call). |
 | **Phase 2** | LLM cluster summaries via aiGeek (`need:`, every claim linked to an article), "what's new since you looked", story timelines, the non-RSS ingest kinds below, thumbnails through a proxy, a source discovery helper. |

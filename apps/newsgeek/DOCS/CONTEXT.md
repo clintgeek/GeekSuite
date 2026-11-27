@@ -9,9 +9,9 @@ at the repo root. This file is a dated decision log, and it should stay honest.
 |---|---|---|
 | Public host | `newsgeek.clintgeek.com` | nginx vhost: `/` → :1830, `/graphql` → basegeek :8987 (the frontend calls a relative `/graphql`) |
 | Container | `newsgeek`, image `ghcr.io/clintgeek/newsgeek:latest` | host port **1830**; dev frontend 1831 |
-| Database | Mongo `newsgeek`: `sources`, `places`, `articles`, `prefs` (per reader) | Shared definitions are in `@geeksuite/schemas/newsgeek/*`. Add fields there, never in a model file. |
+| Database | Mongo `newsgeek`: `sources`, `places`, `articles`, `prefs` (per reader), `stories` (2026-11-27, written by the backend only) | Shared definitions are in `@geeksuite/schemas/newsgeek/*`. Add fields there, never in a model file. |
 | Gateway | `apps/basegeek/packages/api/src/graphql/newsgeek/` | Reads need any signed-in user. Any reader may add a source (off for others); its adder may edit it; everything else needs an admin (`requireAdminUser`). |
-| Backend | `apps/newsgeek/backend` (`newsgeek-server`) | auth proxy, `/api/health`, `POST /api/discover`, the static frontend, the **ingest worker**, the retention purge. Every outbound request goes through the SSRF guard (`src/lib/safeFetch.js`). |
+| Backend | `apps/newsgeek/backend` (`newsgeek-server`) | auth proxy, `/api/health`, `POST /api/discover`, the static frontend, the **ingest worker**, the **embedding indexer**, the **story assigner**, the retention purge. Every outbound request goes through the SSRF guard (`src/lib/safeFetch.js`). |
 | Frontend | `apps/newsgeek/frontend` (`newsgeek-frontend`) | "County Gazette": Newsreader + Libre Franklin, newsprint `#F4F0E6`, blue reserved for *official* |
 
 ## The ingest worker
@@ -28,6 +28,9 @@ at the repo root. This file is a dated decision log, and it should stay honest.
 - **Backoff:** each failure doubles the interval, capped at 6h. `Retry-After` wins when it
   asks for longer (capped at 24h). After 12 consecutive failures the source goes `broken`.
   Status is per *source*, so one dead NPR feed marks all of NPR broken.
+- **Broken is not for ever (2026-11-27).** A broken source's feeds are still tried **once a
+  day**, and the first one that answers puts the source back to `active`. Before, only
+  `active` sources were polled. `worker.activeSources` in `/api/health` counts active ones only.
 - **Stale:** an OK fetch with no new item for longer than max(7 × median gap, 3 days).
   NWS is exempt.
 - **Seed:** insert-if-absent by slug, on every boot. It never overwrites an existing row.
@@ -41,7 +44,9 @@ at the repo root. This file is a dated decision log, and it should stay honest.
 - **Required:** `MONGODB_URI` (db `newsgeek`), `JWT_SECRET` (the suite's shared secret),
   `BASEGEEK_URL`.
 - **Optional:** `LOG_LEVEL`, `BASEGEEK_TIMEOUT_MS`, `CSRF_GUARD`, `CORS_ORIGINS`,
-  `INGEST_DISABLED`, `INGEST_CONCURRENCY`, `PURGE_DISABLED`.
+  `INGEST_DISABLED`, `INGEST_CONCURRENCY`, `PURGE_DISABLED`, `EMBEDDINGS_URL` (default
+  `http://datageek_embeddings:11434`), `EMBEDDINGS_MODEL` (experiments only), `EMBED_DISABLED`,
+  `STORIES_DISABLED`. None is needed in production: the defaults are production's.
 
 A new variable only takes effect after `docker compose up -d` in `apps/newsgeek/`.
 Watchtower recreates the container with its old env.
@@ -368,3 +373,72 @@ Little Rock, Texarkana, Conway and the southern half of the state.
   does not move until it is tapped. Scroll position is remembered across article opens.
 - A failed "older stories" load says so, with a retry.
 - Deploy order: gateway first (the UI selects `nextCursor`).
+
+### 2026-11-27: stories, coverage in the ranking, Top Stories, feeds that come back
+
+Chef: "tell me exactly what the hell is wrong with it and why I keep turning to an ad riddled
+Google News", then "Do whatever you think will fix this app before I give up on it." The
+measurements and every rule are in the plan's "Stories on the front page (2026-11-27)".
+
+- **What was wrong, measured:** the eight most-covered stories of a morning were on Today 0, 3,
+  1 and 0 times out of 8 over four mornings; 48,672 articles had vectors and none had a story;
+  the pace-normalised freshness made a daily paper's story dead in three hours, so for ten
+  mornings Local held no Sentinel-Record, KATV, KARK, THV11 or Democrat-Gazette story; eight
+  sources had been `broken`, and so never polled, for six weeks.
+- **Built, backend** (the newsgeek image):
+  - **The story assigner** (`src/jobs/storyAssigner.js`, rule in `src/cluster/stories.js`,
+    details in `CLUSTERING.md` "Phase 2"). Every 60 s it gives each article that has a vector
+    and no story a `storyId`, oldest first, and writes the `stories` collection. It looks back
+    **14 days**; older articles never get a story and still show on their own.
+  - `/api/health` → `stories: { enabled, lastRunAt, lastRunAssigned, lastRunJoined, pending,
+    lastError }`.
+  - The daily purge also strips the vectors of stories closed for 21 days and deletes stories
+    past retention.
+  - Broken sources retried daily (above). Four world sources. File-name titles dropped.
+    Capital-letter entities decoded.
+  - A new index on `articles`: `{ storyId: 1, publishedAt: 1 }` (the assigner's queue). It is
+    built at boot by `Article.init()`.
+- **Built, gateway** (the basegeek image; `graphql/newsgeek/ranking.js`, `dedupe.js`):
+  `newsFrontPage` groups by `storyId`, scores with coverage, and leads with `top`. **No schema
+  change**: "N sources" is a why-chip, the other outlets are `alsoIn`, and `top` is one more
+  `NewsFrontSection`. The live UI renders all of it as it is, so there is no UI change set.
+- **Deploy order: none.** The gateway treats a missing `storyId` as "on its own", so either
+  image can go first. Until the backend has assigned stories, Today is the old paper with the
+  new scoring.
+- **After the deploy** (nothing to run by hand):
+  ```
+  curl -s http://localhost:1830/api/health | jq .stories
+  ```
+  `pending` starts near 12,000 (14 days of articles) and drains in batches of 400 within a
+  20 s budget per minute. Measured on the live box on 2026-11-27 as a dry run: 12,600 articles
+  into 8,800 stories in about 50 s of work, so expect it empty within about ten minutes.
+  `lastError` stays null. The eight broken sources are each tried once on the first ticks (the
+  six Blox ones one per tick, through the platform throttle), then daily.
+- **Turning it off:** `STORIES_DISABLED=1` in `.env.production`, then `docker compose up -d`
+  in `apps/newsgeek/` (Watchtower keeps the old env). Articles keep the stories they have.
+- **Undoing it** (nothing here deletes an article):
+  - the ranking: revert the gateway commit;
+  - the data, if ever wanted: `db.articles.updateMany({}, { $set: { storyId: null } })` and
+    `db.stories.drop()`. With the assigner on, it simply rebuilds the last 14 days.
+- **Changing JOIN or SEED_FLOOR** (`cluster/stories.js`) only affects articles assigned
+  afterwards. To re-cluster, undo the data as above and let it rebuild.
+- **Known and left:**
+  - Everything and the section pages do not group by story (the plan lists this).
+  - A story told only by AP or Reuters is shown through a Google News redirect, with no
+    excerpt.
+  - Wire copy with no wire byline (THV11's, some of the Democrat-Gazette's) is still filed
+    under State.
+  - The threshold was read by hand on live stories (the numbers are beside the constants);
+    the October golden set (200 labelled pairs) was in a session scratchpad and is gone, so
+    nothing was re-measured against it.
+  - Titles stored before today keep "&Aacute;" until they age out.
+- **Tests:** backend 296 (was 264); gateway NewsGeek suites 261 (was 207), the full api suite
+  3,936 in 198 suites; 41 revert-checks (a rule broken on purpose), each red. Two of the first
+  tests written for the favourite rules passed either way and were rewritten until they did not.
+- **Checked on live data, read-only, before anything was deployed:** the rule and the ranking
+  were run inside the newsgeek container over the last 14 days of articles (nothing written),
+  and Today was replayed for the last four mornings. Top Stories held: Nov 23 the House
+  majority, a cartel capture, the climate talks; Nov 24 Nvidia's CEO (15 outlets); Nov 25 the
+  Huawei verdict; Nov 26 Ábrego García, the Iowa detonation, SpaceX. Local held the Little
+  Rock arson arrest (4 outlets, one item) and a Garland County felony beside The Arkadelphian.
+

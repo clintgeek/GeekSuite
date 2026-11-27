@@ -374,3 +374,52 @@ describe('newsArticles(section) uses the same per-story section', () => {
     expect(walled.hiddenPaywalled).toBe(1); // the state one is not on this page
   });
 });
+
+describe('stories on Today (2026-11-27)', () => {
+  const STORY_FRONT = `{ newsFrontPage { sections { key title moreCount items { title section why sourceName alsoIn { publisher } } } } }`;
+  const storyFront = async () => (await ok(STORY_FRONT)).newsFrontPage.sections;
+
+  it('articles the backend gave one story are one item; three outlets make it a Top Story, printed once', async () => {
+    await setHome(['arkadelphia', 'clark']);
+    const hill = await mkSource({ name: 'The Hill', sections: ['national'], places: [P.us._id] });
+    const pbs = await mkSource({ name: 'PBS NewsHour', sections: ['national'], places: [P.us._id] });
+    const npr = await mkSource({ name: 'NPR', sections: ['national'], places: [P.us._id] });
+    const big = new mongoose.Types.ObjectId();
+    const small = new mongoose.Types.ObjectId();
+    await mkArticle(hill, { title: 'Court strikes down the tariff order', storyId: big, age: 3 * H });
+    await mkArticle(pbs, { title: 'Justices void the tariff order', storyId: big, age: 2 * H });
+    await mkArticle(npr, { title: 'Supreme Court rules against the tariff order', storyId: big, age: H });
+    await mkArticle(hill, { title: 'Senate passes the farm bill', storyId: small, age: 2 * H });
+    await mkArticle(pbs, { title: 'Farm bill clears the Senate', storyId: small, age: H });
+    await mkArticle(npr, { title: 'A story nobody else told' });
+
+    const sections = await storyFront();
+    expect(sections.map((s) => [s.key, s.title, s.items.length])).toEqual([['top', 'Top Stories', 1], ['national', 'National', 2]]);
+    const top = sections[0].items[0];
+    expect(top.why).toEqual(['3 sources', 'National']);
+    expect(top.section).toBe('national');
+    expect([top.sourceName, ...top.alsoIn.map((a) => a.publisher)].sort()).toEqual(['NPR', 'PBS NewsHour', 'The Hill']);
+    expect(sections[0].moreCount).toBe(0);
+    const national = sections[1].items;
+    expect(national.map((i) => i.why)).toEqual(expect.arrayContaining([['2 sources'], []]));
+    expect(national.flatMap((i) => [i.title, ...i.alsoIn.map(() => null)]).filter(Boolean)).not.toContain(top.title);
+  });
+
+  it('an article with no story yet shows on its own, exactly as before', async () => {
+    await seedPaper();
+    await setHome(['arkadelphia', 'clark', 'hot-springs', 'little-rock', 'garland']);
+    const sections = await storyFront();
+    expect(sections.map((s) => s.key)).toEqual(['local', 'state', 'national', 'tech', 'around']);
+  });
+
+  it('wire copy in the hometown paper is National, without the town’s chip', async () => {
+    await setHome(['hot-springs', 'garland']);
+    const sentinel = await mkSource({ name: 'Sentinel-Record', places: [P.garland._id, P['hot-springs']._id] });
+    await mkArticle(sentinel, { title: 'Wall Street recovers most early losses', author: 'The Associated Press' });
+    await mkArticle(sentinel, { title: 'Garland County man charged after stabbing', author: 'Staff Reports' });
+    const sections = await storyFront();
+    const by = Object.fromEntries(sections.map((s) => [s.key, s.items]));
+    expect(by.local.map((i) => i.title)).toEqual(['Garland County man charged after stabbing']);
+    expect(by.national.map((i) => [i.title, i.why])).toEqual([['Wall Street recovers most early losses', []]]);
+  });
+});

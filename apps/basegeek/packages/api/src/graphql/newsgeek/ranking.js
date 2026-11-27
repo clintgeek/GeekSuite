@@ -33,40 +33,70 @@
  *    A reader with NO ring keeps the old rule: local = labelled local; state =
  *    any Arkansas place (own or inherited) or labelled state; no `around`.
  *
- * 3. THE SCORE, within a section:
- *      score = (FRESHNESS_SHARE·freshness + LOCALITY_SHARE·locality) × priority
+ * 3. THE SCORE, within a section (2026-11-27: coverage, the pace clamp, the
+ *    kind weight; before, freshness 0.6 + locality 0.4 and nothing else):
+ *      score = (FRESHNESS_SHARE·freshness + LOCALITY_SHARE·locality
+ *               + COVERAGE_SHARE·coverage) × priority × kind
  *    - freshness is PACE-NORMALISED: typicalGap = 7 days / max(1, the source's
- *      stories in the last 7 days), clamped to [1 h, 3 days];
+ *      stories in the last 7 days), clamped to [6 h, 1 day];
  *      freshness = exp(−(age / typicalGap) / PACE_DECAY) × max(0, 1 − age / window).
- *      So a 2-day-old story from a 7-a-week paper is "fresh for it", and a
- *      6-hour-old story from a 40-a-day wire is not. The second factor is the
- *      hard absolute decay: nothing older than the window scores or shows.
- *      Windows: local 10 days, every other section 7.
- *    - locality = RING_WEIGHTS[best ring index] (entries past the table get
- *      RING_WEIGHT_FLOOR); else ARKANSAS_WEIGHT if any place is in Arkansas;
- *      else 0.
- *    - priority = PRIORITY_WEIGHT[favorite | normal | less].
+ *      So every story lives between 18 h and 3 days: the weekly paper's is
+ *      fresher than the firehose's at the same age, and the daily paper's
+ *      evening story is still alive at breakfast. (With the old clamp,
+ *      [1 h, 3 days], it was dead in three hours and an agenda feed's stayed
+ *      fresh for nine days.) The second factor is the hard absolute decay:
+ *      nothing older than the window scores or shows. Windows: local 10 days,
+ *      every other section 7. Age runs from when the story's words were first
+ *      published (`toldAt`): a late copy of a wire story is not fresh.
+ *    - locality is earned IN THE STORY'S SECTION (sectionLocality): in Local,
+ *      RING_WEIGHTS[best ring index] (entries past the table get
+ *      RING_WEIGHT_FLOOR); in State and Around, ARKANSAS_WEIGHT for any
+ *      Arkansas place; in National / World / Tech, ARKANSAS_WEIGHT only when
+ *      the story names an Arkansas place itself.
+ *    - coverage = log2(voices) / log2(COVERAGE_FULL_VOICES), at most 1, where
+ *      voices are the distinct outlets that told the story in the last
+ *      VOICE_WINDOW_HOURS (dedupe.js collapseStories; 1 = alone → 0).
+ *    - priority = PRIORITY_WEIGHT[favorite | normal | less]. A ★ Favorite is
+ *      boosted on its own beat only: its copy of a statehouse story, shown in
+ *      State, ranks and reads as any other source's.
+ *    - kind (kindWeight): a notice (an official source's item that is not an
+ *      active alert) × OFFICIAL_WEIGHT; a lone search result (an aggregator
+ *      item nobody else reported) × LONE_AGGREGATOR_WEIGHT; a lone post from
+ *      a title-only source × LONE_TITLE_ONLY_WEIGHT; everything else × 1.
  *
  * 4. THE FILL, per section, greedy down this order:
  *    - active official alerts (an NWS alert: official, `expiresAt` in the
  *      future) that are Local lead Local, newest first, exempt from the cap;
  *    - then favourites' stories no older than FAVORITE_LEAD_DAYS, by score;
  *    - then everything else by score (ties: newer first).
- *    At most perSourceCap(quota) stories per source per section (PER_SOURCE_CAP
- *    for a block of 8 or more, else half the block rounded up); an aggregator
- *    (Google News) item counts against its real publisher's domain, not
- *    against the aggregator. The section's quota is a CAP, never a target: a
- *    quiet section stays short, and an empty one is left out.
+ *    At most sourceCap(quota, priority) stories per source per section: half
+ *    the block for a ★ Favorite (at most PER_SOURCE_CAP), a quarter for any
+ *    other source (at least one). An aggregator (Google News) item counts
+ *    against its real publisher's domain, not against the aggregator. The
+ *    section's quota is a CAP, never a target: a quiet section stays short,
+ *    and an empty one is left out.
  *
- * 4b. DUPLICATES (2026-10-11, dedupe.js): the resolver passes `collapse`, and
- *    a group of copies of one story (AP across three sites) is ranked as ONE
- *    candidate — its representative, in the GROUP's section (the wire rule)
- *    — so it counts once against its representative's source cap and quota.
+ * 4b. STORIES (dedupe.js; duplicates 2026-10-11, stories 2026-11-27): the
+ *    resolver passes `collapse`, and every article about one event (the
+ *    backend's `storyId`), or every copy of one headline, is ranked as ONE
+ *    candidate: its representative, in the STORY's section (a vote), counted
+ *    once against its representative's source cap and the quota.
  *
- * 5. WHY. Every story carries the chips that explain its score: the ring place
- *    that made it local ("Arkadelphia"), "Arkansas" when that is its locality,
- *    "★ Favorite" / "Less", "Official". If it can't be a chip it isn't in the
- *    score.
+ * 4c. TOP STORIES: the TOP_QUOTA stories with the most voices in the window
+ *    (at least TOP_MIN_VOICES), by topScore = log2(voices) × decay from the
+ *    newest telling (TOP_DECAY_HOURS) × (1 + TOP_LOCALITY_LIFT·locality).
+ *    They lead the paper as their own section and are left out of their own.
+ *    A reader whose sources never overlap gets no Top Stories.
+ *
+ * 5. WIRE COPY (Today only; the resolver marks `article.wire` from the
+ *    byline): an AP story in a local or state paper inherits nothing from the
+ *    paper. Naming no Arkansas place, it is National.
+ *
+ * 6. WHY. Every story carries the chips that explain its score: "5 sources",
+ *    the ring place that made it local ("Arkadelphia"), "Arkansas" when that
+ *    is its locality, "★ Favorite" / "Less", "Official"; in Top Stories also
+ *    the section it came from. The kind weight has no chip: a notice wears
+ *    the OFFICIAL badge, and a lone search result has nothing to show.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -79,20 +109,59 @@ export const SECTION_TITLES = { local: 'Local', state: 'State', national: 'Natio
 // --- The constants (the plan quotes these; keep the two in step) -----------
 export const WINDOW_DAYS = 7;
 export const LOCAL_WINDOW_DAYS = 10;
-export const MIN_GAP_MS = HOUR_MS;
-export const MAX_GAP_MS = 3 * DAY_MS;
+// The pace clamp (2026-11-27). It was [1 h, 3 days]: a busy newsroom's story
+// was dead in three hours and an agenda feed's stayed fresh for nine days, so
+// for ten mornings running Local held no Sentinel-Record, KATV, KARK, THV11 or
+// Democrat-Gazette story. Now every source's story lives between 18 h and
+// 3 days (PACE_DECAY × the gap): pace still helps the weekly paper, it no
+// longer buries the daily one.
+export const MIN_GAP_MS = 6 * HOUR_MS;
+export const MAX_GAP_MS = DAY_MS;
 export const PACE_DECAY = 3;
-export const FRESHNESS_SHARE = 0.6;
-export const LOCALITY_SHARE = 0.4;
+export const FRESHNESS_SHARE = 0.4;
+export const LOCALITY_SHARE = 0.3;
+// Coverage (2026-11-27): how many outlets told the story. log2, full at
+// COVERAGE_FULL_VOICES, so the eighth outlet matters less than the second.
+export const COVERAGE_SHARE = 0.3;
+export const COVERAGE_FULL_VOICES = 8;
 export const RING_WEIGHTS = [1.0, 0.9, 0.75, 0.65, 0.55, 0.5, 0.45];
 export const RING_WEIGHT_FLOOR = 0.4;
 export const ARKANSAS_WEIGHT = 0.25;
 export const PRIORITY_WEIGHT = { favorite: 3, normal: 1, less: 0.3 };
+// A notice (agenda, press office) is not a report: it ranks under one. An
+// active alert is exempt (it leads Local). A search result nobody else
+// reported (a lone Google News item: MaxPreps, openPR, FloWrestling) ranks
+// under a story from a source somebody chose.
+export const OFFICIAL_WEIGHT = 0.6;
+export const LONE_AGGREGATOR_WEIGHT = 0.6;
+// A title-only source (Hacker News posts one every half hour, no excerpt)
+// ranks the same way until a second outlet tells the story.
+export const LONE_TITLE_ONLY_WEIGHT = 0.6;
 export const FAVORITE_LEAD_DAYS = 7;
+// The most one source may hold in any block (see sourceCap).
 export const PER_SOURCE_CAP = 5;
-// Blocks this big get the full PER_SOURCE_CAP; smaller ones half (rounded up).
-export const FULL_CAP_MIN_QUOTA = 8;
 export const ARKANSAS_SLUG = 'arkansas';
+
+// Voices are counted over the last VOICE_WINDOW_HOURS only: a story fifteen
+// outlets told on Monday is not fifteen outlets' news on Friday.
+export const VOICE_WINDOW_HOURS = 48;
+
+// Top Stories (2026-11-27): the stories the most outlets told in that window,
+// whatever their section. It leads the paper, and a story printed there is
+// not printed again in its own section.
+export const TOP_KEY = 'top';
+export const TOP_TITLE = 'Top Stories';
+export const TOP_QUOTA = 5;
+export const TOP_MIN_VOICES = 3;
+export const TOP_DECAY_HOURS = 18;
+// How far a ring place lifts a story in Top Stories: at most ×1.5.
+export const TOP_LOCALITY_LIFT = 0.5;
+
+// Wire copy, by its byline. A local paper's AP story is not local news: it
+// inherits nothing from the paper that carried it (resolvers.js marks
+// `article.wire` on Today's candidates).
+const WIRE_AUTHOR = /\b(?:associated press|reuters|stateline|tribune news service|bloomberg|washington post|new york times|cnn newsource|states newsroom)\b|^\s*ap\s*$/i;
+export const isWireAuthor = (author) => Boolean(author) && WIRE_AUTHOR.test(String(author));
 
 // Places at these levels never make a source ring-local (KATV covers "Arkansas").
 const BROAD_PLACE_KINDS = new Set(['state', 'country']);
@@ -181,6 +250,8 @@ export function isRingLocalSource(ctx, source) {
 export function localityPlaces(ctx, article, source) {
   const sourcePlaces = new Set((source.places || []).map(String));
   const own = (article.places || []).map(String).filter((id) => !sourcePlaces.has(id));
+  // Wire copy inherits nothing from the paper that carried it.
+  if (article.wire) return own;
   return isRingLocalSource(ctx, source) ? [...own, ...sourcePlaces] : own;
 }
 
@@ -198,6 +269,12 @@ export function bestRingMatch(ctx, article, source) {
   return best;
 }
 
+/** A ring match earned by the article itself: a place of its own, not one inherited from its source. */
+export function hasOwnRingPlace(ctx, article, source) {
+  const inherited = new Set((source.places || []).map(String));
+  return (article.places || []).map(String).some((id) => !inherited.has(id) && ringIndex(ctx, id) >= 0);
+}
+
 export const firstSection = (source) => (source.sections && source.sections[0]) || 'national';
 const labelledStateOrLocal = (source) => (source.sections || []).some((s) => s === 'state' || s === 'local');
 
@@ -209,14 +286,18 @@ export function hasOwnArkansasPlace(ctx, article, source) {
 
 /** The story's section for this reader (header, 2). */
 export function sectionOf(ctx, article, source) {
+  // Wire copy in a local or state paper, naming no Arkansas place: National.
+  const wire = Boolean(article.wire) && labelledStateOrLocal(source) && !hasOwnArkansasPlace(ctx, article, source);
   if (!ctx.ring.length) {
     // No ring: the old rule, untouched (no `around`).
+    if (wire) return 'national';
     if ((source.sections || []).includes('local')) return 'local';
     if ((article.places || []).some((id) => inArkansas(ctx, id)) || labelledStateOrLocal(source)) return 'state';
     return firstSection(source);
   }
   if (bestRingMatch(ctx, article, source).index >= 0) return 'local';
   if (hasOwnArkansasPlace(ctx, article, source)) return 'state';
+  if (wire) return 'national';
   // Otherwise the source's first section: a statewide source's story is
   // State, a local paper's (off the ring, nothing of its own) is Around.
   const first = firstSection(source);
@@ -224,14 +305,19 @@ export function sectionOf(ctx, article, source) {
 }
 
 /**
- * At most this many stories from one source in a block of `quota` (Chef,
- * 2026-10-11): PER_SOURCE_CAP for a block of FULL_CAP_MIN_QUOTA or more,
- * else half the block, rounded up — so one busy paper can't fill a 5-slot
- * State block (3 of 5) or a 3-slot World block (2 of 3).
+ * At most this many stories from one source in a block of `quota`
+ * (2026-11-27; before, Chef 2026-10-11: 5 for a block of 8 or more, else half
+ * the block). A ★ Favorite may take half the block, at most PER_SOURCE_CAP;
+ * any other source a quarter of it, at least one story: 2 of Local's 8, 1 of
+ * State's 5. Before, a student paper held three of Local's eight slots and
+ * the Democrat-Gazette three of State's five. A story several outlets told
+ * is one story now, so variety costs nothing.
  */
-export function perSourceCap(quota) {
+export function sourceCap(quota, priority = 'normal') {
   const q = Math.max(0, Math.floor(Number(quota) || 0));
-  return q >= FULL_CAP_MIN_QUOTA ? PER_SOURCE_CAP : Math.ceil(q / 2);
+  if (q === 0) return 0;
+  if (priority === 'favorite') return Math.min(PER_SOURCE_CAP, Math.ceil(q / 2));
+  return Math.max(1, Math.round(q / 4));
 }
 
 export function ringWeight(index) {
@@ -276,38 +362,107 @@ export function capKey(article, source) {
   return source.kind === 'aggregator' && domain ? `domain:${domain}` : `source:${String(source._id)}`;
 }
 
-/** The chips that explain a story's place (header, 5). */
-export function whyChips(ctx, article, source, loc = locality(ctx, article, source)) {
+/** "12 sources": the coverage chip. */
+export const voicesChip = (voices) => `${voices} sources`;
+
+/** 0 for one outlet, 1 at COVERAGE_FULL_VOICES or more (log2). */
+export function coverage(voices) {
+  const v = Math.max(1, Number(voices) || 1);
+  return Math.min(1, Math.log2(v) / Math.log2(COVERAGE_FULL_VOICES));
+}
+
+/** The chips that explain a story's place (header, 6). */
+export function whyChips(ctx, article, source, loc = locality(ctx, article, source), voices = 1, priority = priorityOf(ctx, source._id)) {
   const why = [];
+  if (voices >= 2) why.push(voicesChip(voices));
   if (loc.match.index >= 0) {
     const name = ctx.byId.get(loc.match.placeId)?.name;
     if (name) why.push(name);
   } else if (loc.arkansas) {
     why.push(ctx.byId.get(ctx.arkansasId)?.name || 'Arkansas');
   }
-  const priority = priorityOf(ctx, source._id);
   if (priority === 'favorite') why.push('★ Favorite');
   if (priority === 'less') why.push('Less');
   if (source.kind === 'official') why.push('Official');
   return why;
 }
 
-/** One story's full judgement. `section` overrides the per-story rule (a duplicate group's own section). */
-export function judge(ctx, article, source, countLast7d, section = sectionOf(ctx, article, source)) {
-  const age = ctx.now - new Date(article.publishedAt).getTime();
-  const fresh = freshness(age, countLast7d, windowMs(section));
+/** What kind of item it is, as a weight (header, 3): a notice and a lone search result rank under a report. */
+export function kindWeight(ctx, article, source, voices = 1) {
+  if (source.kind === 'official') return isActiveAlert(ctx, article, source) ? 1 : OFFICIAL_WEIGHT;
+  if (voices >= 2) return 1;
+  if (source.kind === 'aggregator') return LONE_AGGREGATOR_WEIGHT;
+  if (source.access?.content === 'title') return LONE_TITLE_ONLY_WEIGHT;
+  return 1;
+}
+
+const NO_LOCALITY = { value: 0, match: { index: -1, placeId: null }, arkansas: false };
+const AWAY_SECTIONS = new Set(['national', 'world', 'tech']);
+
+/**
+ * The locality a story earns IN ITS SECTION. The ring counts only in Local: a
+ * statewide story the hometown paper also ran is not closer to home for it.
+ * And in National / World / Tech, "Arkansas" counts only when the story names
+ * an Arkansas place itself, not because an Arkansas paper carried the wire.
+ */
+export function sectionLocality(ctx, article, source, section) {
   const loc = locality(ctx, article, source);
-  const priority = priorityOf(ctx, source._id);
-  const score = (FRESHNESS_SHARE * fresh + LOCALITY_SHARE * loc.value) * PRIORITY_WEIGHT[priority];
+  if (section === 'local') return loc;
+  if (AWAY_SECTIONS.has(section)) {
+    return hasOwnArkansasPlace(ctx, article, source) ? { value: ARKANSAS_WEIGHT, match: NO_LOCALITY.match, arkansas: true } : NO_LOCALITY;
+  }
+  if (loc.match.index >= 0) return { value: ARKANSAS_WEIGHT, match: NO_LOCALITY.match, arkansas: true };
+  return loc;
+}
+
+/**
+ * One story's full judgement. `section` overrides the per-story rule (a
+ * group's own section); `voices` is how many outlets told it (1 = alone);
+ * `toldAt` is when its words were first published, when that is earlier;
+ * `boost` false withholds the ★ Favorite boost (the favourite's copy of a
+ * story from another section).
+ */
+export function judge(ctx, article, source, countLast7d, section = sectionOf(ctx, article, source), voices = 1, toldAt = null, boost = true) {
+  // A late copy of a wire story is as old as the story (dedupe.js `toldAt`).
+  const age = ctx.now - (toldAt ?? new Date(article.publishedAt).getTime());
+  const fresh = freshness(age, countLast7d, windowMs(section));
+  const loc = sectionLocality(ctx, article, source, section);
+  // A ★ Favorite is boosted on its own beat only (`boost`, dedupe.js `repOwn`). "Less" always counts.
+  const own = priorityOf(ctx, source._id);
+  const priority = own === 'favorite' && !boost ? 'normal' : own;
+  const score = (FRESHNESS_SHARE * fresh + LOCALITY_SHARE * loc.value + COVERAGE_SHARE * coverage(voices))
+    * PRIORITY_WEIGHT[priority] * kindWeight(ctx, article, source, voices);
   return {
     section,
     score,
     inWindow: Math.max(0, age) <= windowMs(section),
     ageMs: age,
     priority,
+    voices,
+    locality: loc.value,
     alert: section === 'local' && isActiveAlert(ctx, article, source),
-    why: whyChips(ctx, article, source, loc),
+    why: whyChips(ctx, article, source, loc, voices, priority),
   };
+}
+
+/** Outlets that told the story within VOICE_WINDOW_HOURS (unit.voiceTimes: [{ outlet, at }]). */
+export function recentVoices(ctx, unit) {
+  const since = ctx.now - VOICE_WINDOW_HOURS * HOUR_MS;
+  const seen = new Set();
+  let newest = 0;
+  for (const v of unit.voiceTimes || []) {
+    if (v.at < since || v.at > ctx.now + HOUR_MS) continue;
+    seen.add(v.outlet);
+    if (v.at > newest) newest = v.at;
+  }
+  return { count: seen.size, newestAt: newest };
+}
+
+/** Top Stories' own score: coverage in the window, decaying from its newest telling, lifted by locality. */
+export function topScore(ctx, recent, localityValue) {
+  if (recent.count < TOP_MIN_VOICES) return 0;
+  const ageH = Math.max(0, ctx.now - recent.newestAt) / HOUR_MS;
+  return Math.log2(recent.count) * Math.exp(-ageH / TOP_DECAY_HOURS) * (1 + TOP_LOCALITY_LIFT * localityValue);
 }
 
 const byScore = (a, b) => b.score - a.score
@@ -329,13 +484,25 @@ export function rankFrontPage({ ctx, candidates, sources, counts = new Map(), qu
     ? collapse({ ctx, articles: candidates, sourceById })
     : candidates.map((article) => ({ rep: article, source: sourceById.get(String(article.sourceId)), alsoIn: [], section: null }));
   const groups = new Map(SECTION_ORDER.map((k) => [k, []]));
+  const all = [];
   for (const unit of units) {
     const { rep: article, source } = unit;
     if (!source) continue;
-    const j = judge(ctx, article, source, counts.get(String(source._id)) || 0, unit.section || undefined);
+    const recent = recentVoices(ctx, unit);
+    const j = judge(ctx, article, source, counts.get(String(source._id)) || 0, unit.section || undefined, Math.max(1, recent.count), unit.toldAt ?? null, unit.repOwn !== false);
     if (!j.inWindow) continue;
-    if (!groups.has(j.section)) groups.set(j.section, []);
-    groups.get(j.section).push({ article, source, alsoIn: unit.alsoIn || [], ...j });
+    all.push({ article, source, alsoIn: unit.alsoIn || [], ...j, top: topScore(ctx, recent, j.locality) });
+  }
+
+  // Top Stories first: taken out of their own sections, so nothing prints twice.
+  const top = all.filter((e) => e.top > 0 && !e.alert)
+    .sort((a, b) => b.top - a.top || byScore(a, b))
+    .slice(0, TOP_QUOTA);
+  const inTop = new Set(top);
+  for (const e of all) {
+    if (inTop.has(e)) continue;
+    if (!groups.has(e.section)) groups.set(e.section, []);
+    groups.get(e.section).push(e);
   }
 
   const favoriteLeadMs = FAVORITE_LEAD_DAYS * DAY_MS;
@@ -349,13 +516,12 @@ export function rankFrontPage({ ctx, candidates, sources, counts = new Map(), qu
 
     const items = [];
     const perSource = new Map();
-    const cap = perSourceCap(quota);
     for (const e of [...alerts, ...leads, ...rest]) {
       if (items.length >= quota) break;
       if (!e.alert) {
         const k = capKey(e.article, e.source);
         const n = perSource.get(k) || 0;
-        if (n >= cap) continue;
+        if (n >= sourceCap(quota, e.priority)) continue;
         perSource.set(k, n + 1);
       }
       items.push(e);
@@ -364,6 +530,15 @@ export function rankFrontPage({ ctx, candidates, sources, counts = new Map(), qu
     out.push({ key, title: SECTION_TITLES[key] || key, items, moreCount: entries.length - items.length });
   }
   out.sort((a, b) => sectionRank(a.key) - sectionRank(b.key));
+  if (top.length) {
+    out.unshift({
+      key: TOP_KEY,
+      title: TOP_TITLE,
+      // The chip says where the story would otherwise be: "12 sources · National".
+      items: top.map((e) => ({ ...e, why: [e.why[0], SECTION_TITLES[e.section] || e.section, ...e.why.slice(1)].filter(Boolean) })),
+      moreCount: 0,
+    });
+  }
   return out;
 }
 

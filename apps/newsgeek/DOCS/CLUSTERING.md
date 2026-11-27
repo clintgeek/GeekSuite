@@ -5,7 +5,7 @@ a JOIN threshold plus a guard, and **a golden set before tuning**. This file cov
 is built, in two phases:
 
 - **Phase 1 (built 2026-10-11):** article embeddings plus the golden-set tools.
-- **Phase 2 (not built):** assigning `storyId`.
+- **Phase 2 (built 2026-11-27):** assigning `storyId`. See "Phase 2: what was built".
 
 ## Phase 1: what was built
 
@@ -203,7 +203,83 @@ database.
 If you can't tell from the title and the 200-character excerpt, open both links. If you
 still can't tell, leave it unlabelled. About 150 confident labels beat 200 guesses.
 
-## Phase 2 (not built): assigning `storyId`
+## Phase 2: what was built (2026-11-27)
+
+| Piece | File | What it does |
+|---|---|---|
+| The rule | `backend/src/cluster/stories.js` | Pure. Which story an article joins, or that it starts one. |
+| The job | `backend/src/jobs/storyAssigner.js` | The queue, the open stories, the two writes. |
+| The schema | `packages/schemas/newsgeek/story.js` | `newsgeek.stories`, written by the backend only. |
+| Housekeeping | `backend/src/jobs/purge.js` `runStoryPurge` | Strips closed stories' vectors, deletes old stories. |
+| Health | `GET /api/health` → `stories` | `{ enabled, lastRunAt, lastRunAssigned, lastRunJoined, pending, lastError }` |
+| Reading it | `basegeek … graphql/newsgeek/dedupe.js` `collapseStories` | Today groups by `Article.storyId`. The gateway never reads `stories`. |
+
+### The rule (under-merge)
+Articles are taken oldest first. Each joins an open story or starts one.
+1. **A copy.** Its `titleKey` is one an open story already holds: it joins, and adds **no
+   voice** (AP copy on three stations).
+2. **Otherwise** the open story with the best cosine to its **centroid** joins when
+   `cosine(article, centroid) ≥ JOIN` (0.80) **and** `cosine(article, seed) ≥ SEED_FLOOR`
+   (0.74). The seed is the story's first article. The second test stops a story drifting: a
+   running mean can walk from one event to the next one near-miss at a time; the seed cannot.
+3. **Open** means: the article is published within **72 h** after the story's newest article,
+   and within **7 days** of its first. No story rolls on for ever.
+4. **Solo** articles never join and are never joined: an **official** source's (a notice is
+   not coverage), and one with **under 40 characters** of title + excerpt (too little to
+   compare; a copy is exempt).
+
+The centroid is stored as the running **sum** of the members' unit vectors (`sum`), with the
+seed (`seed`, written when a second article joins; before that the seed is the sum). Both are
+dropped 21 days after the story's last article.
+
+### How the numbers were chosen
+- Read by hand on live data, 2026-11-27 (5 days, 4,138 articles):
+
+  | JOIN / SEED_FLOOR | Stories | With 2+ outlets | With 3+ | Largest |
+  |---|---|---|---|---|
+  | 0.76 / 0.70 | 2,707 | 349 | 149 | 117 articles |
+  | **0.80 / 0.74** | 2,926 | 313 | 128 | 61 articles |
+  | 0.84 / 0.78 | 3,163 | 256 | 97 | 55 articles |
+
+- At 0.80 the six largest stories each read as one event (Nvidia's CEO 15 outlets, the Iowa
+  detonation 14, Ábrego García 12, the Macy's parade 11, the Huawei verdict 10, SpaceX 10), and
+  a sample of 28 two-to-four-outlet stories held two wrong joins: "Happy Thanksgiving" with
+  "Tell HN: Happy Thanksgiving" (now solo, rule 4) and a Vance photo-op with the Iowa story.
+- The October golden set (pairwise): 0.82 → precision 97.5 %, recall 22 %; 0.75 → 94.5 % / 46 %.
+  A centroid joins more than a pair does, which is why 0.80 with the seed test was preferred.
+- **Not done:** the labelled file was in a session scratchpad and is gone, so 0.80 / 0.74 was
+  never run through `eval-cluster-threshold.js`. Phase 1's export and evaluation still work;
+  label a new set and re-measure before changing either number.
+
+### What differs from the plan
+- **An unclustered article still shows**, on its own. The plan said it waits.
+- **Candidates are every open story**, not only those in one section: a story's section is
+  decided per reader at read time, so it cannot filter here.
+- **The guard is the seed test**, not a shared significant term or place. The golden set showed
+  the term guard barely moved precision.
+- **Follow-ups count as the same story** (an arrest after the homicide, the vote after the
+  debate), as the labelling rules below already say.
+- **No merge pass, no split.** Two stories about one event stay two (under-merge). A wrong join
+  has no admin fix yet; lower risk than it sounds, because a story closes after 72 h of quiet.
+- **Official notices are not attached** as `officialArticleIds`. They stand alone.
+
+### The job
+- **When:** production, or `STORIES_AUTORUN=1`. `STORIES_DISABLED=1` is the kill switch. First
+  run ~30 s after boot, then every 60 s, single-flight.
+- **The queue is the database:** a vector for the current model, no story, published in the
+  last **14 days**, oldest first, 400 at a time, until 20 s are spent. A restart loses nothing.
+- **Writes:** the changed stories first, then `$set storyId` on the articles (nothing else,
+  not even `updatedAt`). Cut off between the two, the batch is assigned again and finds its
+  own stories by title key, as copies.
+- **It needs no outside service.** It reads the vectors the indexer wrote. An article waits
+  here only until it has one.
+- **Cost:** measured as a dry run on the live box, 12,600 articles → 8,800 stories in ~50 s.
+  Steady state is a few dozen articles a minute against ~2,000 open stories: milliseconds.
+- **Storage:** a story of one article keeps one vector (~9 KB; four in five are that), a
+  joined one two, a solo one none. ~630 new stories a day, vectors dropped after 21 days:
+  roughly 130 MB at steady state, then ~300 bytes each until retention.
+
+## Phase 2 as first planned (kept for the parts not built: merge pass, split)
 
 1. **Stories:** the plan's "Data model" `stories` collection, which needs a schema in
    `packages/schemas/newsgeek/` (not created in phase 1). It holds the centroid (a running

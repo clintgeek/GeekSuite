@@ -16,6 +16,8 @@ import { singleFlight } from '../lib/concurrency.js';
 const { ARTICLE_RETENTION_DAYS } = constants;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** A story this long without a new article can never be joined again (see runStoryPurge). */
+export const STORY_CLOSED_DAYS = 21;
 
 /**
  * TODO(N2): saved stories outlive retention — "savedAt pins the story and
@@ -50,12 +52,39 @@ export async function runPurge({
 }
 
 /**
+ * Stories (N1 phase 2). A story nobody can join any more keeps its counts but
+ * loses its vectors (~16 KB each); one older than retention is deleted with
+ * its articles. `closedDays` is past the assigner's look-back (ASSIGN_DAYS,
+ * 14) plus the join window, so no article will ever be compared with it again.
+ * @returns {Promise<{ stripped: number, deleted: number }>}
+ */
+export async function runStoryPurge({
+  Story,
+  retentionDays = ARTICLE_RETENTION_DAYS,
+  closedDays = STORY_CLOSED_DAYS,
+  now = () => new Date(),
+  log,
+}) {
+  const at = now().getTime();
+  const del = await Story.deleteMany({ lastArticleAt: { $lt: new Date(at - retentionDays * DAY_MS) } });
+  const strip = await Story.updateMany(
+    { lastArticleAt: { $lt: new Date(at - closedDays * DAY_MS) }, $or: [{ 'sum.0': { $exists: true } }, { 'seed.0': { $exists: true } }] },
+    { $unset: { sum: 1, seed: 1 } },
+    { timestamps: false },
+  );
+  const out = { stripped: strip?.modifiedCount || 0, deleted: del?.deletedCount || 0 };
+  log?.info({ event: 'story_purge_done', ...out }, 'story purge finished');
+  return out;
+}
+
+/**
  * Daily schedule: once ~60 s after boot, then every 24 h. Production only
  * (or PURGE_AUTORUN=1); PURGE_DISABLED=1 is the kill switch. Timers are
  * unref'd so they never hold the process open.
  */
 export function startPurgeSchedule({
   Article,
+  Story = null,
   log,
   env = process.env,
   bootDelayMs = 60_000,
@@ -72,6 +101,12 @@ export function startPurgeSchedule({
     } catch (err) {
       log?.error({ event: 'purge_failed', code: err?.code, name: err?.name }, 'retention purge failed');
     }
+    if (!Story) return;
+    try {
+      await runStoryPurge({ Story, log });
+    } catch (err) {
+      log?.error({ event: 'story_purge_failed', code: err?.code, name: err?.name }, 'story purge failed');
+    }
   });
   const boot = setTimeout(run, bootDelayMs);
   boot.unref();
@@ -87,4 +122,4 @@ export function startPurgeSchedule({
   };
 }
 
-export default { runPurge, startPurgeSchedule, pinnedArticleIds };
+export default { runPurge, runStoryPurge, startPurgeSchedule, pinnedArticleIds };

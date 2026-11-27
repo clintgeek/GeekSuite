@@ -1002,3 +1002,41 @@ written spec, saved verbatim as `apps/fitnessgeek/DOCS/DASHBOARD_REDESIGN_SPEC.m
 - Verified: unit suite 1,050 / 1,050; contrast 664 / 664; PWA audit clean; harness on phone, desktop and
   tablet with a11y enforcing, 1,166 scenes, 0 violations, 0 a11y, 0 page errors. Not yet on a real device.
 
+## 2026-11-27: NewsGeek — stories, coverage, Top Stories (branch `newsgeek-stories`)
+
+Chef: "tell me exactly what the hell is wrong with it and why I keep turning to an ad riddled Google News",
+then "Give it your best shot. Do whatever you think will fix this app before I give up on it."
+
+- **The diagnosis, measured on production:** NewsGeek had no measure of whether a story matters. The eight
+  most-covered stories of a morning were on Today 0, 3, 1 and 0 times out of 8 (Nov 23–26). All 48,672
+  articles had vectors and none had a story: clustering, "the product" in the plan, stalled on 2026-10-11.
+  The pace-normalised freshness rewarded whoever publishes least, so for ten mornings Local held no
+  Sentinel-Record, KATV, KARK, THV11 or Democrat-Gazette story. Eight sources had been `broken`, and so
+  never polled, for six weeks.
+- **Built** (spec: `DOCS/NEWSGEEK_PLAN.md` "Stories on the front page (2026-11-27)"; how it runs:
+  `apps/newsgeek/DOCS/CONTEXT.md` and `CLUSTERING.md` "Phase 2"):
+  - The **story assigner** (backend): every article about one event gets one `storyId`. Cosine 0.80 to the
+    story's centroid and 0.74 to its first article, 72 h window, 7-day span, official notices alone.
+  - **Today groups by story.** One item per event, "N sources" as a chip, the other outlets under "Also in".
+    The story's section is a vote; its headline is chosen for being in the section, typical and readable.
+  - **The score gained coverage** and lost the clamp that buried daily papers: 0.4 freshness + 0.3 locality
+    + 0.3 coverage, gap clamped to [6 h, 1 day]. Notices, lone search results and lone title-only posts
+    rank under a report. Wire copy by byline is National, not the carrier's town.
+  - **Top Stories** leads the paper: up to 5 stories that 3 or more outlets told in the last 48 h.
+  - Per-source cap: a favourite half the block, anyone else a quarter. The ★ boost only on its own beat.
+  - Broken sources are retried daily and recover by themselves. Four world sources. File-name titles
+    dropped. Capital-letter entities decoded.
+- **No schema change and no UI change**: chips, `alsoIn` and one more front-page section carry all of it.
+- **Decided by Sage under Chef's mandate, each one constant or function to turn back:** Top Stories before
+  Local; the favourite capped at 4 of Local's 8; other sources at 2 (1 elsewhere); an unclustered article
+  still shows; follow-ups are the same story; no significant-term guard.
+- **Not built:** the story page, read state, Saved, follows; story grouping on Everything and the section
+  pages; unwrapping Google News links; images; the merge pass and the admin split.
+- **Verified:** backend 296 tests, gateway 3,936 (198 suites), lint clean, 41 revert-checks each red; the rule
+  and the ranking run read-only over 14 days of live articles and four replayed mornings before any deploy.
+- **Landmines:** a preview that runs inside a production container dies with it when Watchtower recreates
+  the fleet (it did, twice, mid-run); a worktree installed with `pnpm --filter` fails three other apps'
+  schema-parity suites with "Cannot find module 'mongoose'" (install the whole workspace); "own place"
+  can never be true for a ring-local paper naming its own town, because ingest merges the source's places
+  into the article's; basegeek's startup log prints the last four characters of each AI provider key.
+

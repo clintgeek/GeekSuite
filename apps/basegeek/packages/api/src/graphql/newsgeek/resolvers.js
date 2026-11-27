@@ -14,10 +14,10 @@ import feedUrlModule from '@geeksuite/schemas/newsgeek/feedUrl';
 import prefsSchemaModule from '@geeksuite/schemas/newsgeek/prefs';
 import pathRulesModule from '@geeksuite/schemas/newsgeek/pathRules';
 import {
-  createContext, rankFrontPage, sectionClause, sectionOf, whyChips, LOCAL_WINDOW_DAYS,
+  createContext, rankFrontPage, sectionClause, sectionOf, whyChips, isWireAuthor, LOCAL_WINDOW_DAYS,
 } from './ranking.js';
 import {
-  collapseDuplicates, dupInfo, DUP_WINDOW_MS, OBITUARY_HOSTS,
+  collapseDuplicates, collapseStories, dupInfo, DUP_WINDOW_MS, OBITUARY_HOSTS,
 } from './dedupe.js';
 
 const {
@@ -698,7 +698,7 @@ function shapeArticle(a, src, placeMap, ctx, group = null) {
     sections: src.sections || [],
     places: placesOf(a.places, placeMap),
     section: group?.section || sectionOf(ctx, a, src),
-    why: whyChips(ctx, a, src),
+    why: group?.why || whyChips(ctx, a, src),
     alsoIn: group?.alsoIn || [],
   };
 }
@@ -849,8 +849,10 @@ async function articlePage(args, viewer) {
 
 // Scoring needs only these; the chosen stories are read in full afterwards.
 // Duplicate collapse (dedupe.js) also needs the title, publisher and link.
+// Stories (2026-11-27) need the story id, and the byline to tell wire copy.
 const CANDIDATE_FIELDS = {
   sourceId: 1, publishedAt: 1, expiresAt: 1, places: 1, publisherDomain: 1, title: 1, titleKey: 1, publisher: 1, url: 1,
+  storyId: 1, author: 1,
 };
 
 async function frontPage(viewer) {
@@ -879,7 +881,10 @@ async function frontPage(viewer) {
   ]);
 
   const ctx = rankingContext(places, viewer, now);
-  const ranked = rankFrontPage({ ctx, candidates, sources, counts, quotas: viewer.sectionQuotas, collapse: collapseDuplicates });
+  // Wire copy (an AP byline in a local paper) inherits nothing from its carrier. Today only.
+  for (const c of candidates) if (isWireAuthor(c.author)) c.wire = true;
+  const wire = new Set(candidates.filter((c) => c.wire).map((c) => String(c._id)));
+  const ranked = rankFrontPage({ ctx, candidates, sources, counts, quotas: viewer.sectionQuotas, collapse: collapseStories });
   const chosen = ranked.flatMap((s) => s.items.map((e) => e.article._id));
   const full = chosen.length ? await NewsArticle.find({ _id: { $in: chosen } }, { embedding: 0 }).lean() : [];
   const byId = new Map(full.map((a) => [String(a._id), a]));
@@ -893,7 +898,11 @@ async function frontPage(viewer) {
       moreCount: s.moreCount,
       items: s.items
         .filter((e) => byId.has(String(e.article._id))) // purged between the two reads
-        .map((e) => shapeArticle(byId.get(String(e.article._id)), e.source, placeMap, ctx, { section: e.section, alsoIn: e.alsoIn })),
+        .map((e) => {
+          const a = byId.get(String(e.article._id));
+          if (wire.has(String(a._id))) a.wire = true;
+          return shapeArticle(a, e.source, placeMap, ctx, { section: e.section, alsoIn: e.alsoIn, why: e.why });
+        }),
     })).filter((s) => s.items.length),
   };
 }
