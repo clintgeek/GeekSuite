@@ -351,12 +351,24 @@ const BloodPressure = () => {
   return (
     // On a phone the page's last card clears the "Add BP" ThumbFab (visual
     // review C1): it used to sit over the end of the readings list.
-    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 'calc(88px + env(safe-area-inset-bottom))', md: 3 }, maxWidth: 960, mx: 'auto' }}>
-      {/* Editorial header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
+    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 'calc(88px + env(safe-area-inset-bottom))', sm: 'calc(88px + env(safe-area-inset-bottom))', md: 3 }, maxWidth: 960, mx: 'auto' }}>
+      {/* Editorial header. "View report" lives up here, not in the full-width row at the
+          page's first scroll where the thumb-zone "Log BP" button rests
+          (review item 9). */}
+      <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem', flex: '1 1 240px' }}>
           Track your blood pressure and heart health over time.
         </Typography>
+        {bpLogs.length > 0 && (
+          <Button
+            onClick={() => setShowReport(true)}
+            variant="tonal"
+            size="small"
+            startIcon={<PdfIcon />}
+          >
+            View report
+          </Button>
+        )}
       </Box>
 
       {/* The answer first: the week's average, in words (review D-1). A
@@ -392,14 +404,12 @@ const BloodPressure = () => {
           governs, and the donut's title names the window (review D-1). */}
       {bpLogs.length > 0 && (
         <>
-          {/* Time Range + Report — matches Reports page control bar */}
+          {/* Time range (View report moved to the page header) */}
           <Box
             sx={{
               display: 'flex',
-              flexDirection: { xs: 'column', sm: 'row' },
-              alignItems: { xs: 'stretch', sm: 'center' },
-              justifyContent: 'space-between',
-              gap: 2,
+              flexDirection: 'row',
+              alignItems: 'center',
               mb: 3,
             }}
           >
@@ -415,6 +425,8 @@ const BloodPressure = () => {
                   minHeight: { xs: 44, sm: 34 },
                   minWidth: { xs: 56, sm: 44 },
                   fontSize: '0.8125rem',
+                  // A touch tablet is not a mouse: keep the 44px target.
+                  '@media (pointer: coarse)': { minHeight: 44, minWidth: 56 },
                 },
               }}
             >
@@ -423,14 +435,6 @@ const BloodPressure = () => {
               <ToggleButton value="365" aria-label="1 year">1y</ToggleButton>
               <ToggleButton value="all">All</ToggleButton>
             </ToggleButtonGroup>
-            <Button
-              onClick={() => setShowReport(true)}
-              variant="tonal"
-              size="small"
-              startIcon={<PdfIcon />}
-            >
-              View report
-            </Button>
           </Box>
 
           {insufficientDataMessage && (
