@@ -1,7 +1,6 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { alpha } from '@mui/material/styles';
 
 /**
  * ModeSelector — Step 0 of the goal wizard.
@@ -35,110 +34,75 @@ const ModeSelector = ({ value, onChange }) => {
 
   return (
     <Box
+      role="radiogroup"
+      aria-label="Tracking style"
       sx={{
         display: 'flex',
-        gap: 2,
+        gap: 1.75,
         flexDirection: { xs: 'column', sm: 'row' },
       }}
     >
       {cards.map(({ mode, accentColor, title, subtitle, typical }) => {
         const isSelected = value === mode;
+        const choose = () => onChange(mode);
         return (
           <Box
             key={mode}
-            onClick={() => onChange(mode)}
+            role="radio"
+            aria-checked={isSelected}
+            tabIndex={0}
+            onClick={choose}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                choose();
+              }
+            }}
             sx={{
               position: 'relative',
               flex: 1,
-              p: 3,
-              borderRadius: '24px',
+              minHeight: 44,
+              p: 2,
               cursor: 'pointer',
-              border: isSelected
-                ? `2px solid ${accentColor}`
-                : `1px solid ${theme.palette.divider}`,
-              background: isSelected
-                ? alpha(accentColor, 0.08)
-                : theme.palette.background.paper,
-              boxShadow: isSelected
-                ? `inset 0 0 0 1px ${alpha(accentColor, 0.3)}`
-                : 'none',
-              transition: 'all 180ms ease-out',
+              // The Label: a square panel with an ink edge; the chosen one
+              // wears the blue edge and a filled blue square, not a tint.
+              border: `2px solid ${isSelected ? accentColor : theme.palette.text.primary}`,
+              bgcolor: 'background.paper',
               userSelect: 'none',
+              '&:focus-visible': { outline: `3px solid ${accentColor}`, outlineOffset: 2 },
             }}
           >
-            {/* Selection indicator — filled dot at top-right, visible only when selected */}
+            {/* Selection indicator: a filled square, only when selected */}
             {isSelected && (
               <Box
-                sx={{
-                  position: 'absolute',
-                  top: 12,
-                  right: 12,
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  bgcolor: accentColor,
-                }}
+                aria-hidden
+                sx={{ position: 'absolute', top: 12, right: 12, width: 12, height: 12, bgcolor: accentColor }}
               />
             )}
 
-            {/* Card title */}
             <Typography
-              variant="h5"
+              component="div"
               sx={{
-                fontFamily: 'inherit',
                 fontSize: '1.5rem',
+                fontWeight: 900,
+                lineHeight: 1.1,
                 mb: 0.75,
                 color: isSelected ? accentColor : 'text.primary',
-                transition: 'color 180ms ease-out',
               }}
             >
               {title}
             </Typography>
 
-            {/* Subtitle */}
-            <Typography
-              variant="body2"
-              sx={{
-                fontFamily: 'inherit',
-                fontSize: '0.9375rem',
-                color: 'text.secondary',
-                mb: 2,
-              }}
-            >
+            <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', mb: 1.5 }}>
               {subtitle}
             </Typography>
 
-            <Box
-              sx={{
-                borderTop: `1px solid ${theme.palette.divider}`,
-                pt: 1.5,
-              }}
-            />
-
-            {/* Typical value */}
-            <Typography
-              variant="caption"
-              sx={{
-                display: 'block',
-                fontFamily: 'inherit',
-                color: isSelected ? accentColor : 'text.secondary',
-                mt: 1.5,
-                transition: 'color 180ms ease-out',
-              }}
-            >
-              {typical}
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{
-                display: 'block',
-                fontFamily: 'inherit',
-                color: 'text.disabled',
-                mt: 0.25,
-              }}
-            >
-              typical
-            </Typography>
+            <Box sx={{ borderTop: `1px solid ${theme.palette.text.primary}`, pt: 1 }}>
+              <Typography sx={{ fontSize: '0.9375rem', fontWeight: 700 }}>{typical}</Typography>
+              <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                typical
+              </Typography>
+            </Box>
           </Box>
         );
       })}

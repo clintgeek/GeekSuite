@@ -1,42 +1,18 @@
 import React from 'react';
-import {
-  Card,
-  CardContent,
-  Typography,
-  Box,
-  IconButton,
-  Chip,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction
-} from '@mui/material';
+import { Typography, Box, IconButton } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { localDateString, utcDateString } from '@geeksuite/utils';
 import { categorizeBP } from '../../utils/bpUtils.js';
 import { bpStageWords } from '../../utils/plainWords.js';
 import { nearDay } from '../../utils/dates.js';
 import { formatLocalTime } from './bpTimeUtils.js';
-import {
-  DeleteOutline as DeleteIcon,
-  EditOutlined as EditIcon,
-  MonitorHeartOutlined as BPIcon
-} from '@mui/icons-material';
+import { DeleteOutline as DeleteIcon, EditOutlined as EditIcon } from '@mui/icons-material';
+import { LabelPanel, ListRow, Tag } from '../primitives';
 
 const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
   const theme = useTheme();
-  // The stage colour is the theme's semantic tone for this mode (bpUtils), as
-  // the tag's wash and the heart icon; the words are ink, because success
-  // green on its own tint measured 4.35:1. One info-tag shape (visual review
-  // B5): round, 28px, no border.
-  const stageTag = (color) => ({
-    backgroundColor: alpha(color, 0.14),
-    color: 'text.primary',
-    fontWeight: 700,
-    height: 28,
-    borderRadius: 999,
-    '& .MuiChip-label': { fontSize: '0.875rem' },
-  });
+  // The stage colour is the theme's one small set (bpUtils: success / warning
+  // / error), the fill of a Tag that always carries the plain words.
   // Remove is quiet at rest and only turns red under the thumb (B7).
   const quietDelete = {
     color: 'text.secondary',
@@ -54,21 +30,11 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
 
   if (logs.length === 0) {
     return (
-      <Card sx={{ width: '100%', display: 'block' }}>
-        <CardContent sx={{ p: 4 }}>
-          <Box sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: 100,
-            color: theme.palette.text.secondary
-          }}>
-            <Typography variant="body2">
-              No readings yet
-            </Typography>
-          </Box>
-        </CardContent>
-      </Card>
+      <LabelPanel title="Reading log">
+        <Typography variant="body2" sx={{ color: 'text.secondary', pt: 1.5 }}>
+          No readings yet
+        </Typography>
+      </LabelPanel>
     );
   }
 
@@ -86,165 +52,68 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
   });
 
   return (
-    <Card sx={{ width: '100%', display: 'block' }}>
-      <CardContent sx={{ p: 3 }}>
+    <LabelPanel
+      title="Reading log"
+      action={
+        <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
+          {sortedLogs.length} {sortedLogs.length === 1 ? 'reading' : 'readings'}
+        </Typography>
+      }
+    >
+      <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+        {sortedLogs.map((log, index) => {
+          const bpStatus = categorizeBP(log.systolic, log.diastolic, theme.palette.mode);
+          const readingLabel = `${log.systolic}/${log.diastolic} ${unit} reading from ${formatDate(log.log_date)}`;
+          const deleteLabel = `Remove the ${readingLabel}`;
+          const editLabel = `Edit the ${readingLabel}`;
+          // An instant, unlike `log_date` — rendered in the viewer's own
+          // timezone, not forced to UTC. Empty string (not a fabricated
+          // time) when the row has none yet.
+          const timeLabel = formatLocalTime(log.measured_at);
 
-        <List sx={{ p: 0, m: 0, width: '100%' }}>
-          {sortedLogs.map((log) => {
-            const bpStatus = categorizeBP(log.systolic, log.diastolic, theme.palette.mode);
-            const readingLabel = `${log.systolic}/${log.diastolic} ${unit} reading from ${formatDate(log.log_date)}`;
-            const deleteLabel = `Remove the ${readingLabel}`;
-            const editLabel = `Edit the ${readingLabel}`;
-            // An instant, unlike `log_date` — rendered in the viewer's own
-            // timezone, not forced to UTC. Empty string (not a fabricated
-            // time) when the row has none yet.
-            const timeLabel = formatLocalTime(log.measured_at);
-
-            return (
-              <ListItem
-                disableGutters
-                key={log.id || log._id}
-                sx={{
-                  border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: '16px',
-                  mb: 1,
-                  backgroundColor: theme.palette.background.paper,
-                  '&:last-child': { mb: 0 },
-                  py: 1.5,
-                  px: { xs: 2, md: 3 },
-                  display: 'flex',
-                  flexDirection: { xs: 'column', md: 'row' },
-                  alignItems: { xs: 'stretch', md: 'center' },
-                  justifyContent: { xs: 'flex-start', md: 'space-between' },
-                  width: '100%',
-                  gap: { xs: 0.5, md: 0 }
-                }}
-              >
-                {/* Mobile Layout */}
-                <Box sx={{ display: { xs: 'block', md: 'none' }, width: '100%' }}>
-                  {/* Row 1: Icon + BP + Status + Delete */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <BPIcon sx={{ color: bpStatus.color, fontSize: 24 }} />
-                      <Typography variant="h6" sx={{ fontSize: '1rem' }}>
-                        {log.systolic}/{log.diastolic} {unit}
-                      </Typography>
-                      <Chip
-                        label={bpStageWords(bpStatus.stage).label}
-                        size="small"
-                        sx={stageTag(bpStatus.color)}
-                      />
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      {onEdit && (
-                        <IconButton
-                          edge="end"
-                          aria-label={editLabel}
-                          onClick={() => onEdit(log)}
-                          sx={{ color: 'text.secondary', p: 0.5 }}
-                          size="small"
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      )}
-                      <IconButton
-                        edge="end"
-                        aria-label={deleteLabel}
-                        onClick={() => onDelete(log.id || log._id)}
-                        sx={{ ...quietDelete, p: 0.5 }}
-                        size="small"
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </Box>
-
-                  {/* Row 2: Pulse + Date + Time */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pl: 5, flexWrap: 'wrap' }}>
-                    {log.pulse && (
-                      <Typography variant="body2" sx={{ fontWeight: 500, color: theme.palette.text.secondary }}>
-                        ♥ {log.pulse} bpm
-                      </Typography>
-                    )}
-                    <Typography variant="body2" color="text.secondary">
-                      {formatDate(log.log_date)}
-                      {timeLabel && ` • ${timeLabel}`}
-                    </Typography>
-                  </Box>
+          return (
+            <ListRow component="li" key={log.id || log._id} first={index === 0} sx={{ gap: 1, py: 0.5 }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  <Typography component="span" sx={{ fontWeight: 800, fontSize: '1.125rem' }}>
+                    {log.systolic}/{log.diastolic}
+                    <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 700 }}> {unit}</Box>
+                  </Typography>
+                  <Tag sx={{ bgcolor: bpStatus.color }}>{bpStageWords(bpStatus.stage).label}</Tag>
                 </Box>
-
-                {/* Desktop Layout */}
-                <Box sx={{ display: { xs: 'none', md: 'contents' } }}>
-                  {/* Left: Icon + BP Reading */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: '0 0 auto' }}>
-                    <BPIcon sx={{ color: bpStatus.color, fontSize: 28 }} />
-                    <Typography variant="h6">
-                      {log.systolic}/{log.diastolic} {unit}
+                <Box sx={{ display: 'flex', alignItems: 'center', columnGap: 1.5, flexWrap: 'wrap', mt: 0.25 }}>
+                  {log.pulse && (
+                    <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
+                      ♥ {log.pulse} bpm
                     </Typography>
-                  </Box>
-
-                  {/* Pulse */}
-                  <Box sx={{ flex: '0 0 auto' }}>
-                    {log.pulse ? (
-                      <Typography variant="body1" sx={{ fontWeight: 500, color: theme.palette.text.secondary }}>
-                        ♥ {log.pulse} bpm
-                      </Typography>
-                    ) : (
-                      <Typography variant="body1" sx={{ color: 'transparent' }}>
-                        ♥ -- bpm
-                      </Typography>
-                    )}
-                  </Box>
-
-                  {/* Status Chip */}
-                  <Box sx={{ flex: '0 0 auto' }}>
-                    <Chip
-                      label={bpStageWords(bpStatus.stage).label}
-                      size="small"
-                      sx={stageTag(bpStatus.color)}
-                    />
-                  </Box>
-
-                  {/* Date/Time */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '0 0 auto' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {formatDate(log.log_date)}
-                      {timeLabel && ` • ${timeLabel}`}
-                    </Typography>
-                  </Box>
-
-                  {/* Edit Button */}
-                  {onEdit && (
-                    <Box sx={{ flex: '0 0 auto' }}>
-                      <IconButton
-                        edge="end"
-                        aria-label={editLabel}
-                        onClick={() => onEdit(log)}
-                        sx={{ color: 'text.secondary' }}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                    </Box>
                   )}
-
-                  {/* Delete Button */}
-                  <Box sx={{ flex: '0 0 auto' }}>
-                    <IconButton
-                      edge="end"
-                      aria-label={deleteLabel}
-                      onClick={() => onDelete(log.id || log._id)}
-                      sx={quietDelete}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </Box>
+                  <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
+                    {formatDate(log.log_date)}
+                    {timeLabel && ` • ${timeLabel}`}
+                  </Typography>
                 </Box>
-              </ListItem>
-            );
-          })}
-        </List>
-      </CardContent>
-    </Card>
+              </Box>
+              {onEdit && (
+                <IconButton
+                  aria-label={editLabel}
+                  onClick={() => onEdit(log)}
+                  sx={{ width: 44, height: 44, color: 'text.secondary' }}
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              )}
+              <IconButton
+                aria-label={deleteLabel}
+                onClick={() => onDelete(log.id || log._id)}
+                sx={{ ...quietDelete, width: 44, height: 44 }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </ListRow>
+          );
+        })}
+      </Box>
+    </LabelPanel>
   );
 };
 

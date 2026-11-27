@@ -946,3 +946,31 @@ not yet on a device, and the prompt has never been run against a real model and 
   / 0.96 MB gzip, lazy.
 - Harness: 32a–32e; full NoteGeek run `scenes: 726  violations: 0  a11y: 0 (enforcing)  page errors: 0`.
 - Details: `apps/notegeek/DOCS/HANDWRITING.md` §4, `apps/notegeek/DOCS/CONTEXT.md` §27.
+
+## 2026-11-26: FitnessGeek "The Label"
+
+Chef: "Fitnessgeek currently looks themed after a 1990s Subway store." Reviewed, mocked three directions,
+Chef picked A. Review and item list: `apps/fitnessgeek/DOCS/THEME_REVIEW_2026-11.md`.
+
+- Four fixes first, each its own commit (`c9517090`, `8b767a29`, `abe8f713`, `d00cfb74`): floating Log buttons
+  no longer cover content on tablet; food-log macros never wrap; sidebar fits 800px; harness scene 63b checked
+  the wrong Save on a tablet.
+- The redesign is ONE commit so it can be reverted. Identity: the Nutrition Facts panel. Grey ground, white
+  panels with a 2px ink border, square corners, no shadows, Archivo, one blue for anything pressable; meals are
+  orange / green / violet / magenta as small marks only. Replaces Market Morning (Nunito, cream, basil, produce
+  fills). The plate ring is gone; a calorie bar split by meal replaces it.
+- New shared pieces in `src/components/primitives/`: `Label.jsx` (LabelPanel, Rule, FactHeadline, FactRow,
+  LabelBar, Tag, ListRow) and `Page.jsx` (the one page container). Hierarchy comes from rules and weight, not
+  boxes in boxes.
+- Desktop uses the width: facts left, meals or charts right, on Home, Food log, Weight and Blood pressure.
+- Blood pressure status is one colour set (success / warning / error) with the word beside it; systolic is ink
+  and diastolic blue, so red only ever means "high".
+- PWA wrapper: new "FG" label icon, theme-color and manifest on the new grounds, offline page restyled.
+- One dependency added: `@fontsource/archivo`.
+- Landmines found: an `sm` padding key silently overrides an `xs`-only `pb` (the tablet clearance bug); a
+  `Tag` drawn in capitals by CSS reports capitals from `innerText`, so scenes must compare without case; a
+  panel is no longer `.MuiCard-root`, so scenes select `[data-fg-panel]`; `pkill -f`/`pgrep -f` match the
+  shell that runs them.
+- Verified: unit suite 1,050 / 1,050; contrast 658 / 658; full harness on phone, desktop and tablet with a11y
+  enforcing, then the failing scenes re-run clean after fixes.
+- Open: on a phone the facts panel fills Full Home's first screen, so meals start one scroll down.

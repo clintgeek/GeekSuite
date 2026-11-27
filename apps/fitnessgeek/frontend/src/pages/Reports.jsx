@@ -1,26 +1,21 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
-  Container,
   Box,
   Typography,
-  Grid,
   ToggleButtonGroup,
   ToggleButton,
   Button,
   CircularProgress,
-  LinearProgress,
   useTheme
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import { GeekErrorState, useToast } from '@geeksuite/ui';
 import DayRibbon from '../components/Reports/DayRibbon.jsx';
 import BodyRecoverySection from '../components/Reports/BodyRecoverySection.jsx';
 import { AINoteFooter, AI_NOTES_NAME, aiNotesTitle, lastDaysSource } from '../components/Reports/aiNotes.jsx';
 import { formatSpan } from '../components/BodyComposition/bodyCompFormat.js';
-import { Surface, SectionLabel, DisplayHeading } from '../components/primitives';
+import { SectionLabel, DisplayHeading, LabelPanel, LabelBar, Page } from '../components/primitives';
 import {
   Download as DownloadIcon,
-  Insights as InsightsIcon,
   TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { reportsService } from '../services/reportsService.js';
@@ -131,7 +126,7 @@ const renderInsightContent = (text = '', theme) => {
  * One AI panel: loads, fails and empties on its own, and ends with the
  * footer that says what it was written from, when, and that it can be wrong.
  */
-const AIPanel = ({ title, icon: Icon, testId, loading, loadingLabel, error, data, empty, emptyText, emptyPattern, source }) => {
+const AIPanel = ({ title, testId, loading, loadingLabel, error, data, empty, emptyText, emptyPattern, source }) => {
   const theme = useTheme();
   const text = data?.content || '';
   let body;
@@ -179,18 +174,13 @@ const AIPanel = ({ title, icon: Icon, testId, loading, loadingLabel, error, data
     );
   }
   return (
-    <Surface data-testid={testId} sx={{ height: '100%' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-        <Icon sx={{ color: 'primary.main', fontSize: 20 }} />
-        <SectionLabel variant="emphasis">{title}</SectionLabel>
-      </Box>
-      {body}
-    </Surface>
+    <LabelPanel title={title} titleComponent="h3" data-testid={testId} sx={{ height: '100%' }}>
+      <Box sx={{ pt: 1.25 }}>{body}</Box>
+    </LabelPanel>
   );
 };
 
 const Reports = () => {
-  const theme = useTheme();
   const { notify } = useToast();
   const [range, setRange] = useState('7');
   const [loading, setLoading] = useState(true);
@@ -333,46 +323,39 @@ const Reports = () => {
 
   const rangeTitle = aiNotesTitle(days);
 
+  const grid2 = { display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 1.75, md: 2.25 }, alignItems: 'start' };
+  const rule = (t) => `1px solid ${t.palette.text.primary}`;
+  const averageEntries = Object.entries(overview?.averages || {});
+
   return (
-    <Container maxWidth="xl" sx={{ py: 4, px: { xs: 2, md: 4 } }}>
-      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem', mb: 4 }}>
+    <Page>
+      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
         How your eating went, and how your body is trending.
       </Typography>
 
       {/* Food — the range toggle lives in this section's own header, because
           it governs this section and the AI notes under it, and nothing
           else (D-5). */}
-      <Box component="section" aria-labelledby="food-heading" data-testid="reports-food" sx={{ mb: 5 }}>
-        <Box sx={{ mb: 2.5, display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-end', justifyContent: 'space-between' }}>
-          <Box>
-            <SectionLabel sx={{ mb: 0.75 }}>Food</SectionLabel>
-            <DisplayHeading size="card" id="food-heading">{rangeTitle}</DisplayHeading>
-          </Box>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-            {/* `size="small"` renders under the 44px tap floor the mobile
-                harness enforces (MOBILE_UI_PLAN 6). The compact look is kept;
-                only the hit area grows. The labels are words ("7 days"),
-                not "7d" — three of them fit a 360px phone row, and the
-                Export button wraps under them. */}
+      <Box
+        component="section"
+        aria-label="Food"
+        data-testid="reports-food"
+        sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.75, md: 2.25 } }}
+      >
+        <LabelPanel title={rangeTitle} level={1} titleComponent="h2" meta="Food">
+          {/* The range and Export on one row. `size="small"` renders under
+              the 44px tap floor the mobile harness enforces (MOBILE_UI_PLAN
+              6): the compact look is kept, only the hit area grows. The
+              labels are words ("7 days"), not "7d". Export is a text button:
+              the page's filled blue is not spent on a download. */}
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', justifyContent: 'space-between', py: 1.25 }}>
             <ToggleButtonGroup
               size="small"
               value={range}
               exclusive
               onChange={handleRangeChange}
               aria-label="How many days"
-              // A pill like every other control (visual review B6); the chosen
-              // range is basil, the app's "selected" look (B2).
-              sx={{
-                borderRadius: 999,
-                '& .MuiToggleButtonGroup-grouped': { minHeight: 44, minWidth: 44 },
-                '& .MuiToggleButtonGroup-grouped:first-of-type': { borderTopLeftRadius: 999, borderBottomLeftRadius: 999, pl: 1.75 },
-                '& .MuiToggleButtonGroup-grouped:last-of-type': { borderTopRightRadius: 999, borderBottomRightRadius: 999, pr: 1.75 },
-                '& .MuiToggleButton-root.Mui-selected': {
-                  bgcolor: alpha(theme.palette.primary.main, 0.12),
-                  color: 'primary.main',
-                  '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.16) },
-                },
-              }}
+              sx={{ '& .MuiToggleButtonGroup-grouped': { minHeight: 44, minWidth: 44 } }}
             >
               {RANGE_OPTIONS.map((option) => (
                 <ToggleButton key={option} value={option} sx={{ px: 1.25, whiteSpace: 'nowrap' }}>
@@ -381,270 +364,223 @@ const Reports = () => {
               ))}
             </ToggleButtonGroup>
             <Button
-              variant="tonal"
+              variant="text"
               startIcon={<DownloadIcon />}
               onClick={handleExport}
               disabled={exporting || loading}
+              sx={{ fontWeight: 700, minHeight: 44 }}
             >
               Export CSV
             </Button>
           </Box>
-        </Box>
 
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-            <CircularProgress />
-          </Box>
-        ) : error ? (
-          <GeekErrorState
-            title="Couldn’t load your reports"
-            error={error}
-            onRetry={fetchReports}
-          />
-        ) : (
-          <Box>
-            {/* Averages divide by the days that have logs (an unlogged day is
-                unknown, not zero) — so when that isn't every day, say so. */}
-            {overview && Number.isFinite(overview.days_logged) && overview.days_logged < rangeDays && (
-              <Typography data-testid="report-days-logged" variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
-                {`Averages cover the ${overview.days_logged} of ${rangeDays} days you logged.`}
-              </Typography>
-            )}
-            {/* Daily averages — "Calories 1,760 a day", "Protein 162g a day". */}
-            <Grid container spacing={2} sx={{ mb: 4 }}>
-              {overview && Object.entries(overview.averages || {}).map(([key, value]) => (
-                <Grid item xs={6} sm={4} md={2} key={key}>
-                  <Surface data-testid={`average-${key}`} sx={{ height: '100%' }}>
-                    <SectionLabel sx={{ mb: 1 }}>{metricLabels[key] || key}</SectionLabel>
-                    <Typography
-                      sx={{
-                        fontVariantNumeric: 'tabular-nums',
-                        fontSize: { xs: '1.75rem', sm: '2rem' },
-                        lineHeight: 1,
-                        letterSpacing: '-0.02em',
-                        fontWeight: 600,
-                        color: 'text.primary',
-                      }}
-                    >
-                      {`${commas(value)}${metricUnits[key] || ''}`}
-                    </Typography>
-                    <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.75 }}>
-                      a day
-                    </Typography>
-                  </Surface>
-                </Grid>
-              ))}
-            </Grid>
-
-            <Box sx={{ mb: 3 }}>
-              <DayRibbon
-                daily={overview?.daily || []}
-                calorieTarget={overview?.targets?.calories || overview?.calorieGoal}
-                rangeLabel={overview?.range ? formatSpan(overview.range.start, overview.range.end) : null}
-              />
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress />
             </Box>
-
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={8}>
-
-                {/* Calories by meal */}
-                <Surface sx={{ mb: 3 }} data-testid="meal-breakdown">
-                  <SectionLabel sx={{ mb: 1.5 }}>Calories by meal, average per day</SectionLabel>
-                  {mealRows.length ? mealRows.map((row) => (
-                    <Typography
-                      key={row.meal}
-                      data-testid="meal-row"
-                      sx={{
-                        fontVariantNumeric: 'tabular-nums',
-                        fontSize: '0.9375rem',
-                        py: 1,
-                        '&:not(:last-of-type)': {
-                          borderBottom: `1px dotted ${alpha(theme.palette.text.primary, 0.1)}`,
-                        },
-                      }}
+          ) : error ? (
+            <GeekErrorState
+              title="Couldn’t load your reports"
+              error={error}
+              onRetry={fetchReports}
+            />
+          ) : (
+            <>
+              {/* Averages divide by the days that have logs (an unlogged day is
+                  unknown, not zero) — so when that isn't every day, say so. */}
+              {overview && Number.isFinite(overview.days_logged) && overview.days_logged < rangeDays && (
+                <Typography data-testid="report-days-logged" variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+                  {`Averages cover the ${overview.days_logged} of ${rangeDays} days you logged.`}
+                </Typography>
+              )}
+              {/* Daily averages — "Calories 1,760 a day", "Protein 162g a day":
+                  headline numbers in a 2 / 3 / 6 column grid, parted by rules
+                  (the left rule of each first column and the top rule of the
+                  first row are clipped by the wrapper). */}
+              <Box sx={{ overflow: 'hidden', borderTop: (t) => `5px solid ${t.palette.text.primary}`, mt: 0 }}>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))', md: 'repeat(6, minmax(0, 1fr))' },
+                    ml: '-1px',
+                    mt: '-1px',
+                  }}
+                >
+                  {averageEntries.map(([key, value]) => (
+                    <Box
+                      key={key}
+                      data-testid={`average-${key}`}
+                      sx={{ borderTop: rule, borderLeft: rule, px: 1.5, py: 1.25, minWidth: 0 }}
                     >
-                      <Box component="span" sx={{ fontWeight: 700 }}>{row.label}</Box>
-                      {` · ${row.calories} cal a day`}
-                      {row.protein !== null && (
-                        <Box component="span" sx={{ color: 'text.secondary' }}>{` · protein ${row.protein}g`}</Box>
-                      )}
-                    </Typography>
-                  )) : (
-                    <Typography variant="body2" color="text.secondary">
-                      No meals logged in this range.
-                    </Typography>
-                  )}
-                </Surface>
-
-                {/* Days on target */}
-                <Surface data-testid="days-on-target">
-                  <SectionLabel sx={{ mb: 2 }}>Days on target</SectionLabel>
-                  {goalComplianceEntries.length ? goalComplianceEntries.map(([metric, detail]) => (
-                    <Box key={metric} sx={{ mb: 2, '&:last-child': { mb: 0 } }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
-                        <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', textTransform: 'capitalize' }}>
-                          {metricLabels[metric] || metric}
-                        </Typography>
-                        <Typography
-                          sx={{
-                            fontFamily: "inherit",
-                            fontVariantNumeric: 'tabular-nums',
-                            fontSize: '0.75rem',
-                            color: 'text.secondary',
-                          }}
-                        >
-                          {detail.daysWithin} days on target
-                        </Typography>
-                      </Box>
-                      <LinearProgress
-                        variant="determinate"
-                        value={detail.percentage}
-                        aria-label={`${metricLabels[metric] || metric}: ${detail.daysWithin} days on target`}
-                        sx={{ borderRadius: 999 }}
-                      />
-                    </Box>
-                  )) : (
-                    <Typography variant="body2" color="text.secondary">
-                      Set a daily target and I’ll count the days you hit it.
-                    </Typography>
-                  )}
-                </Surface>
-              </Grid>
-
-              <Grid item xs={12} md={4}>
-                {/* Top foods */}
-                <Surface padded={false} sx={{ mb: 3 }}>
-                  <Box
-                    sx={{
-                      px: 2.5,
-                      pt: 2,
-                      pb: 1.25,
-                      borderBottom: `1px dashed ${theme.palette.divider}`,
-                    }}
-                  >
-                    <SectionLabel>Your top foods</SectionLabel>
-                  </Box>
-                  <Box sx={{ p: 2.5 }}>
-                    {overview?.topFoods?.length ? overview.topFoods.map((food) => (
-                      <Box
-                        key={food.name}
-                        data-testid="top-food"
+                      <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
+                        {metricLabels[key] || key}
+                      </Typography>
+                      <Typography
                         sx={{
-                          py: 1,
-                          minWidth: 0,
-                          '&:not(:last-of-type)': {
-                            borderBottom: `1px dotted ${alpha(theme.palette.text.primary, 0.1)}`,
-                          },
+                          fontVariantNumeric: 'tabular-nums',
+                          fontSize: { xs: '1.75rem', sm: '2rem' },
+                          lineHeight: 1,
+                          letterSpacing: '-0.02em',
+                          fontWeight: 900,
+                          color: 'text.primary',
                         }}
                       >
-                        <Typography
-                          sx={{
-                            fontWeight: 600,
-                            fontSize: '0.875rem',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {food.name}
-                        </Typography>
-                        <Typography
-                          sx={{
-                            fontVariantNumeric: 'tabular-nums',
-                            fontSize: '0.8125rem',
-                            color: 'text.secondary',
-                          }}
-                        >
-                          {`${commas(food.calories)} cal over ${rangeDays} days · ${food.count} ${food.count === 1 ? 'time' : 'times'}`}
-                        </Typography>
-                      </Box>
-                    )) : (
-                      <Typography variant="body2" color="text.secondary">
-                        No repeated foods logged in this range.
+                        {`${commas(value)}${metricUnits[key] || ''}`}
                       </Typography>
-                    )}
-                  </Box>
-                </Surface>
+                      <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.5 }}>
+                        a day
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </>
+          )}
+        </LabelPanel>
 
-                {/* What stands out */}
-                <Surface padded={false}>
-                  <Box
+        {!loading && !error && (
+          <>
+            <DayRibbon
+              daily={overview?.daily || []}
+              calorieTarget={overview?.targets?.calories || overview?.calorieGoal}
+              rangeLabel={overview?.range ? formatSpan(overview.range.start, overview.range.end) : null}
+            />
+
+            <Box sx={grid2}>
+              {/* Calories by meal */}
+              <LabelPanel title="Calories by meal, average per day" data-testid="meal-breakdown">
+                {mealRows.length ? mealRows.map((row, i) => (
+                  <Typography
+                    key={row.meal}
+                    data-testid="meal-row"
                     sx={{
-                      px: 2.5,
-                      pt: 2,
-                      pb: 1.25,
-                      borderBottom: `1px dashed ${theme.palette.divider}`,
+                      fontVariantNumeric: 'tabular-nums',
+                      fontSize: '1rem',
+                      py: 1,
+                      borderTop: i === 0 ? 0 : (t) => `1px solid ${t.palette.divider}`,
                     }}
                   >
-                    <SectionLabel>What stands out</SectionLabel>
-                  </Box>
-                  <Box sx={{ p: 2.5 }}>
-                    {trends?.highlights?.length ? trends.highlights.map((item, idx) => (
-                      <Box key={idx} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1.5, '&:last-child': { mb: 0 } }}>
-                        <TrendingUpIcon fontSize="small" sx={{ color: theme.palette.primary.main, mt: 0.25 }} />
-                        <Typography sx={{ fontSize: '0.875rem', lineHeight: 1.5 }}>
-                          {item}
-                        </Typography>
-                      </Box>
-                    )) : (
-                      <Typography variant="body2" color="text.secondary">
-                        Nothing stands out yet.
-                      </Typography>
+                    <Box component="span" sx={{ fontWeight: 700 }}>{row.label}</Box>
+                    {` · ${row.calories} cal a day`}
+                    {row.protein !== null && (
+                      <Box component="span" sx={{ color: 'text.secondary' }}>{` · protein ${row.protein}g`}</Box>
                     )}
+                  </Typography>
+                )) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+                    No meals logged in this range.
+                  </Typography>
+                )}
+              </LabelPanel>
+
+              {/* Days on target */}
+              <LabelPanel title="Days on target" data-testid="days-on-target">
+                {goalComplianceEntries.length ? goalComplianceEntries.map(([metric, detail], i) => (
+                  <Box key={metric} sx={{ py: 1, borderTop: i === 0 ? 0 : (t) => `1px solid ${t.palette.divider}` }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
+                      <Typography sx={{ fontWeight: 700, fontSize: '1rem', textTransform: 'capitalize' }}>
+                        {metricLabels[metric] || metric}
+                      </Typography>
+                      <Typography sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.875rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                        {detail.daysWithin} days on target
+                      </Typography>
+                    </Box>
+                    <LabelBar
+                      value={detail.percentage}
+                      label={`${metricLabels[metric] || metric}: ${detail.daysWithin} days on target`}
+                      height={10}
+                      sx={{ mb: 0.25 }}
+                    />
                   </Box>
-                </Surface>
-              </Grid>
-            </Grid>
-          </Box>
+                )) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+                    Set a daily target and I’ll count the days you hit it.
+                  </Typography>
+                )}
+              </LabelPanel>
+
+              {/* Top foods */}
+              <LabelPanel title="Your top foods">
+                {overview?.topFoods?.length ? overview.topFoods.map((food, i) => (
+                  <Box
+                    key={food.name}
+                    data-testid="top-food"
+                    sx={{ py: 1, minWidth: 0, borderTop: i === 0 ? 0 : (t) => `1px solid ${t.palette.divider}` }}
+                  >
+                    <Typography sx={{ fontWeight: 700, fontSize: '1rem', overflowWrap: 'anywhere' }}>
+                      {food.name}
+                    </Typography>
+                    <Typography sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.875rem', color: 'text.secondary' }}>
+                      {`${commas(food.calories)} cal over ${rangeDays} days · ${food.count} ${food.count === 1 ? 'time' : 'times'}`}
+                    </Typography>
+                  </Box>
+                )) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+                    No repeated foods logged in this range.
+                  </Typography>
+                )}
+              </LabelPanel>
+
+              {/* What stands out */}
+              <LabelPanel title="What stands out">
+                {trends?.highlights?.length ? trends.highlights.map((item, idx) => (
+                  <Box key={idx} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, py: 1, borderTop: idx === 0 ? 0 : (t) => `1px solid ${t.palette.divider}` }}>
+                    <TrendingUpIcon fontSize="small" sx={{ color: 'text.primary', mt: 0.25 }} />
+                    <Typography sx={{ fontSize: '1rem', lineHeight: 1.5 }}>
+                      {item}
+                    </Typography>
+                  </Box>
+                )) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+                    Nothing stands out yet.
+                  </Typography>
+                )}
+              </LabelPanel>
+            </Box>
+          </>
         )}
       </Box>
 
       {/* Notes from the AI, for the same range — outside the food report's
           loading and error states, so each panel shows up, loads and fails
           on its own. */}
-      <Box component="section" aria-labelledby="ai-notes-heading" data-testid="reports-ai-notes" sx={{ mb: 5 }}>
-        <Box sx={{ mb: 2.5 }}>
+      <Box component="section" aria-labelledby="ai-notes-heading" data-testid="reports-ai-notes" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.75, md: 2.25 } }}>
+        <Box>
           <SectionLabel sx={{ mb: 0.75 }}>{AI_NOTES_NAME}</SectionLabel>
           <DisplayHeading size="card" id="ai-notes-heading">{rangeTitle}</DisplayHeading>
         </Box>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <AIPanel
-              title="Summary"
-              icon={InsightsIcon}
-              testId="weekly-ai"
-              loading={weeklyLoading}
-              loadingLabel="Loading the summary"
-              error={weeklyError}
-              data={weeklyCoach}
-              empty={nothingLogged}
-              emptyText="Log a few days and I’ll write a summary here."
-              emptyPattern={EMPTY_SUMMARY}
-              source={lastDaysSource(days)}
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <AIPanel
-              title="Trends"
-              icon={TrendingUpIcon}
-              testId="trend-ai"
-              loading={trendLoading}
-              loadingLabel="Loading the trends"
-              error={trendError}
-              data={trendWatch}
-              empty={false}
-              emptyText="Nothing stands out yet."
-              emptyPattern={EMPTY_TRENDS}
-              source={lastDaysSource(trendDays)}
-            />
-          </Grid>
-        </Grid>
+        <Box sx={grid2}>
+          <AIPanel
+            title="Summary"
+            testId="weekly-ai"
+            loading={weeklyLoading}
+            loadingLabel="Loading the summary"
+            error={weeklyError}
+            data={weeklyCoach}
+            empty={nothingLogged}
+            emptyText="Log a few days and I’ll write a summary here."
+            emptyPattern={EMPTY_SUMMARY}
+            source={lastDaysSource(days)}
+          />
+          <AIPanel
+            title="Trends"
+            testId="trend-ai"
+            loading={trendLoading}
+            loadingLabel="Loading the trends"
+            error={trendError}
+            data={trendWatch}
+            empty={false}
+            emptyText="Nothing stands out yet."
+            emptyPattern={EMPTY_TRENDS}
+            source={lastDaysSource(trendDays)}
+          />
+        </Box>
       </Box>
 
       {/* Body and recovery: its own 90-day window and its own loading, so the
           range toggle and the food report's states never reach it. */}
       <BodyRecoverySection />
-    </Container>
+    </Page>
   );
 };
 

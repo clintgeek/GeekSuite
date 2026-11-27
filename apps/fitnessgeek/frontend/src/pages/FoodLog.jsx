@@ -8,11 +8,9 @@ import {
   Button,
   Stack,
   Collapse,
-  Typography,
-  LinearProgress
+  Typography
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { trackColor } from '../theme/theme.jsx';
 import {
   ContentCopy as CopyIcon,
   People as PeopleIcon
@@ -37,7 +35,7 @@ import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { settingsService } from '../services/settingsService.js';
 import { goalsService } from '../services/goalsService.js';
 import { useToast } from '@geeksuite/ui';
-import { Surface, SectionLabel, StatNumber } from '../components/primitives';
+import { Surface, Page, LabelPanel, LabelBar, FactHeadline, Rule } from '../components/primitives';
 import { useExperience } from '../contexts/ExperienceContext.jsx';
 import { friendlyDay, mealWord } from '../utils/plainWords.js';
 import { mealOnDayL22 } from '../components/FoodLog/dayWords.js';
@@ -474,20 +472,57 @@ const FoodLog = () => {
   // "Sat, Sep 26" under 400px and still ran out of room beside the arrows.
   const formatDate = (dateString) => friendlyDay(dateString, today);
 
+  const toggleCaloriePanel = () => {
+    setShowCaloriePanel(prev => {
+      const next = !prev;
+      if (!prev && typeof window !== 'undefined') {
+        setTimeout(() => {
+          const panel = document.getElementById('calorie-goal-panel');
+          if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 0);
+      }
+      return next;
+    });
+  };
+
   return (
-    // Bottom padding clears the thumb-zone "Log food" button, which used to
-    // sit on top of the last meal's empty-state text (plan item 8): its 56px
-    // plus its 16px gap and a breath, above the safe area (visual review C1;
-    // 56px of padding wasn't enough). The top bar already says "Food log", so
-    // the page no longer says it twice more.
-    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 'calc(88px + env(safe-area-inset-bottom))', md: 6 }, maxWidth: 960, mx: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {/* Date Navigation with compact calorie card */}
-      <DateNavigator
-        selectedDate={selectedDate}
-        onPreviousDay={goToPreviousDay}
-        onNextDay={goToNextDay}
-        formatDate={formatDate}
-        calorieCard={
+    // `fab` keeps the clearance under the last panel on phones and portrait
+    // tablets (it used to clear a floating "Log food" button; there is none
+    // now, but the last meal still needs room above the tab bar).
+    <Page fab>
+      {/* Phone: one column, in the order you use it (day, calories, the box,
+          then the meals). From md: the day + calories + box on the left (it
+          sticks while the meals scroll), the day's meals on the right. */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '420px minmax(0, 1fr)' },
+          gap: { xs: 1.75, md: 3 },
+          alignItems: 'start',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: { xs: 1.5, md: 2 },
+            minWidth: 0,
+            position: { md: 'sticky' },
+            top: { md: 16 },
+            maxHeight: { md: 'calc(100vh - 32px)' },
+            overflowY: { md: 'auto' },
+            // The sticky column scrolls on its own; keep its focus rings.
+            p: { md: '2px' },
+            m: { md: '-2px' },
+          }}
+        >
+          <DateNavigator
+            selectedDate={selectedDate}
+            onPreviousDay={goToPreviousDay}
+            onNextDay={goToNextDay}
+            formatDate={formatDate}
+          />
+
           <CalorieSummary
             calories={nutritionSummary?.calories || 0}
             goal={nutritionSummary?.calorieGoal || 0}
@@ -495,276 +530,183 @@ const FoodLog = () => {
             // Simple: no "Includes N extra for today's activity", and no gear
             // that opens "Adjust today" — it could change her goal (Phase 1.6).
             add={isSimple ? 0 : baseAdd.add}
-            onSettings={isSimple ? undefined : () => {
-              setShowCaloriePanel(prev => {
-                const next = !prev;
-                if (!prev && typeof window !== 'undefined') {
-                  setTimeout(() => {
-                    const panel = document.getElementById('calorie-goal-panel');
-                    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }, 0);
-                }
-                return next;
-              });
-            }}
-            embedded
+            onSettings={isSimple ? undefined : toggleCaloriePanel}
             mode={mode}
             netCarbsConsumed={ketoTotals.totalNetCarbs}
             netCarbLimit={netCarbLimit}
           />
-        }
-      />
 
-      {/* B19: the day on screen couldn't be (re)read. The rows above stay. */}
-      {loadProblem && (
-        <Box role="status" sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-          <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem' }}>{loadProblem}</Typography>
-          <Button size="small" onClick={() => refreshLogs()} sx={{ minHeight: 44 }}>Try again</Button>
-        </Box>
-      )}
-
-      {/* Calorie Goal Panel (toggle) */}
-      <Collapse in={showCaloriePanel && !isSimple} unmountOnExit>
-        <Surface id="calorie-goal-panel" sx={{ mb: 2 }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
-            <Box sx={{ flex: 1 }}>
-              <SectionLabel sx={{ mb: 0.75 }}>Today’s target</SectionLabel>
-              <StatNumber value={todayCalorieGoal} unit="cal" size="display" />
+          {/* B19: the day on screen couldn't be (re)read. The rows below stay. */}
+          {loadProblem && (
+            <Box role="status" sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem' }}>{loadProblem}</Typography>
+              <Button size="small" onClick={() => refreshLogs()} sx={{ minHeight: 44 }}>Try again</Button>
             </Box>
-            <TextField
-              label="Change today’s target"
-              type="number"
-              inputProps={{ inputMode: 'decimal' }}
-              size="small"
-              value={goalInput}
-              onChange={(e) => setGoalInput(e.target.value)}
-              sx={{ width: 180 }}
-            />
-            <Button
-              variant="contained"
-              onClick={handleSaveTodayGoal}
-              disabled={savingGoal || !goalInput}
-            >
-                Save
-              </Button>
-          </Stack>
-          {goalSavedMsg && (
-            <Alert severity="success" sx={{ mt: 2 }}>{goalSavedMsg}</Alert>
           )}
-        </Surface>
-      </Collapse>
 
-      {/* Removed standalone top calorie card; it's now embedded under the date picker */}
+          {/* Calorie Goal Panel (toggle) */}
+          <Collapse in={showCaloriePanel && !isSimple} unmountOnExit>
+            <LabelPanel id="calorie-goal-panel" title="Today’s target">
+              <FactHeadline name="Calories" value={todayCalorieGoal.toLocaleString('en-US')} unit="cal" />
+              <Rule weight="medium" sx={{ mt: 1 }} />
+              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ pt: 1.5 }}>
+                <TextField
+                  label="Change today’s target"
+                  type="number"
+                  inputProps={{ inputMode: 'decimal' }}
+                  size="small"
+                  value={goalInput}
+                  onChange={(e) => setGoalInput(e.target.value)}
+                  sx={{ flex: 1, minWidth: 0 }}
+                />
+                <Button
+                  variant="outlined"
+                  onClick={handleSaveTodayGoal}
+                  disabled={savingGoal || !goalInput}
+                  sx={{ minHeight: 44 }}
+                >
+                  Save
+                </Button>
+              </Stack>
+              {goalSavedMsg && (
+                <Alert severity="success" sx={{ mt: 1.5 }}>{goalSavedMsg}</Alert>
+              )}
+            </LabelPanel>
+          </Collapse>
 
-      {/* The search box, inline. It is the page's main job, so it is on the
-          page — not behind a button that opens a dialog that owns a tab that
-          contains a field.
-
-          Its empty state is favourites and recents, which is what the Quick
-          Add accordion used to be — and which is folded here, because on THIS
-          page the meals below are what you came to see. It stays open on the
-          dedicated search page, where it is the content rather than something
-          in front of the content. */}
-      <Surface sx={{ p: { xs: 1.5, sm: 2 }, mb: 3 }}>
-        {/* On a backfilled day the box names the day, the way the add sheet
-            does: "Add to Thursday's dinner (yesterday)". Only the date card
-            above it used to (UX review L22). */}
-        {selectedDate !== today && (
-          <Typography
-            component="h2"
-            data-testid="inline-add-day"
-            sx={{ fontSize: '1.0625rem', fontWeight: 800, color: 'text.primary', mb: 1, px: 0.5 }}
-          >
-            {`Add to ${mealOnDayL22(mealWord(selectedMealType), selectedDate, today)}`}
-          </Typography>
-        )}
-        <FoodComposer
-          mode="page"
-          collapseIdleList
-          onClose={showLoggedMeal}
-          mealType={selectedMealType}
-          onMealTypeChange={setSelectedMealType}
-          onLogItems={logItems}
-          onDescribe={describeMeal}
-          onAdjustCalories={adjustLogCalories}
-          onUpdateLog={updateLog}
-          onSetCalories={setLogCalories}
-          onJustAdded={justAdded.show}
-          onUndo={undoLogs}
-          onBarcodeClick={() => setShowBarcodeScanner(true)}
-          onCreateFood={(query) => setCreateForm({ ...EMPTY_FOOD_FORM, name: query })}
-          ketoMode={mode === 'keto'}
-          showQuickPicks
-          date={selectedDate}
-        />
-      </Surface>
-
-      {/* Meal Sections */}
-      {(['breakfast', 'lunch', 'dinner', 'snack']).map((mealType) => (
-        <Box
-          key={mealType}
-          id={`meal-section-${mealType}`}
-          // Clears the sticky top bar when a finished log scrolls here.
-          sx={{ mb: 3, scrollMarginTop: 88 }}
-        >
-          <MealSection
-            mealType={mealType}
-            logs={getLogsByMealType(mealType)}
-            onAddFood={handleAddFood}
-            onEditLog={handleEditLog}
-            onDeleteLog={handleDeleteLog}
-            onSaveMeal={handleSaveMeal}
-            showActions={true}
-            mode={mode}
-            favoriteFoodIds={favoriteFoodIds}
-            onFavoriteChange={toggleFavoriteId}
-            justAdded={justAdded.renderFor(mealType, selectedDate)}
-            simple={isSimple}
-          />
-        </Box>
-      ))}
-
-      {/* Copy Meal and Household, which used to be a row of buttons stacked
-          ahead of the date. Copying yesterday's meal is now one tap in the
-          add box ("Same as yesterday's …"); this is for any other day.
-          Neither is in Simple: "Same as …" in the add sheet covers her, and
-          Copy a meal is a Full-sized form (Chef, 2026-10-17, UX review L3). */}
-      {!isSimple && (
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-        <Button
-          variant="text"
-          startIcon={<CopyIcon />}
-          onClick={() => setShowCopyDialog(true)}
-          sx={{ minHeight: 48 }}
-        >
-          Copy a meal from another day
-        </Button>
-          <Button
-            variant="text"
-            startIcon={<PeopleIcon />}
-            onClick={() => setShowHouseholdDialog(true)}
-            sx={{ minHeight: 48 }}
-          >
-            What your household ate
-          </Button>
-      </Box>
-      )}
-
-      {/* Macros and the calorie panel are Full-mode detail (plan: Simple
-          keeps macros out of the way). */}
-      {!isSimple && (
-      <Box sx={{ mt: 3 }}>
-        <NutritionSummary summary={nutritionSummary} showGoals={true} onCalorieSettingsClick={() => {
-          setShowCaloriePanel(prev => {
-            const next = !prev;
-            if (!prev && typeof window !== 'undefined') {
-              setTimeout(() => {
-                const panel = document.getElementById('calorie-goal-panel');
-                if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }, 0);
-            }
-            return next;
-          });
-        }} />
-      </Box>
-      )}
-
-      {/* Keto: Net Carb Day Total (Task D4) */}
-      {!isSimple && mode === 'keto' && (() => {
-        const { totalNetCarbs } = ketoTotals;
-        const status = ketoStatus(totalNetCarbs, netCarbLimit);
-        const barPct = Math.min((totalNetCarbs / netCarbLimit) * 100, 100);
-        const barColor = status === 'over'
-          ? theme.palette.error.main
-          : status === 'approaching'
-            ? theme.palette.warning.main
-            : theme.palette.primary.main;
-        return (
-          <Surface sx={{ mt: 2, p: { xs: 1.5, sm: 2 } }}>
-            <Typography
-              variant="caption"
-              sx={{
-                display: 'block',
-                color: theme.palette.text.secondary,
-                fontSize: '0.9375rem',
-                fontWeight: 800,
-                mb: 0.5
-              }}
-            >
-              Net carbs today
-            </Typography>
-            <Typography
-              sx={{
-                fontFamily: 'inherit',
-                fontWeight: 700,
-                fontSize: '1.5rem',
-                color: theme.palette.warning.main,
-                lineHeight: 1.2,
-                mb: 1
-              }}
-            >
-              {totalNetCarbs}g
+          {/* The search box, inline. It is the page's main job, so it is on the
+              page — not behind a button that opens a dialog that owns a tab that
+              contains a field. Its empty state is favourites and recents, folded
+              here because on THIS page the meals are what you came to see. */}
+          <Surface sx={{ p: { xs: 1.5, sm: 2 } }}>
+            {/* On a backfilled day the box names the day, the way the add sheet
+                does: "Add to Thursday's dinner (yesterday)" (UX review L22). */}
+            {selectedDate !== today && (
               <Typography
-                component="span"
-                sx={{
-                  fontFamily: 'inherit',
-                  fontSize: '1rem',
-                  color: theme.palette.text.secondary,
-                  fontWeight: 400,
-                  ml: 0.5
-                }}
+                component="h2"
+                data-testid="inline-add-day"
+                sx={{ fontSize: '1.0625rem', fontWeight: 700, color: 'text.primary', mb: 1 }}
               >
-                / {netCarbLimit}g
+                {`Add to ${mealOnDayL22(mealWord(selectedMealType), selectedDate, today)}`}
               </Typography>
-            </Typography>
-            <LinearProgress
-              variant="determinate"
-              value={barPct}
-              aria-label={`Net carbs: ${totalNetCarbs}g of ${netCarbLimit}g`}
-              sx={{
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: trackColor(theme),
-                '& .MuiLinearProgress-bar': {
-                  backgroundColor: barColor,
-                  borderRadius: 4
-                }
-              }}
+            )}
+            <FoodComposer
+              mode="page"
+              collapseIdleList
+              onClose={showLoggedMeal}
+              mealType={selectedMealType}
+              onMealTypeChange={setSelectedMealType}
+              onLogItems={logItems}
+              onDescribe={describeMeal}
+              onAdjustCalories={adjustLogCalories}
+              onUpdateLog={updateLog}
+              onSetCalories={setLogCalories}
+              onJustAdded={justAdded.show}
+              onUndo={undoLogs}
+              onBarcodeClick={() => setShowBarcodeScanner(true)}
+              onCreateFood={(query) => setCreateForm({ ...EMPTY_FOOD_FORM, name: query })}
+              ketoMode={mode === 'keto'}
+              showQuickPicks
+              date={selectedDate}
             />
-            <Typography
-              variant="caption"
-              sx={{
-                display: 'block',
-                mt: 0.5,
-                color: barColor,
-                fontWeight: 600,
-                fontSize: '0.75rem'
-              }}
-            >
-              {status === 'over'
-                ? `${Math.round(totalNetCarbs - netCarbLimit)}g over your limit`
-                : status === 'approaching'
-                  ? `Close to your limit — ${Math.round(netCarbLimit - totalNetCarbs)}g left`
-                  : `${Math.round(netCarbLimit - totalNetCarbs)}g left`}
-            </Typography>
           </Surface>
-        );
-      })()}
+        </Box>
 
-      {/* Keto: Asterisk footnote (Task D5) */}
-      {mode === 'keto' && ketoTotals.anyMissingFiber && (
-        <Typography
-          variant="caption"
-          sx={{
-            display: 'block',
-            mt: 1,
-            color: theme.palette.text.secondary,
-            fontSize: '0.75rem'
-          }}
-        >
-          * No fiber listed for this food, so it counts all its carbs
-        </Typography>
-      )}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.75, md: 2 }, minWidth: 0 }}>
+          {/* Meal Sections */}
+          {(['breakfast', 'lunch', 'dinner', 'snack']).map((mealType) => (
+            <Box
+              key={mealType}
+              id={`meal-section-${mealType}`}
+              // Clears the sticky top bar when a finished log scrolls here.
+              sx={{ scrollMarginTop: 88 }}
+            >
+              <MealSection
+                mealType={mealType}
+                logs={getLogsByMealType(mealType)}
+                onAddFood={handleAddFood}
+                onEditLog={handleEditLog}
+                onDeleteLog={handleDeleteLog}
+                onSaveMeal={handleSaveMeal}
+                showActions={true}
+                mode={mode}
+                favoriteFoodIds={favoriteFoodIds}
+                onFavoriteChange={toggleFavoriteId}
+                justAdded={justAdded.renderFor(mealType, selectedDate)}
+                simple={isSimple}
+              />
+            </Box>
+          ))}
+
+          {/* Macros and the totals panel are Full-mode detail (plan: Simple
+              keeps macros out of the way). */}
+          {!isSimple && (
+            <NutritionSummary summary={nutritionSummary} showGoals={true} onCalorieSettingsClick={toggleCaloriePanel} />
+          )}
+
+          {/* Keto: Net Carb Day Total (Task D4) */}
+          {!isSimple && mode === 'keto' && (() => {
+            const { totalNetCarbs } = ketoTotals;
+            const status = ketoStatus(totalNetCarbs, netCarbLimit);
+            const barPct = Math.min((totalNetCarbs / netCarbLimit) * 100, 100);
+            const barColor = status === 'over'
+              ? theme.palette.error.main
+              : status === 'approaching'
+                ? theme.palette.warning.main
+                : theme.palette.primary.main;
+            return (
+              <LabelPanel title="Net carbs today">
+                <FactHeadline name="Net carbs" value={`${totalNetCarbs}g`} unit={`/ ${netCarbLimit}g`} />
+                <LabelBar
+                  value={barPct}
+                  segments={[{ value: barPct, color: barColor }]}
+                  label={`Net carbs: ${totalNetCarbs}g of ${netCarbLimit}g`}
+                />
+                <Typography sx={{ fontSize: '0.9375rem', fontWeight: 700 }}>
+                  {status === 'over'
+                    ? `${Math.round(totalNetCarbs - netCarbLimit)}g over your limit`
+                    : status === 'approaching'
+                      ? `Close to your limit — ${Math.round(netCarbLimit - totalNetCarbs)}g left`
+                      : `${Math.round(netCarbLimit - totalNetCarbs)}g left`}
+                </Typography>
+              </LabelPanel>
+            );
+          })()}
+
+          {/* Keto: Asterisk footnote (Task D5) */}
+          {mode === 'keto' && ketoTotals.anyMissingFiber && (
+            <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
+              * No fiber listed for this food, so it counts all its carbs
+            </Typography>
+          )}
+
+          {/* Copy Meal and Household, which used to be a row of buttons stacked
+              ahead of the date. Copying yesterday's meal is now one tap in the
+              add box ("Same as yesterday's …"); this is for any other day.
+              Neither is in Simple: "Same as …" in the add sheet covers her, and
+              Copy a meal is a Full-sized form (Chef, 2026-10-17, UX review L3). */}
+          {!isSimple && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              <Button
+                variant="text"
+                startIcon={<CopyIcon />}
+                onClick={() => setShowCopyDialog(true)}
+                sx={{ minHeight: 48 }}
+              >
+                Copy a meal from another day
+              </Button>
+              <Button
+                variant="text"
+                startIcon={<PeopleIcon />}
+                onClick={() => setShowHouseholdDialog(true)}
+                sx={{ minHeight: 48 }}
+              >
+                What your household ate
+              </Button>
+            </Box>
+          )}
+        </Box>
+      </Box>
 
       {/* The meal-slot "+" opens the same box in a sheet, with that meal
           already chosen. Same component, same behaviour, less chrome. */}
@@ -861,7 +803,7 @@ const FoodLog = () => {
           <CircularProgress />
         </Box>
       )}
-    </Box>
+    </Page>
   );
 };
 

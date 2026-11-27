@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Alert, Box, Button, Chip, Typography } from '@mui/material';
 import { QrCodeScanner as BarcodeIcon, CheckCircle as AddedIcon, Undo as UndoIcon, Check as CheckIcon } from '@mui/icons-material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import { useToast } from '@geeksuite/ui';
 import ComposerBox from './ComposerBox.jsx';
 import UnifiedFoodSearch from './UnifiedFoodSearch.jsx';
@@ -880,7 +880,39 @@ const FoodComposer = ({
   const adjustingAdded = adjusting ? addedByKey[identityOf(adjusting)] : null;
   const adjustingPrior = adjustingAdded?.logIds?.length === 1 ? adjustingAdded : null;
 
-  const pillButton = { minHeight: 48, borderRadius: 999, fontWeight: 800, fontSize: '1rem', px: 2.5, boxShadow: 'none' };
+  // Four square chips; the chosen one is ink with paper text (the grammar's
+  // "selected"), not a second blue competing with Log it.
+  const mealPicker = onMealTypeChange ? (
+    <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }} role="group" aria-label="Which meal">
+      {['breakfast', 'lunch', 'dinner', 'snack'].map((m) => (
+        <Chip
+          key={m}
+          label={mealLabel(m)}
+          onClick={() => onMealTypeChange(m)}
+          disabled={busy}
+          aria-pressed={m === mealType}
+          variant="outlined"
+          sx={{
+            height: 44,
+            borderRadius: 0,
+            fontWeight: 700,
+            fontSize: '0.875rem',
+            borderWidth: 1.5,
+            borderColor: 'text.primary',
+            color: 'text.primary',
+            '& .MuiChip-label': { px: 1.5 },
+            ...(m === mealType ? {
+              bgcolor: 'text.primary',
+              color: 'background.paper',
+              '&&:hover, &&:focus': { bgcolor: 'text.primary' },
+            } : {}),
+          }}
+        />
+      ))}
+    </Box>
+  ) : null;
+
+  const pillButton = { minHeight: 48, fontWeight: 700, fontSize: '1rem', px: 2.5, boxShadow: 'none' };
 
   if (result) {
     // Entries that landed in different meals are named per row (L6); the
@@ -891,15 +923,8 @@ const FoodComposer = ({
       : sheetMealOnDay(mealWord(result.mealType), result.date, today, day);
     return (
       <Box className={className} data-testid="result-card" sx={{ pb: 1 }}>
-        <Box
-          sx={{
-            p: { xs: 2, sm: 2.5 },
-            borderRadius: '20px',
-            border: `2px solid ${alpha(theme.palette.primary.main, 0.55)}`,
-            bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.1 : 0.05),
-          }}
-        >
-          <Typography component="h3" role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.375rem', fontWeight: 800, color: 'text.primary', mb: 0.5 }}>
+        <Box sx={{ borderTop: `5px solid ${theme.palette.text.primary}`, pt: 1.5 }}>
+          <Typography component="h3" role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.375rem', fontWeight: 900, color: 'text.primary', mb: 0.5 }}>
             <AddedIcon sx={{ color: theme.palette.primary.main, fontSize: 28 }} aria-hidden />
             Added to {where}
           </Typography>
@@ -973,6 +998,7 @@ const FoodComposer = ({
         status={status.text}
         statusTone={status.tone}
         statusKind={status.kind}
+        mealPicker={mealPicker}
       />
 
       {speech.listening && (
@@ -985,11 +1011,10 @@ const FoodComposer = ({
             alignItems: 'center',
             gap: 1.5,
             mb: 2,
-            px: 2,
+            px: 1.5,
             py: 1.5,
-            borderRadius: '18px',
-            bgcolor: alpha(theme.palette.primary.main, 0.1),
-            border: `2px solid ${theme.palette.primary.main}`,
+            borderTop: `2px solid ${theme.palette.primary.main}`,
+            borderBottom: `2px solid ${theme.palette.primary.main}`,
           }}
         >
           <Box
@@ -1009,7 +1034,7 @@ const FoodComposer = ({
             }}
           />
           <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography sx={{ fontWeight: 800, fontSize: '1.0625rem', color: 'text.primary' }}>
+            <Typography sx={{ fontWeight: 700, fontSize: '1.0625rem', color: 'text.primary' }}>
               Listening… say what you ate
             </Typography>
             {speech.interim && (
@@ -1031,7 +1056,7 @@ const FoodComposer = ({
       )}
 
       {speech.errorText && (
-        <Alert severity="info" onClose={speech.clearError} sx={{ mb: 1.5, borderRadius: 2, fontSize: '1rem' }} data-testid="mic-error">
+        <Alert severity="info" onClose={speech.clearError} sx={{ mb: 1.5, fontSize: '1rem' }} data-testid="mic-error">
           {speech.errorText}
         </Alert>
       )}
@@ -1044,13 +1069,11 @@ const FoodComposer = ({
           data-testid="day-confirm"
           sx={{
             mb: 2,
-            p: 1.5,
-            borderRadius: '18px',
-            border: `2px solid ${theme.palette.primary.main}`,
-            bgcolor: theme.palette.background.paper,
+            py: 1.5,
+            borderTop: `2px solid ${theme.palette.primary.main}`,
           }}
         >
-          <Typography id="composer-day-question" sx={{ fontSize: '1.0625rem', fontWeight: 800, color: 'text.primary', mb: 1 }}>
+          <Typography id="composer-day-question" sx={{ fontSize: '1.0625rem', fontWeight: 700, color: 'text.primary', mb: 1 }}>
             Log this to {dayWords(dayAsk.target)}?
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -1071,37 +1094,6 @@ const FoodComposer = ({
             <Button key={name} variant="outlined" disabled={busy} onClick={() => pickFragment(name)} sx={{ ...pillButton, borderWidth: 2, '&:hover': { borderWidth: 2 } }}>
               Pick {name.toLowerCase()}
             </Button>
-          ))}
-        </Box>
-      )}
-
-      {onMealTypeChange && (
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }} role="group" aria-label="Which meal">
-          {['breakfast', 'lunch', 'dinner', 'snack'].map((m) => (
-            <Chip
-              key={m}
-              label={mealLabel(m)}
-              onClick={() => onMealTypeChange(m)}
-              disabled={busy}
-              aria-pressed={m === mealType}
-              variant="outlined"
-              // Chosen is basil at 8% with a basil edge, not a filled basil
-              // chip competing with Log it (visual review B2).
-              sx={{
-                height: 44,
-                borderRadius: 999,
-                fontWeight: 700,
-                fontSize: '0.9375rem',
-                '& .MuiChip-label': { px: 1.75 },
-                ...(m === mealType ? {
-                  bgcolor: alpha(theme.palette.primary.main, 0.08),
-                  borderColor: theme.palette.primary.main,
-                  borderWidth: 2,
-                  color: 'text.primary',
-                  '&&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.14) },
-                } : {}),
-              }}
-            />
           ))}
         </Box>
       )}
@@ -1145,7 +1137,7 @@ const FoodComposer = ({
           startIcon={<BarcodeIcon />}
           onClick={onBarcodeClick}
           disabled={busy}
-          sx={{ mt: 1.5, minHeight: 44, fontWeight: 700, fontSize: '1rem' }}
+          sx={{ mt: 0.5, minHeight: 44, px: 0, fontWeight: 700, fontSize: '1rem' }}
         >
           Scan a barcode
         </Button>

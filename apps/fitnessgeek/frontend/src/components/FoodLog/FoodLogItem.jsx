@@ -3,15 +3,12 @@ import {
   Box,
   Typography,
   IconButton,
-  Chip,
   Tooltip,
-  Avatar,
   ButtonBase
 } from '@mui/material';
 import {
   EditOutlined as EditIcon,
   DeleteOutline as DeleteIcon,
-  Restaurant as FoodIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon
 } from '@mui/icons-material';
@@ -23,6 +20,7 @@ import { errorMessage } from '../../utils/errorMessage.js';
 import { netCarbs as calcNetCarbs } from '../../utils/ketoMath.js';
 import { amountLabel } from './amount.js';
 import { macroLine } from '../../utils/plainWords.js';
+import { ListRow } from '../primitives';
 
 const SWIPE_THRESHOLD = 60;
 
@@ -38,7 +36,9 @@ const FoodLogItem = ({
   // Simple (UX review L15): the name, the amount and "190 cal", and the whole
   // row opens Edit. No macro shorthand, no star/pencil/trash, no swipe —
   // Remove is inside Edit, with the usual Undo.
-  simple = false
+  simple = false,
+  // The first row of a panel sits directly under the rule: no hairline above.
+  first = false
 }) => {
   const theme = useTheme();
   const starInk = (theme.palette.produce?.dinner || mealColors('dinner', theme.palette.mode)).text;
@@ -104,28 +104,26 @@ const FoodLogItem = ({
           alignItems: 'center',
           gap: 1.5,
           minHeight: 56,
-          px: 2,
           py: 1.25,
           textAlign: 'left',
-          borderRadius: '12px',
-          border: `1px solid ${theme.palette.divider}`,
-          backgroundColor: theme.palette.background.paper,
+          borderRadius: 0,
+          borderTop: first ? 0 : `1px solid ${theme.palette.divider}`,
           '&:focus-visible': { outline: `3px solid ${theme.palette.text.primary}`, outlineOffset: 2 },
           '@media (hover: hover)': { '&:hover': { backgroundColor: theme.palette.action.hover } },
         }}
       >
         <Typography
           component="span"
-          sx={{ flex: 1, minWidth: 0, fontSize: '1.0625rem', fontWeight: 600, color: 'text.primary', lineHeight: 1.35, overflowWrap: 'anywhere' }}
+          sx={{ flex: 1, minWidth: 0, fontSize: '1.0625rem', fontWeight: 700, color: 'text.primary', lineHeight: 1.35, overflowWrap: 'anywhere' }}
         >
           {food_item.name}
           {amount && (
-            <Box component="span" sx={{ color: 'text.secondary', fontWeight: 700, ml: 0.75, whiteSpace: 'nowrap' }}>
+            <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400, ml: 0.75, whiteSpace: 'nowrap' }}>
               {amount}
             </Box>
           )}
         </Typography>
-        <Typography component="span" sx={{ fontSize: '1rem', fontWeight: 700, color: 'text.secondary', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+        <Typography component="span" sx={{ fontSize: '1.0625rem', fontWeight: 700, color: 'text.primary', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
           {totalCalories.toLocaleString('en-US')} cal
         </Typography>
       </ButtonBase>
@@ -236,7 +234,7 @@ const FoodLogItem = ({
     if (!swipeEnabled) return children;
 
     return (
-      <Box sx={{ position: 'relative', overflow: 'hidden', borderRadius: '12px' }}>
+      <Box sx={{ position: 'relative', overflow: 'hidden' }}>
         {/* Edit action (left side, revealed on swipe right).
             This box (and its Delete sibling below) sits at rest with
             opacity 0 but was still IN the layout and still absolutely
@@ -327,172 +325,56 @@ const FoodLogItem = ({
     );
   };
 
+  const dense = macroLine({ protein: totalProtein, carbs: totalCarbs, fat: totalFat }, { dense: true });
+  const full = `Protein ${totalProtein} g · Carbs ${totalCarbs} g · Fat ${totalFat} g`;
+  const servingWords = servingsCount === 1 ? '1 serving' : `×${servingsCount}`;
+  const macroSx = { color: theme.palette.text.secondary, fontSize: '0.875rem', whiteSpace: 'nowrap' };
+
   return (
     <SwipeWrapper>
-      <Box
+      <ListRow
+        first={first}
         sx={{
-          display: 'flex',
           alignItems: 'flex-start',
           // Phones: the three actions drop to their own line under the text
           // (they were squeezing the macro line into an orphaned "g").
           flexWrap: { xs: 'wrap', sm: 'nowrap' },
           columnGap: { xs: 1.5, sm: 2 },
-          rowGap: { xs: 0.5, sm: 0 },
-          p: { xs: 2, sm: 2.5 },
+          rowGap: { xs: 0.25, sm: 0 },
           backgroundColor: theme.palette.background.paper,
-          border: `1px solid ${theme.palette.divider}`,
-          borderRadius: '12px',
-          transition: swipeEnabled ? 'none' : 'all 0.2s ease',
-          ...(!swipeEnabled && {
-            '&:hover': {
-              backgroundColor: theme.palette.action.hover,
-              borderColor: theme.palette.divider,
-              boxShadow: theme.shadows[2],
-              transform: 'translateX(4px)'
-            }
-          })
         }}
       >
-      {/* Food Icon */}
-      <Avatar
-        sx={{
-          backgroundColor: theme.palette.tonal?.bg || alpha(theme.palette.primary.main, 0.12),
-          color: theme.palette.tonal?.ink || theme.palette.primary.main,
-          width: { xs: 36, sm: 40 },
-          height: { xs: 36, sm: 40 },
-          flexShrink: 0,
-        }}
-      >
-        <FoodIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
-      </Avatar>
-
-      {/* Food Info */}
+      {/* Food Info: name bold, amount beside it, macros as one muted line */}
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        {/* Food Name and Brand */}
-        <Box sx={{ mb: 0.5 }}>
-          <Typography
-            variant="body1"
-            sx={{
-              fontWeight: 700,
-              fontSize: { xs: '0.9375rem', sm: '1rem' },
-              color: theme.palette.text.primary,
-              lineHeight: 1.3
-            }}
-          >
-            {food_item.name}
-          </Typography>
-        </Box>
+        <Typography
+          sx={{ fontSize: '1rem', color: 'text.primary', lineHeight: 1.3, overflowWrap: 'anywhere' }}
+        >
+          <Box component="span" sx={{ fontWeight: 700 }}>{food_item.name}</Box>
+          <Box component="span" sx={{ color: 'text.secondary', ml: 0.75, whiteSpace: 'nowrap' }}>{servingWords}</Box>
+        </Typography>
 
-        {/* Brand */}
         {food_item.brand && (
-          <Typography
-            variant="caption"
-            sx={{
-              color: theme.palette.text.secondary,
-              fontSize: { xs: '0.8125rem', sm: '0.875rem' },
-              display: 'block',
-              mb: 1
-            }}
-          >
+          <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.3 }}>
             {food_item.brand}
           </Typography>
         )}
 
-        {/* Meta: on a phone the calorie chip, macro line and servings chip
-            are one wrapping line, each a whole unit (never broken inside).
-            On sm+ this wrapper is a plain block and the two rows stack. */}
-        <Box sx={{
-          display: { xs: 'flex', sm: 'block' },
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          columnGap: 1,
-          rowGap: 0.5
-        }}>
-        {/* Nutrition Info - Condensed on narrow screens */}
-        <Box sx={{
-          display: { xs: 'none', sm: 'flex' },
-          gap: 0.75,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          mb: 1
-        }}>
-          <Chip
-            label={`${totalCalories.toLocaleString('en-US')} cal`}
-            size="small"
-            // Info tags, not filled basil (visual review B1/B5).
-            variant="tag"
-          />
-          <Chip
-            label={macroLine({ protein: totalProtein, carbs: totalCarbs, fat: totalFat }, { dense: true })}
-            size="small"
-            variant="tag"
-            sx={{ color: theme.palette.text.secondary }}
-          />
+        <Typography component="div" sx={{ mt: 0.25, lineHeight: 1.4 }}>
+          <Box component="span" sx={{ ...macroSx, display: { xs: 'inline', sm: 'none' } }}>{dense}</Box>
+          <Box component="span" sx={{ ...macroSx, display: { xs: 'none', sm: 'inline' } }}>{full}</Box>
           {mode === 'keto' && (
-            <Chip
-              label={`${totalNetCarbs}g net carbs${isMissingFiber ? '*' : ''}`}
-              size="small"
-              variant="tag"
-            />
+            <Box component="span" sx={{ ...macroSx, fontWeight: 700, color: 'text.primary' }}>
+              {' '}· {totalNetCarbs} g net carbs{isMissingFiber ? '*' : ''}
+            </Box>
           )}
-        </Box>
-        {/* Mobile condensed nutrition display */}
-        <Box sx={{
-          display: { xs: 'contents', sm: 'none' }
-        }}>
-          <Chip
-            label={`${totalCalories.toLocaleString('en-US')} cal`}
-            size="small"
-            variant="tag"
-          />
-          <Typography
-            variant="caption"
-            sx={{
-              color: theme.palette.text.secondary,
-              fontSize: '0.75rem',
-              fontWeight: 500,
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {macroLine({ protein: totalProtein, carbs: totalCarbs, fat: totalFat }, { dense: true })}
-          </Typography>
-          {mode === 'keto' && (
-            <Typography
-              variant="caption"
-              sx={{
-                color: theme.palette.warning.main,
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                fontFamily: 'inherit',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              · {totalNetCarbs}g net carbs{isMissingFiber ? '*' : ''}
-            </Typography>
-          )}
-        </Box>
+        </Typography>
 
-        {/* Serving Indicator */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Chip
-            label={`${servingsCount} serving${servingsCount !== 1 ? 's' : ''}`}
-            size="small"
-            // An info tag (visual review B5).
-            variant="tag"
-            sx={{ '& .MuiChip-label': { px: 1.25 } }}
-          />
-        </Box>
-        </Box>
-
-        {/* Notes */}
         {notes && (
           <Typography
-            variant="caption"
             sx={{
               color: theme.palette.text.secondary,
               fontSize: '0.8125rem',
-              mt: 1,
-              display: 'block',
+              mt: 0.5,
               fontStyle: 'italic',
               pl: 1,
               borderLeft: `2px solid ${theme.palette.divider}`
@@ -502,6 +384,10 @@ const FoodLogItem = ({
           </Typography>
         )}
       </Box>
+
+      <Typography component="span" sx={{ fontSize: '1.0625rem', fontWeight: 700, whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+        {totalCalories.toLocaleString('en-US')} cal
+      </Typography>
 
       {/* Action Buttons */}
       {showActions && (
@@ -561,7 +447,7 @@ const FoodLogItem = ({
           </Tooltip>
         </Box>
       )}
-      </Box>
+      </ListRow>
     </SwipeWrapper>
   );
 };

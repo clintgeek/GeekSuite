@@ -3,8 +3,6 @@ import {
   Button,
   Box,
   Typography,
-  Card,
-  CardContent,
   List,
   ListItem,
   ListItemText,
@@ -20,12 +18,12 @@ import {
 import {
   People as PeopleIcon,
   ContentCopy as CopyIcon,
-  Restaurant as MealIcon
 } from '@mui/icons-material';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import { errorMessage } from '../../utils/errorMessage.js';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { fmt, mealLabel, mealWord } from '../../utils/plainWords.js';
+import { mealColors } from '../../theme/theme.jsx';
 import { useToday } from '../../hooks/useToday.js';
 import { dayName } from './dayWords.js';
 
@@ -225,8 +223,8 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                         const totalCals = calculateMealCalories(logs);
 
                         return (
-                          <Card key={mealType} sx={{ mb: 2 }}>
-                            <CardContent sx={{ pb: '8px !important' }}>
+                          <Box key={mealType} sx={{ mb: 2, pt: 1, borderTop: (t) => `5px solid ${t.palette.text.primary}` }}>
+                            <Box>
                               <Box sx={{
                                 display: 'flex',
                                 justifyContent: 'space-between',
@@ -234,8 +232,12 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                                 mb: 1
                               }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <MealIcon color="primary" fontSize="small" />
-                                  <Typography variant="subtitle1" fontWeight={600}>
+                                  <Box
+                                    component="span"
+                                    aria-hidden
+                                    sx={{ width: 12, height: 12, bgcolor: (t) => (t.palette.produce?.[mealType] || mealColors(mealType, t.palette.mode)).fill }}
+                                  />
+                                  <Typography variant="subtitle1" fontWeight={900}>
                                     {mealLabel(mealType)}
                                   </Typography>
                                   <Chip
@@ -275,8 +277,8 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                                   );
                                 })}
                               </List>
-                            </CardContent>
-                          </Card>
+                            </Box>
+                          </Box>
                         );
                       })
                     )}

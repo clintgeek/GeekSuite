@@ -295,9 +295,8 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
           <Box
             aria-live="polite"
             sx={{
-              border: (t) => `1px dashed ${t.palette.divider}`,
-              borderRadius: 2,
-              p: 2,
+              borderTop: (t) => `5px solid ${t.palette.text.primary}`,
+              pt: 1.5,
             }}
           >
             {per ? (

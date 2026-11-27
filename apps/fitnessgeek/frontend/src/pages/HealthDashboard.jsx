@@ -1,7 +1,6 @@
 import React, { lazy, useState, useEffect } from 'react';
 import {
   Box,
-  Container,
   Typography,
   Stack,
   Tab,
@@ -9,24 +8,21 @@ import {
   Alert,
   AlertTitle,
   CircularProgress,
-  Card,
-  CardContent,
   Button,
+  IconButton,
   useMediaQuery
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
-  TrendingUp as DashboardIcon,
-  Bedtime as SleepIcon,
-  Restaurant as MealIcon,
-  Psychology as CoachIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
   Settings as SettingsIcon
 } from '@mui/icons-material';
 import { useAuth } from '@geeksuite/auth';
 import { localDateString } from '@geeksuite/utils';
 import { apiService } from '../services/apiService';
 import InfluxDBSettings from '../components/InfluxDBSettings';
-import { DateField, SuspenseSurface } from '../components/primitives';
+import { DateField, SuspenseSurface, Page } from '../components/primitives';
 
 // The four analytics panels are lazy. Two of them (Intraday, Meal Impact) pull
 // the chart library, which used to sit in this route's chunk, so it was
@@ -49,6 +45,101 @@ const TAB_TITLES = [
   'Settings',
 ];
 
+// Calendar-day arithmetic on YYYY-MM-DD strings, in local time (never UTC).
+const parseDay = (iso) => {
+  const [y, m, d] = String(iso).split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+const dayString = (date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const shiftDay = (iso, by) => {
+  const date = parseDay(iso);
+  date.setDate(date.getDate() + by);
+  return dayString(date);
+};
+
+/** The day, as a header on the grey ground: previous / next around a heavy
+ * "Today" (or the date in words) with the date as a small-caps eyebrow, then
+ * the Yesterday / Today shortcuts and the native picker for any other day. */
+function DayHeader({ selectedDate, onChange }) {
+  const today = localDateString();
+  const yesterday = shiftDay(today, -1);
+  const date = parseDay(selectedDate);
+  const title = selectedDate === today
+    ? 'Today'
+    : selectedDate === yesterday
+      ? 'Yesterday'
+      : date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const eyebrow = selectedDate === today || selectedDate === yesterday
+    ? date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    : null;
+  return (
+    <Box>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '48px 1fr 48px', alignItems: 'center' }}>
+        <IconButton
+          onClick={() => onChange(shiftDay(selectedDate, -1))}
+          aria-label="Previous day"
+          sx={{ width: 48, height: 48, color: 'text.primary' }}
+        >
+          <ChevronLeftIcon />
+        </IconButton>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
+          <Typography component="h2" sx={{ m: 0, fontWeight: 900, lineHeight: 1.1, fontSize: { xs: '1.5rem', sm: '1.75rem' }, textAlign: 'center' }}>
+            {title}
+          </Typography>
+          {eyebrow && (
+            <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
+              {eyebrow}
+            </Typography>
+          )}
+        </Box>
+        <IconButton
+          onClick={() => onChange(shiftDay(selectedDate, 1))}
+          disabled={selectedDate >= today}
+          aria-label="Next day"
+          sx={{ width: 48, height: 48, color: 'text.primary' }}
+        >
+          <ChevronRightIcon />
+        </IconButton>
+      </Box>
+      <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 1 }}>
+        <Button variant="text" size="small" onClick={() => onChange(yesterday)}>
+          Yesterday
+        </Button>
+        <Button variant="text" size="small" onClick={() => onChange(today)}>
+          Today
+        </Button>
+        <DateField
+          label={false}
+          inputProps={{ 'aria-label': 'Date' }}
+          size="small"
+          value={selectedDate}
+          onChange={onChange}
+          max={today}
+          sx={{ minWidth: 150 }}
+        />
+      </Stack>
+    </Box>
+  );
+}
+
+// Square text tabs with a 4px blue underline on the selected one.
+const tabsSx = {
+  borderBottom: (t) => `2px solid ${t.palette.text.primary}`,
+  minHeight: 48,
+  '& .MuiTabs-indicator': { height: 4, bgcolor: 'primary.main' },
+  '& .MuiTab-root': {
+    minHeight: 48,
+    borderRadius: 0,
+    textTransform: 'none',
+    fontWeight: 700,
+    fontSize: '1rem',
+    color: 'text.secondary',
+    px: 2,
+    '&.Mui-selected': { color: 'text.primary' },
+  },
+};
+
 /**
  * Comprehensive Health Dashboard
  * Displays InfluxDB-powered health analytics
@@ -70,14 +161,8 @@ export default function HealthDashboard() {
       document.title = previousTitle;
     };
   }, [activeTab]);
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const today = new Date();
-    // Use local date format (YYYY-MM-DD) instead of UTC
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${ year }-${ month }-${ day }`;
-  });
+  // Local calendar day (YYYY-MM-DD), not UTC.
+  const [selectedDate, setSelectedDate] = useState(() => localDateString());
   const [influxEnabled, setInfluxEnabled] = useState(false);
   const [checkingInflux, setCheckingInflux] = useState(true);
 
@@ -108,152 +193,91 @@ export default function HealthDashboard() {
 
   if (checkingInflux) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <Page>
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
         </Box>
-      </Container>
+      </Page>
     );
   }
 
   if (!influxEnabled) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Stack spacing={3}>
-          <Box>
-          </Box>
+      <Page>
+        <Alert severity="info">
+          <AlertTitle>Turn on the home data server first</AlertTitle>
+          This page reads your Garmin data from the home data server (InfluxDB).
+          Turn it on below to see:
+          <ul style={{ marginTop: 8, marginBottom: 0 }}>
+            <li>Heart rate, stress and Body Battery through the day</li>
+            <li>How you slept, with heart-rate variability (HRV) and recovery</li>
+            <li>How your heart rate answered each meal</li>
+            <li>Recovery notes written by AI</li>
+          </ul>
+        </Alert>
 
-          <Alert severity="info">
-            <AlertTitle>Turn on the home data server first</AlertTitle>
-            This page reads your Garmin data from the home data server (InfluxDB).
-            Turn it on below to see:
-            <ul style={{ marginTop: 8, marginBottom: 0 }}>
-              <li>Heart rate, stress and Body Battery through the day</li>
-              <li>How you slept, with heart-rate variability (HRV) and recovery</li>
-              <li>How your heart rate answered each meal</li>
-              <li>Recovery notes written by AI</li>
-            </ul>
-          </Alert>
-
-          <Card>
-            <CardContent>
-              <InfluxDBSettings onSettingsChange={(newSettings) => {
-                if (newSettings.influxEnabled) {
-                  setInfluxEnabled(true);
-                }
-              }} />
-            </CardContent>
-          </Card>
-        </Stack>
-      </Container>
+        <InfluxDBSettings onSettingsChange={(newSettings) => {
+          if (newSettings.influxEnabled) {
+            setInfluxEnabled(true);
+          }
+        }} />
+      </Page>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Stack spacing={3}>
-        {/* Editorial header */}
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-end" spacing={2}>
-          <Box>
-            <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-              Your Garmin data through the day, from the home data server.
-            </Typography>
-          </Box>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<SettingsIcon />}
-            onClick={() => setActiveTab(4)}
-          >
-            Settings
-          </Button>
-        </Stack>
-
-        {/* Date Selector */}
-        <Card variant="outlined">
-          <CardContent>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={2}
-              alignItems={{ xs: 'stretch', sm: 'center' }}
-            >
-              <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                Day
-              </Typography>
-              <DateField
-                label={false}
-                inputProps={{ 'aria-label': 'Date' }}
-                size="small"
-                value={selectedDate}
-                onChange={handleDateChange}
-                max={localDateString()}
-                sx={{ minWidth: { xs: '100%', sm: 180 } }}
-              />
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="text"
-                  size="small"
-                  onClick={() => {
-                    const yesterday = new Date();
-                    yesterday.setDate(yesterday.getDate() - 1);
-                    handleDateChange(`${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`);
-                  }}
-                >
-                  Yesterday
-                </Button>
-                <Button
-                  variant="text"
-                  size="small"
-                  onClick={() => {
-                    const today = new Date();
-                    handleDateChange(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`);
-                  }}
-                >
-                  Today
-                </Button>
-              </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
-
-        {/* Tabs */}
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs
-            value={activeTab}
-            onChange={handleTabChange}
-            variant={tabsFit ? 'fullWidth' : 'scrollable'}
-            scrollButtons={tabsFit ? false : 'auto'}
-            allowScrollButtonsMobile
-            data-testid="health-tabs"
-          >
-            <Tab icon={<DashboardIcon />} label="Overview" />
-            <Tab icon={<SleepIcon />} label="Sleep analysis" />
-            <Tab icon={<MealIcon />} label="Meal impact" />
-            <Tab icon={<CoachIcon />} label="Recovery coach" />
-            <Tab icon={<SettingsIcon />} label="Settings" />
-          </Tabs>
-        </Box>
-
-        {/* Tab Panels — no redundant heading, tab label already names the section */}
-        <Box>
-          <SuspenseSurface rows={5} height={360}>
-            {activeTab === 0 && <IntradayDashboard date={selectedDate} />}
-            {activeTab === 1 && <SleepAnalysis date={selectedDate} />}
-            {activeTab === 2 && <MealImpactVisualization date={selectedDate} />}
-            {activeTab === 3 && (
-              <RecoveryCoach date={selectedDate} />
-            )}
-          </SuspenseSurface>
-
-          {activeTab === 4 && (
-            <Stack spacing={3}>
-              <InfluxDBSettings onSettingsChange={(newSettings) => {
-                setInfluxEnabled(newSettings.influxEnabled);
-              }} />
-            </Stack>
-          )}
-        </Box>
+    <Page>
+      {/* Editorial header */}
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-end" spacing={2}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
+          Your Garmin data through the day, from the home data server.
+        </Typography>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<SettingsIcon />}
+          onClick={() => setActiveTab(4)}
+        >
+          Settings
+        </Button>
       </Stack>
-    </Container>
+
+      <DayHeader selectedDate={selectedDate} onChange={handleDateChange} />
+
+      {/* Tabs */}
+      <Tabs
+        value={activeTab}
+        onChange={handleTabChange}
+        variant={tabsFit ? 'fullWidth' : 'scrollable'}
+        scrollButtons={tabsFit ? false : 'auto'}
+        allowScrollButtonsMobile
+        data-testid="health-tabs"
+        sx={tabsSx}
+      >
+        <Tab label="Overview" />
+        <Tab label="Sleep analysis" />
+        <Tab label="Meal impact" />
+        <Tab label="Recovery coach" />
+        <Tab label="Settings" />
+      </Tabs>
+
+      {/* Tab Panels — no redundant heading, tab label already names the section */}
+      <Box>
+        <SuspenseSurface rows={5} height={360}>
+          {activeTab === 0 && <IntradayDashboard date={selectedDate} />}
+          {activeTab === 1 && <SleepAnalysis date={selectedDate} />}
+          {activeTab === 2 && <MealImpactVisualization date={selectedDate} />}
+          {activeTab === 3 && (
+            <RecoveryCoach date={selectedDate} />
+          )}
+        </SuspenseSurface>
+
+        {activeTab === 4 && (
+          <InfluxDBSettings onSettingsChange={(newSettings) => {
+            setInfluxEnabled(newSettings.influxEnabled);
+          }} />
+        )}
+      </Box>
+    </Page>
   );
 }

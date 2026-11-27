@@ -1,7 +1,7 @@
 import React, { useId, useState } from 'react';
 import { Box, Collapse, IconButton, Typography } from '@mui/material';
 import { InfoOutlined as InfoIcon } from '@mui/icons-material';
-import { Surface, SectionLabel, StatNumber } from '../primitives';
+import { FactHeadline, StatNumber } from '../primitives';
 import { formatInstantDay, formatSpan } from './bodyCompFormat.js';
 
 const fmt = (n, places = 1) => (typeof n === 'number' && Number.isFinite(n) ? n.toFixed(places) : null);
@@ -10,8 +10,9 @@ const fmt = (n, places = 1) => (typeof n === 'number' && Number.isFinite(n) ? n.
 const Figure = ({ label, value, unit, decimals = 1, note }) => {
   if (fmt(value, decimals) === null) return null;
   return (
-    <Box sx={{ minWidth: 0 }}>
-      <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 600, mb: 0.5 }}>
+    // A fact: a hairline above, the name, then the amount. No box.
+    <Box sx={{ minWidth: 0, borderTop: (t) => `1px solid ${t.palette.text.primary}`, pt: 0.75, pb: 0.5 }}>
+      <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, mb: 0.25 }}>
         {label}
       </Typography>
       <StatNumber value={value} decimals={decimals} unit={unit} size="body" />
@@ -44,32 +45,32 @@ const BodyCompSummaryCard = ({ summary }) => {
     : null;
 
   return (
-    <Surface>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
-        <Box sx={{ minWidth: 0, pt: 0.5 }}>
-          <SectionLabel sx={{ mb: 1.25 }}>Now · 14-day average</SectionLabel>
-          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, flexWrap: 'wrap' }}>
-            <StatNumber value={current.body_fat_pct} decimals={1} unit="% body fat" size="display" />
-          </Box>
-        </Box>
+    <Box sx={{ pt: 0.5 }}>
+      <FactHeadline
+        caption="Now · 14-day average"
+        name="Body fat"
+        value={fmt(current.body_fat_pct, 1) ?? '—'}
+        unit="%"
+      />
+
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mt: 0.5 }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
+          Average of {current.scans} {current.scans === 1 ? 'scan' : 'scans'} · {span}
+          {latest ? ` · latest scan ${latest}` : ''}
+        </Typography>
         <IconButton
           onClick={() => setExplain((v) => !v)}
           aria-expanded={explain}
           aria-controls={explainId}
           aria-label="Why these are averages"
-          sx={{ width: 44, height: 44, color: 'text.secondary', mt: -0.75, mr: -0.75, flexShrink: 0 }}
+          sx={{ width: 44, height: 44, color: 'text.secondary', mr: -1, flexShrink: 0 }}
         >
           <InfoIcon fontSize="small" />
         </IconButton>
       </Box>
 
-      <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', mt: 1 }}>
-        Average of {current.scans} {current.scans === 1 ? 'scan' : 'scans'} · {span}
-        {latest ? ` · latest scan ${latest}` : ''}
-      </Typography>
-
       <Collapse in={explain} id={explainId}>
-        <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.55, mt: 1.5 }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.55, pb: 1 }}>
           A body-composition scale reads fat through water, so one scan can swing a percent or two
           with how much you drank. Averaging every scan from the last two weeks keeps a
           single day from moving these numbers.
@@ -81,10 +82,8 @@ const BodyCompSummaryCard = ({ summary }) => {
           display: 'grid',
           gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))' },
           columnGap: 2,
-          rowGap: 2,
-          mt: 2.5,
-          pt: 2,
-          borderTop: (t) => `1px dashed ${t.palette.divider}`,
+          rowGap: 0.5,
+          mt: 1,
         }}
       >
         <Figure label="Fat mass" value={current.fat_mass_lb} unit="lb" />
@@ -98,7 +97,7 @@ const BodyCompSummaryCard = ({ summary }) => {
         />
         <Figure label="Calories at rest (BMR)" value={current.bmr_kcal} decimals={0} unit="cal" note="From your scale" />
       </Box>
-    </Surface>
+    </Box>
   );
 };
 

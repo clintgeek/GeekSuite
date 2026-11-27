@@ -7,26 +7,23 @@ import {
 } from '@mui/material';
 import { ResponsiveLine } from '@nivo/line';
 import { displayCalendarDate } from '@geeksuite/utils';
-import {
-  Surface,
-  SectionLabel,
-  DisplayHeading,
-  buildChartTheme,
-} from '../primitives';
+import { LabelPanel, buildChartTheme } from '../primitives';
 
 /**
- * BPChartNivo — systolic + diastolic line chart with reference band markers.
+ * BPChartNivo — systolic + diastolic line chart with reference lines.
  *
- * Editorial treatment: Surface wrapper, DM Serif Display header, JetBrains Mono
- * axis ticks, restrained palette (systolic red, diastolic teal, reference lines
- * muted and dashed). Custom tooltip uses mono tabular-nums.
+ * The Label: a level-2 panel; systolic in ink and diastolic in the blue (both
+ * 3px, so neither borrows a status colour), the reference lines in the one
+ * small status set (normal = success, a little high = warning, high = error;
+ * dashed, with the word in the legend), a hairline grid, and a square tooltip
+ * with a 2px ink border.
  */
 const BPChartNivo = ({ data, unit = 'mmHg' }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const muted = theme.palette.text.secondary;
   const ink = theme.palette.text.primary;
-  const systolicColor = theme.palette.error.main;
+  const systolicColor = theme.palette.text.primary;
   const diastolicColor = theme.palette.primary.main;
   const chartTheme = useMemo(() => buildChartTheme(theme), [theme]);
 
@@ -83,7 +80,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
       // Reference bands first so they sit under the data lines
       {
         id: 'Stage 1 (140)',
-        color: theme.palette.error.light,
+        color: theme.palette.error.main,
         data: sortedData.map((item) => ({ x: item.date, y: 140 })),
       },
       {
@@ -117,14 +114,11 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
 
   if (chartData.length === 0) {
     return (
-      <Surface sx={{ textAlign: 'center', py: 5 }}>
-        <SectionLabel sx={{ justifyContent: 'center', mb: 1.5 }}>
-          Your blood pressure over time
-        </SectionLabel>
-        <Typography sx={{ color: muted, fontSize: '0.875rem' }}>
+      <LabelPanel title="Your blood pressure over time" titleComponent="h3">
+        <Typography sx={{ color: muted, fontSize: '0.875rem', pt: 1.5 }}>
           No readings yet in this range.
         </Typography>
-      </Surface>
+      </LabelPanel>
     );
   }
 
@@ -137,10 +131,9 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
       <Box
         sx={{
           width: 14,
-          height: isDashed ? 0 : 2.5,
+          height: isDashed ? 0 : 3,
           borderTop: isDashed ? `2px dashed ${color}` : 'none',
           backgroundColor: isDashed ? 'transparent' : color,
-          borderRadius: 1,
           flexShrink: 0,
         }}
       />
@@ -157,27 +150,13 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
   );
 
   return (
-    <Surface>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          mb: 2.5,
-          gap: 2,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Box>
-          <DisplayHeading size="card">Your blood pressure over time</DisplayHeading>
-        </Box>
-        <Box sx={{ display: 'flex', gap: { xs: 1.25, sm: 2 }, flexWrap: 'wrap' }}>
-          <LegendItem color={systolicColor} label="Top number (systolic)" />
-          <LegendItem color={diastolicColor} label="Bottom number (diastolic)" />
-          <LegendItem color={theme.palette.success.main} label="Normal · 120" isDashed />
-          <LegendItem color={theme.palette.warning.main} label="A little high · 130" isDashed />
-          <LegendItem color={theme.palette.error.light} label="High (stage 1) · 140" isDashed />
-        </Box>
+    <LabelPanel title="Your blood pressure over time" titleComponent="h3">
+      <Box sx={{ display: 'flex', columnGap: { xs: 1.5, sm: 2 }, rowGap: 0.5, flexWrap: 'wrap', py: 1 }}>
+        <LegendItem color={systolicColor} label="Top number (systolic)" />
+        <LegendItem color={diastolicColor} label="Bottom number (diastolic)" />
+        <LegendItem color={theme.palette.success.main} label="Normal · 120" isDashed />
+        <LegendItem color={theme.palette.warning.main} label="A little high · 130" isDashed />
+        <LegendItem color={theme.palette.error.main} label="High (stage 1) · 140" isDashed />
       </Box>
 
       <Box sx={{ height: isMobile ? 240 : 300 }}>
@@ -219,7 +198,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
           // list below, the two custom path layers draw the real strokes. Point
           // size/visibility now comes from the custom points layer below, which
           // can vary by series the way the old function tried to.
-          lineWidth={2.5}
+          lineWidth={3}
           enablePointLabel={false}
           curve="monotoneX"
           crosshairType="cross"
@@ -238,9 +217,9 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                   background: theme.palette.background.paper,
                   px: 1.75,
                   py: 1.25,
-                  borderRadius: 1.5,
-                  border: `1px solid ${theme.palette.divider}`,
-                  boxShadow: theme.shadows[4],
+                  borderRadius: 0,
+                  border: `2px solid ${ink}`,
+                  boxShadow: 'none',
                   minWidth: 150,
                 }}
               >
@@ -271,7 +250,6 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                         sx={{
                           width: 8,
                           height: 8,
-                          borderRadius: '50%',
                           backgroundColor: systolicColor,
                         }}
                       />
@@ -306,7 +284,6 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                         sx={{
                           width: 8,
                           height: 8,
-                          borderRadius: '50%',
                           backgroundColor: diastolicColor,
                         }}
                       />
@@ -348,7 +325,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                       stroke={color}
                       strokeWidth={1.5}
                       strokeDasharray="5 5"
-                      style={{ opacity: 0.55 }}
+                      style={{ opacity: 0.9 }}
                     />
                   );
                 }),
@@ -364,8 +341,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                       d={d}
                       fill="none"
                       stroke={color}
-                      strokeWidth={2.5}
-                      strokeLinecap="round"
+                      strokeWidth={3}
                     />
                   );
                 }),
@@ -394,7 +370,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
           ]}
         />
       </Box>
-    </Surface>
+    </LabelPanel>
   );
 };
 

@@ -4,6 +4,10 @@
 "This is a constant use app and one of the parties isn't terribly technical anymore." The
 Simple face is designed around **Heather** (Chef, 2026-09-27).*
 
+> **2026-11-26:** the "Market Morning" identity described below was replaced by **"The Label"**
+> (`THEME_REVIEW_2026-11.md`). Simple and Full, the navigation and the logging flows stand as written; the
+> look, the fonts, the colours and the plate ring do not.
+
 ## What the data says (production, last 30 days)
 
 - **Only Chef logs.** 328 food logs, 58 weights (scale import), 9 medication entries,

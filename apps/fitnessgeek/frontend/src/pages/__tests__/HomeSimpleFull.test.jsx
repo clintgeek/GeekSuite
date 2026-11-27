@@ -287,18 +287,19 @@ describe('Simple Home: Add first (review Phase 2.13)', () => {
     expect(document.body.textContent.match(/660/g)).toHaveLength(1);
   });
 
-  it('Full keeps a number in the plate and has no big Add button', async () => {
+  it('Full sets a headline number on the facts panel and has no Simple add button', async () => {
     renderHome(experience());
     await screen.findByTestId('calories-sentence');
     expect(screen.getByTestId('plate-number')).toBeInTheDocument();
     expect(screen.queryByTestId('what-did-you-eat')).toBeNull();
   });
 
-  it('A1: Full has a compact add above the plate, and it opens the sheet on this hour\'s meal', async () => {
+  it('A1: Full\'s "What did you eat?" is the page\'s filled button, above the facts panel, and opens the sheet on this hour\'s meal', async () => {
     renderHome(experience());
     const button = await screen.findByTestId('full-add-food');
     expect(button).toHaveTextContent('What did you eat?');
-    expect(button.className).toMatch(/MuiButton-outlined/);
+    // The Label: the page's main action is its one filled blue button.
+    expect(button.className).toMatch(/MuiButton-contained/);
     const hero = screen.getByTestId('home-hero');
     expect(button.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     await act(async () => { fireEvent.click(button); });
@@ -313,11 +314,23 @@ describe('Simple Home: Add first (review Phase 2.13)', () => {
     expect(screen.queryByTestId('full-add-food')).toBeNull();
   });
 
-  it("Full's plate says how much is eaten (72%), not 660 a third time (review D-14)", async () => {
+  it("Full's headline is the amount left (660), said once more in words, not a third time (review D-14)", async () => {
     renderHome(experience());
     await screen.findByTestId('calories-sentence');
-    expect(screen.getByTestId('plate-number')).toHaveTextContent('72%eaten');
-    expect(document.body.textContent.match(/660/g)).toHaveLength(1);
+    // The Label: "Amount left today · Calories · 660", huge; the sentence
+    // under it repeats it once in normal weight; the 72% is the Eaten row's.
+    expect(screen.getByTestId('plate-number')).toHaveTextContent(/^660$/);
+    expect(screen.getByText('Amount left today')).toBeInTheDocument();
+    expect(document.body.textContent.match(/660/g)).toHaveLength(2);
+    expect(within(screen.getByTestId('macro-strip')).getByText('Eaten', { selector: 'b' }).closest('div')).toHaveTextContent(/72%$/);
+  });
+
+  it('Full over target: the headline is the amount over, tagged OVER', async () => {
+    fitnessGeekService.getDailySummary.mockResolvedValueOnce({ data: { totals: { calories: 2500 }, meals: {} } });
+    renderHome(experience());
+    await screen.findByTestId('calories-sentence');
+    expect(screen.getByText('Over target today')).toBeInTheDocument();
+    expect(screen.getByTestId('plate-number')).toHaveTextContent(/^Over160$/);
   });
 });
 

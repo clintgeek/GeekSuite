@@ -4,8 +4,7 @@ import {
   TextField,
   Box,
   Typography,
-  useTheme,
-  alpha
+  useTheme
 } from '@mui/material';
 import {
   MonitorHeart as BPIcon,
@@ -15,6 +14,7 @@ import {
 import { localDateString } from '@geeksuite/utils';
 import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import { Tag } from '../primitives';
 import DateField from '../primitives/DateField.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
 import { bpStageWords } from '../../utils/plainWords.js';
@@ -341,21 +341,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
                 <Typography variant="body2">
                   This reading is
                 </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontWeight: 700,
-                    // Ink on the stage's wash: the tone alone on its tint
-                    // dipped under AA (success 4.35:1).
-                    color: 'text.primary',
-                    backgroundColor: alpha(bpStatus.color, 0.14),
-                    px: 1.5,
-                    py: 0.5,
-                    borderRadius: 999
-                  }}
-                >
-                  {bpStatus.status}
-                </Typography>
+                <Tag sx={{ bgcolor: bpStatus.color }}>{bpStatus.status}</Tag>
               </Box>
             )}
 

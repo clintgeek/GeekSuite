@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
-import { Card, CardContent, Typography, Box } from '@mui/material';
+import { Typography, Box } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { ResponsiveLine } from '@nivo/line';
 import { buildChartTheme } from '../primitives/chartTheme.js';
+import { LabelPanel } from '../primitives';
 
 // Q52a: ported from Recharts to @nivo/line so this page carries ONE chart
 // library instead of two. Same series, the app's basil stroke (was Studio Slate teal), same 250px band,
@@ -71,12 +72,8 @@ const BPHRChart = ({ data = [], title = 'Heart rate today' }) => {
   const tickValues = useMemo(() => spacedIndices(points.length), [points.length]);
 
   return (
-    <Card>
-      <CardContent sx={{ p: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2, fontWeight: 700, color: 'text.primary' }}>
-          {title}
-        </Typography>
-        <Box sx={{ height: 250 }}>
+    <LabelPanel title={title} titleComponent="h3">
+        <Box sx={{ height: 250, mt: 1.5 }}>
           {points.length === 0 ? (
             <Box sx={{
               height: '100%',
@@ -115,7 +112,7 @@ const BPHRChart = ({ data = [], title = 'Heart rate today' }) => {
               }}
               colors={(line) => line.color}
               curve="monotoneX"
-              lineWidth={2}
+              lineWidth={3}
               enablePoints={false}
               enableGridX={false}
               enableArea={false}
@@ -125,10 +122,10 @@ const BPHRChart = ({ data = [], title = 'Heart rate today' }) => {
                 <Box sx={{
                   backgroundColor: theme.palette.background.paper,
                   color: theme.palette.text.primary,
-                  border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: '12px',
+                  border: `2px solid ${theme.palette.text.primary}`,
+                  borderRadius: 0,
                   padding: '8px 12px',
-                  boxShadow: theme.shadows[4],
+                  boxShadow: 'none',
                 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                     {labels[slice.points[0].data.x] ?? ''}
@@ -141,8 +138,7 @@ const BPHRChart = ({ data = [], title = 'Heart rate today' }) => {
             />
           )}
         </Box>
-      </CardContent>
-    </Card>
+    </LabelPanel>
   );
 };
 

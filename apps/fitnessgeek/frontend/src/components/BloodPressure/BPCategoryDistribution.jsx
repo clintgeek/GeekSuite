@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Typography, Card, CardContent } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { ResponsivePie } from '@nivo/pie';
 import { categorizeBP, BP_STAGES } from '../../utils/bpUtils.js';
 import { bpStageWords } from '../../utils/plainWords.js';
+import { LabelPanel } from '../primitives';
 
 // Category name and color come from the one shared categoriser.
 const getBPCategory = (systolic, diastolic, mode) => {
@@ -67,33 +68,21 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
       }));
   }, [bpLogs, theme.palette.mode]);
 
+  const title = `Readings by range${windowLabel ? `, ${windowLabel}` : ''}`;
+
   if (chartData.length === 0) {
     return (
-      <Card>
-        <CardContent sx={{ p: 4 }}>
-          <Box sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: 200,
-            color: theme.palette.text.secondary
-          }}>
-            <Typography variant="body2">
-              No readings{windowLabel ? ` in the ${windowLabel}` : ''}
-            </Typography>
-          </Box>
-        </CardContent>
-      </Card>
+      <LabelPanel title={title} titleComponent="h3">
+        <Typography variant="body2" sx={{ color: 'text.secondary', pt: 1.5 }}>
+          No readings{windowLabel ? ` in the ${windowLabel}` : ''}
+        </Typography>
+      </LabelPanel>
     );
   }
 
   return (
-    <Card>
-      <CardContent sx={{ p: 3 }}>
-        <Typography variant="h6" component="h2" data-testid="bp-donut-title" sx={{ fontWeight: 700, color: theme.palette.text.primary, mb: 2 }}>
-          Readings by range{windowLabel ? `, ${windowLabel}` : ''}
-        </Typography>
-
+    <LabelPanel title={<span data-testid="bp-donut-title">{title}</span>} titleComponent="h3">
+      <Box sx={{ pt: 1 }}>
         {/* @nivo/pie forwards `role` to its <svg> but not `ariaLabel` (the line
             charts forward both), so the name lives on the wrapper and the svg
             steps out of the accessibility tree. */}
@@ -108,12 +97,13 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
             role="presentation"
             margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
             innerRadius={0.6}
-            padAngle={2}
-            cornerRadius={4}
+            padAngle={0}
+            cornerRadius={0}
             activeOuterRadiusOffset={8}
             colors={d => d.data.color}
+            // Square slices parted by a paper line, like the label's rules.
             borderWidth={2}
-            borderColor={{ from: 'color', modifiers: [['darker', 0.2]] }}
+            borderColor={theme.palette.background.paper}
             enableArcLinkLabels={false}
             arcLabel={d => `${d.value}`}
             arcLabelsSkipAngle={10}
@@ -135,10 +125,10 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
                 <Box data-testid="bp-donut-tooltip" sx={{
                   whiteSpace: 'nowrap',
                   backgroundColor: theme.palette.background.paper,
-                  border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: '12px',
+                  border: `2px solid ${theme.palette.text.primary}`,
+                  borderRadius: 0,
                   padding: '8px 12px',
-                  boxShadow: theme.shadows[3]
+                  boxShadow: 'none'
                 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
                     {datum.label}
@@ -165,17 +155,16 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
               <Box sx={{
                 width: 12,
                 height: 12,
-                borderRadius: '50%',
                 backgroundColor: item.color
               }} />
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}>
+              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600 }}>
                 {item.label} ({item.value})
               </Typography>
             </Box>
           ))}
         </Box>
-      </CardContent>
-    </Card>
+      </Box>
+    </LabelPanel>
   );
 };
 

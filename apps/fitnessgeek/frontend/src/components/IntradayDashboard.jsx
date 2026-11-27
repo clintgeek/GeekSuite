@@ -1,24 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
-  Grid,
-  Stack,
-  Chip,
+  Button,
   CircularProgress,
-  Alert,
   Tooltip,
   useTheme
 } from '@mui/material';
 import { influxService } from '../services/influxService';
-import {
-  FavoriteBorder as HeartIcon,
-  Psychology as StressIcon,
-  BatteryChargingFull as BatteryIcon
-} from '@mui/icons-material';
 import { ResponsiveLine } from '@nivo/line';
+import { LabelPanel, FactHeadline } from './primitives';
 import { buildChartTheme } from './primitives/chartTheme.js';
 import {
   toTimeSeries,
@@ -33,6 +24,9 @@ import {
  * Q52a: ported from chart.js/react-chartjs-2 to @nivo/line, the one chart
  * library this app now ships. Same shape — a filled, smoothed 2px line with
  * no axes and a hover readout of "HH:MM / value".
+ *
+ * The Label: one colour system. The measured line is the app's blue; the
+ * fill under it is a 10% tint of the same blue; nothing else is coloured.
  */
 function SparklineChart({ data, color, height = 60, showGradient = true }) {
   const theme = useTheme();
@@ -68,21 +62,19 @@ function SparklineChart({ data, color, height = 60, showGradient = true }) {
         lineWidth={2}
         enablePoints={false}
         enableArea={showGradient}
-        areaOpacity={0.2}
+        areaOpacity={0.1}
         useMesh
         tooltip={({ point }) => (
           <Box sx={{
             backgroundColor: theme.palette.background.paper,
-            border: `1px solid ${theme.palette.divider}`,
-            borderRadius: '8px',
+            border: `2px solid ${theme.palette.text.primary}`,
             px: 1.25,
             py: 0.75,
-            boxShadow: theme.shadows[3],
           }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
               {formatClockTime(point.data.x)}
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>
               {point.data.y}
             </Typography>
           </Box>
@@ -96,7 +88,6 @@ function SparklineChart({ data, color, height = 60, showGradient = true }) {
  * Metric card with current value and sparkline
  */
 function MetricCardWithChart({
-  icon,
   label,
   currentValue,
   unit,
@@ -105,8 +96,6 @@ function MetricCardWithChart({
   target = null,
   tooltipText = ''
 }) {
-  const theme = useTheme();
-
   /*
    * A "trend" chip lived here. It compared the last ten data points with the
    * ten before them — on an INTRADAY series, so it measured the last few
@@ -121,48 +110,33 @@ function MetricCardWithChart({
 
   return (
     <Tooltip title={tooltipText} arrow>
-      <Card sx={{ height: '100%' }}>
-        <CardContent>
-          <Stack spacing={1}>
-            {/* Header */}
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Stack direction="row" spacing={1} alignItems="center">
-                {React.cloneElement(icon, { sx: { color } })}
-                <Typography variant="body2" color="text.secondary">
-                  {label}
-                </Typography>
-              </Stack>
-            </Stack>
+      <Box sx={{ height: '100%' }}>
+        <LabelPanel title={label} sx={{ height: '100%' }}>
+          {/* Latest reading, and when it was taken. On a past date that is
+              the last reading of that day, so the time is not decoration —
+              without it the number reads as "now". */}
+          <FactHeadline
+            name=""
+            value={currentValue == null ? '—' : currentValue}
+            unit={currentValue != null ? unit : undefined}
+          />
+          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.5 }}>
+            {currentValue == null ? 'No readings for this day' : `Latest reading, ${asOf}`}
+          </Typography>
 
-            {/* Latest reading, and when it was taken. On a past date that is
-                the last reading of that day, so the time is not decoration —
-                without it the number reads as "now". */}
-            <Stack direction="row" spacing={1} alignItems="baseline">
-              <Typography variant="h3" component="div" sx={{ color, fontWeight: 'bold' }}>
-                {currentValue == null ? '—' : currentValue}
-              </Typography>
-              {unit && currentValue != null && (
-                <Typography variant="body1" color="text.secondary">
-                  {unit}
-                </Typography>
-              )}
-            </Stack>
-            <Typography variant="caption" color="text.secondary">
-              {currentValue == null ? 'No readings for this day' : `Latest reading, ${asOf}`}
+          {/* Target indicator */}
+          {target && (
+            <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+              {`Aim for ${target}`}
             </Typography>
+          )}
 
-            {/* Target indicator */}
-            {target && (
-              <Typography variant="caption" color="text.secondary">
-                {`Aim for ${target}`}
-              </Typography>
-            )}
-
-            {/* Sparkline */}
+          {/* Sparkline */}
+          <Box sx={{ mt: 1 }}>
             <SparklineChart data={data} color={color} height={50} />
-          </Stack>
-        </CardContent>
-      </Card>
+          </Box>
+        </LabelPanel>
+      </Box>
     </Tooltip>
   );
 }
@@ -214,22 +188,20 @@ function DetailedChart({ data, label, color, yAxisLabel, height = 200 }) {
         pointBorderWidth={1}
         pointBorderColor={{ from: 'serieColor' }}
         enableArea
-        areaOpacity={0.13}
+        areaOpacity={0.1}
         useMesh
         enableSlices="x"
         sliceTooltip={({ slice }) => (
           <Box sx={{
             backgroundColor: theme.palette.background.paper,
-            border: `1px solid ${theme.palette.divider}`,
-            borderRadius: '8px',
+            border: `2px solid ${theme.palette.text.primary}`,
             px: 1.5,
             py: 1,
-            boxShadow: theme.shadows[3],
           }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
               {formatClockTime(slice.points[0].data.x, { withDate: true })}
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>
               {label}: {slice.points[0].data.y}{yAxisLabel ? ` ${yAxisLabel}` : ''}
             </Typography>
           </Box>
@@ -302,102 +274,81 @@ export default function IntradayDashboard({
   const currentStress = latestOf(data.stress);
   const currentBattery = latestOf(data.bodyBattery);
 
+  const blue = theme.palette.primary.main;
+
   return (
     <Box>
-      {/* Summary Cards */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={4}>
-          <MetricCardWithChart
-            icon={<HeartIcon />}
-            label="Heart rate"
-            currentValue={currentHR}
-            unit="bpm"
-            data={data.heartRate}
-            color={theme.palette.error.main}
-            tooltipText="Heart rate from your Garmin device — the latest reading for the day shown"
-          />
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <MetricCardWithChart
-            icon={<StressIcon />}
-            label="Stress"
-            currentValue={currentStress}
-            unit="/100"
-            data={data.stress}
-            color={theme.palette.warning.main}
-            target="under 40"
-            tooltipText="Garmin’s stress score from heart-rate variability (HRV), 0–100. Lower is calmer."
-          />
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <MetricCardWithChart
-            icon={<BatteryIcon />}
-            label="Body Battery"
-            currentValue={currentBattery}
-            unit="/100"
-            data={data.bodyBattery}
-            color={theme.palette.success.main}
-            tooltipText="Garmin’s 0–100 energy estimate: it charges while you rest and drains with activity and stress."
-          />
-        </Grid>
-      </Grid>
+      {/* Summary Cards: three label panels; one across from md up */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr))' }, gap: { xs: 1.75, md: 2.25 }, mb: 2.25 }}>
+        <MetricCardWithChart
+          label="Heart rate"
+          currentValue={currentHR}
+          unit="bpm"
+          data={data.heartRate}
+          color={blue}
+          tooltipText="Heart rate from your Garmin device — the latest reading for the day shown"
+        />
+        <MetricCardWithChart
+          label="Stress"
+          currentValue={currentStress}
+          unit="/100"
+          data={data.stress}
+          color={blue}
+          target="under 40"
+          tooltipText="Garmin’s stress score from heart-rate variability (HRV), 0–100. Lower is calmer."
+        />
+        <MetricCardWithChart
+          label="Body Battery"
+          currentValue={currentBattery}
+          unit="/100"
+          data={data.bodyBattery}
+          color={blue}
+          tooltipText="Garmin’s 0–100 energy estimate: it charges while you rest and drains with activity and stress."
+        />
+      </Box>
 
       {/* Detailed Charts */}
       {viewMode === 'detailed' && (
-        <Grid container spacing={2}>
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>Heart rate through the day</Typography>
-                <DetailedChart
-                  data={data.heartRate}
-                  label="Heart rate"
-                  color={theme.palette.error.main}
-                  yAxisLabel="bpm"
-                  height={250}
-                />
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>Stress through the day</Typography>
-                <DetailedChart
-                  data={data.stress}
-                  label="Stress"
-                  color={theme.palette.warning.main}
-                  yAxisLabel=""
-                  height={200}
-                />
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>Body Battery</Typography>
-                <DetailedChart
-                  data={data.bodyBattery}
-                  label="Energy"
-                  color={theme.palette.success.main}
-                  yAxisLabel=""
-                  height={200}
-                />
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 1.75, md: 2.25 } }}>
+          <LabelPanel title="Heart rate through the day" sx={{ gridColumn: { md: '1 / -1' } }}>
+            <DetailedChart
+              data={data.heartRate}
+              label="Heart rate"
+              color={blue}
+              yAxisLabel="bpm"
+              height={250}
+            />
+          </LabelPanel>
+          <LabelPanel title="Stress through the day">
+            <DetailedChart
+              data={data.stress}
+              label="Stress"
+              color={blue}
+              yAxisLabel=""
+              height={200}
+            />
+          </LabelPanel>
+          <LabelPanel title="Body Battery">
+            <DetailedChart
+              data={data.bodyBattery}
+              label="Energy"
+              color={blue}
+              yAxisLabel=""
+              height={200}
+            />
+          </LabelPanel>
+        </Box>
       )}
 
-      {/* Toggle View Button */}
+      {/* Toggle View Button: a text link in blue, not a filled chip */}
       <Box sx={{ mt: 2, textAlign: 'center' }}>
-        <Chip
-          label={viewMode === 'summary' ? 'Show the charts' : 'Hide the charts'}
+        <Button
+          variant="text"
           onClick={() => setViewMode(viewMode === 'summary' ? 'detailed' : 'summary')}
-          clickable
-          color="primary"
-        />
+          sx={{ fontWeight: 700, minHeight: 44 }}
+        >
+          {viewMode === 'summary' ? 'Show the charts' : 'Hide the charts'}
+        </Button>
       </Box>
     </Box>
   );

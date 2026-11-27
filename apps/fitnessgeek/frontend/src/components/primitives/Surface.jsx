@@ -5,14 +5,15 @@ import { useTheme, alpha } from '@mui/material/styles';
 /**
  * Surface — the single card primitive for FitnessGeek.
  *
- * Variants:
- *  - "card"    : standard content card (subtle border, rest state)
- *  - "inset"   : subordinate surface, tinted background, no border
- *  - "ticket"  : the editorial "receipt stub" — perforated top edge, heavy border
- *  - "ghost"   : dashed border, muted background (empty states, placeholders)
+ * The Label (theme/theme.jsx): a panel is a white box with a 2px ink border
+ * and square corners. Nothing has a shadow and nothing lifts on hover.
  *
- * Replaces the ad-hoc Card + borderRadius + border styling across the app.
- * Adopt this and everything inherits the same radii/shadows/colors automatically.
+ * Variants:
+ *  - "card"    : a label panel (2px ink border)
+ *  - "inset"   : a subordinate block INSIDE a panel: no border, a faint wash.
+ *                Never nest a "card" in a "card"; use rules (Label.jsx) first.
+ *  - "ticket"  : kept as a name for older call sites; draws as "card"
+ *  - "ghost"   : dashed border (empty states, placeholders)
  */
 const Surface = React.forwardRef(function Surface(
   {
@@ -37,74 +38,32 @@ const Surface = React.forwardRef(function Surface(
 
   const base = {
     position: 'relative',
-    borderRadius: variant === 'ticket' ? '20px' : '16px',
+    borderRadius: 0,
     backgroundColor: canvas,
-    border: `1px solid ${edge}`,
+    border: `2px solid ${edge}`,
     boxShadow: 'none',
-    padding: padded ? { xs: 2, sm: 2.5 } : 0,
-    transition:
-      'transform 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms ease, box-shadow 220ms ease',
+    padding: padded ? { xs: 1.5, sm: 2 } : 0,
+    transition: 'background-color 150ms ease, border-color 150ms ease',
   };
 
   const variantStyles = {
     card: {},
     inset: {
-      backgroundColor: alpha(ink, isDark ? 0.04 : 0.025),
+      backgroundColor: alpha(ink, isDark ? 0.06 : 0.04),
       border: 'none',
     },
-    ticket: {
-      // Receipt aesthetic told by the perforation alone — no heavy border.
-      // Subtle warmth on light mode, canvas on dark.
-      backgroundColor: canvas,
-      border: `1px solid ${edge}`,
-      boxShadow: isDark
-        ? '0 12px 32px -16px rgba(0, 0, 0, 0.5)'
-        : '0 12px 32px -20px rgba(92, 64, 32, 0.16)',
-      // Leave room at the top for the perforation to sit inside the card
-      paddingTop: 0,
-      // Dashed "tear" line — now sits INSIDE the card at the top,
-      // using the divider color so it doesn't fight anything.
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        top: 10,
-        left: 20,
-        right: 20,
-        height: 0,
-        borderTop: `1.5px dashed ${alpha(ink, isDark ? 0.3 : 0.22)}`,
-        pointerEvents: 'none',
-      },
-      // Tiny circular notches at each end of the perforation — binder-hole feel
-      '&::after': {
-        content: '""',
-        position: 'absolute',
-        top: 6,
-        left: 14,
-        right: 14,
-        height: 9,
-        background: `radial-gradient(circle 4px at 0 50%, ${theme.palette.background.default} 4px, transparent 4.5px), radial-gradient(circle 4px at 100% 50%, ${theme.palette.background.default} 4px, transparent 4.5px)`,
-        pointerEvents: 'none',
-      },
-    },
+    ticket: {},
     ghost: {
-      border: `1px dashed ${alpha(ink, 0.18)}`,
-      backgroundColor: alpha(ink, isDark ? 0.04 : 0.02),
-      boxShadow: 'none',
+      border: `2px dashed ${alpha(ink, 0.35)}`,
+      backgroundColor: 'transparent',
     },
   };
 
   const interactiveStyles = interactive
     ? {
         cursor: 'pointer',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          borderColor: variant === 'ghost' ? theme.palette.primary.main : alpha(ink, 0.28),
-          boxShadow: isDark
-            ? '0 10px 24px -10px rgba(0, 0, 0, 0.5)'
-            : '0 10px 24px -14px rgba(92, 64, 32, 0.24)',
-        },
-        '&:active': {
-          transform: 'translateY(0)',
+        '@media (hover: hover)': {
+          '&:hover': { backgroundColor: alpha(theme.palette.primary.main, isDark ? 0.12 : 0.06) },
         },
         '&:focus-visible': {
           outline: `2px solid ${theme.palette.primary.main}`,
@@ -117,6 +76,7 @@ const Surface = React.forwardRef(function Surface(
     <Box
       ref={ref}
       component={component}
+      data-fg-panel={variant}
       onClick={onClick}
       tabIndex={interactive ? 0 : undefined}
       role={interactive ? 'button' : undefined}

@@ -49,7 +49,7 @@ export default class ErrorBoundary extends React.Component {
           color: 'text.primary',
         }}
       >
-        <Typography component="h1" sx={{ fontSize: '1.5rem', fontWeight: 800 }}>
+        <Typography component="h1" sx={{ fontSize: '1.5rem', fontWeight: 900 }}>
           Something went wrong.
         </Typography>
         <Typography sx={{ fontSize: '1.0625rem', color: 'text.secondary', maxWidth: 360 }}>
@@ -59,7 +59,7 @@ export default class ErrorBoundary extends React.Component {
           variant="contained"
           size="large"
           onClick={() => window.location.reload()}
-          sx={{ minWidth: 200, minHeight: 48, borderRadius: '999px', fontWeight: 800 }}
+          sx={{ minWidth: 200, minHeight: 48, fontWeight: 800 }}
         >
           Reload
         </Button>

@@ -197,9 +197,8 @@ const EditLogDialog = ({
               alignItems: 'center',
               gap: 2,
               mb: 3,
-              p: 2,
-              backgroundColor: 'action.hover',
-              borderRadius: 1
+              pb: 2,
+              borderBottom: (t) => `5px solid ${t.palette.text.primary}`
             }}>
               <FoodIcon sx={{ fontSize: 32, color: 'primary.main' }} />
               <Box sx={{ flex: 1 }}>

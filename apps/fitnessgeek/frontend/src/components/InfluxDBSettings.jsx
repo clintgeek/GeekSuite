@@ -3,8 +3,6 @@ import { apiService } from '../services/apiService';
 import { influxService } from '../services/influxService';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Switch,
   FormControlLabel,
@@ -14,10 +12,10 @@ import {
   Divider,
   Button,
   CircularProgress,
-  Chip,
   TextField,
   InputAdornment
 } from '@mui/material';
+import { LabelPanel, FactRow } from './primitives';
 import {
   Storage as StorageIcon,
   CloudSync as SyncIcon,
@@ -181,17 +179,16 @@ export default function InfluxDBSettings({ onSettingsChange }) {
 
   return (
     <Box>
-      <Stack spacing={3}>
+      <Stack spacing={2.25}>
         {/* Header */}
-        <Typography variant="h5">
+        <Typography variant="h5" sx={{ fontWeight: 900 }}>
           <StorageIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
           Where your Garmin data comes from
         </Typography>
 
         {/* Main Toggle Card */}
-        <Card>
-          <CardContent>
-            <Stack spacing={2}>
+        <LabelPanel title="Home data server" level={1}>
+            <Stack spacing={2} sx={{ pt: 1.5 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
                   <Typography variant="h6" id="influx-toggle-title">Use the home data server (InfluxDB)</Typography>
@@ -258,16 +255,13 @@ export default function InfluxDBSettings({ onSettingsChange }) {
                 </Stack>
               )}
             </Stack>
-          </CardContent>
-        </Card>
+        </LabelPanel>
 
         {/* Health Baselines Card */}
         {settings.influxEnabled && (
-          <Card>
-            <CardContent>
-              <Stack spacing={2}>
+          <LabelPanel title="Your usual numbers">
+              <Stack spacing={2} sx={{ pt: 1.5 }}>
                 <Box>
-                  <Typography variant="h6">Your usual numbers</Typography>
                   <Typography variant="body2" color="text.secondary">
                     What’s normal for you, so recovery notes can tell a good day from a tired one.
                   </Typography>
@@ -316,75 +310,30 @@ export default function InfluxDBSettings({ onSettingsChange }) {
                   {saving ? 'Saving…' : 'Save'}
                 </Button>
               </Stack>
-            </CardContent>
-          </Card>
+          </LabelPanel>
         )}
 
-        {/* Feature Availability */}
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              What’s on
-            </Typography>
-            <Stack spacing={1}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Chip
-                  label="Sleep analysis"
-                  color={settings.influxEnabled ? 'success' : 'default'}
-                  size="small"
-                  icon={settings.influxEnabled ? <CheckIcon /> : <InfoIcon />}
-                />
-                <Typography variant="body2" color="text.secondary">
-                  {settings.influxEnabled ? 'On' : 'Needs the home data server'}
-                </Typography>
-              </Stack>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Chip
-                  label="Through the day"
-                  color={settings.influxEnabled ? 'success' : 'default'}
-                  size="small"
-                  icon={settings.influxEnabled ? <CheckIcon /> : <InfoIcon />}
-                />
-                <Typography variant="body2" color="text.secondary">
-                  {settings.influxEnabled ? 'On' : 'Needs the home data server'}
-                </Typography>
-              </Stack>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Chip
-                  label="Recovery coach"
-                  color={settings.influxEnabled ? 'success' : 'default'}
-                  size="small"
-                  icon={settings.influxEnabled ? <CheckIcon /> : <InfoIcon />}
-                />
-                <Typography variant="body2" color="text.secondary">
-                  {settings.influxEnabled ? 'On' : 'Needs the home data server'}
-                </Typography>
-              </Stack>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Chip
-                  label="Meal impact"
-                  color={settings.influxEnabled ? 'success' : 'default'}
-                  size="small"
-                  icon={settings.influxEnabled ? <CheckIcon /> : <InfoIcon />}
-                />
-                <Typography variant="body2" color="text.secondary">
-                  {settings.influxEnabled ? 'On' : 'Needs the home data server'}
-                </Typography>
-              </Stack>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Chip
-                  label="Steps, sleep and heart rate"
-                  color="success"
-                  size="small"
-                  icon={<CheckIcon />}
-                />
-                <Typography variant="body2" color="text.secondary">
-                  Always on
-                </Typography>
-              </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
+        {/* Feature Availability: label rows, a status word each */}
+        <LabelPanel title="What’s on">
+          {[
+            ['Sleep analysis', settings.influxEnabled],
+            ['Through the day', settings.influxEnabled],
+            ['Recovery coach', settings.influxEnabled],
+            ['Meal impact', settings.influxEnabled],
+            ['Steps, sleep and heart rate', true],
+          ].map(([name, on], i) => (
+            <FactRow
+              key={name}
+              first={i === 0}
+              name={name}
+              trailing={(
+                <Box component="span" sx={{ color: 'text.secondary' }}>
+                  {name === 'Steps, sleep and heart rate' ? 'Always on' : on ? 'On' : 'Needs the home data server'}
+                </Box>
+              )}
+            />
+          ))}
+        </LabelPanel>
       </Stack>
     </Box>
   );

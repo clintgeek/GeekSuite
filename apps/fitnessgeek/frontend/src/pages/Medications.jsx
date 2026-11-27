@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Typography, TextField, Button, Chip, Stack, IconButton, ToggleButton, ToggleButtonGroup, FormControl, InputLabel, Select, MenuItem, Alert } from '@mui/material';
+import { Box, Typography, TextField, Button, ButtonBase, Chip, Stack, IconButton, ToggleButton, ToggleButtonGroup, FormControl, InputLabel, Select, MenuItem, Alert } from '@mui/material';
 import { useToast, useGeekDialogFullScreen } from '@geeksuite/ui';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/EditOutlined';
@@ -9,7 +9,8 @@ import MedicationIcon from '@mui/icons-material/Medication';
 import AddIcon from '@mui/icons-material/Add';
 import medsService from '../services/medsService.js';
 import { localDateString, localDateStringDaysAgo } from '@geeksuite/utils';
-import { Surface, SectionLabel, DisplayHeading, EmptyState } from '../components/primitives';
+import { Surface, LabelPanel, ListRow, Page, EmptyState } from '../components/primitives';
+import { createFitnessTheme } from '../theme/theme.jsx';
 import PremiumDialog from '../components/primitives/PremiumDialog.jsx';
 import { thumbSaveProps } from '../components/BloodPressure/thumbSave.jsx';
 import { useExperience } from '../contexts/ExperienceContext.jsx';
@@ -20,6 +21,34 @@ import { errorMessage } from '../utils/errorMessage.js';
 import { shortDay } from '../utils/dates.js';
 
 const TIME_OPTIONS = ['morning', 'afternoon', 'evening', 'bedtime'];
+
+// The exported PDF is a printout: it takes its inks from the light theme (no
+// literal colours here), whatever mode the app is in.
+const PRINT = createFitnessTheme('light').palette;
+
+/** A tappable row in a list of choices (a search result, a suggestion): a
+ * 44px+ target under a hairline, no box around it. */
+function PickRow({ onClick, children, ...rest }) {
+  return (
+    <ButtonBase
+      onClick={onClick}
+      sx={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        minHeight: 44,
+        py: 1,
+        borderTop: (t) => `1px solid ${t.palette.divider}`,
+        '&:first-of-type': { borderTop: 0 },
+        '&:focus-visible': { outline: (t) => `3px solid ${t.palette.primary.main}`, outlineOffset: 2 },
+        '@media (hover: hover)': { '&:hover': { bgcolor: (t) => t.palette.action.hover } },
+      }}
+      {...rest}
+    >
+      {children}
+    </ButtonBase>
+  );
+}
 
 // A medication with no time of day set is one daily dose (checkIns.js). It
 // used to match none of the four slot groups below, so it saved and then
@@ -222,9 +251,9 @@ export default function Medications() {
 
     // Legend
     const legend = [
-      { label: 'RX = Prescription', color: '#263238' },
-      { label: 'OTC = Over-the-counter', color: '#263238' },
-      { label: 'SUPPLEMENT', color: '#263238' },
+      { label: 'RX = Prescription', color: PRINT.text.primary },
+      { label: 'OTC = Over-the-counter', color: PRINT.text.primary },
+      { label: 'SUPPLEMENT', color: PRINT.text.primary },
     ];
     legend.forEach((l, i) => {
       doc.setFontSize(10);
@@ -234,7 +263,7 @@ export default function Medications() {
 
     const drawSectionHeader = (title) => {
       // Gray band with section title
-      doc.setFillColor('#ECEFF1');
+      doc.setFillColor(PRINT.track);
       doc.rect(margin, y, page.w - margin * 2, 22, 'F');
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
@@ -249,7 +278,7 @@ export default function Medications() {
     ];
 
     const drawTableHeader = () => {
-      doc.setFillColor('#F5F5F5');
+      doc.setFillColor(PRINT.divider);
       doc.rect(margin, y, page.w - margin * 2, 22, 'F');
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
@@ -276,7 +305,7 @@ export default function Medications() {
       ensureRoom(rowHeight + 6);
       // alternate row fill
       if (idx % 2 === 0) {
-        doc.setFillColor('#FAFAFA');
+        doc.setFillColor(PRINT.background.default);
         doc.rect(margin, y - 4, page.w - margin * 2, rowHeight + 8, 'F');
       }
       let x = margin + 8;
@@ -547,7 +576,7 @@ export default function Medications() {
       notify(`Removed ${med.display_name || 'that medication'}`, {
         tone: 'info',
         action: (
-          <Button size="small" sx={{ color: 'inherit', fontWeight: 800 }} onClick={() => restoreMed(med)}>
+          <Button size="small" sx={{ color: 'inherit', fontWeight: 700 }} onClick={() => restoreMed(med)}>
             Undo
           </Button>
         ),
@@ -572,17 +601,24 @@ export default function Medications() {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-          {isSimple
-            ? 'Tick off your doses each day, and keep your list of medications here.'
-            : <>Tick off today&rsquo;s doses, keep your list of medications, and export it for your doctor.</>}
-        </Typography>
-      </Box>
+    <Page>
+      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
+        {isSimple
+          ? 'Tick off your doses each day, and keep your list of medications here.'
+          : <>Tick off today&rsquo;s doses, keep your list of medications, and export it for your doctor.</>}
+      </Typography>
 
       {doses.total > 0 && (
-        <Surface sx={{ mb: 3, borderRadius: '24px' }}>
+        // The page's main panel: today's doses as big tick rows. The
+        // checklist draws its own title (components/Home), so the level-1
+        // size and the thick rule are set from here.
+        <Surface
+          sx={{
+            p: { xs: 1.5, sm: 2 },
+            '& #meds-checklist-title': { fontSize: { xs: '2.25rem', sm: '2.5rem' }, letterSpacing: '-0.01em', lineHeight: 1 },
+            '& [data-testid="meds-checklist"] > div[aria-hidden]': { borderTopWidth: '10px' },
+          }}
+        >
           {/* Today or yesterday (L23). The checklist's own heading names the
               day too, so which one she's ticking is said in words. */}
           <ToggleButtonGroup
@@ -590,7 +626,7 @@ export default function Medications() {
             value={day}
             onChange={(e, v) => { if (v) setDay(v); }}
             aria-label="Which day to tick"
-            sx={{ mb: 2, '& .MuiToggleButton-root': { minHeight: 44, px: 2.5, textTransform: 'none', fontWeight: 700, fontSize: '1rem' } }}
+            sx={{ mb: 1.5, '& .MuiToggleButton-root': { minHeight: 44, px: 2.5, textTransform: 'none', fontWeight: 700, fontSize: '1rem' } }}
           >
             <ToggleButton value="today">Today</ToggleButton>
             <ToggleButton value="yesterday">Yesterday</ToggleButton>
@@ -615,15 +651,15 @@ export default function Medications() {
         </Surface>
       )}
 
-      {/* Simple: one big Add, then a two-question dialog (L16). */}
+      {/* Simple: one big Add, then a two-question dialog (L16). The page's
+          one filled button: full width on a phone, its own width from md. */}
       {isSimple && myMeds.length > 0 && (
         <Button
           variant="contained"
           size="large"
-          fullWidth
           startIcon={<AddIcon />}
           onClick={startSimpleAdd}
-          sx={{ mb: 3, minHeight: 56, fontSize: '1.0625rem', fontWeight: 800 }}
+          sx={{ minHeight: 56, fontSize: '1.0625rem', width: { xs: '100%', md: 'auto' }, alignSelf: { md: 'flex-start' } }}
         >
           Add a medication
         </Button>
@@ -631,12 +667,8 @@ export default function Medications() {
 
       {/* Search Surface */}
       {!isSimple && (
-      <Surface sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
-          <SearchIcon sx={{ color: 'primary.main' }} />
-          <SectionLabel>Find a medication</SectionLabel>
-        </Box>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+      <LabelPanel title="Find a medication" titleComponent="h3">
+        <Stack sx={{ mt: 1.5 }} direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
           <TextField
             fullWidth
             size="small"
@@ -664,14 +696,11 @@ export default function Medications() {
           </Typography>
         )}
         {results.length > 0 && (
-          <Stack spacing={0.5} sx={{ mt: 2, maxHeight: 220, overflowY: 'auto' }}>
+          <Stack sx={{ mt: 2, maxHeight: 220, overflowY: 'auto' }}>
             {results.map((r, idx) => (
-              <Surface
+              <PickRow
                 key={`${r.rxcui}-${idx}`}
-                variant="inset"
-                interactive
                 onClick={() => selectCandidate(r)}
-                sx={{ py: 1.25, px: 1.5 }}
               >
                 <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>{r.name}</Typography>
                 <Typography
@@ -684,7 +713,7 @@ export default function Medications() {
                 >
                   RxCUI {r.rxcui}
                 </Typography>
-              </Surface>
+              </PickRow>
             ))}
           </Stack>
         )}
@@ -697,16 +726,13 @@ export default function Medications() {
             Add &ldquo;{searchedFor}&rdquo; as typed
           </Button>
         )}
-      </Surface>
+      </LabelPanel>
       )}
 
       {!isSimple && (selected || editingMed) && (
-        <Surface ref={editorRef} sx={{ mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
-            <MedicationIcon sx={{ color: 'primary.main' }} />
-            <SectionLabel>{editingMed ? 'Edit medication' : 'Add a medication'}</SectionLabel>
-          </Box>
-          <Stack spacing={2}>
+        <Box ref={editorRef}>
+        <LabelPanel title={editingMed ? 'Edit medication' : 'Add a medication'} titleComponent="h3">
+          <Stack spacing={2} sx={{ mt: 1.5 }}>
             <TextField inputRef={nameInputRef} label="Display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
             {Array.isArray(details?.strengths) && details.strengths.length > 0 && (
               <FormControl fullWidth>
@@ -797,27 +823,27 @@ export default function Medications() {
               <Button variant="outlined" onClick={cancelEdit} disabled={Boolean(busy)}>Cancel</Button>
             </Stack>
           </Stack>
-        </Surface>
+        </LabelPanel>
+        </Box>
       )}
 
       {/* Medications List */}
       {loadError && myMeds.length === 0 ? (
         <Alert
           severity="error"
-          sx={{ mb: 3 }}
           action={<Button color="inherit" size="small" sx={{ minHeight: 44 }} onClick={loadMeds}>Try again</Button>}
         >
           Couldn&rsquo;t load your medications. {loadError}
         </Alert>
       ) : listLoading && myMeds.length === 0 ? null : myMeds.length === 0 ? (
-        <Box sx={{ mb: 3 }}>
+        <Box>
           {isSimple ? (
             <EmptyState
               icon={MedicationIcon}
               title="No medications yet"
               copy="Add the ones you take, and you can tick them off each day."
               action={(
-                <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={startSimpleAdd} sx={{ minHeight: 56, fontWeight: 800 }}>
+                <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={startSimpleAdd} sx={{ minHeight: 56, width: { xs: '100%', md: 'auto' } }}>
                   Add a medication
                 </Button>
               )}
@@ -831,94 +857,68 @@ export default function Medications() {
           )}
         </Box>
       ) : (
-      <Surface sx={{ mb: 3 }}>
-        <Box sx={{ mb: 2.5 }}>
-          <DisplayHeading size="card">Your medications, by time of day</DisplayHeading>
-        </Box>
-        <Stack spacing={2}>
+      <LabelPanel title="Your medications, by time of day" titleComponent="h3">
+        <Stack spacing={2} sx={{ pt: 1 }}>
           {/* Simple names the groups in the form's words and skips empty ones. */}
           {MED_GROUPS.filter(g => (g.key !== 'daily' && !isSimple) || myMeds.some(g.match)).map(({ key: slot, label, match }) => (
             <Box key={slot}>
-              <SectionLabel dot sx={{ mb: 1 }}>{SLOT_WORD[slot] || label}</SectionLabel>
-              <Stack spacing={1} sx={{ mt: 1 }}>
+              <Typography component="h4" sx={{ fontWeight: 900, fontSize: '1.0625rem', lineHeight: 1.2, pb: 0.5, borderBottom: (t) => `2px solid ${t.palette.text.primary}` }}>
+                {SLOT_WORD[slot] || label}
+              </Typography>
+              <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
                 {myMeds
                   .filter(match)
                   .sort(byTypeThenName)
-                  .map(m => {
+                  .map((m, index) => {
                     const typeInfo = getMedTypeColor(m.med_type);
 
                     return (
-                      <Surface
-                        key={m.id ?? m._id}
-                        variant="inset"
-                        sx={{
-                          py: 1.75,
-                          px: 2,
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                          <MedicationIcon sx={{ color: typeInfo.color, fontSize: 26, mt: 0.25 }} />
+                      <ListRow component="li" key={m.id ?? m._id} first={index === 0} sx={{ alignItems: 'flex-start', py: 1 }}>
+                        <Box sx={{ flex: 1, minWidth: 0, pt: 0.5 }}>
+                          <Typography sx={{ fontWeight: 700, fontSize: '1rem' }}>
+                            {m.display_name}
+                          </Typography>
 
-                          <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem', mb: 0.25 }}>
-                              {m.display_name}
+                          {m.strength && (
+                            <Typography sx={{ fontFamily: 'inherit', fontSize: '0.8125rem', color: 'text.secondary' }}>
+                              {m.strength}
                             </Typography>
+                          )}
 
-                            {m.strength && (
-                              <Typography
-                                sx={{
-                                  fontFamily: "inherit",
-                                  fontSize: '0.75rem',
-                                  color: 'text.secondary',
-                                  mb: 0.75,
-                                }}
-                              >
-                                {m.strength}
-                              </Typography>
-                            )}
+                          {(m.user_indications||[]).length > 0 && (
+                            <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', display: 'block' }}>
+                              {(m.user_indications||[]).join(', ')}
+                            </Typography>
+                          )}
 
-                            {(m.user_indications||[]).length > 0 && (
-                              <Typography
-                                sx={{
-                                  fontSize: '0.75rem',
-                                  color: 'text.secondary',
-                                  display: 'block',
-                                  mb: 1,
-                                }}
-                              >
-                                {(m.user_indications||[]).join(', ')}
-                              </Typography>
-                            )}
-
-                            {!isSimple && (
-                            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
-                              <Chip variant="tag" size="small" label={typeInfo.label} />
-                            </Box>
-                            )}
-                          </Box>
-
-                          <Stack direction="row" spacing={0.5}>
-                            {/* One quiet icon set (visual review B7): text.secondary at rest;
-                                remove turns red only under a finger or the pointer. */}
-                            <IconButton size="small" aria-label={`Edit ${m.display_name}`} onClick={() => startEdit(m)} sx={{ color: 'text.secondary' }}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton size="small" aria-label={`Remove ${m.display_name}`} onClick={() => removeMed(m)} disabled={Boolean(busy)} sx={{ color: 'text.secondary', '&:hover, &:active': { color: 'error.main' } }}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Stack>
+                          {!isSimple && (
+                            <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: 'text.primary', mt: 0.25 }}>
+                              {typeInfo.label}
+                            </Typography>
+                          )}
                         </Box>
-                      </Surface>
+
+                        <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                          {/* One quiet icon set (visual review B7): text.secondary at rest;
+                              remove turns red only under a finger or the pointer. */}
+                          <IconButton aria-label={`Edit ${m.display_name}`} onClick={() => startEdit(m)} sx={{ width: 44, height: 44, color: 'text.secondary' }}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton aria-label={`Remove ${m.display_name}`} onClick={() => removeMed(m)} disabled={Boolean(busy)} sx={{ width: 44, height: 44, color: 'text.secondary', '&:hover, &:active': { color: 'error.main' } }}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Stack>
+                      </ListRow>
                     );
                   })}
-                {myMeds.filter(match).length === 0 && (
-                  <Typography variant="caption" color="text.secondary">Nothing for {(SLOT_WORD[slot] || slot).toLowerCase()} yet.</Typography>
-                )}
-              </Stack>
+              </Box>
+              {myMeds.filter(match).length === 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', pt: 0.75 }}>Nothing for {(SLOT_WORD[slot] || slot).toLowerCase()} yet.</Typography>
+              )}
             </Box>
           ))}
         </Stack>
-      </Surface>
+      </LabelPanel>
       )}
 
       {/* Export Buttons: under the list, and only once there is a list
@@ -926,7 +926,7 @@ export default function Medications() {
       {/* `size="small"` renders these under the 44px tap floor the mobile
           harness enforces. minHeight only — the compact look is unchanged. */}
       {!isSimple && myMeds.length > 0 && (
-      <Box sx={{ mb: 3, display: 'flex', gap: 1, flexWrap: 'wrap', '& .MuiButton-root': { minHeight: 44, minWidth: 44 } }}>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', '& .MuiButton-root': { minHeight: 44, minWidth: 44 } }}>
         <Button size="small" variant="outlined" onClick={handleCopyExport}>Copy text</Button>
         <Button size="small" variant="outlined" onClick={handleDownloadExport}>Download .txt</Button>
         <Button size="small" variant="outlined" onClick={handleDownloadPdf}>Download PDF</Button>
@@ -958,7 +958,7 @@ export default function Medications() {
         >
           <Stack spacing={3} sx={{ mt: 1 }}>
             <Box>
-              <Typography component="label" htmlFor="simple-med-name" sx={{ display: 'block', fontSize: '1.125rem', fontWeight: 800, mb: 1 }}>
+              <Typography component="label" htmlFor="simple-med-name" sx={{ display: 'block', fontSize: '1.125rem', fontWeight: 700, mb: 1 }}>
                 What&rsquo;s it called?
               </Typography>
               <TextField
@@ -978,18 +978,15 @@ export default function Medications() {
                   <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', mb: 1 }}>
                     Tap one to use it, or just keep typing.
                   </Typography>
-                  <Stack spacing={0.75} role="list" aria-label="Suggestions">
+                  <Stack role="list" aria-label="Suggestions">
                     {suggestions.map((c, idx) => (
-                      <Surface
+                      <PickRow
                         key={`${c.rxcui}-${idx}`}
                         role="listitem"
-                        variant="inset"
-                        interactive
                         onClick={() => pickSuggestion(c)}
-                        sx={{ py: 1.25, px: 1.5, minHeight: 44, display: 'flex', alignItems: 'center' }}
                       >
                         <Typography sx={{ fontWeight: 600, fontSize: '1rem' }}>{c.name}</Typography>
-                      </Surface>
+                      </PickRow>
                     ))}
                   </Stack>
                 </Box>
@@ -1002,7 +999,7 @@ export default function Medications() {
             </Box>
 
             <Box>
-              <Typography id="simple-med-when" sx={{ fontSize: '1.125rem', fontWeight: 800, mb: 1 }}>
+              <Typography id="simple-med-when" sx={{ fontSize: '1.125rem', fontWeight: 700, mb: 1 }}>
                 When do you take it?
               </Typography>
               <Box
@@ -1014,11 +1011,16 @@ export default function Medications() {
                   gap: 1,
                   '& .MuiToggleButton-root': {
                     minHeight: 56,
-                    borderRadius: '16px',
                     textTransform: 'none',
                     fontSize: '1.0625rem',
                     fontWeight: 700,
-                    border: (t) => `1px solid ${t.palette.divider}`,
+                    // Square, 2px ink edge; chosen = the blue fill.
+                    border: (t) => `2px solid ${t.palette.text.primary}`,
+                    '&.Mui-selected, &.Mui-selected:hover': {
+                      bgcolor: 'primary.main',
+                      color: 'primary.contrastText',
+                      borderColor: 'primary.main',
+                    },
                   },
                 }}
               >
@@ -1049,7 +1051,7 @@ export default function Medications() {
           </Stack>
         </PremiumDialog>
       )}
-    </Box>
+    </Page>
   );
 }
 

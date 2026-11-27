@@ -22,7 +22,7 @@ export default function SignInButton({ sx, ...props }) {
       variant="contained"
       onClick={signIn}
       data-testid="sign-in-again"
-      sx={{ minHeight: 44, borderRadius: 999, fontWeight: 800, boxShadow: 'none', ...sx }}
+      sx={{ minHeight: 44, fontWeight: 700, boxShadow: 'none', ...sx }}
       {...props}
     >
       Sign in

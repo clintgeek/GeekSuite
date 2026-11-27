@@ -6,15 +6,20 @@ desktop, and occasionally on tablet." The open decision is the identity directio
 
 ## Progress
 
-- **2026-11-26, fixed in the working tree, not yet committed:** items 9 (floating buttons),
-  10 (food-log row), 16 (sidebar height) and 18 (scene `63b`: the scene was wrong, not the
-  app). Full unit suite 1,044 / 1,044; harness clean on phone, desktop and tablet portrait.
-- **Corrections to the review found while fixing:** the sidebar has 13 destinations, not 14,
-  and it has no user chip / Settings / Sign out at all (FitnessGeek passes no footer).
-- **Still flagged on tablet landscape, pre-existing:** the AI Insights chips on Full Home
-  ("Today", "Advice", "Patterns", "Ask") are 32px tall on a touch screen.
-- **Identity mockups:** https://claude.ai/artifact/WXfSyTwNHjhWH76KwzJEDg (A the Label,
-  B kitchen scale, C Market Morning de-Subwayed). Awaiting Chef's pick.
+- **2026-11-26, committed:** items 9 (floating buttons), 10 (food-log row), 16 (sidebar height) and 18
+  (scene `63b`: the scene was wrong, not the app).
+- **2026-11-26, built as one commit: "The Label"** (direction A, Chef's pick). Covers items 1–8 and 11–15:
+  the identity on every screen, the stale PWA shell, type weights, flattened nesting, one status colour set,
+  Health and Activity brought in, the main action made the strongest thing on Home, the one page container,
+  and two-column desktop layouts. Mockups: https://claude.ai/artifact/WXfSyTwNHjhWH76KwzJEDg
+- **Corrections to the review found while fixing:** the sidebar has 13 destinations, not 14, and it has no
+  user chip / Settings / Sign out at all (FitnessGeek passes no footer). The Food log's calendar icon was
+  decorative; it never opened a picker.
+- **Open after the build:**
+  - Item 12 in spirit, on Home: the facts panel fills the first phone screen in Full, so meals start one
+    scroll down. Trimming the Eaten row or the repeated sentence would bring Breakfast up. Chef's call.
+  - "Log weight" still rests over text at the top of the phone Weight page (bottom clearance is fine).
+  - Not yet on a real device.
 
 ## What was looked at
 

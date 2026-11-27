@@ -1,110 +1,78 @@
 import React from 'react';
-import { Box, Typography, IconButton, Tooltip, LinearProgress } from '@mui/material';
+import { Box, Typography, IconButton, Tooltip } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { LocalFireDepartment as CaloriesIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { Settings as SettingsIcon } from '@mui/icons-material';
 import { fmt } from '../../utils/plainWords.js';
-import { trackColor, macroColors } from '../../theme/theme.jsx';
+import { Surface, LabelBar } from '../primitives';
 
 const DEFAULT_RDA = 2000;
 
+/**
+ * The day's calories as one compact panel: "1,680 of 2,340 cal … 660 left",
+ * a square bar, and under it one quiet line that holds the activity allowance
+ * and the settings gear. No nested box. (Keto swaps the numbers for net carbs.)
+ */
 const CalorieSummary = ({
   calories = 0,
   goal = 0,
   base = 0,
   add = 0,
   onSettings,
-  embedded = false,
-  // Keto props
+  // Mode keto props
   mode = 'standard',
   netCarbsConsumed = 0,
   netCarbLimit = 20,
+  sx,
 }) => {
   const theme = useTheme();
-  const amber = theme.palette.warning.main;
-  // Every progress track is the warm `track` groove (visual review A2).
-  const track = trackColor(theme);
-  const carbsColor = (theme.palette.macro || macroColors(theme.palette.mode)).carbs;
+
+  const gear = onSettings && (
+    <Tooltip title="Change your daily target">
+      <IconButton
+        size="small"
+        onClick={onSettings}
+        aria-label="Change your daily target"
+        sx={{ color: 'text.secondary', mr: -0.75 }}
+      >
+        <SettingsIcon fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  );
 
   // ─── Keto mode ───────────────────────────────────────────────────────────
   if (mode === 'keto') {
+    const consumed = Math.round(netCarbsConsumed * 10) / 10;
     const carbProgress = Math.min((netCarbsConsumed / netCarbLimit) * 100, 100);
-    // Rounded to one decimal at the point of subtraction. `netCarbsConsumed`
-    // arrives already quantised to 0.1, so the subtraction produces binary
-    // float residue that nothing downstream cleaned up: a 20 g cap with 16.6 g
-    // eaten rendered "3.3999999999999986g left" — the only unrounded number on
-    // a card where everything else is rounded.
+    // Rounded to one decimal at the point of subtraction: `netCarbsConsumed`
+    // arrives quantised to 0.1, so the subtraction left binary float residue
+    // ("3.3999999999999986g left").
     const carbsLeft = Math.round(Math.max(0, netCarbLimit - netCarbsConsumed) * 10) / 10;
     const barColor = carbProgress >= 100
       ? theme.palette.error.main
       : carbProgress >= 70
-        ? amber
+        ? theme.palette.warning.main
         : theme.palette.primary.main;
 
     return (
-      <Box sx={{
-        backgroundColor: embedded ? 'transparent' : theme.palette.background.paper,
-        borderRadius: embedded ? 0 : 2,
-        p: embedded ? 0 : { xs: 1.5, sm: 2 },
-        boxShadow: embedded ? 'none' : theme.shadows[1],
-      }}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto', rowGap: 0.5, columnGap: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 16, height: 16, borderRadius: '50%', backgroundColor: carbsColor, flexShrink: 0 }} />
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 800, fontSize: '0.9375rem' }}>
-              Net carbs
-            </Typography>
-          </Box>
-          {onSettings && (
-            <Tooltip title="Change your daily target">
-              <IconButton size="small" onClick={onSettings} aria-label="Change your daily target">
-                <SettingsIcon fontSize="inherit" />
-              </IconButton>
-            </Tooltip>
-          )}
-
-          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
-            <Typography
-              sx={{
-                fontFamily: "inherit",
-                fontSize: '1.5rem',
-                fontWeight: 700,
-                lineHeight: 1,
-                color: carbProgress >= 100 ? theme.palette.error.main : carbProgress >= 70 ? amber : theme.palette.text.primary
-              }}
-            >
-              {Math.round(netCarbsConsumed * 10) / 10}
-            </Typography>
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-              / {netCarbLimit}g
-            </Typography>
-          </Box>
-          <Typography variant="caption" sx={{ color: theme.palette.text.secondary, justifySelf: 'end' }}>
-            {Math.round(carbProgress)}%
+      <Surface sx={{ py: 1, ...sx }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 1.5 }}>
+          <Typography component="span" sx={{ minWidth: 0 }}>
+            <Box component="span" sx={{ fontSize: '1.625rem', fontWeight: 900, lineHeight: 1 }}>{consumed}</Box>
+            <Box component="span" sx={{ fontSize: '0.875rem' }}> / {netCarbLimit}g net carbs</Box>
           </Typography>
-
-          <Box sx={{ gridColumn: '1 / span 2' }}>
-            <LinearProgress
-              variant="determinate"
-              value={carbProgress}
-              aria-label={`Net carbs: ${Math.round(netCarbsConsumed * 10) / 10}g of ${netCarbLimit}g`}
-              sx={{
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: track,
-                '& .MuiLinearProgress-bar': { backgroundColor: barColor, transition: 'background-color 0.3s ease' }
-              }}
-            />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.25 }}>
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                {carbsLeft}g left · {fmt(calories)} cal
-              </Typography>
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                limit {netCarbLimit}g
-              </Typography>
-            </Box>
-          </Box>
+          <Typography component="span" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{carbsLeft}g left</Typography>
         </Box>
-      </Box>
+        <LabelBar
+          value={carbProgress}
+          segments={[{ value: carbProgress, color: barColor }]}
+          label={`Net carbs: ${consumed}g of ${netCarbLimit}g`}
+          height={10}
+        />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, minHeight: gear ? 32 : 'auto' }}>
+          <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>{fmt(calories)} cal so far</Typography>
+          {gear}
+        </Box>
+      </Surface>
     );
   }
 
@@ -112,78 +80,43 @@ const CalorieSummary = ({
   const effectiveGoal = goal > 0 ? goal : DEFAULT_RDA;
   const usingRda = goal === 0;
   const progress = Math.min((calories / effectiveGoal) * 100, 100);
+  const rounded = Math.round(calories);
+  // No arithmetic in the label (SIMPLE_AND_FULL_PLAN.md item 4): the activity
+  // allowance is a sentence, and only when there is one.
+  const showAllowance = !usingRda && base > 0 && add > 0;
+
   return (
-    <Box sx={{
-      backgroundColor: embedded ? 'transparent' : theme.palette.background.paper,
-      borderRadius: embedded ? 0 : 2,
-      p: embedded ? 0 : { xs: 1.5, sm: 2 },
-      boxShadow: embedded ? 'none' : theme.shadows[1],
-      border: 'none',
-      display: 'grid',
-      gridTemplateColumns: '1fr auto',
-      gridTemplateRows: 'auto auto',
-      rowGap: 0.5,
-      columnGap: 1
-    }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <CaloriesIcon sx={{ color: theme.palette.primary.main }} />
-        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 800, fontSize: '0.9375rem' }}>
-          Calories
+    <Surface sx={{ py: 1, ...sx }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 1.5 }}>
+        <Typography component="span" sx={{ minWidth: 0 }}>
+          <Box component="span" sx={{ fontSize: '1.625rem', fontWeight: 900, lineHeight: 1 }}>{fmt(calories)}</Box>
+          <Box component="span" sx={{ fontSize: '0.875rem' }}>
+            {' '}of {effectiveGoal.toLocaleString('en-US')} cal{usingRda ? ' (typical day)' : ''}
+          </Box>
+        </Typography>
+        <Typography component="span" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+          {rounded > effectiveGoal
+            ? `${(rounded - effectiveGoal).toLocaleString('en-US')} over`
+            : `${Math.max(0, effectiveGoal - rounded).toLocaleString('en-US')} left`}
         </Typography>
       </Box>
-      {onSettings && (
-        <Tooltip title="Change your daily target">
-          <IconButton size="small" onClick={onSettings} aria-label="Change your daily target">
-            <SettingsIcon fontSize="inherit" />
-          </IconButton>
-        </Tooltip>
-      )}
-
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1 }}>
-          {fmt(calories)}
-        </Typography>
-        <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>cal</Typography>
-      </Box>
-      <Typography variant="caption" sx={{ color: theme.palette.text.secondary, justifySelf: 'end' }}>
-        {Math.round(progress)}%
-      </Typography>
-
-      <Box sx={{ gridColumn: '1 / span 2' }}>
-        <LinearProgress
-          variant="determinate"
-          value={progress}
-          aria-label={`Calories: ${fmt(calories)} of ${fmt(effectiveGoal)} cal`}
-          sx={{
-            height: 4,
-            borderRadius: 2,
-            backgroundColor: track,
-            '& .MuiLinearProgress-bar': { backgroundColor: theme.palette.primary.main }
-          }}
-        />
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.25 }}>
-          {/* No arithmetic in the label (SIMPLE_AND_FULL_PLAN.md item 4). It
-              used to read "Goal: 2340 cal (2100 +240)"; the activity allowance
-              is said in a sentence instead, and only when there is one. */}
-          <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontSize: '0.9375rem' }}>
-            {usingRda ? 'Typical day' : 'Target'}: {effectiveGoal.toLocaleString('en-US')} cal
-          </Typography>
-          <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontSize: '0.9375rem', fontWeight: 700 }}>
-            {Math.round(calories) > effectiveGoal
-              ? `${(Math.round(calories) - effectiveGoal).toLocaleString('en-US')} over`
-              : `${Math.max(0, effectiveGoal - Math.round(calories)).toLocaleString('en-US')} left`}
-          </Typography>
+      <LabelBar
+        value={progress}
+        label={`Calories: ${fmt(calories)} of ${fmt(effectiveGoal)} cal`}
+        height={10}
+      />
+      {(showAllowance || gear) && (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, minHeight: gear ? 32 : 'auto' }}>
+          {showAllowance ? (
+            <Typography data-testid="activity-allowance" sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+              Includes {Math.round(add).toLocaleString('en-US')} extra for today’s activity.
+            </Typography>
+          ) : <span />}
+          {gear}
         </Box>
-        {!usingRda && base > 0 && add > 0 && (
-          <Typography data-testid="activity-allowance" sx={{ color: theme.palette.text.secondary, fontSize: '0.9375rem', mt: 0.5 }}>
-            Includes {Math.round(add).toLocaleString('en-US')} extra for today’s activity.
-          </Typography>
-        )}
-      </Box>
-    </Box>
+      )}
+    </Surface>
   );
 };
 
 export default CalorieSummary;
-
-

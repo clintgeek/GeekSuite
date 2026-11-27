@@ -199,7 +199,8 @@ describe('BPInsights — the latest reading', () => {
       { id: 'pm', systolic: 121, diastolic: 79, log_date: '2026-10-16T00:00:00.000Z', measured_at: '2026-10-17T01:00:00.000Z' },
     ];
     render(<BPInsights bpLogs={logs} />);
-    expect(screen.getByText(/121\/79/)).toBeInTheDocument();
+    // The headline names it (and the big number repeats it).
+    expect(screen.getByTestId('bp-headline')).toHaveTextContent(/121\/79/);
     expect(screen.queryByText(/150\/95/)).toBeNull();
   });
 });

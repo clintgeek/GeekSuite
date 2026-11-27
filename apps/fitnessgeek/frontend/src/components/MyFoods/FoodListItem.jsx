@@ -32,14 +32,15 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
   return (
     <ListItem
       sx={{
-        pl: 2.5,
+        pl: 0,
         // Clear the two 44px action buttons: `px` here used to override the
         // room MUI reserves for secondaryAction, so the macros ran under the
         // edit icon. Spacing unit is 4px — 24 = 96px.
         pr: 24,
-        py: 1.5,
+        py: 1.25,
         borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
         '&:last-child': { borderBottom: 'none' },
+        '& .MuiListItemSecondaryAction-root': { right: 0 },
       }}
       secondaryAction={
         <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -84,15 +85,12 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
         {/* Name + brand */}
         <Typography
           sx={{
-            fontWeight: 600,
+            fontWeight: 700,
             fontSize: '1rem',
             color: 'text.primary',
             lineHeight: 1.3,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            overflowWrap: 'anywhere',
           }}
-          title={food.name}
         >
           {food.name}
         </Typography>
@@ -132,7 +130,7 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
                 component="span"
                 // The source colour is the dot's job. As ink it failed contrast —
                 // grey #757575 on the dark theme is 3.49:1 (first audited 2026-10-13).
-                sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.02em' }}
+                sx={{ color: 'text.secondary', fontWeight: 500 }}
               >
                 {sourceName}
               </Box>
@@ -141,7 +139,7 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
           )}
           {isRecipe && (
             <>
-              <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>Recipe</Box>
+              <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>Recipe</Box>
               {makes > 0 && (
                 <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                   makes {Math.round(makes * 100) / 100}

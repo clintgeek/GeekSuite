@@ -1,21 +1,20 @@
 /**
- * FitnessGeek Theme: "Market Morning"
+ * FitnessGeek Theme: "The Label"
  *
- * Warm and food-first (DOCS/SIMPLE_AND_FULL_PLAN.md, Decisions). A sunny
- * cream ground, rounded friendly type (Nunito, self-hosted), big soft cards,
- * and a produce colour per meal: tomato for Breakfast, leaf for Lunch, lemon
- * for Dinner, plum for Snacks. Night is the same kitchen with the lamp on —
- * walnut and warm cream — not the day palette inverted.
+ * The Nutrition Facts panel, as an app (DOCS/THEME_REVIEW_2026-11.md, item 1;
+ * Chef picked direction A on 2026-11-26). A white panel with a 2px ink border
+ * on a cool grey ground, thick and thin ink rules, heavy grotesque numerals
+ * (Archivo, self-hosted), and one ink-blue for anything you can press or that
+ * shows progress. Meals and statuses get a few more bold ink colours in the
+ * same vein as the blue; they are marks and fills, never card bodies.
  *
- * Replaces "Studio Slate" (teal, a serif display face and monospace labels),
- * which sat too close to NoteGeek's Lab Notebook and BookGeek's serif.
+ * Night is the label inverted: near-black panel, off-white rules.
  *
- * CONTRAST (measured, WCAG): the produce colours are FILLS and EDGES, never
- * text on the cream. Lemon measures 1.6:1 and leaf 2.5:1 as text on paper —
- * both unreadable — so every produce fill carries INK text instead, and each
- * colour has a deep `text` variant for the rare case it must be the ink.
- * The measured pairs are listed beside each value; packages/ui's
- * themeContrast.test.js holds the palette pairs to AA in both modes.
+ * Replaces "Market Morning" (cream, Nunito, basil green and produce fills),
+ * which read as a sandwich shop.
+ *
+ * CONTRAST (WCAG): every meal `fill` carries its `ink` at AA; packages/ui's
+ * themeContrast.test.js holds the pairs in both modes.
  *
  * Composes createGeekSuiteTheme with FitnessGeek-specific identity overrides.
  */
@@ -23,75 +22,70 @@ import { alpha } from '@mui/material/styles';
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 
 // ─── Design Tokens ───────────────────────────────────────────────
-const NUNITO = '"Nunito", "Segoe UI Rounded", "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const ARCHIVO = '"Archivo", "Helvetica Neue", Helvetica, Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 export const tokens = {
   radius: {
-    xs: 8,
-    sm: 12,
-    md: 16,
-    lg: 24,
-    pill: 999,
+    // A label has square corners. Controls get a 4px ease; `pill` is kept as
+    // a name for older call sites and is now that same 4px.
+    xs: 2,
+    sm: 4,
+    md: 4,
+    lg: 0,
+    pill: 4,
   },
   // One family everywhere. The display/mono slots are kept so older call
   // sites that read `tokens.font.display` keep working; numbers get
   // tabular figures from the body rule below rather than a monospace face.
   font: {
-    display: NUNITO,
-    body: NUNITO,
-    mono: NUNITO,
+    display: ARCHIVO,
+    body: ARCHIVO,
+    mono: ARCHIVO,
   },
 };
 
-// ─── Light: the market in the morning ────────────────────────────
+// ─── Light: the label ────────────────────────────────────────────
 const lightColors = {
-  // Basil. White on it 6.41:1; as ink on paper 6.36:1.
-  primary: { main: '#2F6B35', light: '#4E8A2A', dark: '#24522A', contrastText: '#FFFFFF' },
-  secondary: { main: '#8A5A3C', light: '#B07A55', dark: '#6B4329', contrastText: '#FFFFFF' },
-  background: { default: '#FFF8EC', paper: '#FFFEFB' },
-  // Espresso ink: 14.96:1 on cream. Secondary 7.88:1, muted 6.39:1.
-  text: { primary: '#2A2118', secondary: '#5C4B3B', muted: '#6B5847', disabled: '#8C7A67' },
-  divider: '#EFE3CF',
+  // Ink blue. White on it 8.3:1.
+  primary: { main: '#1F3FD1', light: '#4A66E0', dark: '#1630A8', contrastText: '#FFFFFF' },
+  secondary: { main: '#111318', light: '#3D414B', dark: '#000000', contrastText: '#FFFFFF' },
+  background: { default: '#ECEEF2', paper: '#FFFFFF' },
+  text: { primary: '#111318', secondary: '#3D414B', muted: '#4A4E57', disabled: '#6B7080' },
+  // The hairline between rows; the heavy rules are drawn in the ink itself.
+  divider: '#C9CCD3',
 };
 
-// ─── Dark: the same kitchen at night ─────────────────────────────
+// ─── Dark: the label inverted ────────────────────────────────────
 const darkColors = {
-  // Basil under the lamp. 8.40:1 on the night paper; its dark label 8.82:1.
-  primary: { main: '#8BCB7E', light: '#A9DA9E', dark: '#6DB35F', contrastText: '#13200F' },
-  secondary: { main: '#D9A77F', light: '#E8C3A4', dark: '#C08A60', contrastText: '#1B1612' },
-  background: { default: '#1B1612', paper: '#262019' },
-  // Warm cream ink: 15.51:1 on walnut. Secondary 9.66:1, muted 7.83:1.
-  text: { primary: '#F7EDE0', secondary: '#D6C6B3', muted: '#C4B29D', disabled: '#A08E7A' },
-  divider: '#3D3228',
+  primary: { main: '#8FA6FF', light: '#B3C2FF', dark: '#6F88F0', contrastText: '#0E0F12' },
+  secondary: { main: '#F2F2EE', light: '#FFFFFF', dark: '#C4C7CF', contrastText: '#0E0F12' },
+  background: { default: '#0E0F12', paper: '#17181C' },
+  text: { primary: '#F2F2EE', secondary: '#C4C7CF', muted: '#A9ADB8', disabled: '#9498A3' },
+  divider: '#3A3D46',
 };
 
-// Semantic tones retuned for the warm grounds (the suite's defaults are
-// tuned for neutral grey and land under AA on cream / walnut).
 const semantic = {
-  light: { success: '#2F7D32', warning: '#9A5B00', error: '#B3261E', info: '#2A5F8F' },
-  dark: { success: '#8BCB7E', warning: '#F2B45A', error: '#FF9A8A', info: '#8CC4F0' },
+  light: { success: '#0B7A3B', warning: '#9A5200', error: '#C81E1E', info: '#1F3FD1' },
+  dark: { success: '#5FD08A', warning: '#F2B45A', error: '#FF8A80', info: '#8FA6FF' },
 };
 
 /**
- * The produce, per meal. `fill` is a surface (cards' edge, buttons) that
- * always carries `ink`; `tint` is the soft card body; `text` is the deep
- * variant for the rare time the colour itself has to be read.
- *
- * Light, ink #2A2118 on fill: tomato 5.42, leaf 7.53, lemon 10.05, plum 5.50.
- * Dark, ink #1B1612 on fill: tomato 7.80, leaf 10.47, lemon 12.29, plum 7.94.
+ * One bold ink per meal, in the same vein as the blue. `fill` is a mark or a
+ * button that always carries `ink`; `tint` is a faint wash for the rare
+ * surface that needs one; `text` is the colour as words on paper.
  */
 const PRODUCE = {
   light: {
-    breakfast: { name: 'Tomato', fill: '#F07156', tint: '#FDE9E2', text: '#B23A22', ink: '#2A2118' },
-    lunch: { name: 'Leaf', fill: '#8BC34A', tint: '#EDF5E0', text: '#3F7A25', ink: '#2A2118' },
-    dinner: { name: 'Lemon', fill: '#F6C945', tint: '#FEF5D6', text: '#8A6100', ink: '#2A2118' },
-    snack: { name: 'Plum', fill: '#C184BE', tint: '#F5E8F4', text: '#7E3F7B', ink: '#2A2118' },
+    breakfast: { name: 'Orange', fill: '#C2410C', tint: '#FBEDE6', text: '#C2410C', ink: '#FFFFFF' },
+    lunch: { name: 'Green', fill: '#0B7A3B', tint: '#E6F3EB', text: '#0B7A3B', ink: '#FFFFFF' },
+    dinner: { name: 'Violet', fill: '#6D28D9', tint: '#EFE9FB', text: '#6D28D9', ink: '#FFFFFF' },
+    snack: { name: 'Magenta', fill: '#B0127E', tint: '#F9E6F2', text: '#B0127E', ink: '#FFFFFF' },
   },
   dark: {
-    breakfast: { name: 'Tomato', fill: '#FF8A70', tint: '#3A2620', text: '#FF8A70', ink: '#1B1612' },
-    lunch: { name: 'Leaf', fill: '#A5D46F', tint: '#27301E', text: '#A5D46F', ink: '#1B1612' },
-    dinner: { name: 'Lemon', fill: '#F7D26A', tint: '#35301B', text: '#F7D26A', ink: '#1B1612' },
-    snack: { name: 'Plum', fill: '#D39ACF', tint: '#33253A', text: '#D39ACF', ink: '#1B1612' },
+    breakfast: { name: 'Orange', fill: '#FF9A6B', tint: '#2A1D17', text: '#FF9A6B', ink: '#0E0F12' },
+    lunch: { name: 'Green', fill: '#5FD08A', tint: '#16261C', text: '#5FD08A', ink: '#0E0F12' },
+    dinner: { name: 'Violet', fill: '#B79CFF', tint: '#201B30', text: '#B79CFF', ink: '#0E0F12' },
+    snack: { name: 'Magenta', fill: '#F58AD0', tint: '#2A1826', text: '#F58AD0', ink: '#0E0F12' },
   },
 };
 
@@ -105,16 +99,13 @@ export function mealColors(mealType, mode = 'light') {
 }
 
 /**
- * One colour per job (visual review B2): the produce colours mean "which
- * meal" and nothing else, so macros get their own warm ramp built from basil
- * and the ink — a reader can't connect "Fat" to Breakfast's tomato any more.
- * Measured on paper / against `track`: light protein 6.35 / 4.85, carbs
- * 5.78 / 4.42, fat 6.67 / 5.10, fibre 4.16 / 3.18 (a bar or dot only, never
- * text); dark 8.42 / 6.51, 7.52 / 5.82, 7.85 / 6.07, 10.15 / 7.86.
+ * Macros are label rows: ink bars, like the panel's own rules. The meal
+ * colours mean "which meal" and nothing else, so a reader can't connect
+ * "Fat" to a meal. Fibre is the quieter grey (a bar or dot only).
  */
 const MACROS = {
-  light: { protein: '#2F6B35', carbs: '#8A5A3C', fat: '#6B5847', fiber: '#4E8A2A' },
-  dark: { protein: '#8BCB7E', carbs: '#D9A77F', fat: '#C4B29D', fiber: '#A9DA9E' },
+  light: { protein: '#111318', carbs: '#111318', fat: '#111318', fiber: '#4A4E57' },
+  dark: { protein: '#F2F2EE', carbs: '#F2F2EE', fat: '#F2F2EE', fiber: '#A9ADB8' },
 };
 
 /** The macro colours in one mode: { protein, carbs, fat, fiber }. */
@@ -123,21 +114,21 @@ export function macroColors(mode = 'light') {
 }
 
 /**
- * Every progress track: a warm cream groove in the morning, a walnut one at
- * night (review A2). Basil on the light track 4.85:1; night basil on the dark
+ * Every progress track: a cool grey groove by day, a charcoal one at
+ * night (review A2). The blue on the light track and on the dark
  * one 6.51:1 — the old grey[200]/[300] tracks were cold, and in dark the
  * brightest thing on the screen.
  */
-const TRACK = { light: '#EADFCB', dark: '#3D3228' };
+const TRACK = { light: '#D9DCE3', dark: '#2C2F38' };
 
 /**
- * The second-rank button (review B1): one filled basil per view; every other
- * action is tonal. Basil on the light tint 5.34:1; night basil-light on the
+ * The second-rank button (review B1): one filled blue per view; every other
+ * action is tonal. The blue on the light tint and the night blue on the
  * dark tint 7.42:1.
  */
 const TONAL = {
-  light: { bg: '#E3EEDC', hover: '#D3E4C9', ink: '#2F6B35' },
-  dark: { bg: '#2E3B29', hover: '#394A33', ink: '#A9DA9E' },
+  light: { bg: '#E3E8FB', hover: '#D3DBF8', ink: '#1F3FD1' },
+  dark: { bg: '#1F2540', hover: '#283056', ink: '#B3C2FF' },
 };
 
 /** The track colour for this theme, with a fallback for a bare MUI theme. */
@@ -151,19 +142,18 @@ function buildFitnessOverrides(mode) {
   const tones = semantic[isDark ? 'dark' : 'light'];
   const track = TRACK[isDark ? 'dark' : 'light'];
   const tonal = TONAL[isDark ? 'dark' : 'light'];
-  // Night cards lift off the walnut with a firmer edge (review A10); outlined
+  // Panels are bordered in the ink itself, like a label; outlined
   // pills and chips get a warm edge instead of MUI's cold grey (A9, B5).
-  const cardBorder = isDark ? '#4A3D30' : colors.divider;
-  const outline = isDark ? '#554636' : '#CDBBA0';
+  const cardBorder = colors.text.primary;
+  const outline = isDark ? '#6B7080' : '#6B7080';
   // Disabled is warm too (A8): the composer's Log it rests here every time
   // it opens, and MUI's cold grey read as "broken". 3.33:1 light.
-  const disabled = isDark ? { bg: '#2E261E', ink: '#A08E7A' } : { bg: '#EFE6D6', ink: '#8C7A67' };
-  // The keyboard focus ring (A3): basil on paper 6.36:1, night basil 8.40:1.
+  const disabled = isDark ? { bg: '#23252B', ink: '#9498A3' } : { bg: '#E1E3E8', ink: '#6B7080' };
+  // The keyboard focus ring (A3): the blue, in both modes.
   const focusRing = colors.primary.main;
   const ink = colors.text.primary;
-  const softShadow = isDark
-    ? '0 1px 0 rgba(255, 236, 210, 0.04) inset, 0 10px 28px -18px rgba(0, 0, 0, 0.8)'
-    : '0 1px 2px rgba(92, 64, 32, 0.06), 0 12px 28px -20px rgba(92, 64, 32, 0.28)';
+  // A label is flat: no shadows anywhere.
+  const softShadow = 'none';
 
   return {
     palette: {
@@ -182,31 +172,31 @@ function buildFitnessOverrides(mode) {
       macro: MACROS[isDark ? 'dark' : 'light'],
     },
 
-    shape: { borderRadius: 12 },
+    shape: { borderRadius: 4 },
 
     typography: {
       fontFamily: tokens.font.body,
-      h1: { fontFamily: NUNITO, fontSize: '2.25rem', fontWeight: 800, letterSpacing: '-0.01em', lineHeight: 1.15 },
-      h2: { fontFamily: NUNITO, fontSize: '1.875rem', fontWeight: 800, letterSpacing: '-0.005em', lineHeight: 1.2 },
-      h3: { fontFamily: NUNITO, fontSize: '1.5rem', fontWeight: 800, lineHeight: 1.25 },
-      h4: { fontFamily: NUNITO, fontSize: '1.25rem', fontWeight: 800, lineHeight: 1.3 },
+      h1: { fontFamily: ARCHIVO, fontSize: '2.25rem', fontWeight: 900, letterSpacing: '-0.01em', lineHeight: 1.15 },
+      h2: { fontFamily: ARCHIVO, fontSize: '1.875rem', fontWeight: 900, letterSpacing: '-0.005em', lineHeight: 1.2 },
+      h3: { fontFamily: ARCHIVO, fontSize: '1.5rem', fontWeight: 900, lineHeight: 1.25 },
+      h4: { fontFamily: ARCHIVO, fontSize: '1.25rem', fontWeight: 900, lineHeight: 1.3 },
       // Card titles are h6 at 800 (review B10): one weight per heading level.
-      h5: { fontFamily: NUNITO, fontSize: '1.125rem', fontWeight: 800, lineHeight: 1.35 },
-      h6: { fontFamily: NUNITO, fontSize: '1.0625rem', fontWeight: 800, lineHeight: 1.4 },
+      h5: { fontFamily: ARCHIVO, fontSize: '1.125rem', fontWeight: 800, lineHeight: 1.35 },
+      h6: { fontFamily: ARCHIVO, fontSize: '1.0625rem', fontWeight: 800, lineHeight: 1.4 },
       // Body text at 18px on phones (plan item 5), a notch smaller on a
       // desktop where the dense Full pages live.
       body1: { fontSize: '1.125rem', lineHeight: 1.55, '@media (min-width:900px)': { fontSize: '1rem' } },
       body2: { fontSize: '1rem', lineHeight: 1.5, '@media (min-width:900px)': { fontSize: '0.9375rem' } },
       // Captions never drop under 13px on a desktop (review C9).
       caption: { fontSize: '0.75rem', '@media (min-width:900px)': { fontSize: '0.8125rem' } },
-      button: { fontFamily: NUNITO, fontSize: '1rem', fontWeight: 800, textTransform: 'none', letterSpacing: 0 },
+      button: { fontFamily: ARCHIVO, fontSize: '1rem', fontWeight: 700, textTransform: 'none', letterSpacing: 0 },
     },
 
     components: {
       MuiCssBaseline: {
         styleOverrides: {
           body: {
-            fontFamily: NUNITO,
+            fontFamily: ARCHIVO,
             // Tabular figures everywhere: calorie totals line up without a
             // monospace face.
             fontVariantNumeric: 'tabular-nums',
@@ -235,7 +225,7 @@ function buildFitnessOverrides(mode) {
           root: {
             borderRadius: tokens.radius.lg,
             backgroundColor: colors.background.paper,
-            border: `1px solid ${cardBorder}`,
+            border: `2px solid ${cardBorder}`,
             boxShadow: softShadow,
           },
         },
@@ -253,7 +243,7 @@ function buildFitnessOverrides(mode) {
         styleOverrides: {
           root: {
             borderRadius: tokens.radius.pill,
-            fontWeight: 800,
+            fontWeight: 700,
             boxShadow: 'none',
             '&:hover': { boxShadow: 'none' },
             '&.Mui-disabled': { color: disabled.ink },
@@ -291,18 +281,20 @@ function buildFitnessOverrides(mode) {
             borderColor: outline,
             // The same 44px phone floor as chips and icon buttons.
             '@media (max-width:899.95px)': { minHeight: 44, minWidth: 44 },
+            // A tablet in landscape is wider than md but still a finger.
+            '@media (pointer: coarse)': { minHeight: 44, minWidth: 44 },
           },
         },
       },
       // Every track, every bar (review A2).
       MuiLinearProgress: {
         styleOverrides: {
-          root: { backgroundColor: track, borderRadius: tokens.radius.pill },
-          bar: { borderRadius: tokens.radius.pill },
+          root: { backgroundColor: track, borderRadius: 0, height: 10 },
+          bar: { borderRadius: 0 },
         },
       },
       // The app's one switch, warmed (review B11): 52 × 32 drawn on a 44px
-      // tall hit area, the off track in the ink at 25%, basil when on.
+      // tall hit area, the off track in the ink at 25%, blue when on.
       MuiSwitch: {
         styleOverrides: {
           root: { width: 52, height: 44, padding: '6px 0', overflow: 'visible' },
@@ -313,7 +305,7 @@ function buildFitnessOverrides(mode) {
             '&:hover': { backgroundColor: 'transparent' },
             '&.Mui-checked': {
               transform: 'translateX(20px)',
-              color: isDark ? colors.primary.contrastText : '#FFFEFB',
+              color: isDark ? colors.primary.contrastText : '#FFFFFF',
               '& + .MuiSwitch-track': { backgroundColor: colors.primary.main, opacity: 1 },
             },
             '&.Mui-disabled + .MuiSwitch-track': { opacity: 0.4 },
@@ -322,10 +314,10 @@ function buildFitnessOverrides(mode) {
             width: 24,
             height: 24,
             boxShadow: softShadow,
-            color: isDark ? colors.text.primary : '#FFFEFB',
+            color: isDark ? colors.text.primary : '#FFFFFF',
           },
           track: {
-            borderRadius: 16,
+            borderRadius: 4,
             backgroundColor: alpha(ink, 0.25),
             opacity: 1,
           },
@@ -338,14 +330,14 @@ function buildFitnessOverrides(mode) {
           root: { '&:has(.MuiSwitch-root)': { marginLeft: 0, gap: 12 } },
         },
       },
-      // The toast at night sat darker than the walnut and read as a hole
-      // (review A9): a lifted espresso card instead, cream ink 11.13:1.
+      // The toast at night sat darker than the ground and read as a hole
+      // (review A9): a lifted card instead.
       MuiSnackbar: {
         styleOverrides: {
           root: isDark
             ? {
                 '& .MuiAlert-root': {
-                  backgroundColor: '#3A3026',
+                  backgroundColor: '#23252B',
                   color: colors.text.primary,
                   border: `1px solid ${outline}`,
                 },
@@ -355,7 +347,7 @@ function buildFitnessOverrides(mode) {
       },
       MuiTooltip: {
         styleOverrides: {
-          tooltip: { fontFamily: NUNITO, fontSize: '0.875rem' },
+          tooltip: { fontFamily: ARCHIVO, fontSize: '0.875rem' },
         },
       },
 
@@ -420,6 +412,10 @@ function buildFitnessOverrides(mode) {
             '@media (max-width:899.95px)': {
               minHeight: 44,
             },
+            '@media (pointer: coarse)': {
+              minHeight: 44,
+              '& .MuiSelect-select': { minHeight: 44, boxSizing: 'border-box', display: 'flex', alignItems: 'center' },
+            },
           },
         },
       },
@@ -430,7 +426,7 @@ function buildFitnessOverrides(mode) {
 /**
  * createFitnessTheme(mode)
  *
- * Composes shared GeekSuite rules with FitnessGeek "Market Morning" identity.
+ * Composes shared GeekSuite rules with FitnessGeek's "The Label" identity.
  */
 export function createFitnessTheme(mode = 'light') {
   const isDark = mode === 'dark';

@@ -1,9 +1,9 @@
 import React from 'react';
 import { Box, ButtonBase, Switch, Typography } from '@mui/material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import { Check as CheckIcon } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
-import { Surface } from '../primitives';
+import { LabelPanel } from '../primitives';
 import { useExperience } from '../../contexts/ExperienceContext.jsx';
 import { UndoAction, UNDO_TOAST_MS } from '../FoodSearch/undoToast.jsx';
 
@@ -66,11 +66,8 @@ export default function ExperienceSettings({ children, id }) {
   };
 
   return (
-    <Surface sx={{ mb: 2, borderRadius: '24px' }} data-testid="experience-settings" id={id}>
-      <Typography component="h2" sx={{ fontSize: '1.375rem', fontWeight: 800, mb: 0.5 }}>
-        How much FitnessGeek shows
-      </Typography>
-      <Typography sx={{ color: 'text.secondary', fontSize: '1rem', mb: 2 }}>
+    <LabelPanel title="How much FitnessGeek shows" titleComponent="h2" data-testid="experience-settings" id={id}>
+      <Typography sx={{ color: 'text.secondary', fontSize: '1rem', mt: 1.5, mb: 2 }}>
         {savedMode ? 'Saved as soon as you choose.' : `You haven’t chosen yet, so you’re seeing ${modeName(effectiveMode)}. Saved as soon as you choose.`}
       </Typography>
       {effectiveMode === 'full' && (
@@ -96,9 +93,11 @@ export default function ExperienceSettings({ children, id }) {
                 gap: 1.5,
                 p: 2,
                 minHeight: 88,
-                borderRadius: '20px',
+                // Two bordered options: the chosen one gets a 2px blue border
+                // and a blue tick, no tinted fill.
+                borderRadius: 0,
                 border: `2px solid ${on ? theme.palette.primary.main : theme.palette.divider}`,
-                bgcolor: on ? alpha(theme.palette.primary.main, 0.08) : 'background.paper',
+                bgcolor: 'background.paper',
                 '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
               }}
             >
@@ -137,6 +136,6 @@ export default function ExperienceSettings({ children, id }) {
         />
       </Box>
       {children}
-    </Surface>
+    </LabelPanel>
   );
 }

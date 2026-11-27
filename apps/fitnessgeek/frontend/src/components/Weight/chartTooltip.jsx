@@ -43,9 +43,10 @@ function ChartTooltip({ chartRef, marginLeft = 0, x = 0, title, rows = [] }) {
         background: theme.palette.background.paper,
         px: 1.5,
         py: 1,
-        borderRadius: 1.5,
-        border: `1px solid ${theme.palette.divider}`,
-        boxShadow: theme.shadows[4],
+        // The Label: a square panel with a 2px ink border, no shadow.
+        borderRadius: 0,
+        border: `2px solid ${theme.palette.text.primary}`,
+        boxShadow: 'none',
         minWidth: 168,
         whiteSpace: 'nowrap',
       }}

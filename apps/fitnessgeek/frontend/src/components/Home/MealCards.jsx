@@ -2,83 +2,60 @@ import React from 'react';
 import { Box, Button, IconButton, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { Link as RouterLink } from 'react-router-dom';
-import {
-  Add as AddIcon,
-  Close as RemoveIcon,
-  FreeBreakfast as BreakfastIcon,
-  LunchDining as LunchIcon,
-  DinnerDining as DinnerIcon,
-  Cookie as SnackIcon,
-} from '@mui/icons-material';
-import { MEAL_ORDER } from '../../theme/theme.jsx';
+import { Add as AddIcon, Close as RemoveIcon } from '@mui/icons-material';
+import { MEAL_ORDER, mealColors } from '../../theme/theme.jsx';
 import { amountName, mealLabel, mealWord, mergeByName } from '../../utils/plainWords.js';
+import { Surface, Rule, ListRow } from '../primitives';
 
 /**
- * Today's meals as four big cards (SIMPLE_AND_FULL_PLAN.md item 1): Breakfast,
- * Lunch, Dinner, Snacks, each in its produce colour and each with its own
- * "+ Add" that opens the add sheet already set to that meal — so there is no
- * separate meal picker to get wrong.
+ * Today's meals as four label panels (SIMPLE_AND_FULL_PLAN.md item 1, The
+ * Label): Breakfast, Lunch, Dinner, Snacks. Each has a heavy title with a
+ * small square in its meal colour, its calories right, a medium rule, the
+ * foods as rows, and its own "+ Add" that opens the add sheet already set to
+ * that meal — so there is no separate meal picker to get wrong.
  *
- * The produce colour is a FILL (the badge, the button) and a soft tint, never
- * the text: lemon and leaf are unreadable as ink on cream. Every word on a
- * card is the theme's ink.
+ * The meal colour is a small mark only (the square), never a card
+ * background; every word is the theme's ink, and "+ Add" is the app's blue.
  *
  * `compact` (Simple) shows the first two foods and a count; Full lists every
- * food with a remove button, which Chef uses.
+ * food with its calories and a remove button, which Chef uses.
  *
  * Amounts show (review L4): "Egg ×2" when an entry isn't one serving, and in
  * compact cards two entries with the same name merge into one line, "Egg ×2",
  * so she can check what she logged instead of adding another to be safe.
  */
-const ICONS = { breakfast: BreakfastIcon, lunch: LunchIcon, dinner: DinnerIcon, snack: SnackIcon };
-
 function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove, removingIds, logHref, justAdded = null, unknown = false }) {
   const theme = useTheme();
-  const produce = theme.palette.produce?.[mealType] || {};
-  const Icon = ICONS[mealType] || SnackIcon;
+  const colour = mealColors(mealType, theme.palette.mode);
   const label = mealLabel(mealType);
   const rows = compact ? mergeByName(foods) : foods;
   const shown = compact ? rows.slice(0, 2) : rows;
   const hidden = rows.length - shown.length;
   const cal = Math.round(calories || 0);
+  // A meal that couldn't be read is unknown ("—"), never "Nothing yet".
+  const amount = unknown ? '—' : foods.length === 0 ? null : `${cal.toLocaleString('en-US')} cal`;
 
   return (
-    <Box
+    <Surface
       component="section"
       id={`meal-card-${mealType}`}
       aria-labelledby={`meal-card-${mealType}-title`}
       data-testid={`meal-card-${mealType}`}
       sx={{
-        position: 'relative',
         // Clear of the sticky top bar when Home scrolls a card into view.
         scrollMarginTop: 88,
         display: 'flex',
         flexDirection: 'column',
-        gap: 1.5,
-        p: { xs: 2, sm: 2.5 },
-        borderRadius: '24px',
-        bgcolor: produce.tint,
-        border: `1px solid ${theme.palette.divider}`,
-        minHeight: compact ? 188 : 0,
-        overflow: 'hidden',
-        // The produce edge along the top — a fill, not a word.
-        '&::before': {
-          content: '""',
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: 0,
-          height: 6,
-          bgcolor: produce.fill,
-        },
+        pt: { xs: 1, sm: 1.25 },
+        pb: { xs: 0.5, sm: 0.75 },
       }}
     >
       {/* The header row is a link to this meal in the log. Its ::after
-          stretches over the whole card, so a tap anywhere opens it, while Add
-          and the remove buttons sit above it and stay their own targets (a
-          link wrapping buttons is invalid and unreadable to a screen reader).
-          The row itself — not just the title — is the link, so its own box
-          is a full-width tap target. */}
+          stretches over the whole panel, so a tap anywhere opens it, while
+          Add and the remove buttons sit above it and stay their own targets
+          (a link wrapping buttons is invalid and unreadable to a screen
+          reader). The row itself — not just the title — is the link, so its
+          own box is a full-width tap target. */}
       <Box
         {...(logHref ? {
           component: RouterLink,
@@ -87,65 +64,64 @@ function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove
         } : {})}
         sx={{
           display: 'flex',
-          alignItems: 'center',
-          gap: 1.25,
-          mt: 0.5,
-          minHeight: 48,
+          flexDirection: compact ? 'column' : 'row',
+          alignItems: compact ? 'flex-start' : 'baseline',
+          justifyContent: 'space-between',
+          gap: compact ? 0.25 : 1.5,
+          minHeight: 44,
           color: 'inherit',
           textDecoration: 'none',
           ...(logHref ? {
-            '&::after': { content: '""', position: 'absolute', inset: 0, borderRadius: '24px', zIndex: 0 },
+            '&::after': { content: '""', position: 'absolute', inset: 0, zIndex: 0 },
             '&:focus-visible': { outline: 'none' },
-            '&:focus-visible::after': { outline: `3px solid ${theme.palette.text.primary}`, outlineOffset: -3 },
+            '&:focus-visible::after': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: -3 },
           } : {}),
         }}
       >
-        <Box
-          aria-hidden
-          sx={{
-            width: 40,
-            height: 40,
-            borderRadius: '50%',
-            bgcolor: produce.fill,
-            color: produce.ink,
-            display: 'grid',
-            placeItems: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <Icon sx={{ fontSize: 22 }} />
-        </Box>
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography id={`meal-card-${mealType}-title`} component="h3" sx={{ fontSize: '1.25rem', fontWeight: 800, lineHeight: 1.2, color: 'text.primary' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+          <Box aria-hidden sx={{ width: 12, height: 12, flexShrink: 0, bgcolor: colour.fill }} />
+          <Typography
+            id={`meal-card-${mealType}-title`}
+            component="h3"
+            sx={{ fontSize: compact ? '1.25rem' : '1.375rem', fontWeight: 900, lineHeight: 1.1, color: 'text.primary' }}
+          >
             {label}
           </Typography>
-          <Typography sx={{ fontSize: '1rem', color: 'text.secondary', fontWeight: 600 }}>
-            {/* A meal that couldn't be read is unknown ("—"), never "Nothing yet". */}
-            {unknown ? '—' : foods.length === 0 ? 'Nothing yet' : `${cal.toLocaleString('en-US')} cal`}
-          </Typography>
         </Box>
+        {amount && (
+          <Typography sx={{ fontSize: compact ? '1rem' : '1.125rem', fontWeight: 700, whiteSpace: 'nowrap', color: 'text.primary' }}>
+            {amount}
+          </Typography>
+        )}
       </Box>
+      <Rule weight="medium" sx={{ mt: 0.5 }} />
+
+      {!unknown && foods.length === 0 && (
+        <ListRow first>
+          <Typography sx={{ fontSize: '1rem', color: 'text.secondary' }}>Nothing yet</Typography>
+        </ListRow>
+      )}
 
       {foods.length > 0 && (
-        <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: compact ? 0.25 : 0.5 }}>
-          {shown.map((food) => (
-            <Box
+        <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+          {shown.map((food, i) => (
+            <ListRow
               component="li"
               key={food.logId || food.name}
+              first={i === 0}
               sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
+                py: compact || !onRemove ? 0.75 : 0,
+                minHeight: compact ? 0 : 44,
                 opacity: removingIds?.has?.(food.logId) ? 0.4 : 1,
                 transition: 'opacity 200ms ease',
                 '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
               }}
             >
-              <Typography sx={{ flex: 1, minWidth: 0, fontSize: '1.0625rem', color: 'text.primary', lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+              <Typography sx={{ flex: 1, minWidth: 0, fontSize: compact ? '1.0625rem' : '1rem', color: 'text.primary', lineHeight: 1.35, overflowWrap: 'anywhere' }}>
                 {amountName(food.name, food.servings)}
               </Typography>
               {!compact && (
-                <Typography sx={{ fontSize: '1rem', color: 'text.secondary', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                <Typography sx={{ fontSize: '1rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
                   {Math.round(food.calories || 0)}
                 </Typography>
               )}
@@ -154,60 +130,68 @@ function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove
                   size="small"
                   aria-label={`Remove ${food.name} from ${mealWord(mealType)}`}
                   onClick={() => onRemove(food.logId)}
-                  sx={{ color: 'text.secondary', width: 44, height: 44, mr: -1, position: 'relative', zIndex: 1 }}
+                  sx={{ color: 'text.secondary', width: 44, height: 44, mr: -1.25, ml: -0.5, position: 'relative', zIndex: 1 }}
                 >
                   <RemoveIcon fontSize="small" />
                 </IconButton>
               )}
-            </Box>
+            </ListRow>
           ))}
           {hidden > 0 && (
-            <Typography component="li" sx={{ fontSize: '1rem', color: 'text.secondary' }}>
-              and {hidden} more
-            </Typography>
+            <ListRow component="li" sx={{ py: 0.75 }}>
+              <Typography sx={{ fontSize: '1rem', color: 'text.secondary' }}>and {hidden} more</Typography>
+            </ListRow>
           )}
         </Box>
       )}
 
       {/* Full's "Just added" strip: above the stretched link, so its own
           buttons stay their own targets. */}
-      {justAdded}
+      {justAdded && <Box sx={{ position: 'relative', zIndex: 1, py: 0.5 }}>{justAdded}</Box>}
 
       <Box sx={{ flex: 1 }} />
-      <Button
-        onClick={() => onAdd?.(mealType)}
-        startIcon={<AddIcon />}
-        aria-label={`Add to ${mealWord(mealType)}`}
-        sx={{
-          minHeight: 56,
-          borderRadius: 999,
-          bgcolor: produce.fill,
-          color: produce.ink,
-          fontSize: '1.125rem',
-          fontWeight: 800,
-          alignSelf: compact ? 'stretch' : 'flex-start',
-          px: 3,
-          position: 'relative',
-          zIndex: 1,
-          '@media (hover: hover)': { '&:hover': { bgcolor: produce.fill, filter: 'brightness(0.96)' } },
-          '&:focus-visible': { outline: `3px solid ${theme.palette.text.primary}`, outlineOffset: 2 },
-        }}
-      >
-        Add
-      </Button>
-    </Box>
+      {/* "+ Add": a blue text-link row in Full; Simple's is a big outlined
+          button, still a secondary action (the filled one is the page's). */}
+      <Box sx={{ borderTop: compact ? 0 : `1px solid ${theme.palette.divider}`, pt: compact ? 1 : 0, pb: compact ? 1 : 0 }}>
+        <Button
+          onClick={() => onAdd?.(mealType)}
+          startIcon={<AddIcon aria-hidden />}
+          aria-label={`Add to ${mealWord(mealType)}`}
+          variant={compact ? 'outlined' : 'text'}
+          fullWidth={compact}
+          sx={{
+            position: 'relative',
+            zIndex: 1,
+            minHeight: compact ? 52 : 44,
+            fontSize: compact ? '1.125rem' : '1rem',
+            fontWeight: 700,
+            textTransform: 'none',
+            color: 'primary.main',
+            justifyContent: compact ? 'center' : 'flex-start',
+            ...(compact
+              ? { borderWidth: 2, borderColor: 'primary.main', '&:hover': { borderWidth: 2 } }
+              : { px: 0, width: '100%', '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }),
+          }}
+        >
+          Add
+        </Button>
+      </Box>
+    </Surface>
   );
 }
 
 /**
- * `date` (YYYY-MM-DD) makes each card a link to that day's meal in the food
- * log; without it the cards are not links.
+ * `date` (YYYY-MM-DD) makes each panel a link to that day's meal in the food
+ * log; without it the panels are not links.
  *
- * `justAdded` is useJustAdded()'s value (Full): the card a describe landed on
- * carries a "Just added" strip with Fix and Undo until the next action.
+ * `justAdded` is useJustAdded()'s value (Full): the panel a describe landed
+ * on carries a "Just added" strip with Fix and Undo until the next action.
  *
  * `unknown` (review L1): the day couldn't be read and there is nothing from
- * before to show, so no card claims "Nothing yet".
+ * before to show, so no panel claims "Nothing yet".
+ *
+ * Layout: Full stacks on a phone and fills the width in a responsive grid
+ * from `sm` up; Simple is two across on a phone, as dense as before.
  */
 export default function MealCards({ meals = {}, compact = false, onAdd, onRemove, removingIds, date, justAdded = null, unknown = false }) {
   return (
@@ -220,8 +204,8 @@ export default function MealCards({ meals = {}, compact = false, onAdd, onRemove
         // stretching to a full neighbour's (review C8).
         alignItems: compact ? 'start' : 'stretch',
         gridTemplateColumns: compact
-          ? { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }
-          : { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+          ? { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))' }
+          : { xs: 'minmax(0, 1fr)', sm: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))' },
       }}
     >
       {MEAL_ORDER.map((mealType) => (

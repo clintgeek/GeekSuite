@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Button, Chip, IconButton, Typography } from '@mui/material';
+import { Box, Button, IconButton, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
   DeleteOutline as DeleteIcon,
@@ -8,7 +8,7 @@ import {
 } from '@mui/icons-material';
 import { localDateString, utcDateString } from '@geeksuite/utils';
 import { nearDay } from '../../utils/dates.js';
-import { Surface, SectionLabel, StatNumber, EmptyState } from '../primitives';
+import { LabelPanel, ListRow, Tag, EmptyState } from '../primitives';
 import EditWeightDialog from './EditWeightDialog.jsx';
 
 /** Rows shown before "Show all" — the list is a record, not the page. */
@@ -61,48 +61,39 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
   const visible = showAll ? sortedLogs : sortedLogs.slice(0, INITIAL_ROWS);
 
   return (
-    <Surface>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
-        <SectionLabel>Weight log</SectionLabel>
-        <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
+    <LabelPanel
+      title="Weight log"
+      titleComponent="h3"
+      action={
+        <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
           {sortedLogs.length} {sortedLogs.length === 1 ? 'weigh-in' : 'weigh-ins'}
         </Typography>
-      </Box>
-
+      }
+    >
       <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
         {visible.map((log, index) => {
           const weight = parseFloat(log.weight_value).toFixed(1);
           const when = formatDate(log.log_date);
           const fromScale = log.source === 'arboleaf_xlsx';
           return (
-            <Box
+            <ListRow
               component="li"
               key={log.id}
+              first={index === 0}
               data-testid="weight-log-row"
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                py: 1,
-                ...(index < visible.length - 1 && {
-                  borderBottom: (t) => `1px solid ${t.palette.divider}`,
-                }),
-              }}
+              sx={{ gap: 1, py: 0.5 }}
             >
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <StatNumber value={weight} decimals={1} unit={u} size="body" />
+                <Typography component="span" sx={{ fontWeight: 800, fontSize: '1.125rem' }}>
+                  {weight}
+                  <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 700 }}> {u}</Box>
+                </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25, flexWrap: 'wrap' }}>
                   <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>{when}</Typography>
                   {fromScale && (
-                    // The app's one info-tag shape (visual review B5): round,
-                    // ink on a 6% ink wash, 14px bold — ink on it stays well
-                    // over AA, unlike the 12px-on-tint landmine.
-                    <Chip
-                      component="span"
-                      variant="tag"
-                      label="Scale"
-                      title="Imported from the scale"
-                    />
+                    <Box component="span" title="Imported from the scale" sx={{ display: 'inline-flex' }}>
+                      <Tag>Scale</Tag>
+                    </Box>
                   )}
                 </Box>
                 {log.notes && (
@@ -125,7 +116,7 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
               <IconButton
                 onClick={() => onDelete(log.id)}
                 aria-label={`Remove the ${weight} ${u} weigh-in from ${when}`}
-                // Quiet at rest; red only under the thumb (B7).
+                // Quiet at rest; the error colour only under the thumb (B7).
                 sx={{
                   width: 44,
                   height: 44,
@@ -135,7 +126,7 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
               >
                 <DeleteIcon fontSize="small" />
               </IconButton>
-            </Box>
+            </ListRow>
           );
         })}
       </Box>
@@ -157,7 +148,7 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
           onSave={onUpdate}
         />
       )}
-    </Surface>
+    </LabelPanel>
   );
 };
 

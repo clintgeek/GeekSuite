@@ -413,15 +413,19 @@ const homeScenes = [
     await scrollToSection(page, h, '#todays-meals', 88);
   }),
 
-  // Full Home, fat over target: "99 of 78g · 21 over", and "72%" in the plate.
+  // Full Home, fat over target: the Fat row reads "Fat 99 g of 78" with a
+  // "21 over" tag and 127%, and the Eaten row says 72% (The Label, 2026-11).
   {
     ...pageScene('52e-home-fat-over', () => ({
       ...OPS,
       ...FULL,
       ...ledger(logDay(), 2340, { fat_grams: 99, calories: 1685 }),
     }), async (page) => {
-      await need(page.getByText(/99 of 78g · 21 over/), '"99 of 78g · 21 over"');
-      await need(page.getByText('72%', { exact: true }).first(), 'the plate centre 72%');
+      const strip = page.locator('[data-testid="macro-strip"]');
+      await need(strip.getByText(/Fat\s*99 g\s*of 78/), 'the Fat row "Fat 99 g of 78"');
+      await need(strip.getByText(/^21 over$/i), 'the "21 over" tag');
+      await need(strip.getByText('127%', { exact: true }), 'Fat at 127%');
+      await need(page.getByText('72%', { exact: true }).first(), 'Eaten at 72%');
     }),
   },
 ];

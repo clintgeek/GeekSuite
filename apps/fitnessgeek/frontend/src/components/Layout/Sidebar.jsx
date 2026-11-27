@@ -2,9 +2,9 @@
  * FitnessGeek sidebar — thin identity wrapper around the suite `GeekSidebar`.
  *
  * Structure (brand → grouped nav → user chip → Settings → Sign out) belongs
- * to the primitive; this file only supplies Market Morning's chalkboard
- * chrome (chrome.js) — the same board in light and dark app modes, written on
- * in chalk with a lemon accent — and the mode-aware section list.
+ * to the primitive; this file only supplies The Label's ink panel
+ * (chrome.js) — the same panel in light and dark app modes — and the
+ * mode-aware section list.
  *
  * `GeekShell nav={…}` decides whether this panel sits in the permanent 220px
  * column or inside the mobile drawer, so there is no `isMobile` / `onClose`
@@ -17,7 +17,7 @@ import { activeNavId, navSectionsFor } from './navConfig.jsx';
 import { ACCENT, ACTIVE_BG, CHROME_BG, HOVER_BG, INK, MUTED } from './chrome.js';
 import { useExperience } from '../../contexts/ExperienceContext.jsx';
 
-/** Brand block: a lemon dot and the name, in chalk. */
+/** Brand block: the name set heavy, like the title of a label. */
 const Brand = () => (
   <Box
     component={RouterLink}
@@ -25,23 +25,19 @@ const Brand = () => (
     sx={{
       display: 'flex',
       alignItems: 'center',
-      gap: 1.25,
       px: 2.5,
       height: geekLayout.topBarHeight,
       textDecoration: 'none',
       color: 'inherit',
+      borderBottom: `4px solid ${INK}`,
     }}
   >
-    <Box aria-hidden sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: ACCENT, boxShadow: `0 0 0 4px rgba(246, 201, 69, 0.18)` }} />
     <Typography
       variant="h5"
       noWrap
-      sx={{ fontWeight: 800, color: INK, fontSize: '1.25rem', letterSpacing: '-0.01em' }}
+      sx={{ fontWeight: 900, color: INK, fontSize: '1.375rem', letterSpacing: '-0.02em' }}
     >
-      fitness
-      <Box component="span" sx={{ color: ACCENT }}>
-        geek
-      </Box>
+      FitnessGeek
     </Typography>
   </Box>
 );
@@ -75,7 +71,7 @@ const Sidebar = () => {
       sectionLabelSx={{ color: MUTED, textTransform: 'none', letterSpacing: 0, fontSize: '0.8125rem', lineHeight: 1.4, pb: 0, fontWeight: 700 }}
       itemSx={{
         color: MUTED,
-        borderRadius: 999,
+        borderRadius: 0,
         // Density: 13 rows must fit 800px. Row = 44px (the touch floor: a
         // tablet in landscape uses this sidebar) with no gap between rows; the
         // primitive's default stacks padding and margins to ~54px a row.

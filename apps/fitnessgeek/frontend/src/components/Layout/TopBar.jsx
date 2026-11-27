@@ -33,6 +33,12 @@ const TopBar = () => {
       themeMode={themeMode}
       onThemeToggle={toggleTheme}
       currentApp={APP_NAME}
+      // The Label: a 2px ink rule under the bar (not the theme's hairline) and
+      // the title set heavy.
+      sx={{
+        borderBottom: (t) => `2px solid ${t.palette.text.primary}`,
+        '& [data-geek-topbar="title"]': { fontWeight: 900, letterSpacing: '-0.01em', lineHeight: 1.1 },
+      }}
       actions={
         // The day in words, never abbreviated (plan item 8). Hidden on a
         // phone, where the page itself says "Today".

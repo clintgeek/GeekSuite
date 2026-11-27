@@ -1,12 +1,13 @@
 import { StrictMode } from 'react'
 import { MotionConfig } from 'framer-motion'
 import { createRoot } from 'react-dom/client'
-// Market Morning: Nunito, self-hosted (DOCS/SIMPLE_AND_FULL_PLAN.md). One
-// rounded family for everything; the four weights the theme uses.
-import '@fontsource/nunito/400.css'
-import '@fontsource/nunito/600.css'
-import '@fontsource/nunito/700.css'
-import '@fontsource/nunito/800.css'
+// The Label: Archivo, self-hosted. One grotesque family for everything.
+import '@fontsource/archivo/400.css'
+import '@fontsource/archivo/500.css'
+import '@fontsource/archivo/600.css'
+import '@fontsource/archivo/700.css'
+import '@fontsource/archivo/800.css'
+import '@fontsource/archivo/900.css'
 import './index.css'
 import App from './App.jsx'
 import { GeekSuiteApolloProvider } from '@geeksuite/api-client';

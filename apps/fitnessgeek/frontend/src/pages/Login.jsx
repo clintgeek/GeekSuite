@@ -1,8 +1,10 @@
 import { LoginSplash } from '@geeksuite/ui';
 import { useAuth } from '@geeksuite/auth';
+import { useTheme, alpha } from '@mui/material/styles';
 
 const Login = () => {
   const { login, loading, error } = useAuth();
+  const theme = useTheme();
 
   const handleLogin = async () => {
     await login();
@@ -19,13 +21,14 @@ const Login = () => {
       onLogin={handleLogin}
       loading={loading}
       error={error}
-      // FitnessGeek branding: Market Morning's basil and lemon
+      // FitnessGeek branding: The Label's ink and blue
       logoColor="text.primary"
       logoSuffixColor="primary.main"
-      // A warm wash: basil and the lemon of the morning light
+      // A cool wash: the label's blue and a trace of ink, from theme tokens
+      // so night mode gets its own blue
       inkColors={[
-        'rgba(47, 107, 53, 0.08)', // Basil
-        'rgba(246, 201, 69, 0.10)'  // Lemon
+        alpha(theme.palette.primary.main, 0.1),
+        alpha(theme.palette.text.primary, 0.05),
       ]}
     />
   );

@@ -2,6 +2,8 @@
  * Blood pressure utility functions
  */
 
+import { createFitnessTheme } from '../theme/theme.jsx';
+
 /**
  * Categorize blood pressure readings based on AHA (American Heart Association) guidelines
  * @param {number} systolic - Systolic blood pressure
@@ -49,9 +51,8 @@ export const BP_STAGES = Object.freeze({
  * and/or higher than 120" — strictly greater, which is why 180/120 is Stage 2
  * and 181/121 is Crisis.
  *
- * Colours come from the app's Market Morning semantic set (visual review B3),
- * not Tailwind: Normal = success, Elevated = warning, Stage 1 = the tomato
- * text tone, Stage 2 and Crisis = error, Unknown = muted ink. `tone` names
+ * Colours come from the theme (see BP_TONES): Normal = success, Elevated =
+ * warning, Stage 1 / Stage 2 / Crisis = error, Unknown = muted ink. `tone` names
  * the job; `color` is that tone in the given mode, so a caller passes
  * `theme.palette.mode` and never draws a day colour at night.
  *
@@ -60,9 +61,29 @@ export const BP_STAGES = Object.freeze({
  * @param {'light'|'dark'} [mode]
  * @returns {{stage: string, category: string, color: string, tone: string}}
  */
+/**
+ * The tones come from the theme's own palette (no literal colours here), so a
+ * change to `success` / `warning` / `error` in theme/theme.jsx reaches every
+ * screen that draws a reading. One small set (THEME_REVIEW_2026-11 item 7):
+ * Normal = success, A little high (Elevated) = warning, High (Stage 1, Stage 2,
+ * Crisis) = error. `tomato` stays a tone NAME for Stage 1 (BPInsights keys its
+ * wording on `error` vs the rest) but is drawn in the error colour. Always pair
+ * the colour with the plain word.
+ */
+const toneSet = (mode) => {
+  const p = createFitnessTheme(mode).palette;
+  return {
+    success: p.success.main,
+    warning: p.warning.main,
+    tomato: p.error.main,
+    error: p.error.main,
+    muted: p.text.muted,
+  };
+};
+
 export const BP_TONES = Object.freeze({
-  light: { success: '#2F7D32', warning: '#9A5B00', tomato: '#B23A22', error: '#B3261E', muted: '#6B5847' },
-  dark: { success: '#8BCB7E', warning: '#F2B45A', tomato: '#FF8A70', error: '#FF9A8A', muted: '#C4B29D' },
+  light: Object.freeze(toneSet('light')),
+  dark: Object.freeze(toneSet('dark')),
 });
 
 /** The colour for a BP tone in one mode. */

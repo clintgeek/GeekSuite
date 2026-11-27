@@ -1,20 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Card,
-  CardContent,
   Typography,
   TextField,
   Button,
   Box,
   useTheme,
-  Grid,
-  alpha
+  Grid
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  MonitorHeart as BPIcon
-} from '@mui/icons-material';
+import { Add as AddIcon } from '@mui/icons-material';
 import ThumbFab from '../primitives/ThumbFab.jsx';
+import { LabelPanel, Tag } from '../primitives';
 import AddBPDialog from './AddBPDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
@@ -163,17 +158,12 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
       <ThumbFab label="Log BP" testId="add-bp-fab" onClick={() => setShowDialog(true)} />
 
       {/* Desktop version */}
-      <Card sx={{
-        width: '100%',
-        display: { xs: 'none', md: 'block' }
-      }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <BPIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
-            <Typography variant="h6" sx={{ color: theme.palette.text.primary }}>
-              Log blood pressure
-            </Typography>
-          </Box>
+      <LabelPanel
+        title="Log blood pressure"
+        titleComponent="h3"
+        sx={{ width: '100%', display: { xs: 'none', md: 'block' } }}
+      >
+        <Box sx={{ pt: 1.5 }}>
 
           <form onSubmit={handleSubmit}>
             <Grid container spacing={2} alignItems="center">
@@ -264,21 +254,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
                 <Typography variant="body2">
                   This reading is
                 </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontWeight: 700,
-                    // Ink on the stage's wash: the tone alone on its tint
-                    // dipped under AA (success 4.35:1).
-                    color: 'text.primary',
-                    backgroundColor: alpha(bpStatus.color, 0.14),
-                    px: 1.5,
-                    py: 0.5,
-                    borderRadius: 999
-                  }}
-                >
-                  {bpStatus.status}
-                </Typography>
+                <Tag sx={{ bgcolor: bpStatus.color }}>{bpStatus.status}</Tag>
               </Box>
             )}
 
@@ -290,8 +266,8 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
               sx={{ mt: 2 }}
             />
           </form>
-        </CardContent>
-      </Card>
+        </Box>
+      </LabelPanel>
 
       {/* Mobile Dialog */}
       <AddBPDialog

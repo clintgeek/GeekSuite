@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   TextField,
   Button,
@@ -16,11 +14,9 @@ import {
   ListItemAvatar,
   Avatar,
   IconButton,
-  Chip,
   InputAdornment
 } from '@mui/material';
 import {
-  People as PeopleIcon,
   PersonAdd as JoinIcon,
   GroupAdd as CreateIcon,
   ContentCopy as CopyIcon,
@@ -31,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import { LabelPanel, Tag } from '../primitives';
 import { settingsService } from '../../services/settingsService';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { SWITCH_ROW } from './switchRow.js';
@@ -176,14 +173,9 @@ const HouseholdSettings = () => {
   const isInHousehold = !!householdData?.household_id;
 
   return (
-    <Card sx={{ mb: 3 }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <PeopleIcon color="primary" />
-          <Typography variant="h6">Household sharing</Typography>
-        </Box>
-
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+    <LabelPanel title="Household sharing" titleComponent="h2">
+      <Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, mb: 3 }}>
           Share food logs and meals with your family. See what they ate, and copy a meal in a tap.
         </Typography>
 
@@ -230,14 +222,8 @@ const HouseholdSettings = () => {
             </Box>
 
             {/* Household Code */}
-            <Box sx={{
-              mb: 3,
-              p: 2,
-              bgcolor: 'primary.50',
-              borderRadius: 2,
-              border: '1px solid',
-              borderColor: 'divider' // the theme's warm outline, not near-white in dark (A11)
-            }}>
+            {/* A rule and a row, not a box inside the panel. */}
+            <Box sx={{ mb: 3, py: 1.5, borderTop: (t) => `1px solid ${t.palette.text.primary}`, borderBottom: (t) => `1px solid ${t.palette.text.primary}` }}>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 Household code
               </Typography>
@@ -274,7 +260,7 @@ const HouseholdSettings = () => {
             <Divider sx={{ my: 2 }} />
 
             {/* Your Sharing Settings */}
-            <Typography variant="subtitle2" gutterBottom>
+            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 800 }}>
               What you share
             </Typography>
             <Box sx={{ mb: 3 }}>
@@ -317,7 +303,7 @@ const HouseholdSettings = () => {
             <Divider sx={{ my: 2 }} />
 
             {/* Household Members */}
-            <Typography variant="subtitle2" gutterBottom>
+            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 800 }}>
               Who’s in it
             </Typography>
             {householdData.members?.length > 0 ? (
@@ -334,10 +320,10 @@ const HouseholdSettings = () => {
                       secondary={
                         <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
                           {member.shares_food_logs && (
-                            <Chip label="Food logs" size="small" variant="tag" />
+                            <Tag>Food logs</Tag>
                           )}
                           {member.shares_meals && (
-                            <Chip label="Meals" size="small" variant="tag" />
+                            <Tag>Meals</Tag>
                           )}
                         </Box>
                       }
@@ -364,7 +350,7 @@ const HouseholdSettings = () => {
             </Button>
           </>
         )}
-      </CardContent>
+      </Box>
 
       {/* Create Household Dialog */}
       <PremiumDialog
@@ -468,7 +454,7 @@ const HouseholdSettings = () => {
           You won’t see your family’s food logs or meals any more. You can join again with the code.
         </Typography>
       </PremiumDialog>
-    </Card>
+    </LabelPanel>
   );
 };
 

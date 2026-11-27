@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Typography } from '@mui/material';
 import { useToast } from '@geeksuite/ui';
 import { FoodComposer } from '../components/FoodSearch';
 import { useUndoToast } from '../components/FoodSearch/undoToast.jsx';
@@ -7,6 +7,7 @@ import BarcodeScanner from '../components/BarcodeScanner/BarcodeScanner.jsx';
 import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
 import { useToday } from '../hooks/useToday.js';
+import { Page, Surface } from '../components/primitives';
 import { addedMessage } from '../utils/plainWords.js';
 import { errorMessage } from '../utils/errorMessage.js';
 
@@ -93,13 +94,12 @@ const FoodSearchPage = () => {
   }, [createForm, createFood, logItems, mealType, notify]);
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 820, mx: 'auto' }}>
-      <Box sx={{ mb: 2 }}>
-        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-          Say what you ate, or type a food’s name to pick it from the list.
-        </Typography>
-      </Box>
+    <Page narrow>
+      <Typography sx={{ color: 'text.secondary', fontSize: '1rem' }}>
+        Say what you ate, or type a food’s name to pick it from the list.
+      </Typography>
 
+      <Surface sx={{ p: { xs: 1.5, sm: 2 } }}>
       <FoodComposer
         mode="page"
         autoFocus
@@ -115,6 +115,7 @@ const FoodSearchPage = () => {
         onBarcodeClick={() => setScannerOpen(true)}
         onCreateFood={(query) => setCreateForm({ ...EMPTY_FOOD_FORM, name: query })}
       />
+      </Surface>
 
       <BarcodeScanner
         open={scannerOpen}
@@ -146,7 +147,7 @@ const FoodSearchPage = () => {
         onSave={handleCreate}
         loading={creating}
       />
-    </Box>
+    </Page>
   );
 };
 

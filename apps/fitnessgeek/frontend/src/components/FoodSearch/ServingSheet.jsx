@@ -5,7 +5,7 @@ import {
   ToggleButtonGroup, ToggleButton
 } from '@mui/material';
 import { Remove as MinusIcon, Add as PlusIcon } from '@mui/icons-material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import { amountToServings } from '../../utils/recipeMath.js';
 import { convertAmount, formatServing, usLogUnits } from '../../utils/units.js';
 import { useBackToClose } from './useBackToClose.js';
@@ -169,9 +169,8 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', editing = null, o
           sx={{
             display: 'flex',
             justifyContent: 'space-between',
-            p: 1.5,
-            borderRadius: 2,
-            backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.07),
+            pt: 1,
+            borderTop: `5px solid ${theme.palette.text.primary}`,
             fontFamily: "inherit"
           }}
         >

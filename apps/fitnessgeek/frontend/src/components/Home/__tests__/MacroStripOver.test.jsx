@@ -1,6 +1,7 @@
 /**
- * Review D-14: an over-target macro says so in words — "99 of 78g · 21 over"
- * — so the full bar's colour isn't carrying "over" on its own.
+ * Review D-14: an over-target macro says so in words — "Fat 99 g of 78
+ * [21 OVER] 127%" — so no colour carries "over" on its own. The Label draws
+ * the macros as "% of daily target" rows, not coloured bars.
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -14,26 +15,40 @@ const renderStrip = (props) => render(
   </ThemeProvider>
 );
 
+// The row whose bold name is `name` (FactRow: <b>name</b> amount of … percent).
+const rowOf = (name) => screen.getByText(name, { selector: 'b' }).closest('div');
+
 describe('MacroStrip over target', () => {
-  it('says how far over, in words', () => {
+  it('says how far over, in words, with the percent of target', () => {
     renderStrip();
-    expect(screen.getByText('99 of 78g · 21 over')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Fat: 99 of 78 grams, 21 over' })).toBeInTheDocument();
+    const fat = rowOf('Fat');
+    expect(fat).toHaveTextContent('Fat 99 g of 78');
+    expect(fat).toHaveTextContent('21 over');
+    expect(fat).toHaveTextContent(/127%$/);
   });
 
   it('under target says nothing extra', () => {
     renderStrip();
-    expect(screen.getByText('96 of 156g')).toBeInTheDocument();
-    expect(screen.queryByText(/Protein.*over/)).toBeNull();
+    const protein = rowOf('Protein');
+    expect(protein).toHaveTextContent('Protein 96 g of 156');
+    expect(protein).not.toHaveTextContent(/over/);
+    expect(protein).toHaveTextContent(/62%$/);
   });
 });
 
-describe('MacroStrip colours (visual review B2)', () => {
-  it('draws macros in the macro ramp, not the meal produce', () => {
-    renderStrip();
-    // Protein basil, Carbs cinnamon, Fat the muted ink — tomato/leaf/lemon mean meals.
-    expect(screen.getByTestId('macro-fill-protein')).toHaveStyle({ backgroundColor: 'rgb(47, 107, 53)' });
-    expect(screen.getByTestId('macro-fill-carbs')).toHaveStyle({ backgroundColor: 'rgb(138, 90, 60)' });
-    expect(screen.getByTestId('macro-fill-fat')).toHaveStyle({ backgroundColor: 'rgb(107, 88, 71)' });
+describe('MacroStrip rows', () => {
+  it('heads the column "% of daily target" and leads with Eaten when given calories', () => {
+    renderStrip({ calories: { current: 1680, goal: 2340 } });
+    expect(screen.getByText('% of daily target')).toBeInTheDocument();
+    const names = screen.getAllByText(/^(Eaten|Protein|Carbs|Fat)$/, { selector: 'b' }).map((b) => b.textContent);
+    expect(names).toEqual(['Eaten', 'Protein', 'Carbs', 'Fat']);
+    expect(rowOf('Eaten')).toHaveTextContent(/Eaten 1,680 cal.*72%$/);
+  });
+
+  it('keto: fat, protein, then net carbs against the cap, in words when close', () => {
+    renderStrip({ mode: 'keto', netCarbsConsumed: 16, netCarbLimit: 20 });
+    const names = screen.getAllByText(/^(Protein|Carbs|Fat|Net carbs)$/, { selector: 'b' }).map((b) => b.textContent);
+    expect(names).toEqual(['Fat', 'Protein', 'Net carbs']);
+    expect(rowOf('Net carbs')).toHaveTextContent(/Net carbs 16 g of 20.*Close to your limit.*80%$/);
   });
 });

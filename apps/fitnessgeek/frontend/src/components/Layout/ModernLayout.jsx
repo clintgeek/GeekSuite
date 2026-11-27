@@ -39,8 +39,8 @@ export default function ModernLayout() {
 
   return (
     <GeekShell
-      // Market Morning's sidebar is the chalkboard in both modes; pin the
-      // mobile drawer paper to it too.
+      // The Label's sidebar is ink in both modes; pin the mobile drawer
+      // paper to it too.
       navSx={{ bgcolor: CHROME_BG }}
       nav={<Sidebar />}
       topBar={<TopBar />}

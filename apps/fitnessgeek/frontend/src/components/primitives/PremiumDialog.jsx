@@ -10,8 +10,8 @@ import DisplayHeading from './DisplayHeading.jsx';
  *
  * Now a thin skin over `GeekDialog` (MOBILE_UI_PLAN.md §2): the primitive owns
  * the rule — full-screen below `sm`, header of close ✕ / title / primary
- * action — and this wrapper owns the identity: the sentence-case eyebrow, the DM
- * Serif Display title, and the dashed rules above and below the body. It used
+ * action — and this wrapper owns the identity: the eyebrow, the heavy title, and the ink rules
+ * above and below the body. It used
  * to fake full-screen with `xs` margins and a `100vh` cap, which left an
  * unscrollable page behind a card on a phone.
  *
@@ -19,11 +19,14 @@ import DisplayHeading from './DisplayHeading.jsx';
  * primitive's `data-geek-dialog` hooks rather than by re-implementing MUI's
  * `Dialog`, so the mobile rule is inherited, not copied.
  *
+ * The Label: square corners, a 2px ink border, a heavy title over a medium
+ * (5px) ink rule, and a thin ink rule above the actions row. No shadow.
+ *
  * Props (all of the original API, plus the two mobile-header slots):
  *   open, onClose, maxWidth, fullWidth — passed through to GeekDialog
  *   eyebrow                            — small context label (a date or a meal
  *                                        only; never a second heading)
- *   title                              — the rounded display heading
+ *   title                              — the heavy display heading
  *   subtitle                           — optional muted body copy. Moves to the
  *                                        top of the body when full-screen, so
  *                                        the 60px header stays a header.
@@ -72,10 +75,9 @@ const PremiumDialog = ({
   const theme = useTheme();
   const fullScreen = useGeekDialogFullScreen();
 
-  const dashed = `1px dashed ${theme.palette.divider}`;
-  const footerTint = theme.palette.mode === 'dark'
-    ? 'rgba(255,255,255,0.02)'
-    : 'rgba(0,0,0,0.015)';
+  const ink = theme.palette.text.primary;
+  const mediumRule = `5px solid ${ink}`;
+  const thinRule = `1px solid ${ink}`;
 
   const titleNode = (title || eyebrow || Icon || subtitle) ? (
     <Box
@@ -93,9 +95,9 @@ const PremiumDialog = ({
           sx={{
             width: { xs: 34, sm: 40 },
             height: { xs: 34, sm: 40 },
-            borderRadius: '50%',
-            backgroundColor: theme.palette.primary.main,
-            color: theme.palette.primary.contrastText,
+            borderRadius: 0,
+            backgroundColor: ink,
+            color: theme.palette.background.paper,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -145,7 +147,7 @@ const PremiumDialog = ({
       headerSx={{
         alignItems: 'center',
         py: 1,
-        borderBottom: dashed,
+        borderBottom: mediumRule,
         ...headerSx,
       }}
       bodySx={{
@@ -154,24 +156,21 @@ const PremiumDialog = ({
         ...contentSx,
       }}
       sx={{
-        borderRadius: { xs: 0, sm: 3 },
-        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 0,
+        border: `2px solid ${ink}`,
         backgroundColor: theme.palette.background.paper,
         backgroundImage: 'none',
-        boxShadow: theme.palette.mode === 'dark'
-          ? '0 24px 64px -16px rgba(0, 0, 0, 0.7)'
-          : '0 24px 64px -20px rgba(92, 64, 32, 0.28)',
-        // Dashed rules are the identity; the primitive draws solid ones.
-        '& [data-geek-dialog="header"]': { borderBottomStyle: 'dashed' },
+        boxShadow: 'none',
+        // The ink rule under the title is the identity; the primitive draws a
+        // hairline divider.
+        '& [data-geek-dialog="header"]': { borderBottom: mediumRule },
         '& [data-geek-dialog="title"]': { overflow: 'visible' },
-        // Window mode has no header band of its own; the dashed rule under the
-        // title is what makes it read as the same dialog as the phone's.
         '& .MuiDialogTitle-root[data-geek-dialog="title"]': {
           alignItems: 'flex-start',
           px: { xs: 3, sm: 3.5 },
           pt: { xs: 3, sm: 3.5 },
           pb: { xs: 2, sm: 2.5 },
-          borderBottom: dashed,
+          borderBottom: mediumRule,
         },
         // The full-screen header's primary action is text in a 60px bar, not a
         // full-size CTA: drop its start icon and tighten the padding so the
@@ -183,15 +182,13 @@ const PremiumDialog = ({
           whiteSpace: 'nowrap',
         },
         '& [data-geek-dialog="footer"]': {
-          borderTop: dashed,
-          backgroundColor: footerTint,
+          borderTop: thinRule,
           gap: 1,
         },
         '& [data-geek-dialog="actions"]': {
           px: { xs: 3, sm: 3.5 },
           py: { xs: 2, sm: 2.5 },
-          borderTop: dashed,
-          backgroundColor: footerTint,
+          borderTop: thinRule,
           gap: 1,
         },
       }}

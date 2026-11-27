@@ -2,15 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { influxService } from '../services/influxService';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
-  Chip,
   Accordion,
   AccordionSummary,
   AccordionDetails,
   Grid,
-  LinearProgress,
   Alert,
   AlertTitle,
   List,
@@ -20,8 +16,8 @@ import {
   Divider,
   Stack,
   Tooltip,
-  IconButton
 } from '@mui/material';
+import { LabelPanel, FactHeadline, LabelBar, Tag } from './primitives';
 import {
   ExpandMore as ExpandMoreIcon,
   Bedtime as BedtimeIcon,
@@ -36,36 +32,35 @@ import {
   Info as InfoIcon
 } from '@mui/icons-material';
 
-/**
- * Quality score color
- */
-function getQualityColor(score) {
-  // Garmin's bands — the label beside this number is Garmin's too, and the
-  // two used to disagree (70-79 was "info" here but GOOD in the label).
-  if (score == null) return 'default';
-  if (score >= 80) return 'success';
-  if (score >= 60) return 'warning';
-  return 'error';
-}
-
 /** Garmin's ALL-CAPS words ("GOOD", "BALANCED") in sentence case. */
 const sentenceWord = (word) => (typeof word === 'string' && word
   ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase().replace(/_/g, ' ')
   : word);
 const HRV_WORDS = { HIGH: 'High', BALANCED: 'Balanced', LOW: 'Low', UNBALANCED: 'Unbalanced' };
 
-/**
- * Quality label with emoji
- */
-function getQualityEmoji(label) {
-  const map = {
-    EXCELLENT: '🌟',
-    GOOD: '✅',
-    FAIR: '⚠️',
-    POOR: '❌'
-  };
-  return map[label] || '❓';
-}
+/** An accordion drawn as a label panel: 2px ink border, square, no shadow. */
+const accordionSx = {
+  mb: 1,
+  border: (t) => `2px solid ${t.palette.text.primary}`,
+  borderRadius: 0,
+  boxShadow: 'none',
+  backgroundImage: 'none',
+  '&:before': { display: 'none' },
+  '&.Mui-expanded': { margin: '0 0 8px' },
+  '& .MuiAccordionSummary-root': { minHeight: 56 },
+  '& .MuiAccordionDetails-root': { borderTop: (t) => `1px solid ${t.palette.text.primary}`, pt: 2 },
+};
+const accordionTitleSx = { fontWeight: 900, fontSize: '1.125rem', lineHeight: 1.2 };
+
+/** A small status mark beside a label; the label is the words. */
+const StatusMark = ({ color }) => (
+  color && color !== 'default' ? (
+    <Box
+      aria-hidden
+      sx={{ width: 10, height: 10, flexShrink: 0, bgcolor: `${color}.main` }}
+    />
+  ) : null
+);
 
 /**
  * Metric card for displaying a single value
@@ -79,28 +74,36 @@ function getQualityEmoji(label) {
 function MetricCard({ label, value, unit, color = 'default', trend = null, higherIsBetter = false, tooltip = '' }) {
   return (
     <Tooltip title={tooltip} arrow>
-      <Card variant="outlined" sx={{ height: '100%' }}>
-        <CardContent>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
+      <Box
+        sx={{
+          height: '100%',
+          borderTop: (t) => `1px solid ${t.palette.text.primary}`,
+          pt: 1,
+          pb: 0.5,
+        }}
+      >
+        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }}>
+          <StatusMark color={color} />
+          <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, lineHeight: 1.2 }}>
             {label}
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="h4" component="div" color={`${color}.main`}>
-              {value}
+        </Stack>
+        <Stack direction="row" spacing={1} alignItems="baseline">
+          <Typography component="div" sx={{ fontWeight: 900, fontSize: '2rem', lineHeight: 1, letterSpacing: '-0.02em' }}>
+            {value}
+          </Typography>
+          {unit && (
+            <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.secondary' }}>
+              {unit}
             </Typography>
-            {unit && (
-              <Typography variant="body2" color="text.secondary">
-                {unit}
-              </Typography>
-            )}
-            {typeof trend === 'number' && trend !== 0 && (
-              trend > 0
-                ? <TrendingUpIcon color={higherIsBetter ? 'success' : 'error'} />
-                : <TrendingDownIcon color={higherIsBetter ? 'error' : 'success'} />
-            )}
-          </Stack>
-        </CardContent>
-      </Card>
+          )}
+          {typeof trend === 'number' && trend !== 0 && (
+            trend > 0
+              ? <TrendingUpIcon color={higherIsBetter ? 'success' : 'error'} />
+              : <TrendingDownIcon color={higherIsBetter ? 'error' : 'success'} />
+          )}
+        </Stack>
+      </Box>
     </Tooltip>
   );
 }
@@ -112,19 +115,20 @@ function ProgressMetric({ label, value, max = 100, color = 'primary', showPercen
   const percentage = Math.min(100, (value / max) * 100);
 
   return (
-    <Box sx={{ mb: 2 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
-        <Typography variant="body2">{label}</Typography>
+    <Box sx={{ mb: 1 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>{label}</Typography>
         <Typography variant="body2" fontWeight="bold">
           {showPercentage ? `${Math.round(percentage)}%` : `${value}${max ? `/${max}` : ''}`}
         </Typography>
       </Stack>
-      <LinearProgress
-        variant="determinate"
+      {/* Blue is the measured bar; a stage that misses its line is marked in
+          the theme's warning colour, a stage that makes it stays blue. */}
+      <LabelBar
         value={percentage}
-        color={color}
-        aria-label={`${label}: ${Math.round(percentage)}%`}
-        sx={{ height: 8, borderRadius: 1 }}
+        label={`${label}: ${Math.round(percentage)}%`}
+        height={10}
+        sx={{ my: 0.5, '& > div': { bgcolor: color === 'primary' || color === 'success' || color === 'info' ? 'primary.main' : `${color}.main` } }}
       />
     </Box>
   );
@@ -155,12 +159,7 @@ function RecommendationItem({ recommendation }) {
         primary={
           <Stack direction="row" spacing={1} alignItems="center">
             <Typography variant="subtitle2">{recommendation.issue}</Typography>
-            <Chip
-              label={recommendation.category.replace('_', ' ')}
-              size="small"
-              color={priorityColors[recommendation.priority]}
-              variant="outlined"
-            />
+            <Tag>{recommendation.category.replace('_', ' ')}</Tag>
           </Stack>
         }
         secondary={
@@ -223,24 +222,20 @@ export default function SleepAnalysis({ date }) {
 
   if (loading) {
     return (
-      <Card>
-        <CardContent>
-          <Typography>Loading your sleep…</Typography>
-        </CardContent>
-      </Card>
+      <LabelPanel title="Your sleep">
+        <Typography sx={{ pt: 1 }}>Loading your sleep…</Typography>
+      </LabelPanel>
     );
   }
 
   if (!data || !data.available) {
     return (
-      <Card>
-        <CardContent>
-          <Alert severity="info">
-            <AlertTitle>No sleep for this night</AlertTitle>
-            {data?.message || 'Your watch hasn’t sent sleep for this night yet.'}
-          </Alert>
-        </CardContent>
-      </Card>
+      <LabelPanel title="Your sleep">
+        <Alert severity="info" sx={{ mt: 1.5 }}>
+          <AlertTitle>No sleep for this night</AlertTitle>
+          {data?.message || 'Your watch hasn’t sent sleep for this night yet.'}
+        </Alert>
+      </LabelPanel>
     );
   }
 
@@ -248,38 +243,23 @@ export default function SleepAnalysis({ date }) {
 
   return (
     <Box>
-      {/* Summary Card */}
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <BedtimeIcon color="primary" />
-              <Typography variant="h5">Your sleep</Typography>
-            </Stack>
-            <Stack direction="row" spacing={1} alignItems="center">
-              {qualityScore != null ? (
-                <>
-                  <Tooltip title="Garmin’s sleep score for this night — the same number your watch shows" arrow>
-                    <Typography variant="h4" color={`${getQualityColor(qualityScore)}.main`}>
-                      {qualityScore}/100
-                    </Typography>
-                  </Tooltip>
-                  <Chip
-                    label={`${sentenceWord(qualityLabel)} ${getQualityEmoji(qualityLabel)}`}
-                    color={getQualityColor(qualityScore)}
-                    size="large"
-                  />
-                </>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  No score from the watch yet
-                </Typography>
-              )}
-            </Stack>
-          </Stack>
+      {/* Summary panel: the score is the headline */}
+      <LabelPanel title="Your sleep" level={1} sx={{ mb: 2 }}>
+          {qualityScore != null ? (
+            <Tooltip title="Garmin’s sleep score for this night — the same number your watch shows" arrow>
+              <Box>
+                <FactHeadline caption="Sleep score" name={qualityLabel ? <Tag>{sentenceWord(qualityLabel)}</Tag> : ''} value={`${qualityScore}/100`} />
+              </Box>
+            </Tooltip>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+              No score from the watch yet
+            </Typography>
+          )}
+          <Box sx={{ height: 12 }} />
 
-          {/* Key Metrics Grid */}
-          <Grid container spacing={2} sx={{ mb: 2 }}>
+          {/* Key metrics: four headline numbers under one rule, no boxes */}
+          <Grid container columnSpacing={2} rowSpacing={1.5} sx={{ mb: 2 }}>
             <Grid item xs={6} sm={3}>
               <MetricCard
                 label="Time asleep"
@@ -341,19 +321,18 @@ export default function SleepAnalysis({ date }) {
               </List>
             </Alert>
           )}
-        </CardContent>
-      </Card>
+      </LabelPanel>
 
       {/* Sleep Architecture Accordion */}
       <Accordion
         expanded={expanded.architecture}
         onChange={handleAccordionChange('architecture')}
-        sx={{ mb: 1 }}
+        sx={accordionSx}
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Stack direction="row" spacing={1} alignItems="center">
             <BedtimeIcon />
-            <Typography variant="h6">Sleep stages</Typography>
+            <Typography sx={accordionTitleSx}>Sleep stages</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
@@ -411,12 +390,12 @@ export default function SleepAnalysis({ date }) {
       <Accordion
         expanded={expanded.cardiovascular}
         onChange={handleAccordionChange('cardiovascular')}
-        sx={{ mb: 1 }}
+        sx={accordionSx}
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Stack direction="row" spacing={1} alignItems="center">
             <HeartIcon />
-            <Typography variant="h6">Heart rate overnight</Typography>
+            <Typography sx={accordionTitleSx}>Heart rate overnight</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
@@ -457,12 +436,12 @@ export default function SleepAnalysis({ date }) {
       <Accordion
         expanded={expanded.recovery}
         onChange={handleAccordionChange('recovery')}
-        sx={{ mb: 1 }}
+        sx={accordionSx}
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Stack direction="row" spacing={1} alignItems="center">
             <BrainIcon />
-            <Typography variant="h6">Heart-rate variability (HRV) and recovery</Typography>
+            <Typography sx={accordionTitleSx}>Heart-rate variability (HRV) and recovery</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
@@ -482,12 +461,9 @@ export default function SleepAnalysis({ date }) {
                       </Typography>
                       <Typography variant="body2">
                         <strong>Difference:</strong> {metrics.hrvRecovery.hrvDeviation > 0 ? '+' : ''}{metrics.hrvRecovery.hrvDeviation}%
-                        <Chip
-                          size="small"
-                          label={HRV_WORDS[metrics.hrvRecovery.hrvStatus] || sentenceWord(metrics.hrvRecovery.hrvStatus)}
-                          color={metrics.hrvRecovery.hrvStatus === 'HIGH' ? 'success' : metrics.hrvRecovery.hrvStatus === 'BALANCED' ? 'info' : 'warning'}
-                          sx={{ ml: 1 }}
-                        />
+                        <Tag sx={{ ml: 1 }}>
+                          {HRV_WORDS[metrics.hrvRecovery.hrvStatus] || sentenceWord(metrics.hrvRecovery.hrvStatus)}
+                        </Tag>
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         Within 10% either side of your usual reads as balanced.
@@ -510,12 +486,7 @@ export default function SleepAnalysis({ date }) {
                   </Typography>
                   <Typography variant="body2">
                     <strong>Recovery:</strong> {metrics.stress.bodyBatteryChange >= 0 ? '+' : ''}{metrics.stress.bodyBatteryChange} points
-                    <Chip
-                      size="small"
-                      label={metrics.stress.bodyBatteryChange >= 20 ? 'Good' : 'Low'}
-                      color={metrics.stress.bodyBatteryChange >= 20 ? 'success' : 'warning'}
-                      sx={{ ml: 1 }}
-                    />
+                    <Tag sx={{ ml: 1 }}>{metrics.stress.bodyBatteryChange >= 20 ? 'Good' : 'Low'}</Tag>
                   </Typography>
                 </Box>
               </Stack>
@@ -542,12 +513,12 @@ export default function SleepAnalysis({ date }) {
       <Accordion
         expanded={expanded.respiratory}
         onChange={handleAccordionChange('respiratory')}
-        sx={{ mb: 1 }}
+        sx={accordionSx}
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Stack direction="row" spacing={1} alignItems="center">
             <AirIcon />
-            <Typography variant="h6">Breathing</Typography>
+            <Typography sx={accordionTitleSx}>Breathing</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
@@ -608,11 +579,12 @@ export default function SleepAnalysis({ date }) {
         <Accordion
           expanded={expanded.recommendations}
           onChange={handleAccordionChange('recommendations')}
+          sx={accordionSx}
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Stack direction="row" spacing={1} alignItems="center">
               <CheckIcon />
-              <Typography variant="h6">Recommendations ({recommendations.length})</Typography>
+              <Typography sx={accordionTitleSx}>Recommendations ({recommendations.length})</Typography>
             </Stack>
           </AccordionSummary>
           <AccordionDetails>

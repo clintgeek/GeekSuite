@@ -80,7 +80,7 @@ export default function FixSheet({ item, onClose, fixes }) {
   // Pills, like every button in the app (visual review B6). A choice with a
   // number says it on two lines on purpose — "Smaller" over "~150" — rather
   // than wrapping wherever the width runs out ("Smaller ·" / "~150").
-  const bigButton = { minHeight: 56, borderRadius: 999, fontSize: '1.0625rem', fontWeight: 800, flex: '1 1 0', px: 1.5, lineHeight: 1.2 };
+  const bigButton = { minHeight: 56, fontSize: '1.0625rem', fontWeight: 700, flex: '1 1 0', px: 1.5, lineHeight: 1.2 };
   const twoLines = (word, number) => (
     <Box component="span" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <span>{word}</span>
@@ -91,7 +91,7 @@ export default function FixSheet({ item, onClose, fixes }) {
   return (
     <Dialog open={open} onClose={() => !working && onClose?.()} maxWidth="xs" fullWidth aria-labelledby="fix-sheet-title" data-testid="fix-sheet">
       <DialogTitle id="fix-sheet-title" sx={{ pb: 0.5 }}>
-        <Typography component="span" sx={{ display: 'block', fontSize: '1.25rem', fontWeight: 800 }}>
+        <Typography component="span" sx={{ display: 'block', fontSize: '1.25rem', fontWeight: 900 }}>
           Fix {item.name}
         </Typography>
         <Typography component="span" sx={{ display: 'block', fontSize: '1rem', color: 'text.secondary' }}>
@@ -125,7 +125,7 @@ export default function FixSheet({ item, onClose, fixes }) {
             disabled={Boolean(working)}
             sx={{ flex: 1, '& input': { fontSize: '1.125rem', fontWeight: 700 } }}
           />
-          <Button type="submit" variant="contained" disabled={!canSave || Boolean(working)} sx={{ minHeight: 56, borderRadius: 999, fontWeight: 800, px: 3 }}>
+          <Button type="submit" variant="contained" disabled={!canSave || Boolean(working)} sx={{ minHeight: 56, fontWeight: 700, px: 3 }}>
             Save
           </Button>
         </Box>
@@ -150,7 +150,7 @@ export default function FixSheet({ item, onClose, fixes }) {
             fullWidth
             disabled={!actually.trim() || Boolean(working)}
             startIcon={working === 'actually' ? <CircularProgress size={18} color="inherit" aria-hidden /> : null}
-            sx={{ mt: 1, minHeight: 52, borderRadius: 999, fontWeight: 800, fontSize: '1.0625rem', borderWidth: 2, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
+            sx={{ mt: 1, minHeight: 52, fontWeight: 700, fontSize: '1.0625rem', borderWidth: 2, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
           >
             {working === 'actually' ? 'Working it out…' : 'Log this instead'}
           </Button>
@@ -160,7 +160,7 @@ export default function FixSheet({ item, onClose, fixes }) {
           <Alert
             severity="warning"
             action={isSignedOutMessage(error) ? <SignInButton /> : undefined}
-            sx={{ mt: 2, borderRadius: 2, fontSize: '1rem', color: theme.palette.text.primary, alignItems: 'center' }}
+            sx={{ mt: 2, borderRadius: 0, fontSize: '1rem', color: theme.palette.text.primary, alignItems: 'center' }}
           >
             {error}
           </Alert>

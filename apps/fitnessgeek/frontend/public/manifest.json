@@ -5,8 +5,8 @@
   "description": "Track your nutrition, fitness goals, and weight with FitnessGeek - powered by the GeekSuite ecosystem",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FAFAF9",
-  "theme_color": "#FAFAF9",
+  "background_color": "#ECEEF2",
+  "theme_color": "#ECEEF2",
   "scope": "/",
   "icons": [
     {

@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
-import { Box, Typography, Card, CardContent } from '@mui/material';
-import { useTheme, alpha } from '@mui/material/styles';
-import { readableOn } from '@geeksuite/ui';
+import { Box, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import {
   Favorite as HeartIcon,
   TrendingUp as TrendingUpIcon,
@@ -12,6 +11,7 @@ import { localDateString, utcDateString } from '@geeksuite/utils';
 import { newestReadingFirst, readingWhen } from './bpTimeUtils.js';
 import { categorizeBP } from '../../utils/bpUtils.js';
 import { bpStageWords } from '../../utils/plainWords.js';
+import { LabelPanel, FactHeadline, FactRow, Rule, Tag } from '../primitives';
 
 /**
  * "Is my blood pressure OK?" — answered with the week, not one reading
@@ -29,7 +29,6 @@ const getBPCategory = (systolic, diastolic) => {
 
 const BPInsights = ({ bpLogs = [] }) => {
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   const insights = useMemo(() => {
     if (!bpLogs || bpLogs.length === 0) {
       return null;
@@ -115,17 +114,16 @@ const BPInsights = ({ bpLogs = [] }) => {
 
   if (!insights) {
     return (
-      <Card>
-        <CardContent sx={{ p: 4, textAlign: 'center' }}>
-          <HeartIcon sx={{ fontSize: 48, color: theme.palette.text.disabled, mb: 2 }} />
-          <Typography variant="h6" sx={{ color: theme.palette.text.primary, mb: 1 }}>
+      <LabelPanel level={1} title="Pressure Facts">
+        <Box sx={{ pt: 1.5 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: '1.0625rem', mb: 0.5 }}>
             No readings yet
           </Typography>
-          <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             Log a reading and this shows how your blood pressure is doing.
           </Typography>
-        </CardContent>
-      </Card>
+        </Box>
+      </LabelPanel>
     );
   }
 
@@ -147,124 +145,84 @@ const BPInsights = ({ bpLogs = [] }) => {
   const getTrendColor = () => {
     if (insights.trend === 'improving') return theme.palette.success.main;
     if (insights.trend === 'worsening') return theme.palette.error.main;
-    return theme.palette.primary.main;
+    return theme.palette.text.primary;
   };
-
-  const trendTint = alpha(getTrendColor(), isDark ? 0.12 : 0.06);
 
   const last = insights.latestReading;
   const lastWords = `${last.systolic}/${last.diastolic} · ${bpStageWords(insights.currentCategory.name).phrase.replace(/ \(.*\)$/, '')} · ${readingWhen(last)}`;
-  const headline = insights.weekCategory
-    ? `Your average this week: ${insights.avg7Systolic}/${insights.avg7Diastolic} — ${bpStageWords(insights.weekCategory.name).phrase}`
-    : `Your last reading: ${last.systolic}/${last.diastolic} — ${bpStageWords(insights.currentCategory.name).phrase}`;
-  // The heart takes the headline's tone (UX review 2026-11, A5): basil is
-  // this app's "done / normal", and it sat beside "a little high". Basil
-  // only when the headline is normal; amber or red tint above it.
   const headCategory = insights.weekCategory || insights.currentCategory;
+  const headWords = bpStageWords(headCategory.name);
+  const headline = insights.weekCategory
+    ? `Your average this week: ${insights.avg7Systolic}/${insights.avg7Diastolic} — ${headWords.phrase}`
+    : `Your last reading: ${last.systolic}/${last.diastolic} — ${headWords.phrase}`;
+  // The status colour is the theme's one small set (bpUtils: normal = success,
+  // a little high = warning, high = error), drawn as a Tag's fill with the
+  // words in it, and the heart beside it takes the same tone (UX review
+  // 2026-11, A5). The week's headline number is the page's one big figure.
   const headTone = headCategory?.name === 'Normal'
     ? 'normal'
-    : headCategory?.tone === 'error' ? 'high' : headCategory?.tone === 'muted' ? 'unknown' : 'raised';
-  const heartBg = headTone === 'normal'
-    ? theme.palette.primary.main
-    : headTone === 'high'
-      ? alpha(theme.palette.error.main, isDark ? 0.28 : 0.16)
-      : headTone === 'raised'
-        ? alpha(theme.palette.warning.main, isDark ? 0.28 : 0.2)
-        : alpha(theme.palette.text.primary, 0.08);
-  const heartInk = headTone === 'normal' ? theme.palette.primary.contrastText : theme.palette.text.primary;
-  const tile = {
-    p: 2,
-    // Nested tiles take the smaller radius inside the card's 24 (review B6);
-    // at night a faint cream lift, not a third near-identical brown (A10).
-    borderRadius: '16px',
-    backgroundColor: isDark ? alpha(theme.palette.text.primary, 0.04) : theme.palette.background.default,
-    border: `1px solid ${theme.palette.divider}`
-  };
+    : headCategory?.tone === 'error' || headCategory?.tone === 'tomato' ? 'high' : headCategory?.tone === 'muted' ? 'unknown' : 'raised';
+  const headColor = categorizeBP(
+    insights.weekCategory ? insights.avg7Systolic : last.systolic,
+    insights.weekCategory ? insights.avg7Diastolic : last.diastolic,
+    theme.palette.mode,
+  ).color;
+  const headValue = insights.weekCategory
+    ? `${insights.avg7Systolic}/${insights.avg7Diastolic}`
+    : `${last.systolic}/${last.diastolic}`;
 
   return (
-    <Card>
-      <CardContent sx={{ p: 3 }}>
-        {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-          <Box data-testid="bp-heart" data-tone={headTone} sx={{
-            width: 56,
-            height: 56,
-            flexShrink: 0,
-            borderRadius: '16px',
-            backgroundColor: heartBg,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <HeartIcon sx={{ fontSize: 28, color: heartInk }} />
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography component="h2" data-testid="bp-headline" sx={{ fontWeight: 800, fontSize: { xs: '1.1875rem', sm: '1.375rem' }, lineHeight: 1.3, color: theme.palette.text.primary, mb: 0.5 }}>
-              {headline}
-            </Typography>
-            <Typography data-testid="bp-last-reading" sx={{ fontSize: '1rem', color: theme.palette.text.secondary }}>
-              {insights.weekCategory ? `Last reading ${lastWords}` : 'No readings in the last 7 days'}
-            </Typography>
-          </Box>
-        </Box>
+    <LabelPanel
+      level={1}
+      title="Pressure Facts"
+      meta={insights.weekCategory ? 'Last 7 days' : 'Last reading'}
+      metaRight={<>{insights.totalReadings} {insights.totalReadings === 1 ? 'reading' : 'readings'}</>}
+    >
+      <FactHeadline
+        caption={insights.weekCategory ? 'Average this week' : 'Your last reading'}
+        name="Pressure"
+        value={headValue}
+      />
 
-        {/* Insights Grid */}
-        <Box sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-          gap: 2
-        }}>
-          {/* No 7-day tile (UX review 2026-11, A5): the headline is the
-              week's average, and the tile said it again right under it. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pt: 1, pb: 0.5, flexWrap: 'wrap' }}>
+        <HeartIcon data-testid="bp-heart" data-tone={headTone} aria-hidden sx={{ fontSize: 22, color: headColor }} />
+        <Tag sx={{ bgcolor: headColor, fontSize: '0.8125rem' }}>{headWords.label}</Tag>
+      </Box>
+      <Typography component="h3" data-testid="bp-headline" sx={{ fontWeight: 600, fontSize: '1rem', lineHeight: 1.4, pb: 0.75 }}>
+        {headline}
+      </Typography>
 
-          {/* 30-Day Average */}
-          {insights.avg30Systolic && (
-            <Box sx={tile}>
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
-                30-day average
-              </Typography>
-              <Typography variant="h6" sx={{ color: theme.palette.text.primary }}>
-                {insights.avg30Systolic}/{insights.avg30Diastolic}
-              </Typography>
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                {insights.last30DaysCount} {insights.last30DaysCount === 1 ? 'reading' : 'readings'}
-              </Typography>
-            </Box>
-          )}
-
-          {/* Trend */}
-          <Box sx={{
-            p: 2,
-            borderRadius: '16px',
-            backgroundColor: trendTint,
-            border: `1px solid ${alpha(getTrendColor(), 0.3)}`
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              {getTrendIcon()}
-              {/* The tint is a surface, so the label is measured against it —
-                  text.secondary read 4.39:1 on the light trend panel. */}
-              <Typography variant="caption" sx={{ color: readableOn(theme.palette.text.secondary, trendTint, { under: theme.palette.background.paper }), fontWeight: 600 }}>
-                Last 30 days
-              </Typography>
-            </Box>
-            <Typography variant="h6" sx={{ color: getTrendColor() }}>
-              {getTrendText()}
-            </Typography>
+      <Rule weight="medium" />
+      {insights.avg30Systolic && (
+        <FactRow
+          first
+          name="30-day average"
+          amount={`${insights.avg30Systolic}/${insights.avg30Diastolic}`}
+          of={`· ${insights.last30DaysCount} ${insights.last30DaysCount === 1 ? 'reading' : 'readings'}`}
+        />
+      )}
+      <FactRow
+        first={!insights.avg30Systolic}
+        name="Last 30 days"
+        amount={
+          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, verticalAlign: 'middle' }}>
+            {getTrendIcon()}
+            <Box component="span" sx={{ color: getTrendColor(), fontWeight: 700 }}>{getTrendText()}</Box>
           </Box>
-
-          {/* Healthy readings: a count, not a percent, and no red tile
-              saying it without words (review D-1). */}
-          <Box sx={tile} data-testid="bp-healthy-range">
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
-              Healthy range
-            </Typography>
-            <Typography variant="h6" sx={{ color: theme.palette.text.primary }}>
-              {insights.healthyCount} of {insights.totalReadings} readings
-            </Typography>
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
+        }
+      />
+      {/* Healthy readings: a count, not a percent (review D-1). */}
+      <Box data-testid="bp-healthy-range">
+        <FactRow name="Healthy range" amount={`${insights.healthyCount} of ${insights.totalReadings} readings`} />
+      </Box>
+      <Box data-testid="bp-last-reading">
+        {insights.weekCategory ? (
+          <FactRow name="Last reading" amount={lastWords} />
+        ) : (
+          <FactRow name="No readings in the last 7 days" />
+        )}
+      </Box>
+    </LabelPanel>
   );
 };
 

@@ -1,99 +1,32 @@
 import React from 'react';
-import { Box, LinearProgress, Typography } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
-import { trackColor } from '../../theme/theme.jsx';
+import { FactRow } from '../primitives';
 import { ketoStatus } from '../../utils/ketoMath';
-import KetoStatusChip from './KetoStatusChip';
 
 /**
- * NetCarbMeter — the keto-mode dashboard hero.
+ * NetCarbMeter — keto mode's net-carb line on the Today's Facts label.
  *
- * Replaces the calorie bar when the user is in keto mode.
- * Shows net carbs consumed vs the daily cap with a color-ramping
- * progress bar and a KetoStatusChip.
+ * One fact row: **Net carbs** 12 g of 20 ……… 60%. Close to or over the cap
+ * says so in words, in the row's inverse tag (no colour carries it alone).
  *
  * Props:
  *   consumed  — net carbs consumed today (number, default 0)
  *   limitG    — daily net-carb cap in grams (number, default 20)
- *   sx        — optional MUI sx override for the root Box
+ *   sx        — optional MUI sx override for the row
  */
+const STATUS_WORDS = { over: 'Over your limit', approaching: 'Close to your limit' };
+
 const NetCarbMeter = ({ consumed = 0, limitG = 20, sx }) => {
-  const theme = useTheme();
-
-  const clampedPct = limitG > 0 ? Math.min(consumed / limitG, 1) * 100 : 0;
   const status = ketoStatus(consumed, limitG);
-
-  const barColor =
-    status === 'over'
-      ? theme.palette.error.main
-      : status === 'approaching'
-      ? theme.palette.warning.main
-      : theme.palette.primary.main;
-
+  const pct = limitG > 0 ? `${Math.round((consumed / limitG) * 100)}%` : '—';
   return (
-    <Box sx={{ width: '100%', ...sx }}>
-      {/* Label row */}
-      <Typography
-        sx={{
-          fontSize: '0.875rem',
-          fontFamily: "inherit",
-          fontWeight: 700,
-          color: theme.palette.text.secondary,
-          mb: 0.75,
-        }}
-      >
-        Net carbs today
-      </Typography>
-
-      {/* Large numeric display */}
-      <Typography
-        sx={{
-          fontFamily: "inherit",
-          fontVariantNumeric: 'tabular-nums',
-          fontSize: '2rem',
-          fontWeight: 700,
-          lineHeight: 1,
-          color: theme.palette.warning.main,
-          mb: 1,
-        }}
-      >
-        {Math.round(consumed)}g
-        <Typography
-          component="span"
-          sx={{
-            fontFamily: "inherit",
-            fontVariantNumeric: 'tabular-nums',
-            fontSize: '1rem',
-            fontWeight: 400,
-            color: theme.palette.text.secondary,
-            ml: 0.75,
-          }}
-        >
-          of {limitG}g
-        </Typography>
-      </Typography>
-
-      {/* Color-ramping progress bar */}
-      <LinearProgress
-        variant="determinate"
-        value={clampedPct}
-        aria-label={`Net carbs: ${Math.round(consumed)}g of ${limitG}g`}
-        sx={{
-          height: 10,
-          borderRadius: 5,
-          mb: 1,
-          backgroundColor: trackColor(theme),
-          '& .MuiLinearProgress-bar': {
-            borderRadius: 5,
-            backgroundColor: barColor,
-            transition: 'transform 800ms cubic-bezier(0.22, 1, 0.36, 1), background-color 400ms ease',
-          },
-        }}
-      />
-
-      {/* Status chip */}
-      <KetoStatusChip netCarbsConsumed={consumed} limitG={limitG} />
-    </Box>
+    <FactRow
+      name="Net carbs"
+      amount={`${Math.round(consumed)} g`}
+      of={`of ${limitG}`}
+      tag={STATUS_WORDS[status] || null}
+      percent={pct}
+      sx={sx}
+    />
   );
 };
 

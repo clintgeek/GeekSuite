@@ -1,6 +1,5 @@
 import React from 'react';
 import { Box, Skeleton } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
 import Surface from './Surface';
 
 /**
@@ -12,6 +11,7 @@ import Surface from './Surface';
  *
  * Perceived performance > actual performance.
  */
+// Square, like every panel: the placeholder keeps the Label's corners.
 const SurfaceSkeleton = ({
   rows = 3,
   showHeader = true,
@@ -22,8 +22,8 @@ const SurfaceSkeleton = ({
     <Surface variant={variant} sx={{ minHeight: height === 'auto' ? undefined : height }}>
       {showHeader && (
         <Box sx={{ mb: 2.5 }}>
-          <Skeleton variant="text" width={120} height={16} sx={{ mb: 1, borderRadius: 1 }} />
-          <Skeleton variant="text" width="60%" height={32} sx={{ borderRadius: 1 }} />
+          <Skeleton variant="text" width={120} height={16} sx={{ mb: 1, borderRadius: 0 }} />
+          <Skeleton variant="text" width="60%" height={32} sx={{ borderRadius: 0 }} />
         </Box>
       )}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -37,8 +37,8 @@ const SurfaceSkeleton = ({
               gap: 2,
             }}
           >
-            <Skeleton variant="text" height={24} sx={{ borderRadius: 1 }} />
-            <Skeleton variant="text" width={56} height={24} sx={{ borderRadius: 1 }} />
+            <Skeleton variant="text" height={24} sx={{ borderRadius: 0 }} />
+            <Skeleton variant="text" width={56} height={24} sx={{ borderRadius: 0 }} />
           </Box>
         ))}
       </Box>

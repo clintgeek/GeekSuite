@@ -20,7 +20,7 @@ import RecipeBuilderDialog from '../components/MyFoods/RecipeBuilderDialog.jsx';
 import { foodService } from '../services/foodService.js';
 import { errorMessage } from '../utils/errorMessage.js';
 import FoodDeleteDialog from '../components/MyFoods/FoodDeleteDialog.jsx';
-import { Surface, SectionLabel, EmptyState, SurfaceSkeleton } from '../components/primitives';
+import { Page, LabelPanel, EmptyState, SurfaceSkeleton } from '../components/primitives';
 
 const EMPTY_FOOD_FORM = {
   name: '',
@@ -221,30 +221,24 @@ const MyFoods = () => {
 
   if (loading) {
     return (
-      <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 900, mx: 'auto' }}>
-        <Box sx={{ mb: 3 }}>
-        </Box>
+      <Page>
         <SurfaceSkeleton rows={5} />
-      </Box>
+      </Page>
     );
   }
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 900, mx: 'auto' }}>
-      {/* Editorial header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-          Your custom entries and everything you’ve saved for quick access.
-        </Typography>
-      </Box>
+    <Page>
+      <Typography sx={{ color: 'text.secondary', fontSize: '1rem' }}>
+        Your custom entries and everything you’ve saved for quick access.
+      </Typography>
 
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-        {/* Second-rank actions on a reading page: tonal, not filled basil
-            (visual review B1). */}
-        <Button variant="tonal" startIcon={<AddIcon />} onClick={() => openBuilder(null)}>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        {/* One filled blue button per view: New food. New recipe is outlined. */}
+        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => openBuilder(null)}>
           New recipe
         </Button>
-        <Button variant="tonal" startIcon={<AddIcon />} onClick={() => setCreateForm({ ...EMPTY_FOOD_FORM })}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateForm({ ...EMPTY_FOOD_FORM })}>
           New food
         </Button>
       </Box>
@@ -259,7 +253,6 @@ const MyFoods = () => {
         InputProps={{
           startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
         }}
-        sx={{ mb: 2 }}
       />
 
       {/* Foods list or empty state */}
@@ -274,20 +267,7 @@ const MyFoods = () => {
           }
         />
       ) : (
-        <Surface padded={false}>
-          <Box
-            sx={{
-              px: 2.5,
-              pt: 2,
-              pb: 1.25,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              borderBottom: (theme) => `1px dashed ${theme.palette.divider}`,
-            }}
-          >
-            <SectionLabel count={filteredFoods.length}>Your foods</SectionLabel>
-          </Box>
+        <LabelPanel level={1} title="Your foods" metaRight={`${filteredFoods.length} ${filteredFoods.length === 1 ? 'food' : 'foods'}`}>
           <List sx={{ p: 0 }}>
             {filteredFoods.map((food) => (
               <FoodListItem
@@ -298,7 +278,7 @@ const MyFoods = () => {
               />
             ))}
           </List>
-        </Surface>
+        </LabelPanel>
       )}
 
       {/* Edit Dialog */}
@@ -339,7 +319,7 @@ const MyFoods = () => {
         onConfirm={handleDeleteConfirm}
         loading={deleteLoading}
       />
-    </Box>
+    </Page>
   );
 };
 

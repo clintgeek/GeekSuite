@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Card,
-  CardContent,
   Typography,
   Box,
   IconButton,
@@ -9,12 +7,10 @@ import {
   CircularProgress,
   Collapse,
   TextField,
-  Button,
-  Divider
+  Button
 } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import {
-  AutoAwesome as AIIcon,
   Refresh as RefreshIcon,
   ExpandMore as ExpandIcon,
   ExpandLess as CollapseIcon,
@@ -28,6 +24,7 @@ import {
 import { insightsService } from '../../services/insightsService.js';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { AINoteFooter, AI_NOTES_NAME, lastDaysSource } from '../Reports/aiNotes.jsx';
+import { LabelPanel, Rule } from '../primitives';
 
 /**
  * The sentence the backend sends with `ok: false`. Kept here as the local
@@ -229,65 +226,40 @@ const AIInsightsCard = () => {
 
   const accentColor = theme.palette.primary.main;
 
-  return (
-    <Card sx={{
-      borderRadius: 2.5,
-      boxShadow: 'none',
-      border: `1px solid ${theme.palette.divider}`,
-      overflow: 'hidden',
-    }}>
-      <CardContent sx={{ p: 0 }}>
-        {/* Header — compact */}
-        <Box sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          px: { xs: 1.5, sm: 2.5 },
-          py: 1.25,
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <AIIcon sx={{ color: theme.palette.text.secondary, fontSize: 18 }} />
-            <Typography
-              component="h2"
-              sx={{
-                fontWeight: 700,
-                fontSize: '0.875rem',
-                color: theme.palette.text.secondary,
-              }}
-            >
-              {AI_NOTES_NAME}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 0.25 }}>
-            <IconButton
-              size="small"
-              onClick={() => loadInsight(activeTab)}
-              disabled={!expanded || loading || activeTab === 'chat'}
-              aria-label={`Refresh ${tabs.find((t) => t.id === activeTab)?.label || 'notes'}`}
-              sx={{ p: 0.5 }}
-            >
-              <RefreshIcon sx={{ fontSize: 16 }} />
-            </IconButton>
-            <IconButton
-              size="small"
-              onClick={() => setExpanded(!expanded)}
-              aria-label={expanded ? 'Hide notes from the AI' : 'Show notes from the AI'}
-              aria-expanded={expanded}
-              sx={{ p: 0.5 }}
-            >
-              {expanded ? <CollapseIcon sx={{ fontSize: 16 }} /> : <ExpandIcon sx={{ fontSize: 16 }} />}
-            </IconButton>
-          </Box>
-        </Box>
+  // A level-2 label panel (The Label): the title, refresh and show/hide on
+  // the right, the four chips, then the notes under a rule when opened.
+  const iconButtonSx = { width: 44, height: 44 };
+  const actions = (
+    <Box sx={{ display: 'flex', gap: 0.25, mr: -1, my: -1 }}>
+      <IconButton
+        onClick={() => loadInsight(activeTab)}
+        disabled={!expanded || loading || activeTab === 'chat'}
+        aria-label={`Refresh ${tabs.find((t) => t.id === activeTab)?.label || 'notes'}`}
+        sx={iconButtonSx}
+      >
+        <RefreshIcon sx={{ fontSize: 20 }} />
+      </IconButton>
+      <IconButton
+        onClick={() => setExpanded(!expanded)}
+        aria-label={expanded ? 'Hide notes from the AI' : 'Show notes from the AI'}
+        aria-expanded={expanded}
+        sx={iconButtonSx}
+      >
+        {expanded ? <CollapseIcon sx={{ fontSize: 22 }} /> : <ExpandIcon sx={{ fontSize: 22 }} />}
+      </IconButton>
+    </Box>
+  );
 
-        {/* Tab Chips — smaller */}
+  return (
+    <LabelPanel title={AI_NOTES_NAME} titleComponent="h2" action={actions}>
+        {/* The chips: 44px tall wherever a finger is the pointer or the
+            screen is phone/tablet sized; 32px only for a mouse from md up. */}
         <Box sx={{
           display: 'flex',
+          flexWrap: 'wrap',
           gap: 0.75,
-          px: { xs: 1.5, sm: 2.5 },
-          pb: 1.25,
-          overflowX: 'auto',
-          '&::-webkit-scrollbar': { display: 'none' },
+          pt: 1.25,
+          pb: 0.5,
         }}>
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -295,17 +267,20 @@ const AIInsightsCard = () => {
             return (
               <Chip
                 key={tab.id}
-                icon={<Icon sx={{ fontSize: 14 }} />}
+                icon={<Icon sx={{ fontSize: 16 }} />}
                 label={tab.label}
                 onClick={() => { setActiveTab(tab.id); setExpanded(true); }}
                 size="small"
                 sx={{
-                  borderRadius: 999,
                   fontWeight: 700,
-                  height: { xs: 44, sm: 32 },
+                  fontSize: '0.875rem',
+                  height: { xs: 44, md: 32 },
+                  px: 0.5,
+                  '@media (pointer: coarse)': { height: 44 },
                   backgroundColor: isActive ? alpha(accentColor, isDark ? 0.15 : 0.08) : 'transparent',
-                  color: isActive ? accentColor : theme.palette.text.secondary,
-                  border: `1px solid ${isActive ? accentColor : theme.palette.divider}`,
+                  color: isActive ? accentColor : theme.palette.text.primary,
+                  border: `1.5px solid ${isActive ? accentColor : theme.palette.text.primary}`,
+                  '& .MuiChip-icon': { color: 'inherit' },
                   '&:hover': {
                     backgroundColor: isActive
                       ? alpha(accentColor, isDark ? 0.2 : 0.12)
@@ -318,10 +293,10 @@ const AIInsightsCard = () => {
         </Box>
 
         <Collapse in={expanded}>
-          <Divider />
+          <Rule weight="thin" sx={{ mt: 1 }} />
 
           {/* Content Area */}
-          <Box sx={{ px: { xs: 1.5, sm: 2.5 }, py: 1.5, minHeight: 60 }}>
+          <Box sx={{ pt: 1.5, pb: 0.5, minHeight: 60 }}>
             {activeTab === 'chat' ? (
               /* Chat Interface */
               <Box>
@@ -346,11 +321,10 @@ const AIInsightsCard = () => {
                           maxWidth: '85%',
                           px: 1.5,
                           py: 1,
-                          borderRadius: 2,
-                          backgroundColor: msg.role === 'user'
-                            ? alpha(accentColor, isDark ? 0.15 : 0.08)
-                            : alpha(theme.palette.text.primary, isDark ? 0.05 : 0.03),
-                          border: `1px solid ${theme.palette.divider}`,
+                          // A reply is a quoted block (an ink edge on the
+                          // left); her question sits right with a blue edge.
+                          borderLeft: msg.role === 'user' ? 0 : `3px solid ${theme.palette.text.primary}`,
+                          borderRight: msg.role === 'user' ? `3px solid ${accentColor}` : 0,
                         }}
                       >
                         <Typography sx={{
@@ -384,17 +358,16 @@ const AIInsightsCard = () => {
                     disabled={chatLoading}
                     sx={{
                       '& .MuiOutlinedInput-root': {
-                        borderRadius: 2,
-                        fontSize: '0.8125rem',
+                        fontSize: '0.9375rem',
+                        minHeight: 44,
                       },
                     }}
                   />
                   <IconButton
                     onClick={handleSendChat}
                     disabled={!chatMessage.trim() || chatLoading}
-                    size="small"
                     aria-label="Send your question"
-                    sx={{ p: 0.75 }}
+                    sx={{ width: 44, height: 44 }}
                   >
                     <SendIcon sx={{ fontSize: 18, color: chatMessage.trim() ? accentColor : theme.palette.text.disabled }} />
                   </IconButton>
@@ -449,8 +422,7 @@ const AIInsightsCard = () => {
             )}
           </Box>
         </Collapse>
-      </CardContent>
-    </Card>
+    </LabelPanel>
   );
 };
 

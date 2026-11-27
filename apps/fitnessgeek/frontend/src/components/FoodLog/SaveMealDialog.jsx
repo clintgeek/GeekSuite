@@ -162,10 +162,8 @@ const SaveMealDialog = ({
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1,
-                    mb: 1,
-                    p: 1,
-                    backgroundColor: 'action.hover',
-                    borderRadius: 1
+                    py: 1,
+                    borderBottom: (t) => `1px solid ${t.palette.divider}`
                   }}
                 >
                   <FoodIcon sx={{ fontSize: 20, color: 'text.secondary' }} />

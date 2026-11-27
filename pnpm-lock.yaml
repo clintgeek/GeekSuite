@@ -546,6 +546,9 @@ importers:
       '@emotion/styled':
         specifier: ^11.14.1
         version: 11.14.1(@emotion/react@11.14.0(@types/react@18.3.28)(react@18.3.1))(@types/react@18.3.28)(react@18.3.1)
+      '@fontsource/archivo':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@fontsource/dm-sans':
         specifier: ^5.2.8
         version: 5.2.8
@@ -3663,6 +3666,9 @@ packages:
 
   '@fontsource/allerta-stencil@5.3.0':
     resolution: {integrity: sha512-ydTiW3XTglxA3LvOkmowHdv6ji46VVU4v5iRtj0EixO6r0JkDsxZO/zwO/OXnBWL9rIXb0NAVJcy2sxKOs8zCw==}
+
+  '@fontsource/archivo@5.3.0':
+    resolution: {integrity: sha512-5DIMgPVJRi62OqdOVoogCFxP73EkNM/E0YVTSDIQlDEJfDbxqZduwM/YoNZwC9Sx1CDgpKinqf8ckRY1QNIecw==}
 
   '@fontsource/b612-mono@5.3.0':
     resolution: {integrity: sha512-G0Ihm+ekqqP5PZJ1zrx6GbeS2q4GDmYnM01zrNrPARRg64GoG0D2pTf+FsbDWvbg/9tVWFRmFIz8xYLjgFrUpg==}
@@ -13513,6 +13519,8 @@ snapshots:
   '@fontsource/alegreya@5.3.0': {}
 
   '@fontsource/allerta-stencil@5.3.0': {}
+
+  '@fontsource/archivo@5.3.0': {}
 
   '@fontsource/b612-mono@5.3.0': {}
 

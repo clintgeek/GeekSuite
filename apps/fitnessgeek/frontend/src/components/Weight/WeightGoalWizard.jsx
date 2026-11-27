@@ -6,11 +6,9 @@ import {
   Typography,
   ToggleButtonGroup,
   ToggleButton,
-  Alert,
-  Chip,
-  Divider
+  Alert
 } from '@mui/material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import {
   TrendingDown as LoseIcon,
   TrendingUp as GainIcon,
@@ -19,6 +17,7 @@ import {
 } from '@mui/icons-material';
 import { addWeeks, format } from 'date-fns';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import { Rule, Tag } from '../primitives';
 import { shortDay } from '../../utils/dates.js';
 
 const RATE_OPTIONS = [
@@ -33,7 +32,6 @@ const RATE_OPTIONS = [
 const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, unit = 'lbs' }) => {
   const unitWord = unit === 'lbs' ? 'lb' : unit;
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   const [goalType, setGoalType] = useState('lose'); // 'lose', 'gain', 'maintain'
   const [targetWeight, setTargetWeight] = useState('');
   const [ratePerWeek, setRatePerWeek] = useState(1);
@@ -185,12 +183,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
           onClick={handleSave}
           variant="contained"
           disabled={!goalDate || Object.keys(errors).length > 0}
-          sx={{
-            borderRadius: '999px',
-            px: 4,
-            textTransform: 'none',
-            fontWeight: 700,
-          }}
+          sx={{ px: 4 }}
         >
           {existingGoal?.enabled ? 'Save' : 'Set goal'}
         </Button>
@@ -198,13 +191,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
       secondaryAction={
         <Button
           onClick={handleCancel}
-          sx={{
-            borderRadius: '999px',
-            px: 3,
-            textTransform: 'none',
-            fontWeight: 600,
-            color: theme.palette.text.secondary
-          }}
+          sx={{ px: 3, color: theme.palette.text.secondary }}
         >
           Cancel
         </Button>
@@ -212,7 +199,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
     >
         {/* Goal Type Selection */}
         <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, color: theme.palette.text.primary }}>
+          <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, color: theme.palette.text.primary }}>
             What’s your goal?
           </Typography>
           <ToggleButtonGroup
@@ -222,10 +209,10 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             fullWidth
             sx={{
               '& .MuiToggleButton-root': {
-                borderRadius: '12px',
                 py: 1.5,
+                minHeight: 52,
                 textTransform: 'none',
-                fontWeight: 600,
+                fontWeight: 700,
                 '&.Mui-selected': {
                   backgroundColor: theme.palette.primary.main,
                   color: theme.palette.primary.contrastText,
@@ -267,7 +254,6 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             }}
             sx={{
               '& .MuiOutlinedInput-root': {
-                borderRadius: '12px',
                 '&.Mui-focused fieldset': {
                   borderColor: theme.palette.primary.main,
                   borderWidth: 2
@@ -289,7 +275,6 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             }}
             sx={{
               '& .MuiOutlinedInput-root': {
-                borderRadius: '12px',
                 '&.Mui-focused fieldset': {
                   borderColor: theme.palette.primary.main,
                   borderWidth: 2
@@ -302,7 +287,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
         {/* Rate Selection */}
         {goalType !== 'maintain' && (
           <>
-            <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, color: theme.palette.text.primary }}>
+            <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, color: theme.palette.text.primary }}>
               How fast? ({unitWord} a week)
             </Typography>
             <ToggleButtonGroup
@@ -316,8 +301,8 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
                 gap: 1,
                 mb: 2,
                 '& .MuiToggleButtonGroup-grouped': {
-                  border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: '12px !important',
+                  border: `2px solid ${theme.palette.text.primary}`,
+                  borderRadius: 1,
                   margin: 0,
                   '&.Mui-selected': {
                     backgroundColor: theme.palette.primary.main,
@@ -355,21 +340,12 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             {/* Rate Description */}
             {selectedRate && (
               <Box sx={{ mb: 3 }}>
-                <Chip
-                  label={selectedRate.description}
-                  size="small"
-                  sx={{
-                    // The theme's semantic tones, not Tailwind (visual B3):
-                    // a safety read, so too-fast is the error tone, in words.
-                    backgroundColor: alpha(selectedRate.safe ? theme.palette.success.main : theme.palette.error.main, 0.12),
-                    color: theme.palette.text.primary,
-                    fontWeight: 700,
-                    height: 28,
-                    borderRadius: '999px'
-                  }}
-                />
+                {/* A safety read: too fast is the error colour, in words. */}
+                <Tag sx={{ bgcolor: selectedRate.safe ? 'success.main' : 'error.main', fontSize: '0.8125rem' }}>
+                  {selectedRate.description}
+                </Tag>
                 {!selectedRate.safe && (
-                  <Alert severity="warning" sx={{ mt: 2, borderRadius: '12px' }}>
+                  <Alert severity="warning" sx={{ mt: 2 }}>
                     This pace is too fast for most people. Check with your doctor first.
                   </Alert>
                 )}
@@ -378,23 +354,16 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
           </>
         )}
 
-        <Divider sx={{ my: 3 }} />
+        <Rule weight="medium" sx={{ my: 2 }} />
 
         {/* Goal Summary */}
         {goalDate && weightDifference > 0 && (
-          <Box sx={{
-            p: 3,
-            borderRadius: '16px',
-            // Basil at 8% with a basil edge — the app's one "chosen" look
-            // (visual B2), replacing Studio Slate's cyan gradient.
-            backgroundColor: alpha(theme.palette.primary.main, isDark ? 0.12 : 0.08),
-            border: `1px solid ${theme.palette.primary.main}`
-          }}>
-            <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700, color: theme.palette.text.primary }}>
+          <Box>
+            <Typography component="h4" sx={{ mb: 1, fontWeight: 900, fontSize: '1.125rem', color: theme.palette.text.primary }}>
               Your goal in short
             </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.75 }}>
                 <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
                   To {goalType === 'lose' ? 'lose' : 'gain'}
                 </Typography>
@@ -402,7 +371,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
                   {weightDifference.toFixed(1)} {unitWord}
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.75, borderTop: `1px solid ${theme.palette.divider}` }}>
                 <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
                   About how long
                 </Typography>
@@ -410,7 +379,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
                   {weeksToGoal} {weeksToGoal === 1 ? 'week' : 'weeks'}
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.75, borderTop: `1px solid ${theme.palette.divider}` }}>
                 <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
                   You’d get there
                 </Typography>

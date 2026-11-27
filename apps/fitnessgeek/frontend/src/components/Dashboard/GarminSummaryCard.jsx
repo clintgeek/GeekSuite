@@ -1,87 +1,38 @@
 import React from 'react';
-import { Card, CardContent, Typography, Box, Fade, Grid } from '@mui/material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { Typography } from '@mui/material';
 import { clockTime, shortDay } from '../../utils/dates.js';
-import { DirectionsWalk as StepsIcon, LocalFireDepartment as FireIcon, Bedtime as SleepIcon, Favorite as HeartIcon } from '@mui/icons-material';
+import { LabelPanel, FactRow } from '../primitives';
 
-const Metric = ({ value, label, color }) => {
-  const theme = useTheme();
-  return (
-    <Box sx={{ textAlign: 'center' }}>
-      <Typography variant="h5" sx={{ fontWeight: 600, color, mb: 0.5 }}>
-        {value}
-      </Typography>
-      <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}>
-        {label}
-      </Typography>
-    </Box>
-  );
-};
-
-const GarminSummaryCard = ({ steps, activeCalories, sleepMinutes, restingHR, fetchedAt, lastSyncAt, title = 'Today’s activity', timeout = 700 }) => {
-  const theme = useTheme();
+/**
+ * The day's Garmin numbers as a level-2 label panel (The Label): one fact
+ * row each — resting heart rate, steps, calories from activity, sleep — and
+ * when they were fetched, in the foot. No tiles inside the panel.
+ *
+ * `timeout` is accepted for compatibility (it was the old fade-in).
+ */
+const GarminSummaryCard = ({ steps, activeCalories, sleepMinutes, restingHR, fetchedAt, lastSyncAt, title = 'Today’s activity' }) => {
   const sleepText = sleepMinutes != null ? `${Math.floor(sleepMinutes / 60)}h ${sleepMinutes % 60}m` : '—';
   const timeText = fetchedAt ? clockTime(fetchedAt) : '';
+  const rows = [
+    { name: 'Resting heart rate', value: restingHR != null ? `${restingHR} bpm` : '—' },
+    { name: 'Steps', value: steps != null ? Number(steps).toLocaleString('en-US') : '—' },
+    { name: 'From activity', value: activeCalories != null ? `${activeCalories} cal` : '—' },
+    { name: 'Sleep', value: sleepText },
+  ];
   return (
-    <Fade in timeout={timeout}>
-      <Box sx={{
-        backgroundColor: theme.palette.background.paper,
-        borderRadius: 2,
-        p: { xs: 2, sm: 3 },
-        boxShadow: theme.shadows[1],
-        border: 'none'
-      }}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' }, gap: { xs: 1.5, sm: 2 } }}>
-          {[{
-            label: 'Resting heart rate', value: restingHR ?? '—', color: theme.palette.info.main, Icon: HeartIcon
-          }, {
-            label: 'Steps', value: steps ?? '—', color: theme.palette.primary.main, Icon: StepsIcon
-          }, {
-            label: 'From activity', value: activeCalories != null ? `${activeCalories}` : '—', color: theme.palette.success.main, Icon: FireIcon
-          }, {
-            label: 'Sleep', value: sleepText, color: theme.palette.secondary.main, Icon: SleepIcon
-          }].map((item) => (
-            <Box key={item.label} sx={{ textAlign: 'center', p: 1.5, borderRadius: '16px', backgroundColor: alpha(theme.palette.text.primary, theme.palette.mode === 'dark' ? 0.04 : 0.03), border: 'none', position: 'relative' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
-                <Box sx={{ bgcolor: item.color, color: theme.palette.mode === 'dark' ? theme.palette.background.default : '#FFFFFF', width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', mr: 0.75 }}>
-                  <item.Icon sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }} />
-                </Box>
-                <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 500, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                  {item.label}
-                </Typography>
-              </Box>
-              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: { xs: '1rem', sm: '1.25rem' }, color: theme.palette.text.primary, mb: 0.5 }}>
-                {item.value}
-                {item.label === 'Steps' ? null : (
-                  <Typography component="span" variant="caption" sx={{ color: theme.palette.text.secondary, ml: 0.5, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                    {item.label === 'Resting heart rate' ? '' : (item.label === 'From activity' ? 'cal' : '')}
-                  </Typography>
-                )}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-        {(timeText || lastSyncAt) && (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-            <Box sx={{ textAlign: 'right' }}>
-              {timeText && (
-                <Typography variant="caption" sx={{ color: theme.palette.text.secondary, display: 'block' }}>
-                  Updated {timeText}
-                </Typography>
-              )}
-              {lastSyncAt && (
-                <Typography variant="caption" sx={{ color: theme.palette.text.disabled, display: 'block' }}>
-                  Last synced {shortDay(lastSyncAt)}
-                </Typography>
-              )}
-            </Box>
-          </Box>
-        )}
-      </Box>
-    </Fade>
+    <LabelPanel title={title}>
+      {rows.map((row, i) => (
+        <FactRow key={row.name} first={i === 0} name={row.name} trailing={row.value} />
+      ))}
+      {(timeText || lastSyncAt) && (
+        <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', pt: 0.75, borderTop: (t) => `1px solid ${t.palette.text.primary}` }}>
+          {timeText && <>Updated {timeText}</>}
+          {timeText && lastSyncAt && ' · '}
+          {lastSyncAt && <>Last synced {shortDay(lastSyncAt)}</>}
+        </Typography>
+      )}
+    </LabelPanel>
   );
 };
 
 export default GarminSummaryCard;
-
-

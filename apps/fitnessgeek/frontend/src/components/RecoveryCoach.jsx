@@ -2,12 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { influxService } from '../services/influxService';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Stack,
-  Chip,
-  LinearProgress,
   Alert,
   AlertTitle,
   List,
@@ -17,15 +13,14 @@ import {
   Divider,
   CircularProgress
 } from '@mui/material';
+import { LabelPanel, FactHeadline, LabelBar, Tag } from './primitives';
 import {
   FitnessCenter as TrainingIcon,
-  Restaurant as NutritionIcon,
   Bedtime as SleepIcon,
   Psychology as StressIcon,
   BatteryChargingFull as EnergyIcon,
   Warning as WarningIcon,
   CheckCircle as CheckIcon,
-  TrendingUp as ReadinessIcon
 } from '@mui/icons-material';
 
 const PRIORITY_WORDS = { HIGH: 'Do this first', MEDIUM: 'Worth doing', LOW: 'Nice to have' };
@@ -34,13 +29,6 @@ const PRIORITY_WORDS = { HIGH: 'Do this first', MEDIUM: 'Worth doing', LOW: 'Nic
  * Readiness gauge component
  */
 function ReadinessGauge({ score }) {
-  const getColor = () => {
-    if (score >= 80) return 'success';
-    if (score >= 60) return 'info';
-    if (score >= 40) return 'warning';
-    return 'error';
-  };
-
   const getLabel = () => {
     if (score >= 80) return 'Excellent';
     if (score >= 60) return 'Good';
@@ -48,34 +36,11 @@ function ReadinessGauge({ score }) {
     return 'Low';
   };
 
-  const color = getColor();
-
   return (
-    <Card variant="outlined" sx={{ background: `${color}.light`, borderColor: `${color}.main` }}>
-      <CardContent>
-        <Stack spacing={2} alignItems="center">
-          <ReadinessIcon sx={{ fontSize: 48, color: `${color}.main` }} />
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="h2" color={`${color}.main`} fontWeight="bold">
-              {score}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Ready-for-today score
-            </Typography>
-            <Chip label={getLabel()} color={color} size="small" sx={{ mt: 1 }} />
-          </Box>
-          <Box sx={{ width: '100%' }}>
-            <LinearProgress
-              variant="determinate"
-              value={score}
-              color={color}
-              aria-label={`Ready-for-today score: ${score} out of 100`}
-              sx={{ height: 10, borderRadius: 1 }}
-            />
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
+    <LabelPanel title="Ready-for-today score" level={1}>
+      <FactHeadline name={<Tag>{getLabel()}</Tag>} value={score} unit="/100" />
+      <LabelBar value={score} label={`Ready-for-today score: ${score} out of 100`} height={12} />
+    </LabelPanel>
   );
 }
 
@@ -94,39 +59,22 @@ function RecommendationCard({ recommendation }) {
     }
   };
 
-  const getPriorityColor = () => {
-    switch (recommendation.priority) {
-      case 'HIGH': return 'error';
-      case 'MEDIUM': return 'warning';
-      case 'LOW': return 'info';
-      default: return 'default';
-    }
-  };
-
   return (
-    <Card variant="outlined" sx={{ mb: 2 }}>
-      <CardContent>
-        <Stack spacing={1}>
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-            <Stack direction="row" spacing={1} alignItems="center">
-              {getCategoryIcon()}
-              <Typography variant="h6">{recommendation.title}</Typography>
-            </Stack>
-            <Chip
-              label={PRIORITY_WORDS[recommendation.priority] || recommendation.priority}
-              color={getPriorityColor()}
-              size="small"
-            />
-          </Stack>
-          <Typography variant="body2" color="text.secondary">
-            {recommendation.message}
-          </Typography>
-          <Alert severity={getPriorityColor()} icon={false}>
-            <strong>Try this:</strong> {recommendation.action}
-          </Alert>
-        </Stack>
-      </CardContent>
-    </Card>
+    <LabelPanel
+      title={recommendation.title}
+      titleComponent="h3"
+      action={<Tag>{PRIORITY_WORDS[recommendation.priority] || recommendation.priority}</Tag>}
+    >
+      <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ pt: 1 }}>
+        <Box sx={{ color: 'text.primary', display: 'flex', mt: 0.25 }}>{getCategoryIcon()}</Box>
+        <Typography variant="body2" sx={{ fontSize: '1rem' }}>
+          {recommendation.message}
+        </Typography>
+      </Stack>
+      <Box sx={{ mt: 1.25, pt: 1, borderTop: (t) => `1px solid ${t.palette.text.primary}` }}>
+        <strong>Try this:</strong> {recommendation.action}
+      </Box>
+    </LabelPanel>
   );
 }
 
@@ -181,7 +129,7 @@ export default function RecoveryCoach({ date }) {
 
   return (
     <Box>
-      <Stack spacing={3}>
+      <Stack spacing={2.25}>
         {/* Header.
             "Get Full AI Analysis" used to live here, wired to a native
             `alert('...coming soon')` in HealthDashboard — the one place in
@@ -191,7 +139,7 @@ export default function RecoveryCoach({ date }) {
             than wired to a fake destination; re-add it once there's a real
             AI analysis surface to send the recovery context to. */}
         <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="h5">Recovery notes from the AI</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 900 }}>Recovery notes from the AI</Typography>
         </Stack>
 
         {/* Readiness Score */}
@@ -215,7 +163,7 @@ export default function RecoveryCoach({ date }) {
         {/* Recommendations */}
         {recommendations.length > 0 ? (
           <>
-            <Typography variant="h6">For you today</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 900 }}>For you today</Typography>
             {recommendations.map((rec, idx) => (
               <RecommendationCard key={idx} recommendation={rec} />
             ))}
@@ -228,16 +176,12 @@ export default function RecoveryCoach({ date }) {
         )}
 
         {/* General Tips */}
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              <NutritionIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-              What to eat today
-            </Typography>
+        <LabelPanel title="What to eat today">
+          <Box>
             <List dense>
               {readinessScore < 60 && (
                 <ListItem>
-                  <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
+                  <ListItemIcon><CheckIcon /></ListItemIcon>
                   <ListItemText
                     primary="Put protein and whole foods first"
                     secondary="About 1g of protein per lb of body weight, plus oily fish and colorful vegetables."
@@ -246,7 +190,7 @@ export default function RecoveryCoach({ date }) {
               )}
               {data.context?.sleep?.deepSleepPercent < 20 && (
                 <ListItem>
-                  <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
+                  <ListItemIcon><CheckIcon /></ListItemIcon>
                   <ListItemText
                     primary="Support deep sleep with magnesium-rich foods"
                     secondary="Pumpkin seeds, dark chocolate, spinach. Consider 400mg magnesium glycinate supplement."
@@ -255,7 +199,7 @@ export default function RecoveryCoach({ date }) {
               )}
               {data.context?.current?.stress > 60 && (
                 <ListItem>
-                  <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
+                  <ListItemIcon><CheckIcon /></ListItemIcon>
                   <ListItemText
                     primary="Include adaptogens and B vitamins"
                     secondary="Ashwagandha, rhodiola, B-complex. Go easy on caffeine."
@@ -263,35 +207,31 @@ export default function RecoveryCoach({ date }) {
                 </ListItem>
               )}
               <ListItem>
-                <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
+                <ListItemIcon><CheckIcon /></ListItemIcon>
                 <ListItemText
                   primary="Stay hydrated"
                   secondary="About half your body weight in ounces of water, more if you work out."
                 />
               </ListItem>
             </List>
-          </CardContent>
-        </Card>
+          </Box>
+        </LabelPanel>
 
         {/* Sleep Tips */}
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              <SleepIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-              Tonight’s sleep
-            </Typography>
+        <LabelPanel title="Tonight’s sleep">
+          <Box>
             <List dense>
               {data.context?.sleep?.deepSleepPercent < 20 && (
                 <>
                   <ListItem>
-                    <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
+                    <ListItemIcon><CheckIcon /></ListItemIcon>
                     <ListItemText
                       primary="Cool your bedroom to 65–68°F"
                       secondary="A cooler room helps deep sleep"
                     />
                   </ListItem>
                   <ListItem>
-                    <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
+                    <ListItemIcon><CheckIcon /></ListItemIcon>
                     <ListItemText
                       primary="Finish dinner by 7 PM"
                       secondary="A late meal can cut into deep sleep"
@@ -300,22 +240,22 @@ export default function RecoveryCoach({ date }) {
                 </>
               )}
               <ListItem>
-                <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
+                <ListItemIcon><CheckIcon /></ListItemIcon>
                 <ListItemText
                   primary="No screens for an hour before bed"
                   secondary="Screen light can keep you awake"
                 />
               </ListItem>
               <ListItem>
-                <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
+                <ListItemIcon><CheckIcon /></ListItemIcon>
                 <ListItemText
                   primary="Keep the same bedtime"
                   secondary="Go to bed and get up at the same times every day, weekends too"
                 />
               </ListItem>
             </List>
-          </CardContent>
-        </Card>
+          </Box>
+        </LabelPanel>
       </Stack>
     </Box>
   );

@@ -1,13 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box, Typography, TextField, Button, CircularProgress, Chip, Card, CardContent, LinearProgress,
-  Stepper, Step, StepLabel, StepButton, Divider, FormControl, InputLabel, Select, MenuItem, Alert, InputAdornment
+  Box, Typography, TextField, Button, CircularProgress, LinearProgress,
+  Stepper, Step, StepLabel, StepButton, FormControl, InputLabel, Select, MenuItem, Alert, InputAdornment
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import {
-  Restaurant as FoodIcon, Timeline as TimelineIcon, CheckCircle as CheckCircleIcon,
-  Calculate as CalculateIcon, TrendingUp as TrendingUpIcon
-} from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
 import { userService } from '../../services/userService.js';
 import { settingsService } from '../../services/settingsService.js';
@@ -16,6 +12,7 @@ import { useAuth } from '@geeksuite/auth';
 import { isPlanCalculationStale } from '@geeksuite/utils';
 import ModeSelector from './ModeSelector';
 import KetoPlanStep from './KetoPlanStep';
+import { Page, Rule, Surface, Tag } from '../primitives';
 import { BmrSourceNote, MetabolismCard, PlanComparison, ProteinBasisNote, previewMacros } from './planProvenance.jsx';
 import { planTarget, weekenderHasRoom, weekenderSuggestion, MEASURED_ACTIVITY, usableMeasuredActivity } from './planMath.js';
 import { parseHeightToInches, buildCaloriePlan, nutritionGoalPayload } from './calorieCalc.js';
@@ -364,12 +361,11 @@ const CalorieGoalWizard = () => {
     // the cream with the app's own gutter, its cards straight on it.
     // The phone gutter the quick target and every other page keep (UX review
     // 2026-11, A6): at xs: 0 the cards and "Step 4 of 4" ran to the screen edge.
-    <Box sx={{ maxWidth: 800, mx: 'auto', p: { xs: 2, sm: 3 } }}>
+    <Page narrow>
       {/* Header */}
-      <Box sx={{ textAlign: 'center', mb: 4 }}>
-        <FoodIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
-        <Typography variant="h4" sx={{ mb: 1 }}>Calorie plan</Typography>
-        <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
+      <Box>
+        <Typography component="h1" variant="h4" sx={{ mb: 0.5 }}>Calorie plan</Typography>
+        <Typography variant="body1" sx={{ color: 'text.secondary' }}>
           Tell me your goal and I’ll work out how much to eat each day.
         </Typography>
       </Box>
@@ -449,11 +445,11 @@ const CalorieGoalWizard = () => {
 
       {/* Step 1: Profile */}
       {!hasExistingGoal && activeStep === 1 && (
-        <Card sx={{ p: { xs: 2.5, sm: 3 }, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CalculateIcon sx={{ color: 'primary.main' }} />
+        <Surface>
+          <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
             About you
           </Typography>
+          <Rule weight="medium" sx={{ mb: 2 }} />
 
           {isLoadingProfile ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
@@ -576,16 +572,16 @@ const CalorieGoalWizard = () => {
               Next: set goal
             </Button>
           </Box>
-        </Card>
+        </Surface>
       )}
 
       {/* Step 2: Goal Setting */}
       {!hasExistingGoal && activeStep === 2 && (
-        <Card sx={{ p: { xs: 2.5, sm: 3 }, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <TrendingUpIcon sx={{ color: 'primary.main' }} />
+        <Surface>
+          <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
             Set your weight goal
           </Typography>
+          <Rule weight="medium" sx={{ mb: 2 }} />
 
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 3 }}>
             <TextField
@@ -628,9 +624,10 @@ const CalorieGoalWizard = () => {
 
           {/* Preview calculations */}
           {profile.weight && goal.targetWeight && (
-            <Box sx={{ mb: 3, p: 2, borderRadius: '16px', bgcolor: 'background.default', border: '1px solid', borderColor: 'divider' }}>
+            <Box sx={{ mb: 3 }}>
+              <Rule weight="medium" />
               <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2 }}>
+                <Typography component="h3" sx={{ fontWeight: 900, fontSize: '1.0625rem', py: 0.75 }}>
                   At a glance
                 </Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
@@ -687,7 +684,7 @@ const CalorieGoalWizard = () => {
               Work out my plan
             </Button>
           </Box>
-        </Card>
+        </Surface>
       )}
 
       {/* Step 3b: Keto Plan (shown when mode === 'keto', new goal only) */}
@@ -737,15 +734,15 @@ const CalorieGoalWizard = () => {
       {/* Step 3a: Keto Existing Summary (shown when hasExistingGoal and mode=keto) */}
       {hasExistingGoal && mode === 'keto' && plan && activeStep >= 3 && (
         <Box>
-          <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CheckCircleIcon sx={{ color: 'primary.main' }} />
+          <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
             Your keto plan
           </Typography>
+          <Rule weight="medium" sx={{ mb: 2 }} />
           {/* Basil, like the standard plan: warning ochre means a warning
               (visual review B2), and a keto plan isn't one. */}
-          <Card sx={{ mb: 3, bgcolor: 'background.default', border: '2px solid', borderColor: 'primary.main' }}>
-            <CardContent>
-              <Typography variant="h5" sx={{ mb: 1, color: 'primary.main' }}>
+          <Surface sx={{ mb: 3 }}>
+            <Box>
+              <Typography variant="h5" sx={{ mb: 1, color: 'text.primary' }}>
                 {ketoConfig.net_carb_limit_g}g net carbs a day
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
@@ -754,12 +751,12 @@ const CalorieGoalWizard = () => {
                   : `Split: ${ketoConfig.macro_split?.fat_pct ?? 70}% fat · ${ketoConfig.macro_split?.protein_pct ?? 25}% protein · ${ketoConfig.macro_split?.carb_pct ?? 5}% carbs`}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Chip label={`${Number(plan.dailyCalories).toLocaleString('en-US')} cal a day`} variant="tag" />
-                <Chip label={`${ketoConfig.track_net_carbs ? 'Net carbs' : 'Total carbs'}`} variant="tag" />
-                {plan.weightToLose > 0 && <Chip label={`${plan.weightToLose.toFixed(1)} lb to goal`} variant="tag" />}
+                <Tag>{`${Number(plan.dailyCalories).toLocaleString('en-US')} cal a day`}</Tag>
+                <Tag>{`${ketoConfig.track_net_carbs ? 'Net carbs' : 'Total carbs'}`}</Tag>
+                {plan.weightToLose > 0 && <Tag>{`${plan.weightToLose.toFixed(1)} lb to goal`}</Tag>}
               </Box>
-            </CardContent>
-          </Card>
+            </Box>
+          </Surface>
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
               variant="contained"
@@ -801,18 +798,18 @@ const CalorieGoalWizard = () => {
       {/* Step 3a: Calorie Plan or Existing Summary (standard mode) */}
       {(mode === 'standard' || (hasExistingGoal && mode !== 'keto')) && plan && activeStep >= 3 && (
         <Box>
-          <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CheckCircleIcon sx={{ color: 'success.main' }} />
+          <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
             Your calorie plan
           </Typography>
+          <Rule weight="medium" sx={{ mb: 2 }} />
 
           {/* Saved vs new — only while re-running over an existing plan */}
           {!hasExistingGoal && <PlanComparison saved={savedSnapshot} next={plan} />}
 
           {/* Summary Card */}
-          <Card sx={{ mb: 3, bgcolor: 'background.default', border: '2px solid', borderColor: 'primary.main' }}>
-            <CardContent>
-              <Typography variant="h5" sx={{ mb: 2, color: 'primary.main' }}>
+          <Surface sx={{ mb: 3 }}>
+            <Box>
+              <Typography variant="h5" sx={{ mb: 2, color: 'text.primary' }}>
                 Your daily target: {fmt(plan.dailyCalories)} calories
               </Typography>
               <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
@@ -823,9 +820,9 @@ const CalorieGoalWizard = () => {
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 {/* Info tags, one shape (visual review B5). */}
-                <Chip label={`${ plan.weightToLose.toFixed(1) } lb to lose`} variant="tag" />
-                <Chip label={`${ plan.timeline } weeks`} variant="tag" />
-                <Chip label={`${ plan.weightChangeRate } lb/week`} variant="tag" />
+                <Tag>{`${ plan.weightToLose.toFixed(1) } lb to lose`}</Tag>
+                <Tag>{`${ plan.timeline } weeks`}</Tag>
+                <Tag>{`${ plan.weightChangeRate } lb/week`}</Tag>
               </Box>
               {standardMacroPreview && (
                 <Box sx={{ mt: 2 }} data-testid="macro-preview">
@@ -835,20 +832,20 @@ const CalorieGoalWizard = () => {
                   <ProteinBasisNote rules={standardMacroPreview.rules} />
                 </Box>
               )}
-            </CardContent>
-          </Card>
+            </Box>
+          </Surface>
 
           {/* Weekly Targets */}
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
+          <Surface sx={{ mb: 3 }}>
+            <Box>
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Your week
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(4, minmax(0, 1fr))', sm: 'repeat(7, minmax(0, 1fr))' }, gap: 1 }}>
                 {plan.schedule.map((d) => (
-                  <Box key={d.day} sx={{ textAlign: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                  <Box key={d.day} sx={{ textAlign: 'center', pt: 0.5, pb: 0.5, borderTop: (t) => `1px solid ${t.palette.text.primary}` }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>{d.day}</Typography>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{fmt(d.calories)}</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{fmt(d.calories)}</Typography>
                   </Box>
                 ))}
               </Box>
@@ -869,16 +866,17 @@ const CalorieGoalWizard = () => {
                   Auto: if you go over on a day, the rest of the week adjusts, staying above {fmt(plan.rules.minSafeCalories)} cal.
                 </Typography>
               )}
-            </CardContent>
-          </Card>
+            </Box>
+          </Surface>
 
           {/* Detailed Breakdown */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3, mb: 3 }}>
+          <Surface sx={{ mb: 3, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, columnGap: 3, rowGap: 2 }}>
             <MetabolismCard plan={plan} scanLoadFailed={!hasExistingGoal && scanLoadFailed} />
 
-            <Card>
-              <CardContent>
-                <Typography variant="h6" sx={{ mb: 2 }}>
+            <Box>
+              <Box>
+                <Rule weight="medium" />
+                <Typography component="h3" sx={{ fontWeight: 900, fontSize: '1.0625rem', py: 0.75 }}>
                   Under your daily burn
                 </Typography>
                 <Box sx={{ mb: 2 }}>
@@ -917,13 +915,13 @@ const CalorieGoalWizard = () => {
                       : 'Minimum recommended: 1,200 cal a day'}
                   </Typography>
                 </Box>
-              </CardContent>
-            </Card>
-          </Box>
+              </Box>
+            </Box>
+          </Surface>
 
           {/* Tips */}
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
+          <Surface sx={{ mb: 3 }}>
+            <Box>
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Tips
               </Typography>
@@ -954,8 +952,8 @@ const CalorieGoalWizard = () => {
                   </Typography>
                 </li>
               </ul>
-            </CardContent>
-          </Card>
+            </Box>
+          </Surface>
 
           <Box sx={{ display: 'flex', gap: 2 }}>
             {hasExistingGoal ? (
@@ -1026,7 +1024,7 @@ const CalorieGoalWizard = () => {
           </Box>
         </Box>
       )}
-    </Box>
+    </Page>
   );
 };
 

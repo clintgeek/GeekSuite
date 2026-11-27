@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Box, Button, TextField, Typography, ButtonBase } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { trackColor } from '../../theme/theme.jsx';
+import { Surface, Rule } from '../primitives';
 import { Check as CheckIcon } from '@mui/icons-material';
 import { mealWord } from '../../utils/plainWords.js';
 
@@ -32,7 +33,6 @@ const Step = ({ n, children }) => (
 
 export default function FirstRun({ suggestedName = '', mealType = 'breakfast', onFinish, onTryLogging }) {
   const theme = useTheme();
-  const produce = theme.palette.produce || {};
   const [step, setStep] = useState(1);
   const [name, setName] = useState(suggestedName || '');
   const [goal, setGoal] = useState(null);
@@ -50,20 +50,25 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
       ref={headingRef}
       tabIndex={-1}
       component="h1"
-      sx={{ fontSize: { xs: '1.875rem', sm: '2.25rem' }, fontWeight: 800, lineHeight: 1.2, outline: 'none' }}
+      sx={{ fontSize: { xs: '1.875rem', sm: '2.25rem' }, fontWeight: 900, lineHeight: 1.15, outline: 'none' }}
     >
       {text}
     </Typography>
   );
 
   return (
-    <Box data-testid="first-run" sx={{ maxWidth: 560, mx: 'auto', py: { xs: 2, sm: 4 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Box aria-hidden sx={{ display: 'flex', gap: 1 }}>
-        {[1, 2, 3].map((n) => (
-          <Box key={n} sx={{ height: 8, flex: 1, borderRadius: 999, bgcolor: n <= step ? theme.palette.primary.main : trackColor(theme) }} />
-        ))}
+    // One label panel: the step count and a three-part bar on top, a thick
+    // rule, then the step's question and its answers (The Label).
+    <Surface data-testid="first-run" sx={{ maxWidth: 560, width: '100%', mx: 'auto', display: 'flex', flexDirection: 'column', gap: 2.5, p: { xs: 2, sm: 3 } }}>
+      <Box>
+        <Typography sx={{ fontWeight: 700, fontSize: '1rem', mb: 1 }}>Step {step} of 3</Typography>
+        <Box aria-hidden sx={{ display: 'flex', gap: 0.5 }}>
+          {[1, 2, 3].map((n) => (
+            <Box key={n} sx={{ height: 10, flex: 1, bgcolor: n <= step ? theme.palette.primary.main : trackColor(theme) }} />
+          ))}
+        </Box>
+        <Rule weight="thick" sx={{ mt: 1.5 }} />
       </Box>
-      <Typography sx={{ color: 'text.secondary', fontWeight: 700, fontSize: '1rem' }}>Step {step} of 3</Typography>
 
       {step === 1 && (
         <Step n={1}>
@@ -77,7 +82,7 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
             fullWidth
             sx={{ '& .MuiInputBase-input': { fontSize: '1.25rem', py: 2 } }}
           />
-          <Button variant="contained" size="large" onClick={() => setStep(2)} sx={{ alignSelf: 'stretch' }}>
+          <Button variant="contained" size="large" onClick={() => setStep(2)} sx={{ alignSelf: 'stretch', minHeight: 56 }}>
             Next
           </Button>
         </Step>
@@ -101,8 +106,7 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
                     gap: 2,
                     p: 2,
                     minHeight: 72,
-                    borderRadius: '20px',
-                    border: `2px solid ${chosen ? theme.palette.primary.main : theme.palette.divider}`,
+                    border: `2px solid ${chosen ? theme.palette.primary.main : theme.palette.text.primary}`,
                     bgcolor: chosen ? alpha(theme.palette.primary.main, 0.08) : theme.palette.background.paper,
                     '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
                   }}
@@ -119,7 +123,7 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
                     {chosen && <CheckIcon sx={{ fontSize: 22 }} />}
                   </Box>
                   <Box>
-                    <Typography sx={{ fontSize: '1.1875rem', fontWeight: 800, color: 'text.primary' }}>{g.title}</Typography>
+                    <Typography sx={{ fontSize: '1.1875rem', fontWeight: 700, color: 'text.primary' }}>{g.title}</Typography>
                     <Typography sx={{ fontSize: '1rem', color: 'text.secondary' }}>{g.body}</Typography>
                   </Box>
                 </ButtonBase>
@@ -127,8 +131,8 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
             })}
           </Box>
           <Box sx={{ display: 'flex', gap: 1.5 }}>
-            <Button size="large" variant="outlined" onClick={() => setStep(1)} sx={{ flex: 1 }}>Back</Button>
-            <Button size="large" variant="contained" onClick={() => setStep(3)} sx={{ flex: 2 }}>Next</Button>
+            <Button size="large" variant="outlined" onClick={() => setStep(1)} sx={{ flex: 1, minHeight: 56 }}>Back</Button>
+            <Button size="large" variant="contained" onClick={() => setStep(3)} sx={{ flex: 2, minHeight: 56 }}>Next</Button>
           </Box>
         </Step>
       )}
@@ -143,15 +147,15 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
             size="large"
             variant="contained"
             onClick={() => onTryLogging?.(answers())}
-            sx={{ bgcolor: produce[mealType]?.fill, color: produce[mealType]?.ink, '@media (hover: hover)': { '&:hover': { bgcolor: produce[mealType]?.fill } } }}
+            sx={{ minHeight: 56 }}
           >
             Add my {meal}
           </Button>
-          <Button size="large" variant="text" onClick={() => onFinish?.(answers())}>
+          <Button size="large" variant="text" onClick={() => onFinish?.(answers())} sx={{ minHeight: 48, fontWeight: 700 }}>
             Maybe later
           </Button>
         </Step>
       )}
-    </Box>
+    </Surface>
   );
 }

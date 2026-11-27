@@ -1,11 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- FitnessGeek tab icon: the dumbbell, heavier, no highlight. -->
-  <rect width="512" height="512" rx="112" fill="#0F766E"/>
-  <g transform="rotate(-35 256 256)">
-    <rect x="140" y="224" width="232" height="64" rx="18" fill="#FAFAF9"/>
-    <rect x="84" y="134" width="84" height="244" rx="32" fill="#FAFAF9"/>
-    <rect x="344" y="134" width="84" height="244" rx="32" fill="#FAFAF9"/>
-    <rect x="30" y="184" width="64" height="144" rx="26" fill="#FAFAF9"/>
-    <rect x="418" y="184" width="64" height="144" rx="26" fill="#FAFAF9"/>
-  </g>
+  <!-- FitnessGeek tab icon: the label mark, heavier and simpler for 16-32px. -->
+  <rect x="18" y="18" width="476" height="476" fill="#FFFFFF" stroke="#111318" stroke-width="36"/>
+  <!-- F -->
+  <rect x="96" y="92" width="62" height="190" fill="#111318"/>
+  <rect x="96" y="92" width="150" height="58" fill="#111318"/>
+  <rect x="96" y="172" width="112" height="50" fill="#111318"/>
+  <!-- G -->
+  <rect x="266" y="92" width="150" height="58" fill="#111318"/>
+  <rect x="266" y="92" width="62" height="190" fill="#111318"/>
+  <rect x="266" y="224" width="150" height="58" fill="#111318"/>
+  <rect x="354" y="176" width="62" height="106" fill="#111318"/>
+  <rect x="326" y="176" width="90" height="46" fill="#111318"/>
+  <!-- rule and bar -->
+  <rect x="96" y="312" width="320" height="28" fill="#111318"/>
+  <rect x="96" y="364" width="130" height="48" fill="#1F3FD1"/>
 </svg>

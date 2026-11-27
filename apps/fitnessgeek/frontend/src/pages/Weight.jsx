@@ -18,7 +18,7 @@ import WeightProgress from '../components/Weight/WeightProgress.jsx';
 import QuickAddWeight from '../components/Weight/QuickAddWeight.jsx';
 import WeightLogList from '../components/Weight/WeightLogList.jsx';
 import BodyCompositionSection from '../components/BodyComposition/BodyCompositionSection.jsx';
-import { SuspenseSurface } from '../components/primitives';
+import { Page, SuspenseSurface } from '../components/primitives';
 import { useExperience } from '../contexts/ExperienceContext.jsx';
 
 // The timeline is the only thing on this page that needs Nivo (~530 kB raw
@@ -111,18 +111,27 @@ const Weight = () => {
   }
 
   return (
-    // Bottom padding clears the thumb-zone "Log weight" button (plan item 8):
-    // its 56px, its 16px lift and a gap, above the safe area (visual C1).
-    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 'calc(88px + env(safe-area-inset-bottom))', sm: 'calc(88px + env(safe-area-inset-bottom))', md: 6 }, maxWidth: 960, mx: 'auto' }}>
+    // `fab`: Page leaves the clearance the thumb-zone "Log weight" button
+    // needs under the last panel on a phone and a portrait tablet.
+    <Page fab>
       {/* The top bar says "Weight"; one plain line says what's here. */}
-      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem', mb: 2.5 }}>
+      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
         {isSimple
           ? 'Your weight over time, averaged so one heavy day doesn’t move the needle.'
           : 'Your weight and what it’s made of, averaged so one water day doesn’t move the needle.'}
       </Typography>
 
-      {/* Progress Card */}
-      <Box sx={{ mb: 3 }}>
+      {/* Phone: one column, in order. From md: Body Facts (about 400px) left
+          with the Trend chart wide on the right, then body composition and
+          the log in two columns below. */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '400px minmax(0, 1fr)' },
+          gap: { xs: 1.75, md: 2.25 },
+          alignItems: 'start',
+        }}
+      >
         <WeightProgress
           weightLogs={weightLogs}
           goal={weightGoal}
@@ -132,10 +141,7 @@ const Weight = () => {
           simple={isSimple}
           onEditGoal={() => navigate('/calorie-wizard')}
         />
-      </Box>
 
-      {/* Timeline Chart */}
-      <Box sx={{ mb: 3 }}>
         <SuspenseSurface rows={4} height={320}>
           <WeightTimeline
             weightLogs={weightLogs}
@@ -143,44 +149,45 @@ const Weight = () => {
             unit="lbs"
           />
         </SuspenseSurface>
-      </Box>
 
-      {/* Body composition — summary, change, fat/lean trend. Full only: body
-          composition is one of the things Simple keeps out of the way. */}
-      {!isSimple && (
-      <Box sx={{ mb: 3 }}>
-        <BodyCompositionSection
-          summary={bodyComp.summary}
-          scans={bodyComp.scans}
-          loading={bodyComp.loading}
-          error={bodyComp.error}
-          scansError={bodyComp.scansError}
-          onRetry={bodyComp.reload}
-        />
-      </Box>
-      )}
+        {/* Body composition — summary, change, fat/lean trend. Full only: body
+            composition is one of the things Simple keeps out of the way. */}
+        {!isSimple && (
+          <BodyCompositionSection
+            summary={bodyComp.summary}
+            scans={bodyComp.scans}
+            loading={bodyComp.loading}
+            error={bodyComp.error}
+            scansError={bodyComp.scansError}
+            onRetry={bodyComp.reload}
+          />
+        )}
 
-      {/* Quick Add Weight (desktop card; the FAB on phones) */}
-      <Box sx={{ mb: 3 }}>
-        <QuickAddWeight
-          onAdd={addWeightLog}
-          existingLogs={weightLogs}
-          unit="lbs"
-          autoOpen={autoOpenAdd}
-          onAutoOpened={clearAddParam}
-        />
+        {/* Quick Add Weight (desktop card; the FAB on phones), then the log */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: { xs: 1.75, md: 2.25 },
+            gridColumn: { md: isSimple ? '1 / -1' : 'auto' },
+          }}
+        >
+          <QuickAddWeight
+            onAdd={addWeightLog}
+            existingLogs={weightLogs}
+            unit="lbs"
+            autoOpen={autoOpenAdd}
+            onAutoOpened={clearAddParam}
+          />
+          <WeightLogList
+            logs={weightLogs}
+            onDelete={handleDelete}
+            onUpdate={updateWeightLog}
+            unit="lbs"
+          />
+        </Box>
       </Box>
-
-      {/* Weight Log List */}
-      <Box sx={{ mb: 3 }}>
-        <WeightLogList
-          logs={weightLogs}
-          onDelete={handleDelete}
-          onUpdate={updateWeightLog}
-          unit="lbs"
-        />
-      </Box>
-    </Box>
+    </Page>
   );
 };
 

@@ -2,8 +2,6 @@ import React, { useId } from 'react';
 import { Box, Button, CircularProgress, IconButton, InputAdornment, TextField, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
-  EditNote as PencilIcon,
-  Check as CheckIcon,
   Clear as ClearIcon,
   Mic as MicIcon,
   Stop as StopIcon,
@@ -66,6 +64,9 @@ const ComposerBox = ({
   statusKind = null,
   autoFocus = false,
   inputRef,
+  // The meal picker, drawn between the box and Log it (a node from the
+  // composer, which owns the meal state).
+  mealPicker = null,
 }) => {
   const theme = useTheme();
   const helperId = useId();
@@ -79,99 +80,74 @@ const ComposerBox = ({
     if (!thinking && canLog) onSubmit?.();
   };
 
+  const ink = theme.palette.text.primary;
   return (
     <Box data-testid="composer-box">
       <Typography
         id={labelId}
         component="label"
         htmlFor={`${labelId}-input`}
-        sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontSize: '1.0625rem', fontWeight: 800, color: 'text.primary', mb: 1 }}
+        sx={{ display: 'block', fontSize: '1rem', fontWeight: 700, color: 'text.primary', mb: 0.75 }}
       >
-        <PencilIcon sx={{ color: theme.palette.primary.main, fontSize: 24 }} aria-hidden />
         Tell me what you ate
       </Typography>
-      <TextField
-        fullWidth
-        multiline
-        minRows={2}
-        maxRows={5}
-        value={value}
-        onChange={onChange}
-        onKeyDown={handleKeyDown}
-        placeholder="e.g. a bowl of chicken soup and some crackers"
-        autoFocus={autoFocus}
-        inputRef={inputRef}
-        id={`${labelId}-input`}
-        {...slashFocusProps(30)}
-        InputProps={{
-          readOnly: thinking || disabled,
-          endAdornment: value && !thinking ? (
-            // MUI pins an adornment to 2em high; the 44px button overflowed
-            // upward across the box's top border.
-            <InputAdornment position="end" sx={{ alignSelf: 'flex-start', height: 'auto', maxHeight: 'none', mt: -1, mr: -1 }}>
-              <IconButton
-                aria-label="Clear what you typed"
-                onClick={() => onChange?.({ target: { value: '' } })}
-                sx={{ width: 44, height: 44, color: theme.palette.text.secondary }}
-              >
-                <ClearIcon fontSize="small" />
-              </IconButton>
-            </InputAdornment>
-          ) : null,
-        }}
-        inputProps={{
-          enterKeyHint: 'send',
-          'aria-describedby': helperId,
-          autoComplete: 'off',
-          autoCapitalize: 'sentences',
-        }}
-        sx={{
-          '& .MuiOutlinedInput-root': {
-            borderRadius: '18px',
-            fontSize: '1.125rem',
-            lineHeight: 1.45,
-            alignItems: 'flex-start',
-            py: 1.5,
-            px: 1.5,
-            color: theme.palette.text.primary,
-            backgroundColor: theme.palette.background.paper,
-            '& fieldset': { borderColor: theme.palette.divider },
-            '&:hover fieldset': { borderColor: theme.palette.primary.main },
-            '&.Mui-focused fieldset': { borderColor: theme.palette.primary.main, borderWidth: 2 },
-          },
-          '& .MuiInputBase-input': {
-            '&::placeholder': { color: theme.palette.text.secondary, opacity: 1 },
-          },
-        }}
-      />
 
-      <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
-        <Button
-          variant={quiet && !thinking ? 'outlined' : 'contained'}
-          size="large"
+      {/* The box with the mic beside it. */}
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+        <TextField
           fullWidth
-          onClick={() => { if (!thinking && canLog) onSubmit?.(); }}
-          disabled={!canLog && !thinking}
-          aria-disabled={thinking || undefined}
-          aria-busy={thinking || undefined}
-          data-testid="log-it"
-          startIcon={thinking
-            // A thicker stroke in the button's own label colour: the thin
-            // default vanished into the basil (visual review A3).
-            ? <CircularProgress size={20} thickness={5} aria-hidden sx={{ color: theme.palette.primary.contrastText }} />
-            : <CheckIcon />}
-          sx={{
-            minHeight: 56,
-            borderRadius: 999,
-            fontSize: '1.125rem',
-            fontWeight: 800,
-            boxShadow: 'none',
-            ...(quiet && !thinking ? { borderWidth: 2, '&:hover': { borderWidth: 2 } } : {}),
-            ...(thinking ? { pointerEvents: 'none' } : {}),
+          multiline
+          minRows={1}
+          maxRows={5}
+          value={value}
+          onChange={onChange}
+          onKeyDown={handleKeyDown}
+          placeholder="e.g. a bowl of chicken soup and some crackers"
+          autoFocus={autoFocus}
+          inputRef={inputRef}
+          id={`${labelId}-input`}
+          {...slashFocusProps(30)}
+          InputProps={{
+            readOnly: thinking || disabled,
+            endAdornment: value && !thinking ? (
+              // MUI pins an adornment to 2em high; the 44px button overflowed
+              // upward across the box's top border.
+              <InputAdornment position="end" sx={{ alignSelf: 'flex-start', height: 'auto', maxHeight: 'none', mt: -1, mr: -1 }}>
+                <IconButton
+                  aria-label="Clear what you typed"
+                  onClick={() => onChange?.({ target: { value: '' } })}
+                  sx={{ width: 44, height: 44, color: theme.palette.text.secondary }}
+                >
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
           }}
-        >
-          {thinking ? 'Working it out…' : quiet && value?.trim() ? `Just log ‘${value.trim()}’` : 'Log it'}
-        </Button>
+          inputProps={{
+            enterKeyHint: 'send',
+            'aria-describedby': helperId,
+            autoComplete: 'off',
+            autoCapitalize: 'sentences',
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              fontSize: '1rem',
+              lineHeight: 1.45,
+              alignItems: 'flex-start',
+              minHeight: 52,
+              py: 1.25,
+              px: 1.5,
+              color: theme.palette.text.primary,
+              backgroundColor: theme.palette.background.paper,
+              '& fieldset': { borderColor: ink, borderWidth: 1.5 },
+              '&:hover fieldset': { borderColor: ink },
+              '&.Mui-focused fieldset': { borderColor: theme.palette.primary.main, borderWidth: 2 },
+            },
+            '& .MuiInputBase-input': {
+              '&::placeholder': { color: theme.palette.text.secondary, opacity: 1 },
+            },
+          }}
+        />
         {onMicClick && (
           <IconButton
             onClick={onMicClick}
@@ -180,36 +156,67 @@ const ComposerBox = ({
             aria-pressed={listening}
             data-testid="speak-button"
             sx={{
-              width: 56,
-              height: 56,
+              width: 52,
+              height: 52,
               flexShrink: 0,
-              // A circle beside the pill (visual review B6).
+              // The one round thing on the panel: the mic.
               borderRadius: '50%',
-              border: `2px solid ${theme.palette.primary.main}`,
-              color: listening ? theme.palette.primary.contrastText : theme.palette.primary.main,
+              border: `1.5px solid ${ink}`,
+              color: listening ? theme.palette.primary.contrastText : ink,
               bgcolor: listening ? theme.palette.primary.main : 'transparent',
-              // Listening is a filled basil disc with a contrast stop glyph,
+              // Listening is a filled blue disc with a contrast stop glyph,
               // at a specificity no state style can wash out (UX review
               // 2026-11, B8: the stop square was white on near-white).
               ...(listening ? {
-                '&&': { bgcolor: theme.palette.primary.main, color: theme.palette.primary.contrastText },
+                '&&': { bgcolor: theme.palette.primary.main, color: theme.palette.primary.contrastText, borderColor: theme.palette.primary.main },
               } : {}),
-              // Off (no signal) looks off: a divider ring and a grey glyph,
-              // not the live basil ring (B8).
+              // Off (no signal) looks off: a divider ring and a grey glyph.
               '&.Mui-disabled': {
                 borderColor: theme.palette.divider,
                 color: theme.palette.text.disabled,
                 bgcolor: 'transparent',
               },
               '@media (hover: hover)': {
-                '&:hover': { bgcolor: listening ? theme.palette.primary.dark : `${theme.palette.primary.main}1a` },
+                '&:hover': { bgcolor: listening ? theme.palette.primary.dark : theme.palette.action.hover },
               },
             }}
           >
-            {listening ? <StopIcon /> : <MicIcon sx={{ fontSize: 28 }} />}
+            {listening ? <StopIcon /> : <MicIcon sx={{ fontSize: 26 }} />}
           </IconButton>
         )}
       </Box>
+
+      {mealPicker && <Box sx={{ mt: 1 }}>{mealPicker}</Box>}
+
+      <Button
+        variant={quiet && !thinking ? 'outlined' : 'contained'}
+        size="large"
+        onClick={() => { if (!thinking && canLog) onSubmit?.(); }}
+        disabled={!canLog && !thinking}
+        aria-disabled={thinking || undefined}
+        aria-busy={thinking || undefined}
+        data-testid="log-it"
+        startIcon={thinking
+          // A thicker stroke in the button's own label colour: the thin
+          // default vanished into the fill (visual review A3).
+          ? <CircularProgress size={20} thickness={5} aria-hidden sx={{ color: theme.palette.primary.contrastText }} />
+          : undefined}
+        sx={{
+          mt: 1.25,
+          // Full width on a phone; from md it is its own size, never a bar.
+          width: { xs: '100%', md: 'auto' },
+          minWidth: { md: 160 },
+          px: 4,
+          minHeight: 52,
+          fontSize: '1.0625rem',
+          fontWeight: 700,
+          boxShadow: 'none',
+          ...(quiet && !thinking ? { borderWidth: 2, '&:hover': { borderWidth: 2 } } : {}),
+          ...(thinking ? { pointerEvents: 'none' } : {}),
+        }}
+      >
+        {thinking ? 'Working it out…' : quiet && value?.trim() ? `Just log ‘${value.trim()}’` : 'Log it'}
+      </Button>
 
       {/* Always rendered, always at least one line tall: see the note above. */}
       <Typography
@@ -221,7 +228,7 @@ const ComposerBox = ({
         sx={{
           minHeight: '2.9em',
           mt: 1,
-          fontSize: '1rem',
+          fontSize: '0.9375rem',
           lineHeight: 1.45,
           color: statusTone === 'strong' || statusIcon ? 'text.primary' : 'text.secondary',
           fontWeight: statusTone === 'strong' ? 700 : 400,

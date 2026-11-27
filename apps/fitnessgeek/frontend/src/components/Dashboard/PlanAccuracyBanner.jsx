@@ -1,13 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
 import { Link as RouterLink } from 'react-router-dom';
-import {
-  ReportProblemOutlined as WarningIcon,
-  Science as ScanIcon,
-} from '@mui/icons-material';
 import { isPlanCalculationStale } from '@geeksuite/utils';
-import { Surface } from '../primitives';
 
 /**
  * The dashboard's one line about whether the calorie target can be trusted
@@ -60,15 +54,31 @@ function writeDismissed(key) {
 const fmt = (n) => Math.round(Number(n)).toLocaleString('en-US');
 
 /**
- * One sentence and one button (SIMPLE_AND_FULL_PLAN.md item 4). This banner
- * used to be a bold title plus a paragraph about "a formula error fixed on
- * Sep 20"; the job is still live — a plan saved before that fix really is
- * ~1,000 kcal high, and it is deliberately never rewritten for the person —
- * so it stays, said plainly. Formula talk belongs in the calorie plan, which
- * shows the old and new targets side by side before anything changes.
+ * One sentence and one link (SIMPLE_AND_FULL_PLAN.md item 4). The job is
+ * still live — a plan saved before the Sep 20 fix really is ~1,000 kcal high,
+ * and it is deliberately never rewritten for the person — so it stays, said
+ * plainly. Formula talk belongs in the calorie plan, which shows the old and
+ * new targets side by side before anything changes.
+ *
+ * The Label (THEME_REVIEW_2026-11): this is a footnote at the foot of the
+ * Today's Facts panel, not a banner above it — a muted sentence with its
+ * action as a blue text link, so it never pushes the meals below the fold.
+ * The stale note still announces itself (role="alert"); the scan offer is a
+ * status, and may be put off with "Not now".
  */
-export default function PlanAccuracyBanner({ nutritionGoal, scanBmr }) {
-  const theme = useTheme();
+const linkSx = {
+  minHeight: 44,
+  minWidth: 0,
+  px: 0.5,
+  py: 0,
+  fontSize: 'inherit',
+  fontWeight: 700,
+  textTransform: 'none',
+  verticalAlign: 'baseline',
+  '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
+};
+
+export default function PlanAccuracyBanner({ nutritionGoal, scanBmr, sx }) {
   const kind = planBannerKind(nutritionGoal, scanBmr);
   const key = kind === 'scan' ? planKey(nutritionGoal) : null;
   const [dismissedKey, setDismissedKey] = useState(null);
@@ -77,36 +87,34 @@ export default function PlanAccuracyBanner({ nutritionGoal, scanBmr }) {
   if (kind === 'scan' && (dismissedKey === key || readDismissed(key))) return null;
 
   const stale = kind === 'stale';
-  // One colour per job (visual review B2): the semantic warning / info
-  // tones, not the dinner lemon and lunch leaf, which mean meals.
-  const accent = stale ? theme.palette.warning.main : theme.palette.info.main;
-  const Icon = stale ? WarningIcon : ScanIcon;
 
   return (
-    <Surface
+    <Box
       role={stale ? 'alert' : 'status'}
       data-testid="plan-accuracy-banner"
       data-kind={kind}
-      sx={{ borderLeft: `8px solid ${accent}`, py: 1.75 }}
+      sx={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        columnGap: 0.5,
+        fontSize: '0.875rem',
+        lineHeight: 1.4,
+        color: 'text.secondary',
+        ...sx,
+      }}
     >
-      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Icon sx={{ color: 'text.secondary', fontSize: 24, flexShrink: 0 }} aria-hidden />
-        <Typography sx={{ flex: '1 1 14rem', fontWeight: 700, color: 'text.primary', fontSize: '1.0625rem', lineHeight: 1.4 }}>
-          {stale
-            ? 'Your daily calorie target is probably too high.'
-            : `Your body scans say you burn ${fmt(scanBmr.bmr)} calories a day at rest (BMR). Your plan uses ${fmt(nutritionGoal.bmr)}.`}
-        </Typography>
-        <Button
-          component={RouterLink}
-          to={WIZARD_ROUTE}
-          variant="outlined"
-          sx={{ minHeight: 48, flexShrink: 0 }}
-        >
+      <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'inherit', fontWeight: stale ? 700 : 400 }}>
+        {stale
+          ? 'Your daily calorie target is probably too high.'
+          : `Your body scans say you burn ${fmt(scanBmr.bmr)} calories a day at rest (BMR). Your plan uses ${fmt(nutritionGoal.bmr)}.`}
+      </Typography>
+      <Box component="span" sx={{ display: 'inline-flex', gap: 1 }}>
+        <Button component={RouterLink} to={WIZARD_ROUTE} variant="text" sx={linkSx}>
           Review my plan
         </Button>
-        {/* One shape for both banners (review §2.7): an outlined "Review my
-            plan" and, where it may be put off, a "Not now" — never an
-            unlabelled ✕. The stale banner stays undismissable (see above). */}
+        {/* Where it may be put off, a "Not now" — never an unlabelled ✕.
+            The stale note stays undismissable (see above). */}
         {!stale && (
           <Button
             variant="text"
@@ -114,12 +122,12 @@ export default function PlanAccuracyBanner({ nutritionGoal, scanBmr }) {
               writeDismissed(key);
               setDismissedKey(key);
             }}
-            sx={{ minHeight: 48, flexShrink: 0, color: 'text.secondary' }}
+            sx={{ ...linkSx, color: 'text.secondary' }}
           >
             Not now
           </Button>
         )}
       </Box>
-    </Surface>
+    </Box>
   );
 }

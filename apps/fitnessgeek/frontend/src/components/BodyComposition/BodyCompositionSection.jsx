@@ -1,57 +1,53 @@
-import React, { lazy } from 'react';
-import { Box, Button, Typography } from '@mui/material';
-import { Accessibility as BodyIcon } from '@mui/icons-material';
+import React, { lazy, Suspense } from 'react';
+import { Box, Button, Skeleton, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
-import { Surface, DisplayHeading, EmptyState, SurfaceSkeleton, SuspenseSurface } from '../primitives';
+import { LabelPanel, Rule } from '../primitives';
 import BodyCompSummaryCard from './BodyCompSummaryCard.jsx';
 import BodyCompChangeCard from './BodyCompChangeCard.jsx';
 
 // The fat/lean chart is the only part of this section that needs Nivo; the
-// cards above it paint first and the boundary reserves the chart's height.
+// rows above it paint first and the boundary reserves the chart's height.
 const BodyCompTrend = lazy(() => import('./BodyCompTrend.jsx'));
 
 /**
  * The body-composition half of "Weight & body" (FITNESSGEEK_BODY_DATA_PLAN D6).
  *
+ * One level-2 label panel: the figures as rows (two columns on a phone),
+ * ink rules between the summary, the change and the trend — no boxes inside
+ * the panel.
+ *
  * It owns its own loading, error and empty states so that nothing here can
  * take the weight half of the page down with it: `useBodyComp` is a separate
- * hook from `useWeight`, and a failed body-comp query ends in an error card
+ * hook from `useWeight`, and a failed body-comp query ends in an error state
  * inside this section, not a blank page.
  */
 const BodyCompositionSection = ({ summary, scans = [], loading, error, scansError, onRetry }) => {
   // "Add a scan" sits where the scans are (review IA-5); the empty state has
   // its own Import button, so the header only offers it once there are some.
-  const header = (
-    <Box sx={{ mb: 2, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-      <Box>
-        <DisplayHeading size="card">What your weight is made of</DisplayHeading>
-      </Box>
-      {summary?.total_scans > 0 && !error && (
-        <Button
-          component={RouterLink}
-          to="/scan-import"
-          variant="text"
-          data-testid="add-a-scan"
-          sx={{ minHeight: 44, fontWeight: 700, textTransform: 'none' }}
-        >
-          Add a scan
-        </Button>
-      )}
-    </Box>
-  );
+  const addScan = summary?.total_scans > 0 && !error ? (
+    <Button
+      component={RouterLink}
+      to="/scan-import"
+      variant="text"
+      data-testid="add-a-scan"
+      sx={{ minHeight: 44, px: 0, fontWeight: 700, color: 'primary.main' }}
+    >
+      Add a scan
+    </Button>
+  ) : null;
 
   let body;
   if (loading && !summary) {
     body = (
-      <Box sx={{ display: 'grid', gap: 2 }}>
-        <SurfaceSkeleton rows={3} />
-        <SurfaceSkeleton rows={2} />
+      <Box sx={{ pt: 1.5 }} aria-busy="true">
+        <Skeleton variant="rectangular" height={64} sx={{ mb: 1.5 }} />
+        <Skeleton variant="rectangular" height={120} />
       </Box>
     );
   } else if (error) {
     body = (
-      <Surface role="alert">
-        <Typography sx={{ color: 'text.primary', fontWeight: 600, mb: 0.5 }}>
+      <Box role="alert" sx={{ pt: 1.5 }}>
+        <Typography sx={{ color: 'text.primary', fontWeight: 700, mb: 0.5 }}>
           Your scans didn&rsquo;t load.
         </Typography>
         <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', mb: 1.5 }}>
@@ -62,46 +58,50 @@ const BodyCompositionSection = ({ summary, scans = [], loading, error, scansErro
             Try again
           </Button>
         )}
-      </Surface>
+      </Box>
     );
   } else if (!summary?.total_scans) {
     body = (
-      <EmptyState
-        icon={BodyIcon}
-        title="No scans yet"
-        copy="Scans arrive on their own when your scale&rsquo;s export lands in the Nextcloud folder, or you can import one yourself."
-        action={
-          <Button component={RouterLink} to="/scan-import" variant="contained" sx={{ minHeight: 44 }}>
-            Import a scan
-          </Button>
-        }
-      />
+      <Box sx={{ pt: 1.5 }}>
+        <Typography sx={{ fontWeight: 800, fontSize: '1.25rem', lineHeight: 1.2 }}>No scans yet</Typography>
+        <Typography sx={{ color: 'text.secondary', mt: 0.5, mb: 1.5 }}>
+          Scans arrive on their own when your scale&rsquo;s export lands in the Nextcloud folder, or you can import one yourself.
+        </Typography>
+        <Button component={RouterLink} to="/scan-import" variant="outlined" sx={{ minHeight: 44 }}>
+          Import a scan
+        </Button>
+      </Box>
     );
   } else {
     body = (
-      <Box sx={{ display: 'grid', gap: 2 }}>
+      <>
         <BodyCompSummaryCard summary={summary} />
         <BodyCompChangeCard summary={summary} />
+        <Rule weight="medium" sx={{ mt: 2 }} />
         {scansError ? (
-          <Surface>
-            <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-              The trend chart couldn&rsquo;t load its scan history.
-            </Typography>
-          </Surface>
+          <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', pt: 1.5 }}>
+            The trend chart couldn&rsquo;t load its scan history.
+          </Typography>
         ) : (
-          <SuspenseSurface rows={4} height={340}>
+          <Suspense fallback={<Skeleton variant="rectangular" height={340} sx={{ mt: 1.5 }} />}>
             <BodyCompTrend scans={scans} />
-          </SuspenseSurface>
+          </Suspense>
         )}
-      </Box>
+      </>
     );
   }
 
   return (
-    <Box component="section" aria-label="What your weight is made of" id="body-composition">
-      {header}
+    <LabelPanel
+      component="section"
+      aria-label="What your weight is made of"
+      id="body-composition"
+      title="What your weight is made of"
+      titleComponent="h3"
+      action={addScan}
+    >
       {body}
-    </Box>
+    </LabelPanel>
   );
 };
 

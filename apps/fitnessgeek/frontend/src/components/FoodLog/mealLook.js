@@ -31,6 +31,7 @@ export function mealLook(mealType, theme) {
     badge: produce.fill,
     badgeInk: produce.ink,
     headerBg: produce.tint,
+    text: produce.text,
     edge: produce.fill,
   };
 }

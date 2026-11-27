@@ -1,16 +1,16 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
-import { SectionLabel, Surface } from '../primitives';
+import { LabelPanel, Tag } from '../primitives';
 
 /**
  * DayRibbon — horizontal-scroll ribbon of day cards for Reports.
  *
  * Each day is a small card: the day and date, the calories, one line of
  * macros in words ("P 165 · C 141 · F 70 g") and, when there's a target, a
- * status word. Only an over day gets a coloured edge — the plate's plum, the
- * same edge Home draws round a full plate. The word carries the meaning; the
- * colour only points at it (UX review 2026-10-17, D-8).
+ * status Tag. The Label: square cards with a 1px ink edge; an over day's Tag is
+ * filled ink, the others are outlined. The word carries the meaning (UX
+ * review 2026-10-17, D-8).
  *
  * Newest day first. The ribbon used to start scrolled to its right-hand end,
  * which on a phone left the first visible card cut in half at the left edge
@@ -52,11 +52,8 @@ export function macroLine(day) {
 
 const DayCard = ({ day, calorieTarget }) => {
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   const ink = theme.palette.text.primary;
   const muted = theme.palette.text.secondary;
-  // The plate's over edge (PlateRing): plum, never red.
-  const overEdge = theme.palette.produce?.snack?.text || theme.palette.secondary.main;
 
   const { dayOfWeek, date } = formatDate(day.date);
   const calories = Math.round(day.calories || 0);
@@ -72,18 +69,14 @@ const DayCard = ({ day, calorieTarget }) => {
         position: 'relative',
         flexShrink: 0,
         width: { xs: 140, sm: 152 },
-        borderRadius: '14px',
-        backgroundColor: isDark ? alpha(ink, 0.04) : theme.palette.background.paper,
-        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 0,
+        backgroundColor: theme.palette.background.paper,
+        border: `1px solid ${ink}`,
         p: { xs: 1.5, sm: 1.75 },
-        ...(status?.over && {
-          borderTop: `3px solid ${overEdge}`,
-          paddingTop: '10px',
-        }),
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75, mb: 1 }}>
-        <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, color: ink, lineHeight: 1 }}>
+        <Typography sx={{ fontSize: '1.125rem', fontWeight: 800, color: ink, lineHeight: 1 }}>
           {dayOfWeek}
         </Typography>
         <Typography sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.75rem', fontWeight: 600, color: muted }}>
@@ -94,7 +87,7 @@ const DayCard = ({ day, calorieTarget }) => {
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, mb: 0.75 }}>
         <Typography
           component="span"
-          sx={{ fontVariantNumeric: 'tabular-nums', fontSize: { xs: '1.75rem', sm: '2rem' }, fontWeight: 600, lineHeight: 1, letterSpacing: '-0.02em', color: ink }}
+          sx={{ fontVariantNumeric: 'tabular-nums', fontSize: { xs: '1.75rem', sm: '2rem' }, fontWeight: 900, lineHeight: 1, letterSpacing: '-0.02em', color: ink }}
         >
           {commas(calories)}
         </Typography>
@@ -108,12 +101,15 @@ const DayCard = ({ day, calorieTarget }) => {
       </Typography>
 
       {status && (
-        <Typography
-          data-testid="day-status"
-          sx={{ fontSize: '0.8125rem', fontWeight: status.over ? 700 : 600, color: status.over ? ink : muted, mt: 0.5 }}
-        >
-          {status.label}
-        </Typography>
+        <Box component="span" data-testid="day-status" sx={{ display: 'block', mt: 0.75 }}>
+          <Tag
+            sx={status.over
+              ? {}
+              : { bgcolor: 'transparent', color: 'text.primary', boxShadow: `inset 0 0 0 1px ${ink}` }}
+          >
+            {status.label}
+          </Tag>
+        </Box>
       )}
     </Box>
   );
@@ -124,40 +120,21 @@ const DayRibbon = ({ daily = [], calorieTarget, rangeLabel }) => {
 
   if (!daily || daily.length === 0) {
     return (
-      <Surface>
-        <SectionLabel sx={{ mb: 1.5 }}>Each day</SectionLabel>
+      <LabelPanel title="Each day">
         <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', py: 2, textAlign: 'center' }}>
           No food logs in this range.
         </Typography>
-      </Surface>
+      </LabelPanel>
     );
   }
 
   const newestFirst = [...daily].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   return (
-    <Surface padded={false}>
-      <Box
-        sx={{
-          px: { xs: 2, sm: 2.5 },
-          pt: 2,
-          pb: 1.25,
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          columnGap: 2,
-          borderBottom: `1px dashed ${theme.palette.divider}`,
-        }}
-      >
-        <SectionLabel>{`Each day (${daily.length} logged)`}</SectionLabel>
-        {rangeLabel && (
-          <Typography data-testid="day-ribbon-range" sx={{ fontSize: '0.8125rem', fontWeight: 600, color: 'text.secondary' }}>
-            {rangeLabel}
-          </Typography>
-        )}
-      </Box>
-
+    <LabelPanel
+      title={`Each day (${daily.length} logged)`}
+      metaRight={rangeLabel ? <span data-testid="day-ribbon-range">{rangeLabel}</span> : undefined}
+    >
       <Box
         component="ul"
         // A horizontally scrolling strip must be reachable by keyboard, or its
@@ -170,16 +147,15 @@ const DayRibbon = ({ daily = [], calorieTarget, rangeLabel }) => {
           display: 'flex',
           gap: 1.25,
           m: 0,
-          px: { xs: 2, sm: 2.5 },
-          py: 2,
+          py: 1.5,
+          px: 0,
           overflowX: 'auto',
           overflowY: 'hidden',
           scrollSnapType: 'x proximity',
-          scrollPaddingInline: { xs: 16, sm: 20 },
           '&::-webkit-scrollbar': { height: 6 },
           '&::-webkit-scrollbar-thumb': {
-            background: alpha(theme.palette.text.primary, 0.2),
-            borderRadius: 3,
+            background: alpha(theme.palette.text.primary, 0.3),
+            borderRadius: 0,
           },
           '& > *': { scrollSnapAlign: 'start' },
         }}
@@ -188,7 +164,7 @@ const DayRibbon = ({ daily = [], calorieTarget, rangeLabel }) => {
           <DayCard key={day.date} day={day} calorieTarget={calorieTarget} />
         ))}
       </Box>
-    </Surface>
+    </LabelPanel>
   );
 };
 

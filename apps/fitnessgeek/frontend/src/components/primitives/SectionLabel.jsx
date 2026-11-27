@@ -5,9 +5,8 @@ import { useTheme } from '@mui/material/styles';
 /**
  * SectionLabel — the small heading over a group of things.
  *
- * Sentence case, bold, muted. Market Morning retired the ALL-CAPS tracked
- * tick labels (SIMPLE_AND_FULL_PLAN.md: "All-caps monospace labels"): a
- * label is a word to read, not a stamp.
+ * The Label: heavy Archivo, sentence case, tight line. A label is a word to
+ * read, not a stamp, and has no ornament.
  *
  * Variants:
  *  - "default" : muted text color, used for minor hints
@@ -40,7 +39,7 @@ const SectionLabel = ({
           sx={{
             width: 6,
             height: 6,
-            borderRadius: '50%',
+            borderRadius: 0,
             backgroundColor: dot === true ? theme.palette.primary.main : dot,
             flexShrink: 0,
           }}
@@ -52,9 +51,9 @@ const SectionLabel = ({
           fontFamily: "inherit",
           fontSize: '0.9375rem',
           fontWeight: 800,
-          letterSpacing: 0,
+          letterSpacing: '-0.005em',
           color,
-          lineHeight: 1.3,
+          lineHeight: 1.2,
         }}
       >
         {children}

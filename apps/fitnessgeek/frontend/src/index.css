@@ -1,22 +1,22 @@
 /* CSS Custom Properties — aligned with MUI theme (theme.jsx) */
 :root {
   color-scheme: light;
-  /* Market Morning, light — aligned with theme/theme.jsx */
-  --primary-color: #2F6B35;
-  --primary-hover: #24522A;
-  --secondary-color: #8A5A3C;
-  --success-color: #2F7D32;
-  --error-color: #B3261E;
-  --warning-color: #9A5B00;
-  --info-color: #2A5F8F;
-  --bg-color: #FFF8EC;
-  --card-bg: #FFFEFB;
-  --text-primary: #2A2118;
-  --text-secondary: #5C4B3B;
-  --border-color: #EFE3CF;
-  --shadow: 0 1px 2px rgba(92, 64, 32, 0.06);
-  --shadow-lg: 0 12px 28px -20px rgba(92, 64, 32, 0.28);
-  --shadow-card: 0 1px 2px rgba(92, 64, 32, 0.06), 0 12px 28px -20px rgba(92, 64, 32, 0.28);
+  /* The Label, light — aligned with theme/theme.jsx */
+  --primary-color: #1F3FD1;
+  --primary-hover: #1630A8;
+  --secondary-color: #111318;
+  --success-color: #0B7A3B;
+  --error-color: #C81E1E;
+  --warning-color: #9A5200;
+  --info-color: #1F3FD1;
+  --bg-color: #ECEEF2;
+  --card-bg: #FFFFFF;
+  --text-primary: #111318;
+  --text-secondary: #3D414B;
+  --border-color: #C9CCD3;
+  --shadow: none;
+  --shadow-lg: none;
+  --shadow-card: none;
   /* Safe area defaults */
   --safe-area-inset-top: 0px;
   --safe-area-inset-right: 0px;
@@ -42,22 +42,22 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  /* Market Morning, night — the same kitchen with the lamp on */
-  --primary-color: #8BCB7E;
-  --primary-hover: #A9DA9E;
-  --secondary-color: #D9A77F;
-  --success-color: #8BCB7E;
-  --error-color: #FF9A8A;
+  /* The Label, night */
+  --primary-color: #8FA6FF;
+  --primary-hover: #B3C2FF;
+  --secondary-color: #F2F2EE;
+  --success-color: #8FA6FF;
+  --error-color: #FF8A80;
   --warning-color: #F2B45A;
-  --info-color: #8CC4F0;
-  --bg-color: #1B1612;
-  --card-bg: #262019;
-  --text-primary: #F7EDE0;
-  --text-secondary: #D6C6B3;
-  --border-color: #3D3228;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 28px -18px rgba(0, 0, 0, 0.8);
-  --shadow-card: 0 10px 28px -18px rgba(0, 0, 0, 0.8);
+  --info-color: #8FA6FF;
+  --bg-color: #0E0F12;
+  --card-bg: #17181C;
+  --text-primary: #F2F2EE;
+  --text-secondary: #C4C7CF;
+  --border-color: #3A3D46;
+  --shadow: none;
+  --shadow-lg: none;
+  --shadow-card: none;
 }
 
 /* Reset and base styles */
@@ -69,7 +69,7 @@
 
 html, body {
   height: 100%;
-  font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Archivo', 'Helvetica Neue', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-variant-numeric: tabular-nums;
   background-color: var(--bg-color);
   color: var(--text-primary);

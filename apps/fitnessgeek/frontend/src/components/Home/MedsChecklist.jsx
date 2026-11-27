@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Button, ButtonBase, Typography, Alert } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
+import { Rule } from '../primitives';
 import { Check as CheckIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -18,22 +19,25 @@ import { Link as RouterLink } from 'react-router-dom';
  */
 export default function MedsChecklist({ items = [], taken = 0, total = 0, onToggle, saving, error, unknown = false, ticksError = null, onRetry, title = 'Did you take your meds?' }) {
   const theme = useTheme();
-  // Taken is the app's "done" look: basil at 8% with a basil edge and a
-  // basil tick (visual review B2) — leaf is Lunch's colour.
-  const basil = theme.palette.primary.main;
+  // Taken is the app's "done" look: a filled blue tick box beside the
+  // name. The row itself stays plain paper with a hairline under it, like
+  // a row on a label; no tinted boxes in the panel.
+  const blue = theme.palette.primary.main;
 
   return (
     <Box component="section" aria-labelledby="meds-checklist-title" data-testid="meds-checklist">
-      <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, mb: 1.5 }}>
-        <Typography id="meds-checklist-title" component="h2" sx={{ fontSize: '1.375rem', fontWeight: 800 }}>
+      {/* A level-2 label title: heavy words, the count right, a medium rule. */}
+      <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2 }}>
+        <Typography id="meds-checklist-title" component="h2" sx={{ fontSize: '1.375rem', fontWeight: 900, lineHeight: 1.1 }}>
           {title}
         </Typography>
         {total > 0 && !unknown && (
-          <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: 'text.secondary', whiteSpace: 'nowrap' }}>
+          <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
             {taken} of {total}
           </Typography>
         )}
       </Box>
+      <Rule weight="medium" sx={{ mt: 0.75, mb: 0.5 }} />
 
       {unknown && total > 0 ? (
         <Alert
@@ -46,13 +50,13 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
       ) : total === 0 ? (
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
           No meds added yet.{' '}
-          <Box component={RouterLink} to="/medications" sx={{ color: 'primary.main', fontWeight: 800 }}>
+          <Box component={RouterLink} to="/medications" sx={{ color: 'primary.main', fontWeight: 700 }}>
             Add one
           </Box>
         </Typography>
       ) : (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {items.map((item) => (
+        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+          {items.map((item, i) => (
             <ButtonBase
               key={item.key}
               role="checkbox"
@@ -67,13 +71,11 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
                 justifyContent: 'flex-start',
                 gap: 2,
                 minHeight: 64,
-                px: 2,
-                borderRadius: '20px',
+                py: 1,
                 textAlign: 'left',
-                bgcolor: item.taken ? alpha(basil, 0.08) : theme.palette.background.paper,
-                border: `1px solid ${item.taken ? basil : theme.palette.divider}`,
-                '@media (hover: hover)': { '&:hover': { bgcolor: item.taken ? alpha(basil, 0.08) : alpha(theme.palette.text.primary, 0.03) } },
-                '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+                borderTop: i === 0 ? 0 : `1px solid ${theme.palette.divider}`,
+                '@media (hover: hover)': { '&:hover': { bgcolor: alpha(theme.palette.text.primary, 0.03) } },
+                '&:focus-visible': { outline: `3px solid ${blue}`, outlineOffset: 2 },
               }}
             >
               <Box
@@ -81,19 +83,19 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
                 sx={{
                   width: 40,
                   height: 40,
-                  borderRadius: '12px',
+                  borderRadius: '4px',
                   flexShrink: 0,
                   display: 'grid',
                   placeItems: 'center',
-                  bgcolor: item.taken ? basil : 'transparent',
+                  bgcolor: item.taken ? blue : 'transparent',
                   color: theme.palette.primary.contrastText,
-                  border: item.taken ? 'none' : `2.5px solid ${theme.palette.text.secondary}`,
+                  border: item.taken ? `2.5px solid ${blue}` : `2.5px solid ${theme.palette.text.primary}`,
                 }}
               >
                 {item.taken && <CheckIcon sx={{ fontSize: 28 }} />}
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ fontSize: '1.125rem', fontWeight: 800, color: 'text.primary', lineHeight: 1.25 }}>
+                <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, color: 'text.primary', lineHeight: 1.25 }}>
                   {item.name}
                 </Typography>
                 {item.slotLabel && (

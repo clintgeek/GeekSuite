@@ -2,35 +2,21 @@ import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Grid,
   CircularProgress,
   Button,
-  Chip,
-  LinearProgress,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   DirectionsWalk as StepsIcon,
-  LocalFireDepartment as FireIcon,
-  Bedtime as SleepIcon,
-  Favorite as HeartIcon,
   FitnessCenter as WorkoutIcon,
   DirectionsRun as RunIcon,
   DirectionsBike as BikeIcon,
   Pool as SwimIcon,
   SportsGymnastics as GymIcon,
-  AccessTime as TimeIcon,
-  TrendingUp as TrendIcon,
-  NightsStay as DeepSleepIcon,
-  WbTwilight as LightSleepIcon,
-  Psychology as RemIcon,
-  Visibility as AwakeIcon,
 } from '@mui/icons-material';
-import { alpha } from '@mui/material/styles';
-import { GeekEmptyState, GeekErrorState, toneForMode } from '@geeksuite/ui';
+import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
 import { fitnessGeekService } from '../services/fitnessGeekService';
-import { Surface, SectionLabel, DisplayHeading, StatNumber, EmptyState } from '../components/primitives';
+import { DisplayHeading, StatNumber, EmptyState, LabelPanel, FactHeadline, FactRow, Rule, ListRow, Page } from '../components/primitives';
 import { localDateString } from '@geeksuite/utils';
 import { errorMessage } from '../utils/errorMessage.js';
 import { nearDay, clockTime } from '../utils/dates.js';
@@ -42,132 +28,40 @@ const whenWords = (instant) => {
   return `${day === 'Today' || day === 'Yesterday' ? day.toLowerCase() : day} at ${clockTime(instant)}`;
 };
 
-/**
- * Duration-formatted sleep tile. Renders "Nh Mm" in mono.
- */
-const SleepStageTile = ({ icon: Icon, minutes = 0, label, color }) => {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  const theme = useTheme();
-  const textColor = toneForMode(color, theme, { lightenBy: 0, darkenBy: 0.35 });
-  return (
-    <Box
-      sx={{
-        textAlign: 'center',
-        p: 1.75,
-        borderRadius: '16px',
-        backgroundColor: (t) => alpha(color, t.palette.mode === 'dark' ? 0.12 : 0.08),
-        border: (t) => `1px solid ${alpha(color, t.palette.mode === 'dark' ? 0.22 : 0.14)}`,
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 0.75,
-      }}
-    >
-      {Icon && <Icon sx={{ color, fontSize: 22 }} />}
-      <Typography
-        sx={{
-          fontFamily: "inherit",
-          fontVariantNumeric: 'tabular-nums',
-          fontSize: '1.125rem',
-          fontWeight: 600,
-          color: textColor,
-          lineHeight: 1,
-          letterSpacing: '-0.02em',
-        }}
-      >
-        {hours > 0 ? `${hours}h ` : ''}
-        {mins}m
-      </Typography>
-      <Typography
-        sx={{
-          fontSize: '0.75rem',
-          fontWeight: 700,
-          color: 'text.secondary',
-        }}
-      >
-        {label}
-      </Typography>
-    </Box>
-  );
-};
+/** "7h 4m" from minutes. */
+const hm = (minutes = 0) => `${minutes >= 60 ? `${Math.floor(minutes / 60)}h ` : ''}${minutes % 60}m`;
 
-/**
- * Small tile helper for health-metric grids.
- * Renders value as mono text directly so non-numeric prefixes like "+" are preserved.
- */
-const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
-  const theme = useTheme();
-  const textColor = toneForMode(color, theme, { lightenBy: 0, darkenBy: 0.35 });
-  return (
-    <Box
-      sx={{
-        textAlign: 'center',
-        p: 1.75,
-        borderRadius: '16px',
-        backgroundColor: (t) => alpha(color, t.palette.mode === 'dark' ? 0.12 : 0.08),
-        border: (t) => `1px solid ${alpha(color, t.palette.mode === 'dark' ? 0.2 : 0.14)}`,
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 0.5,
-      }}
-    >
-      {Icon && <Icon sx={{ color, fontSize: 22 }} />}
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.375 }}>
-        <Typography
-          sx={{
-            fontFamily: "inherit",
-            fontVariantNumeric: 'tabular-nums',
-            fontSize: '1.125rem',
-            fontWeight: 600,
-            color: textColor,
-            lineHeight: 1,
-            letterSpacing: '-0.02em',
-          }}
-        >
-          {value ?? '—'}
-        </Typography>
-        {unit && (
-          <Typography
-            sx={{
-              fontFamily: "inherit",
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              color: 'text.secondary',
-            }}
-          >
-            {unit}
-          </Typography>
-        )}
-      </Box>
-      <Typography
-        sx={{
-          fontSize: '0.75rem',
-          fontWeight: 700,
-          color: 'text.secondary',
-        }}
-      >
-        {label}
-      </Typography>
-      {subtext && (
-        <Typography
-          sx={{
-            fontFamily: "inherit",
-            fontSize: '0.75rem',
-            // Readable on the tinted tiles in both modes (text.disabled
-            // measured 3.97:1 at night).
-            color: 'text.secondary',
-          }}
-        >
-          {subtext}
-        </Typography>
-      )}
-    </Box>
-  );
-};
+/** A run of headline numbers separated by ink rules: a name over a heavy
+ * number, no box around each. `cols` is the column count from `sm` up; a
+ * phone gets two. */
+const StatGrid = ({ children, cols = 4 }) => (
+  <Box
+    sx={{
+      display: 'grid',
+      gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: `repeat(${cols}, minmax(0, 1fr))` },
+      mt: 1,
+    }}
+  >
+    {children}
+  </Box>
+);
+
+/** One headline number in a StatGrid. */
+const Headline = ({ label, value, unit, index = 0, cols = 4 }) => (
+  <Box
+    sx={{
+      py: 1.25,
+      pr: 1.5,
+      pl: { xs: index % 2 ? 1.5 : 0, sm: index % cols ? 1.5 : 0 },
+      borderTop: (t) => (index >= 2 ? `1px solid ${t.palette.divider}` : 0),
+      borderLeft: (t) => ({ xs: index % 2 ? `1px solid ${t.palette.text.primary}` : 0, sm: index % cols ? `1px solid ${t.palette.text.primary}` : 0 }),
+      minWidth: 0,
+    }}
+  >
+    <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>{label}</Typography>
+    <StatNumber value={value} unit={unit} size="display" />
+  </Box>
+);
 
 // Activity type icons
 const activityIcons = {
@@ -184,167 +78,44 @@ const getActivityIcon = (type) => {
   return activityIcons[normalizedType] || activityIcons.default;
 };
 
-// Local stat card — uses Surface + StatNumber primitives. Separate from the
-// shared Dashboard/StatCard because this one has a left-aligned icon block.
-const StatCard = ({ icon: Icon, label, value, unit, color, subtitle }) => {
-  return (
-    <Surface sx={{ height: '100%' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: subtitle ? 2 : 0, gap: 1.5 }}>
-        <Box
-          sx={{
-            bgcolor: `${color}20`,
-            color,
-            width: 44,
-            height: 44,
-            borderRadius: 2,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <Icon sx={{ fontSize: 24 }} />
-        </Box>
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <SectionLabel sx={{ mb: 0.5 }}>{label}</SectionLabel>
-          <StatNumber value={value} unit={unit} size="display" />
-        </Box>
-      </Box>
-      {subtitle && (
-        <Typography
-          sx={{
-            fontSize: '0.75rem',
-            color: 'text.secondary',
-            mt: 1,
-          }}
-        >
-          {subtitle}
-        </Typography>
-      )}
-    </Surface>
-  );
-};
-
-const ActivityCard = ({ activity }) => {
-  const theme = useTheme();
+const ActivityCard = ({ activity, first }) => {
   const Icon = getActivityIcon(activity.activityType);
   const duration = activity.duration ? Math.round(activity.duration / 60) : null;
   const distance = activity.distance ? (activity.distance / 1000).toFixed(2) : null;
+  const facts = [
+    duration != null && `${duration} min`,
+    distance && `${distance} km`,
+    activity.averageHR && `${activity.averageHR} bpm avg`,
+  ].filter(Boolean);
 
   return (
-    <Surface sx={{ mb: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1 }}>
-          <Box
-            sx={{
-              bgcolor: theme.palette.primary.main + '20',
-              color: theme.palette.primary.main,
-              width: 44,
-              height: 44,
-              borderRadius: 2,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mr: 2,
-              flexShrink: 0,
-            }}
-          >
-            <Icon sx={{ fontSize: 24 }} />
-          </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography
-              sx={{
-                fontFamily: "inherit",
-                fontSize: '1.25rem',
-                fontWeight: 400,
-                color: 'text.primary',
-                letterSpacing: '-0.01em',
-                lineHeight: 1.2,
-                textTransform: 'capitalize',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {activity.activityName || activity.activityType || 'Activity'}
-            </Typography>
-            <Typography
-              sx={{
-                fontFamily: "inherit",
-                fontSize: '0.75rem',
-                color: 'text.secondary',
-                mt: 0.25,
-                letterSpacing: '0.02em',
-              }}
-            >
-              {activity.startTimeLocal ? `${nearDay(activity.startTimeLocal)} at ${clockTime(activity.startTimeLocal)}` : 'Time not known'}
-            </Typography>
-          </Box>
-        </Box>
-        {activity.calories != null && (
-          <Chip
-            icon={<FireIcon sx={{ fontSize: 16 }} />}
-            label={`${fmt(activity.calories)} cal`}
-            size="small"
-            variant="tag"
-            sx={{ flexShrink: 0 }}
-          />
+    <ListRow first={first} sx={{ alignItems: 'flex-start', py: 1.5 }}>
+      <Icon sx={{ fontSize: 24, color: 'text.primary', mt: 0.25, flexShrink: 0 }} />
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography
+          sx={{ fontSize: '1.0625rem', fontWeight: 700, lineHeight: 1.25, textTransform: 'capitalize', overflowWrap: 'anywhere' }}
+        >
+          {activity.activityName || activity.activityType || 'Activity'}
+        </Typography>
+        <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.25 }}>
+          {activity.startTimeLocal ? `${nearDay(activity.startTimeLocal)} at ${clockTime(activity.startTimeLocal)}` : 'Time not known'}
+        </Typography>
+        {facts.length > 0 && (
+          <Typography sx={{ fontSize: '0.9375rem', mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
+            {facts.join(' · ')}
+          </Typography>
         )}
       </Box>
-
-      <Box sx={{ display: 'flex', gap: 3, mt: 2, flexWrap: 'wrap' }}>
-        {duration != null && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <TimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-            <Typography
-              sx={{
-                fontFamily: "inherit",
-                fontVariantNumeric: 'tabular-nums',
-                fontSize: '0.8125rem',
-                color: 'text.secondary',
-              }}
-            >
-              {duration} min
-            </Typography>
-          </Box>
-        )}
-        {distance && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <TrendIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-            <Typography
-              sx={{
-                fontFamily: "inherit",
-                fontVariantNumeric: 'tabular-nums',
-                fontSize: '0.8125rem',
-                color: 'text.secondary',
-              }}
-            >
-              {distance} km
-            </Typography>
-          </Box>
-        )}
-        {activity.averageHR && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <HeartIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-            <Typography
-              sx={{
-                fontFamily: "inherit",
-                fontVariantNumeric: 'tabular-nums',
-                fontSize: '0.8125rem',
-                color: 'text.secondary',
-              }}
-            >
-              {activity.averageHR} bpm avg
-            </Typography>
-          </Box>
-        )}
-      </Box>
-    </Surface>
+      {activity.calories != null && (
+        <Typography sx={{ fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
+          {`${fmt(activity.calories)} cal`}
+        </Typography>
+      )}
+    </ListRow>
   );
 };
 
 const Activity = () => {
-  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [garminNotEnabled, setGarminNotEnabled] = useState(false);
@@ -423,10 +194,29 @@ const Activity = () => {
     );
   }
 
+  const sleepFacts = sleepData && [
+    sleepData.deepSleepMinutes != null && ['Deep', hm(sleepData.deepSleepMinutes)],
+    sleepData.lightSleepMinutes != null && ['Light', hm(sleepData.lightSleepMinutes)],
+    sleepData.remSleepMinutes != null && ['REM', hm(sleepData.remSleepMinutes)],
+    sleepData.awakeSleepMinutes != null && ['Awake', hm(sleepData.awakeSleepMinutes)],
+  ].filter(Boolean);
+  const overnight = sleepData && [
+    sleepData.avgSpO2 && ['Avg SpO₂', `${sleepData.avgSpO2}%`, sleepData.minSpO2 ? `Low: ${sleepData.minSpO2}%` : null],
+    sleepData.avgOvernightHrv && ['Heart-rate variability (HRV)', `${sleepData.avgOvernightHrv} ms`, sleepData.hrvStatus || null],
+    sleepData.avgRespiration && ['Breaths a minute', `${Math.round(sleepData.avgRespiration * 10) / 10}`,
+      sleepData.minRespiration && sleepData.maxRespiration ? `${sleepData.minRespiration}–${sleepData.maxRespiration}` : null],
+    sleepData.bodyBatteryChange != null && ['Body Battery', `+${sleepData.bodyBatteryChange}`, 'Recovery'],
+  ].filter(Boolean);
+  const quality = sleepData && [
+    sleepData.avgSleepStress != null && ['Sleep stress', sleepData.avgSleepStress],
+    sleepData.restlessMoments != null && ['Restless moments', `${sleepData.restlessMoments} ×`],
+    sleepData.awakeCount != null && ['Awakenings', `${sleepData.awakeCount} ×`],
+  ].filter(Boolean);
+
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
+    <Page>
       {/* Editorial header */}
-      <Box sx={{ mb: 3 }}>
+      <Box>
         <DisplayHeading size="page">Activity</DisplayHeading>
         <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
           Your Garmin fitness data and recent activities.
@@ -452,308 +242,106 @@ const Activity = () => {
         />
       ) : null}
 
-      {/* Daily Stats */}
-      {dailyData && (
-        <>
-          <Box sx={{ mb: 2 }}>
-            <SectionLabel>Today so far</SectionLabel>
-          </Box>
-          <Grid container spacing={2} sx={{ mb: 4 }}>
-            <Grid item xs={6} sm={3}>
-              <StatCard
-                icon={StepsIcon}
-                label="Steps"
-                value={dailyData.steps != null ? fmt(dailyData.steps) : null}
-                color={theme.palette.primary.main}
-              />
-            </Grid>
-            <Grid item xs={6} sm={3}>
-              <StatCard
-                icon={FireIcon}
-                label="Calories from activity"
-                value={dailyData.activeCalories != null ? fmt(dailyData.activeCalories) : null}
-                unit="cal"
-                color={theme.palette.warning.main}
-              />
-            </Grid>
-            <Grid item xs={6} sm={3}>
-              <StatCard
-                icon={HeartIcon}
-                label="Resting heart rate"
-                value={dailyData.restingHR}
-                unit="bpm"
-                color={theme.palette.error.main}
-              />
-            </Grid>
-            <Grid item xs={6} sm={3}>
-              <StatCard
-                icon={SleepIcon}
-                label="Sleep"
-                value={sleepText}
-                color={theme.palette.info.main}
-              />
-            </Grid>
-          </Grid>
-        </>
-      )}
+      {/* The two-column desktop layout: today and the heart on the left, the
+          night on the right. A phone gets them in a single stack. */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 1.75, md: 2.25 }, alignItems: 'start' }}>
+        {dailyData && (
+          <LabelPanel title="Today so far" level={1} sx={{ gridColumn: { md: '1 / -1' } }}>
+            <StatGrid>
+              <Headline index={0} label="Steps" value={dailyData.steps != null ? fmt(dailyData.steps) : null} />
+              <Headline index={1} label="Calories from activity" value={dailyData.activeCalories != null ? fmt(dailyData.activeCalories) : null} unit="cal" />
+              <Headline index={2} label="Resting heart rate" value={dailyData.restingHR} unit="bpm" />
+              <Headline index={3} label="Sleep" value={sleepText} />
+            </StatGrid>
+          </LabelPanel>
+        )}
 
-      {/* Heart Rate Details */}
-      {dailyData?.heartRate && (
-        <>
-          <Box sx={{ mb: 2 }}>
-            <SectionLabel>Heart rate today</SectionLabel>
-          </Box>
-          <Surface sx={{ mb: 4 }}>
-            <Grid container spacing={3}>
-              <Grid item xs={4}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <SectionLabel sx={{ mb: 0.75, justifyContent: 'center' }}>Lowest</SectionLabel>
-                  <StatNumber
-                    value={dailyData.heartRate.minHeartRate}
-                    unit="bpm"
-                    size="display"
-                    color={theme.palette.success.main}
-                  />
-                </Box>
-              </Grid>
-              <Grid item xs={4}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <SectionLabel sx={{ mb: 0.75, justifyContent: 'center' }}>Resting</SectionLabel>
-                  <StatNumber
-                    value={dailyData.heartRate.restingHeartRate || dailyData.restingHR}
-                    unit="bpm"
-                    size="display"
-                    color={theme.palette.info.main}
-                  />
-                </Box>
-              </Grid>
-              <Grid item xs={4}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <SectionLabel sx={{ mb: 0.75, justifyContent: 'center' }}>Highest</SectionLabel>
-                  <StatNumber
-                    value={dailyData.heartRate.maxHeartRate}
-                    unit="bpm"
-                    size="display"
-                    color={theme.palette.error.main}
-                  />
-                </Box>
-              </Grid>
-            </Grid>
-          </Surface>
-        </>
-      )}
+        {dailyData?.heartRate && (
+          <LabelPanel title="Heart rate today">
+            <StatGrid cols={3}>
+              <Headline index={0} cols={3} label="Lowest" value={dailyData.heartRate.minHeartRate} unit="bpm" />
+              <Headline index={1} cols={3} label="Resting" value={dailyData.heartRate.restingHeartRate || dailyData.restingHR} unit="bpm" />
+              <Headline index={2} cols={3} label="Highest" value={dailyData.heartRate.maxHeartRate} unit="bpm" />
+            </StatGrid>
+          </LabelPanel>
+        )}
 
-      {/* Sleep Details */}
-      {sleepData && (
-        <>
-          <Box sx={{ mb: 2 }}>
-            <SectionLabel>Last night’s sleep</SectionLabel>
-          </Box>
-          <Surface sx={{ mb: 4 }}>
-            <Box>
-              {sleepData.sleepScore && (
-                <Box sx={{ textAlign: 'center', mb: 3 }}>
-                  <SectionLabel sx={{ justifyContent: 'center', mb: 1 }}>Sleep score</SectionLabel>
-                  <StatNumber
-                    value={sleepData.sleepScore}
-                    size="hero"
-                    color={theme.palette.primary.main}
-                    sx={{ display: 'flex', justifyContent: 'center' }}
-                  />
-                </Box>
-              )}
+        {sleepData && (
+          <LabelPanel
+            title="Last night’s sleep"
+            meta={(sleepData.sleepStartTime || sleepData.sleepEndTime) ? (
+              <>
+                {sleepData.sleepStartTime && clockTime(sleepData.sleepStartTime)}
+                {sleepData.sleepStartTime && sleepData.sleepEndTime && ' to '}
+                {sleepData.sleepEndTime && clockTime(sleepData.sleepEndTime)}
+              </>
+            ) : undefined}
+          >
+            {sleepData.sleepScore && (
+              <FactHeadline caption="Sleep score" name="Score" value={sleepData.sleepScore} />
+            )}
 
-              {/* Show message if no detailed data available */}
-              {!sleepData.deepSleepMinutes && !sleepData.lightSleepMinutes && !sleepData.remSleepMinutes && !sleepData.sleepScore && (
-                <Box sx={{ textAlign: 'center', py: 2 }}>
-                  <SleepIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-                  <Typography color="text.secondary">
-                    No sleep details for last night yet
+            {/* Show message if no detailed data available */}
+            {!sleepData.deepSleepMinutes && !sleepData.lightSleepMinutes && !sleepData.remSleepMinutes && !sleepData.sleepScore && (
+              <Box sx={{ py: 2 }}>
+                <Typography sx={{ fontWeight: 700 }}>No sleep details for last night yet</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  They show up after your watch syncs with Garmin Connect.
+                </Typography>
+              </Box>
+            )}
+
+            {sleepFacts.length > 0 && (
+              <>
+                <Rule weight="medium" sx={{ mt: 1 }} />
+                {sleepFacts.map(([name, amount], i) => (
+                  <FactRow key={name} first={i === 0} name={name} trailing={<b>{amount}</b>} />
+                ))}
+              </>
+            )}
+
+            {overnight.length > 0 && (
+              <>
+                <Rule weight="medium" sx={{ mt: 1 }} />
+                <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, pt: 0.75 }}>Overnight</Typography>
+                {overnight.map(([name, amount, note], i) => (
+                  <FactRow key={name} first={i === 0} name={name} of={note} trailing={<b>{amount}</b>} />
+                ))}
+              </>
+            )}
+
+            {(quality.length > 0 || sleepData.sleepInsight) && (
+              <>
+                <Rule weight="medium" sx={{ mt: 1 }} />
+                {quality.map(([name, amount], i) => (
+                  <FactRow key={name} first={i === 0} name={name} trailing={<b>{amount}</b>} />
+                ))}
+                {sleepData.sleepInsight && (
+                  <Typography sx={{ mt: 1, fontSize: '0.8125rem', color: 'text.secondary' }}>
+                    {sleepData.sleepInsight.replace(/_/g, ' ').toLowerCase()}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    They show up after your watch syncs with Garmin Connect.
-                  </Typography>
-                </Box>
-              )}
+                )}
+              </>
+            )}
+          </LabelPanel>
+        )}
 
-              {/* Sleep Stages */}
-              {(sleepData.deepSleepMinutes != null || sleepData.lightSleepMinutes != null || sleepData.remSleepMinutes != null || sleepData.awakeSleepMinutes != null) && (
-                <Grid container spacing={1.5}>
-                  {sleepData.deepSleepMinutes != null && (
-                    <Grid item xs={6} sm={3}>
-                      <SleepStageTile
-                        icon={DeepSleepIcon}
-                        minutes={sleepData.deepSleepMinutes}
-                        label="Deep"
-                        color={theme.palette.info.main}
-                      />
-                    </Grid>
-                  )}
-                  {sleepData.lightSleepMinutes != null && (
-                    <Grid item xs={6} sm={3}>
-                      <SleepStageTile
-                        icon={LightSleepIcon}
-                        minutes={sleepData.lightSleepMinutes}
-                        label="Light"
-                        color={theme.palette.primary.main}
-                      />
-                    </Grid>
-                  )}
-                  {sleepData.remSleepMinutes != null && (
-                    <Grid item xs={6} sm={3}>
-                      <SleepStageTile
-                        icon={RemIcon}
-                        minutes={sleepData.remSleepMinutes}
-                        label="REM"
-                        color={theme.palette.secondary.main}
-                      />
-                    </Grid>
-                  )}
-                  {sleepData.awakeSleepMinutes != null && (
-                    <Grid item xs={6} sm={3}>
-                      <SleepStageTile
-                        icon={AwakeIcon}
-                        minutes={sleepData.awakeSleepMinutes}
-                        label="Awake"
-                        color={theme.palette.warning.main}
-                      />
-                    </Grid>
-                  )}
-                </Grid>
-              )}
-
-              {/* Sleep Time Range */}
-              {(sleepData.sleepStartTime || sleepData.sleepEndTime) && (
-                <Box sx={{ mt: 3, textAlign: 'center' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {sleepData.sleepStartTime && clockTime(sleepData.sleepStartTime)}
-                    {sleepData.sleepStartTime && sleepData.sleepEndTime && ' to '}
-                    {sleepData.sleepEndTime && clockTime(sleepData.sleepEndTime)}
-                  </Typography>
-                </Box>
-              )}
-
-              {/* Health Metrics Grid */}
-              {(sleepData.avgSpO2 || sleepData.avgOvernightHrv || sleepData.avgRespiration || sleepData.bodyBatteryChange != null) && (
-                <Box sx={{ mt: 3 }}>
-                  <Box sx={{ textAlign: 'center', mb: 2 }}>
-                    <SectionLabel sx={{ justifyContent: 'center' }}>Overnight</SectionLabel>
-                  </Box>
-                  <Grid container spacing={1.5}>
-                    {sleepData.avgSpO2 && (
-                      <Grid item xs={6} sm={3}>
-                        <MetricTile
-                          label="Avg SpO₂"
-                          value={sleepData.avgSpO2}
-                          unit="%"
-                          color={theme.palette.info.main}
-                          subtext={sleepData.minSpO2 ? `Low: ${sleepData.minSpO2}%` : null}
-                        />
-                      </Grid>
-                    )}
-                    {sleepData.avgOvernightHrv && (
-                      <Grid item xs={6} sm={3}>
-                        <MetricTile
-                          label="Heart-rate variability (HRV)"
-                          value={sleepData.avgOvernightHrv}
-                          unit="ms"
-                          color={theme.palette.success.main}
-                          subtext={sleepData.hrvStatus || null}
-                        />
-                      </Grid>
-                    )}
-                    {sleepData.avgRespiration && (
-                      <Grid item xs={6} sm={3}>
-                        <MetricTile
-                          label="Breaths a minute"
-                          value={Math.round(sleepData.avgRespiration * 10) / 10}
-                          color={theme.palette.secondary.main}
-                          subtext={sleepData.minRespiration && sleepData.maxRespiration
-                            ? `${sleepData.minRespiration}–${sleepData.maxRespiration}`
-                            : null}
-                        />
-                      </Grid>
-                    )}
-                    {sleepData.bodyBatteryChange != null && (
-                      <Grid item xs={6} sm={3}>
-                        <MetricTile
-                          label="Body Battery"
-                          value={`+${sleepData.bodyBatteryChange}`}
-                          color={theme.palette.warning.main}
-                          subtext="Recovery"
-                        />
-                      </Grid>
-                    )}
-                  </Grid>
-                </Box>
-              )}
-
-              {/* Stress & Quality Insights */}
-              {(sleepData.avgSleepStress || sleepData.restlessMoments || sleepData.sleepInsight) && (
-                <Box
-                  sx={{
-                    mt: 3,
-                    p: 2,
-                    borderRadius: 2,
-                    border: (t) => `1px dashed ${t.palette.divider}`,
-                    backgroundColor: (t) => alpha(t.palette.text.primary, t.palette.mode === 'dark' ? 0.04 : 0.02),
-                  }}
-                >
-                  <Grid container spacing={2} alignItems="center">
-                    {sleepData.avgSleepStress != null && (
-                      <Grid item xs={4}>
-                        <SectionLabel sx={{ mb: 0.5 }}>Sleep stress</SectionLabel>
-                        <StatNumber value={sleepData.avgSleepStress} size="body" />
-                      </Grid>
-                    )}
-                    {sleepData.restlessMoments != null && (
-                      <Grid item xs={4}>
-                        <SectionLabel sx={{ mb: 0.5 }}>Restless moments</SectionLabel>
-                        <StatNumber value={sleepData.restlessMoments} unit="×" size="body" />
-                      </Grid>
-                    )}
-                    {sleepData.awakeCount != null && (
-                      <Grid item xs={4}>
-                        <SectionLabel sx={{ mb: 0.5 }}>Awakenings</SectionLabel>
-                        <StatNumber value={sleepData.awakeCount} unit="×" size="body" />
-                      </Grid>
-                    )}
-                  </Grid>
-                  {sleepData.sleepInsight && (
-                    <Typography
-                      sx={{
-                        mt: 1.5,
-                        display: 'block',
-                        fontStyle: 'italic',
-                        fontSize: '0.75rem',
-                        color: 'text.secondary',
-                      }}
-                    >
-                      {sleepData.sleepInsight.replace(/_/g, ' ').toLowerCase()}
-                    </Typography>
-                  )}
-                </Box>
-              )}
+        <LabelPanel title="Recent activities" sx={{ gridColumn: { md: '1 / -1' } }}>
+          {activities.length > 0 ? (
+            activities.map((activity, index) => (
+              <ActivityCard key={activity.activityId || index} activity={activity} first={index === 0} />
+            ))
+          ) : (
+            <Box sx={{ pt: 1.5 }}>
+              <EmptyState
+                icon={WorkoutIcon}
+                title="No recent activities"
+                copy="Activities from your Garmin device will show up here once they sync."
+              />
             </Box>
-          </Surface>
-        </>
-      )}
-
-      {/* Recent Activities */}
-      <Box sx={{ mb: 2 }}>
-        <SectionLabel>Recent activities</SectionLabel>
+          )}
+        </LabelPanel>
       </Box>
-      {activities.length > 0 ? (
-        activities.map((activity, index) => (
-          <ActivityCard key={activity.activityId || index} activity={activity} />
-        ))
-      ) : (
-        <EmptyState
-          icon={WorkoutIcon}
-          title="No recent activities"
-          copy="Activities from your Garmin device will show up here once they sync."
-        />
-      )}
 
       {/* When it was last fetched, and a way to fetch again. Garmin syncs
           through the day, and the only way to see a walk that just synced
@@ -761,7 +349,7 @@ const Activity = () => {
           shell's scrolling <main> held nothing that could take focus, so a
           keyboard couldn't scroll it (axe scrollable-region-focusable). */}
       {!garminNotEnabled && !error && (
-        <Box sx={{ mt: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
           {dailyData?.fetchedAt && (
             <Typography variant="caption" color="text.secondary">
               {`Updated ${whenWords(dailyData.fetchedAt)}`}
@@ -777,7 +365,7 @@ const Activity = () => {
           </Button>
         </Box>
       )}
-    </Box>
+    </Page>
   );
 };
 

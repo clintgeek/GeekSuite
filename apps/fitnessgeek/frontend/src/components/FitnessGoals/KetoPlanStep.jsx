@@ -155,18 +155,18 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
                 label={PRESET_LABELS[key]}
                 variant="outlined"
                 onClick={() => handlePresetChange(key)}
-                // Chosen = basil at 8% with a basil edge, the app's one
-                // selected look (B2); ink text either way.
-                sx={
-                  isSelected
-                    ? {
-                        bgcolor: alpha(theme.palette.primary.main, 0.08),
-                        borderColor: theme.palette.primary.main,
-                        color: 'text.primary',
-                        '&&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.14) },
-                      }
-                    : undefined
-                }
+                // Chosen = the blue fill with its own paper-coloured text:
+                // the Label's one selected look, no tint.
+                sx={{
+                  borderRadius: 1,
+                  borderWidth: 2,
+                  ...(isSelected && {
+                    bgcolor: theme.palette.primary.main,
+                    borderColor: theme.palette.primary.main,
+                    color: theme.palette.primary.contrastText,
+                    '&&:hover': { bgcolor: theme.palette.primary.dark },
+                  }),
+                }}
               />
             );
           })}
@@ -180,8 +180,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
               sx={{
                 display: 'flex',
                 width: '100%',
-                height: 8,
-                borderRadius: '4px',
+                height: 12,
                 overflow: 'hidden',
                 mb: 1,
               }}
@@ -190,6 +189,8 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
                 sx={{
                   width: `${fat_pct}%`,
                   bgcolor: macro.fat,
+                  // Ink segments parted by a paper line (the macros are all ink).
+                  borderRight: `2px solid ${theme.palette.background.paper}`,
                   transition: 'width 200ms ease-out',
                 }}
               />
@@ -197,6 +198,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
                 sx={{
                   width: `${protein_pct}%`,
                   bgcolor: macro.protein,
+                  borderRight: `2px solid ${theme.palette.background.paper}`,
                   transition: 'width 200ms ease-out',
                 }}
               />
@@ -217,7 +219,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
                 { label: 'Carbs', pct: carb_pct, color: macro.carbs },
               ].map(({ label, pct, color }) => (
                 <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color }} />
+                  <Box sx={{ width: 10, height: 10, bgcolor: color }} />
                   <Typography variant="caption" color="text.secondary">
                     {label} {pct}%
                   </Typography>

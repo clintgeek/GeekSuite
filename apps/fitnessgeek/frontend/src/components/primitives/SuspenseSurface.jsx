@@ -10,8 +10,8 @@ import SurfaceSkeleton from './SurfaceSkeleton.jsx';
  * page that has already painted: a full-height spinner where a card belongs
  * makes the layout jump.
  *
- * So the in-page boundary reuses `SurfaceSkeleton` — the same Studio Slate
- * card the rest of the app loads into — and reserves the block's height, which
+ * So the in-page boundary reuses `SurfaceSkeleton` — the same label
+ * panel the rest of the app loads into — and reserves the block's height, which
  * is what stops a chart popping in and shoving the log list down the page.
  *
  * Use it around anything lazy that renders in place: charts, tab panels,

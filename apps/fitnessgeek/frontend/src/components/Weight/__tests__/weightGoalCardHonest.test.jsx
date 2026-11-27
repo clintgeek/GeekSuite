@@ -58,23 +58,24 @@ describe('the weight goal card (Full)', () => {
     expect(screen.getByTestId('weight-basis')).toHaveTextContent('From your 7-day average, 219.9 lb');
   });
 
-  // Visual review B2: the produce colours mean meals only, so "behind" is a
-  // warm warning wash (warning.main #9A5B00 at 14%), still never red.
-  it('behind plan is said in words, in a warning wash, never red, and without a day count', () => {
+  // The Label: "behind" is a filled tag in warning.main (an amber, not the
+  // Dinner lemon), still never red, and it always carries the words.
+  it('behind plan is said in words, in the warning fill, never red, and without a day count', () => {
     renderCard();
     const chip = screen.getByTestId('weight-status');
     expect(chip).toHaveTextContent('Behind plan');
     expect(document.body.textContent).not.toMatch(/days behind/);
-    const bg = window.getComputedStyle(chip).backgroundColor;
-    expect(bg).toBe('rgba(154, 91, 0, 0.14)');
+    // The testid sits on the word; the fill is on the Tag around it.
+    const bg = window.getComputedStyle(chip.parentElement).backgroundColor;
+    expect(bg).toBe('rgb(154, 82, 0)'); // warning.main #9A5200
     expect(bg).not.toBe('rgb(246, 201, 69)'); // not the Dinner lemon
   });
 
-  it('the start weight is muted ink, not alpha grey (A7)', () => {
+  it('shows where the program started, as a fact row in ink (A7)', () => {
     renderCard();
-    // StatNumber renders the start weight first, then the target in basil.
-    const start = screen.getAllByText('232')[0];
-    expect(window.getComputedStyle(start).color).toBe('rgb(107, 88, 71)'); // text.muted #6B5847
+    const row = screen.getByText('Started').closest('div');
+    expect(row).toHaveTextContent('Started 232 lb');
+    expect(window.getComputedStyle(row).color).not.toMatch(/rgba\(.*, 0\.\d+\)/); // not alpha grey
   });
 
   it('the projection is in words, against the goal date', () => {

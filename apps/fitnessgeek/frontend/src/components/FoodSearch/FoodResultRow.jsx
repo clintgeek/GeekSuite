@@ -7,7 +7,7 @@ import {
   RestaurantMenu as MealIcon,
   Check as CheckIcon
 } from '@mui/icons-material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import { netCarbs as calcNetCarbs } from '../../utils/ketoMath';
 import { formatServing } from '../../utils/units.js';
 import { fmt, grams } from '../../utils/plainWords.js';
@@ -102,7 +102,6 @@ const FoodResultRow = ({
   const theme = useTheme();
   const muted = theme.palette.text.secondary;
   const primary = theme.palette.primary.main;
-  const tonal = theme.palette.tonal || { bg: alpha(primary, 0.12), ink: primary };
   const isMeal = food?.kind === 'meal' || food?.type === 'meal';
 
   const nutrition = (isMeal ? (food?.nutrition || food?.totalNutrition) : food?.nutrition) || {};
@@ -166,13 +165,11 @@ const FoodResultRow = ({
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 999,
-        // Tonal, not filled (visual review B1): eight filled basil pills
-        // drowned Log it. One filled basil per view.
-        bgcolor: tonal.bg,
-        color: tonal.ink,
+        
+        // A blue link word, not a filled pill: one filled blue per view.
+        color: primary,
         fontSize: '0.9375rem',
-        fontWeight: 800,
+        fontWeight: 700,
         opacity: disabled && !pending ? 0.6 : 1,
       }}
     >
@@ -191,7 +188,7 @@ const FoodResultRow = ({
         display: 'flex',
         alignItems: 'center',
         gap: 0.5,
-        borderRadius: 2,
+        borderBottom: `1px solid ${theme.palette.divider}`,
         transition: 'background-color 120ms ease',
         '@media (hover: hover)': { '&:hover': { backgroundColor: theme.palette.action.hover } },
       }}
@@ -212,7 +209,7 @@ const FoodResultRow = ({
           minHeight: dense ? 56 : 60,
           px: 1.5,
           py: 1,
-          borderRadius: 2,
+          borderRadius: 0, 
           cursor: pending ? 'progress' : inert ? 'default' : 'pointer',
           '&:focus-visible': { outline: `2px solid ${primary}`, outlineOffset: 2 },
         }}
@@ -314,13 +311,13 @@ const FoodResultRow = ({
             minWidth: PILL_WIDTH,
             minHeight: 44,
             flexShrink: 0,
-            borderRadius: 999,
+            
             borderWidth: 2,
             fontSize: '0.9375rem',
-            fontWeight: 800,
+            fontWeight: 700,
             px: 1,
             whiteSpace: 'nowrap',
-            '@media (hover: hover)': { '&:hover': { borderWidth: 2, bgcolor: alpha(primary, 0.08) } },
+            '@media (hover: hover)': { '&:hover': { borderWidth: 2, bgcolor: theme.palette.action.hover } },
           }}
         >
           Make it {nextCount}
@@ -341,7 +338,7 @@ const FoodResultRow = ({
             display: 'flex',
             flexDirection: 'column',
             gap: 0.25,
-            borderRadius: 2,
+            borderRadius: 0, 
             color: theme.palette.text.secondary,
             opacity: inert ? 0.6 : 1,
             '&:focus-visible': { outline: `2px solid ${primary}`, outlineOffset: 2 },

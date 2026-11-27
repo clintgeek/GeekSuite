@@ -29,9 +29,8 @@ import { useToday } from '../hooks/useToday.js';
 import { errorMessage } from '../utils/errorMessage.js';
 import { addedMessage, fmt, friendlyDay, mealLabel } from '../utils/plainWords.js';
 import {
-  Surface,
-  SectionLabel,
-  DisplayHeading,
+  Page,
+  LabelPanel,
   EmptyState,
   SurfaceSkeleton,
   PremiumDialog,
@@ -170,25 +169,18 @@ const MyMeals = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 900, mx: 'auto' }}>
-      {/* Editorial header */}
-      <Box sx={{ mb: 3 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Library · Meals</SectionLabel>
-        <DisplayHeading size="page">My meals</DisplayHeading>
-        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
-          Save your favorite combinations and reuse them in a single tap.
-        </Typography>
-      </Box>
+    <Page>
+      <Typography sx={{ color: 'text.secondary', fontSize: '1rem' }}>
+        Save your favorite combinations and reuse them in a single tap.
+      </Typography>
 
-      <Box sx={{ mb: 2 }}>
-        <TextField
-          placeholder="Search meals…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          fullWidth
-          size="small"
-        />
-      </Box>
+      <TextField
+        placeholder="Search meals…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        fullWidth
+        size="small"
+      />
 
       {loading ? (
         <SurfaceSkeleton rows={4} />
@@ -203,20 +195,7 @@ const MyMeals = () => {
           }
         />
       ) : (
-        <Surface padded={false}>
-          <Box
-            sx={{
-              px: 2.5,
-              pt: 2,
-              pb: 1.25,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              borderBottom: (theme) => `1px dashed ${theme.palette.divider}`,
-            }}
-          >
-            <SectionLabel count={filtered.length}>Your meals</SectionLabel>
-          </Box>
+        <LabelPanel level={1} title="My meals" metaRight={`${filtered.length} ${filtered.length === 1 ? 'meal' : 'meals'}`}>
           <List sx={{ p: 0 }}>
             {filtered.map((m) => {
               const { itemCount, totalCals } = mealSummary(m);
@@ -224,12 +203,13 @@ const MyMeals = () => {
                 <ListItem
                   key={m._id || m.id}
                   sx={{
-                    px: 2.5,
-                    py: 1.5,
+                    pl: 0,
+                    py: 1.25,
                     // Room for "Log this" and the two icons beside the name.
                     pr: { xs: 26, sm: 28 },
                     borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
                     '&:last-child': { borderBottom: 'none' },
+                    '& .MuiListItemSecondaryAction-root': { right: 0 },
                   }}
                   secondaryAction={
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -264,7 +244,7 @@ const MyMeals = () => {
                   <ListItemText
                     primary={
                       <Typography
-                        sx={{ fontWeight: 600, fontSize: '1rem', color: 'text.primary' }}
+                        sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary' }}
                       >
                         {m.name}
                       </Typography>
@@ -315,7 +295,7 @@ const MyMeals = () => {
               );
             })}
           </List>
-        </Surface>
+        </LabelPanel>
       )}
 
       <EditMealDialog
@@ -358,10 +338,22 @@ const MyMeals = () => {
               label={mealLabel(meal)}
               onClick={() => setLogMealType(meal)}
               aria-pressed={meal === logMealType}
-              color={meal === logMealType ? 'primary' : 'default'}
-              variant={meal === logMealType ? 'filled' : 'outlined'}
+              variant="outlined"
               disabled={logging}
-              sx={{ height: 44, borderRadius: 999, fontWeight: 600, '& .MuiChip-label': { px: 1.75 } }}
+              sx={{
+                height: 44,
+                borderRadius: 0,
+                fontWeight: 700,
+                borderWidth: 1.5,
+                borderColor: 'text.primary',
+                color: 'text.primary',
+                '& .MuiChip-label': { px: 1.75 },
+                ...(meal === logMealType ? {
+                  bgcolor: 'text.primary',
+                  color: 'background.paper',
+                  '&&:hover, &&:focus': { bgcolor: 'text.primary' },
+                } : {}),
+              }}
             />
           ))}
         </Box>
@@ -396,7 +388,7 @@ const MyMeals = () => {
           meals. This can’t be undone.
         </DialogContentText>
       </PremiumDialog>
-    </Box>
+    </Page>
   );
 };
 

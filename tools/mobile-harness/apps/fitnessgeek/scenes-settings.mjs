@@ -435,8 +435,12 @@ const reports = [
       if ((await cards.count()) < 5) throw new Error(`expected 5 day cards, got ${await cards.count()}`);
       const over = await page.locator('[data-testid="day-card"][data-over="true"]').count();
       if (over !== 2) throw new Error(`expected 2 over days, got ${over}`);
-      const words = (await page.locator('[data-testid="day-status"]').allInnerTexts()).join('|');
-      for (const w of ['Over', 'A bit over', 'On target']) if (!words.includes(w)) throw new Error(`no "${w}" status in: ${words}`);
+      // The Label sets a status tag in capitals with CSS, and innerText
+      // reports it that way, so compare whole tags without case. Whole tags:
+      // "over" must not be satisfied by "a bit over".
+      const tags = (await page.locator('[data-testid="day-status"]').allInnerTexts()).map((t) => t.trim().toLowerCase());
+      const words = tags.join('|');
+      for (const w of ['Over', 'A bit over', 'On target']) if (!tags.includes(w.toLowerCase())) throw new Error(`no "${w}" status in: ${words}`);
       await scrollToSection(page, h, '[data-testid="day-ribbon-range"]', 96);
       const box = await cards.first().boundingBox();
       const vw = page.viewportSize().width;
@@ -561,7 +565,11 @@ const bloodPressure = [
       if (fab) {
         const covered = await page.evaluate(({ x, y, w, hh }) => {
           const hits = [];
-          document.querySelectorAll('main .MuiCard-root, main [class*="MuiPaper-root"]').forEach((el) => {
+          // The Label's panels are plain bordered boxes (primitives/Surface.jsx
+          // marks each one); with none found this check would prove nothing.
+          const panels = document.querySelectorAll('main [data-fg-panel="card"], main .MuiCard-root, main [class*="MuiPaper-root"]');
+          if (!panels.length) return ['no panels found to check'];
+          panels.forEach((el) => {
             const r = el.getBoundingClientRect();
             if (r.width && r.x < x + w && x < r.right && r.y < y + hh && y < r.bottom) hits.push(`${Math.round(r.y)}-${Math.round(r.bottom)}`);
           });

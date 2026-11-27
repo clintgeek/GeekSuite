@@ -1,9 +1,9 @@
 /**
  * Shared Nivo chart theme for FitnessGeek.
  *
- * Typography inherits the app face (Nunito) for axis values, tabular-nums,
- * muted colors. Invisible grid (dotted, 5% opacity). No axis domain
- * lines, no tick marks — the data is the foreground, the chrome disappears.
+ * The Label: Archivo at 12px for axis text, a hairline grid in `divider`,
+ * square tooltips with a 2px ink border and no shadow. No axis domain lines
+ * or tick marks — the data is the foreground.
  *
  * Usage:
  *   const theme = useTheme();
@@ -11,33 +11,31 @@
  *   <ResponsiveLine theme={chartTheme} ... />
  */
 export const buildChartTheme = (theme) => {
-  const isDark = theme.palette.mode === 'dark';
   const muted = theme.palette.text.secondary;
 
   return {
     background: 'transparent',
     textColor: muted,
-    fontFamily: "inherit",
-    fontSize: 10,
+    fontFamily: theme.typography.fontFamily,
+    fontSize: 12,
     axis: {
       domain: { line: { stroke: 'transparent' } },
       ticks: {
         line: { stroke: 'transparent' },
         text: {
           fill: muted,
-          fontSize: 10,
-          fontFamily: "inherit",
+          fontSize: 12,
+          fontFamily: theme.typography.fontFamily,
           fontWeight: 500,
           letterSpacing: '0.02em',
         },
       },
-      legend: { text: { fill: muted, fontSize: 10 } },
+      legend: { text: { fill: muted, fontSize: 12 } },
     },
     grid: {
       line: {
-        stroke: isDark ? 'rgba(247, 237, 224, 0.08)' : 'rgba(92, 64, 32, 0.12)',
+        stroke: theme.palette.divider,
         strokeWidth: 1,
-        strokeDasharray: '2 4',
       },
     },
     crosshair: {
@@ -52,12 +50,11 @@ export const buildChartTheme = (theme) => {
       container: {
         background: theme.palette.background.paper,
         color: theme.palette.text.primary,
-        // The same paper card as every other tooltip in the app, at a
-        // readable size.
+        // A square label with a 2px ink border, at a readable size.
         fontSize: 14,
-        borderRadius: 12,
-        border: `1px solid ${theme.palette.cardBorder || theme.palette.divider}`,
-        boxShadow: isDark ? '0 10px 24px -12px rgba(0, 0, 0, 0.7)' : '0 10px 24px -14px rgba(92, 64, 32, 0.3)',
+        borderRadius: 0,
+        border: `2px solid ${theme.palette.text.primary}`,
+        boxShadow: 'none',
       },
     },
   };

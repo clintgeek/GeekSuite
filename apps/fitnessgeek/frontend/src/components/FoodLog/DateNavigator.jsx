@@ -1,15 +1,20 @@
 import React from 'react';
-import {
-  Box,
-  Typography,
-  IconButton
-} from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { Box, Typography, IconButton } from '@mui/material';
 import {
   ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
-  CalendarToday as CalendarIcon
+  ChevronRight as ChevronRightIcon
 } from '@mui/icons-material';
+
+/**
+ * The day, drawn as a plain header on the grey ground (not a card): previous
+ * and next arrows around a heavy "Today" (or the date in words), with the
+ * date as a small-caps eyebrow under it when the title is a word.
+ */
+const eyebrowFor = (selectedDate) => {
+  const [y, m, d] = String(selectedDate || '').split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+};
 
 const DateNavigator = ({
   selectedDate,
@@ -19,7 +24,6 @@ const DateNavigator = ({
   calorieCard = null,
   ...props
 }) => {
-  const theme = useTheme();
   // The day in words, never truncated: it wraps before it clips.
   const displayDate = React.useMemo(() => {
     if (typeof formatDate === 'function') {
@@ -27,78 +31,53 @@ const DateNavigator = ({
     }
     return selectedDate;
   }, [selectedDate, formatDate]);
+  // "Today" / "Yesterday" get the date beneath; "Saturday, September 26" already is one.
+  const eyebrow = /\d/.test(String(displayDate)) ? null : eyebrowFor(selectedDate);
 
   return (
-    <Box sx={{
-      mb: 3,
-      ...props.sx
-    }}
-      {...props}
-    >
+    <Box {...props} sx={{ ...props.sx }}>
       <Box sx={{
         display: 'grid',
-        gridTemplateColumns: 'auto 1fr auto',
-        gridTemplateRows: 'auto auto',
-        rowGap: 1,
+        gridTemplateColumns: '48px 1fr 48px',
         alignItems: 'center',
-        backgroundColor: theme.palette.background.paper,
-        borderRadius: '24px',
-        p: { xs: 2, sm: 3 },
-        boxShadow: 'none',
-        border: `1px solid ${theme.palette.divider}`
       }}>
         <IconButton
           onClick={onPreviousDay}
           aria-label="Previous day"
-          sx={{
-            color: theme.palette.primary.main,
-            width: 48,
-            height: 48,
-            '@media (hover: hover)': {
-              '&:hover': { backgroundColor: theme.palette.primary.light + '20' }
-            }
-          }}
+          sx={{ width: 48, height: 48, color: 'text.primary' }}
         >
           <ChevronLeftIcon />
         </IconButton>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifySelf: 'center' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.125, justifySelf: 'center', minWidth: 0 }}>
           <Typography
-            variant="h6"
+            component="h2"
             sx={{
-              fontWeight: 800,
-              fontSize: { xs: '1.1875rem', sm: '1.375rem' },
-              color: theme.palette.text.primary,
+              m: 0,
+              fontWeight: 900,
+              lineHeight: 1.1,
+              fontSize: { xs: '1.5rem', sm: '1.75rem' },
               textAlign: 'center'
             }}
           >
             {displayDate}
           </Typography>
-          <CalendarIcon aria-hidden sx={{ color: theme.palette.primary.main, fontSize: { xs: 20, sm: 24 } }} />
+          {eyebrow && (
+            <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
+              {eyebrow}
+            </Typography>
+          )}
         </Box>
 
         <IconButton
           onClick={onNextDay}
           aria-label="Next day"
-          sx={{
-            color: theme.palette.primary.main,
-            width: 48,
-            height: 48,
-            '@media (hover: hover)': {
-              '&:hover': { backgroundColor: theme.palette.primary.light + '20' }
-            }
-          }}
+          sx={{ width: 48, height: 48, color: 'text.primary' }}
         >
           <ChevronRightIcon />
         </IconButton>
-
-        {/* Calorie summary spans full width below date row when provided */}
-        {calorieCard && (
-          <Box sx={{ gridColumn: '1 / span 3', pt: 0.5 }}>
-            {calorieCard}
-          </Box>
-        )}
       </Box>
+      {calorieCard}
     </Box>
   );
 };

@@ -4,7 +4,8 @@ import { useTheme, alpha } from '@mui/material/styles';
 import { ResponsiveLine } from '@nivo/line';
 import { utcDateString } from '@geeksuite/utils';
 import { readableOn } from '@geeksuite/ui';
-import { Surface, SectionLabel, DisplayHeading, buildChartTheme } from '../primitives';
+import { LabelPanel, buildChartTheme } from '../primitives';
+import { shortDay } from '../../utils/dates.js';
 import { buildWeightTrend, splitAtGaps } from './weightTrend.js';
 import ChartTooltip from './chartTooltip.jsx';
 import { massDomain, tooltipDay, useTooltipGuard } from './chartTips.js';
@@ -33,6 +34,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
   const theme = useTheme();
   const primary = theme.palette.primary.main;
   const muted = theme.palette.text.secondary;
+  const ink = theme.palette.text.primary;
   const chartTheme = useMemo(() => buildChartTheme(theme), [theme]);
 
   // §0: the line is a 7-day trailing mean; raw readings are faint dots; the
@@ -46,7 +48,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
 
   const chartData = useMemo(() => {
     const lines = [];
-    if (model.goalLine) lines.push({ id: SERIES.goal, color: muted, data: model.goalLine });
+    if (model.goalLine) lines.push({ id: SERIES.goal, color: ink, data: model.goalLine });
     if (model.readings.length) {
       lines.push({ id: SERIES.readings, color: alpha(primary, 0.7), data: model.readings });
       lines.push({ id: SERIES.trend, color: primary, data: model.trend });
@@ -55,7 +57,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
       lines.push({ id: SERIES.projection, color: projectionColor, data: model.projection.points });
     }
     return lines;
-  }, [model, muted, primary, projectionColor]);
+  }, [model, ink, primary, projectionColor]);
 
   // At least 10 lb tall (review D-4), so scale noise isn't drawn as a cliff.
   const yAxisDomain = useMemo(
@@ -68,19 +70,21 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
 
   if (!model.readings.length) {
     return (
-      <Surface sx={{ textAlign: 'center', py: 5 }}>
-        <SectionLabel sx={{ justifyContent: 'center', mb: 1.5 }}>Your weight trend</SectionLabel>
-        <Typography sx={{ color: muted, fontSize: '0.875rem' }}>
+      <LabelPanel title="Your weight trend">
+        <Typography sx={{ color: muted, fontSize: '0.875rem', mt: 1.5 }}>
           No weigh-ins yet.
         </Typography>
         <Typography sx={{ color: muted, fontSize: '0.75rem', mt: 0.5 }}>
           Weigh in and your trend shows here.
         </Typography>
-      </Surface>
+      </LabelPanel>
     );
   }
 
   const paper = theme.palette.background.paper;
+  const first = model.readings[0]?.x;
+  const last = model.readings[model.readings.length - 1]?.x;
+  const rangeText = first && last ? `${shortDay(first)} to ${shortDay(last)}` : undefined;
   // The status word is 12px text in a domain colour, so it is measured
   // against the paper it sits on (GEEK_SUITE_DESIGN_LANGUAGE, "Colour on a
   // surface") — success.main alone is a graphic colour, not an ink.
@@ -89,7 +93,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
   const legend = [
     { key: 'trend', label: LEGEND.trend, color: primary, kind: 'line' },
     { key: 'readings', label: LEGEND.readings, color: alpha(primary, 0.7), kind: 'dot' },
-    model.goalLine && { key: 'goal', label: LEGEND.goal, color: muted, kind: 'dash' },
+    model.goalLine && { key: 'goal', label: LEGEND.goal, color: ink, kind: 'dash' },
     model.projection && {
       key: 'projection',
       label: LEGEND.projection,
@@ -100,25 +104,11 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
   ].filter(Boolean);
 
   return (
-    <Surface>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          mb: 2,
-          gap: 2,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Box>
-          <DisplayHeading size="card">Your weight trend</DisplayHeading>
-        </Box>
-        <Box sx={{ display: 'flex', columnGap: 2, rowGap: 1, flexWrap: 'wrap' }}>
-          {legend.map(({ key, ...item }) => (
-            <LegendItem key={key} {...item} muted={muted} />
-          ))}
-        </Box>
+    <LabelPanel title="Your weight trend" meta={rangeText} sx={{ height: { md: '100%' } }}>
+      <Box sx={{ display: 'flex', columnGap: 2, rowGap: 0.5, flexWrap: 'wrap', py: 1 }}>
+        {legend.map(({ key, ...item }) => (
+          <LegendItem key={key} {...item} muted={muted} />
+        ))}
       </Box>
       {!model.projection && model.goalLine && paceHint(model.pace) && (
         <Typography sx={{ color: muted, fontSize: '0.8125rem', mb: 1 }}>
@@ -166,7 +156,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
           // A plain number in this version (a function rendered as a literal
           // string in `strokeWidth`). The lines themselves are drawn by the
           // custom layer below, which sets each series' own width.
-          lineWidth={2.5}
+          lineWidth={3}
           enableArea={false}
           enableSlices="x"
           enableGridX={false}
@@ -208,7 +198,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                           d={lineGenerator(stretch.map((p) => p.position))}
                           fill="none"
                           stroke={color}
-                          strokeWidth={2.5}
+                          strokeWidth={3}
                         />
                       ))}
                     </g>
@@ -220,9 +210,8 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                     d={d}
                     fill="none"
                     stroke={color}
-                    strokeWidth={2}
-                    strokeDasharray="6 5"
-                    style={{ opacity: id === SERIES.goal ? 0.55 : 0.9 }}
+                    strokeWidth={id === SERIES.goal ? 1.5 : 2}
+                    strokeDasharray="5 5"
                   />
                 );
               }),
@@ -244,12 +233,27 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                     stroke="none"
                   />
                 )),
+            // The square end marker: where the average is now.
+            ({ series }) => {
+              const avg = series.find(({ id }) => id === SERIES.trend);
+              const end = avg?.data?.[avg.data.length - 1]?.position;
+              return end ? (
+                <rect
+                  data-testid="weight-trend-end"
+                  x={end.x - 5}
+                  y={end.y - 5}
+                  width={10}
+                  height={10}
+                  fill={primary}
+                />
+              ) : null;
+            },
             'slices',
             'mesh',
           ]}
         />
       </Box>
-    </Surface>
+    </LabelPanel>
   );
 };
 

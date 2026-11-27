@@ -38,12 +38,15 @@ const ThumbFab = ({ onClick, label, testId }) => {
         minHeight: 56,
         px: 2.5,
         gap: 1,
-        // A pill, like every other button in the app (review B6).
-        borderRadius: 999,
+        // The Label: square 4px corners, flat; a 2px paper outline lifts it off
+        // whatever it floats over (no shadow).
+        borderRadius: '4px',
+        boxShadow: 'none',
+        border: `2px solid ${theme.palette.background.paper}`,
+        '&:hover, &:active, &.Mui-focusVisible': { boxShadow: 'none' },
         fontSize: '1rem',
         fontWeight: 700,
         textTransform: 'none',
-        boxShadow: theme.shadows[6],
         zIndex: theme.zIndex.speedDial,
         // The desktop card is the action at md+.
         display: { xs: 'inline-flex', md: 'none' },

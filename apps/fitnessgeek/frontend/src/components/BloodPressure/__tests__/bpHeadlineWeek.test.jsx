@@ -43,7 +43,7 @@ describe('BPInsights headline', () => {
 
   it('the healthy range is a count, not a percent', () => {
     render(<BPInsights bpLogs={LOGS} />);
-    expect(screen.getByTestId('bp-healthy-range')).toHaveTextContent('Healthy range1 of 14 readings');
+    expect(screen.getByTestId('bp-healthy-range')).toHaveTextContent('Healthy range 1 of 14 readings');
     expect(document.body.textContent).not.toMatch(/7%/);
   });
 

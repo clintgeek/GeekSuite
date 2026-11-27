@@ -1,8 +1,7 @@
 import React, { useMemo } from 'react';
 import { Box, Button, Chip, CircularProgress, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { Replay as AgainIcon, History as YesterdayIcon, RestaurantMenu as MealIcon, People as PeopleIcon, Check as CheckIcon } from '@mui/icons-material';
-import { mealColors } from '../../theme/theme.jsx';
+import { RestaurantMenu as MealIcon, Check as CheckIcon } from '@mui/icons-material';
 import { useRecentLogs } from '../../hooks/useRecentLogs.js';
 import { rankAgainChips, yesterdaysMeal } from '../../utils/againChips.js';
 import { daysBefore } from '../../utils/experience.js';
@@ -58,7 +57,6 @@ export default function QuickPicks({
 }) {
   const theme = useTheme();
   const today = useToday();
-  const produce = theme.palette.produce?.[mealType] || mealColors(mealType, theme.palette.mode);
   const { logs, meals, loading } = useRecentLogs(date);
   const household = useHouseholdMeals(date, mealType);
 
@@ -72,16 +70,21 @@ export default function QuickPicks({
   const meal = mealWord(mealType);
   const previous = daysBefore(date, 1);
   const sameAs = `Same as ${sheetMealOnDay(meal, previous, today, date)}`;
+  // "Same as …" rows: a 2px blue border on the paper (you can press it), no
+  // tint, square, compact enough to leave room for the day's meals.
   const bigButton = {
     justifyContent: 'flex-start',
-    minHeight: 56,
-    borderRadius: '18px',
+    minHeight: 52,
+    py: 0.5,
+    px: 1.5,
     borderWidth: 2,
-    borderColor: produce.fill,
+    borderColor: 'primary.main',
     color: 'text.primary',
-    bgcolor: produce.tint,
+    bgcolor: 'transparent',
     textAlign: 'left',
-    '@media (hover: hover)': { '&:hover': { borderWidth: 2, borderColor: produce.fill, bgcolor: produce.tint } },
+    fontSize: '1rem',
+    fontWeight: 700,
+    '@media (hover: hover)': { '&:hover': { borderWidth: 2, borderColor: 'primary.main', bgcolor: theme.palette.action.hover } },
   };
   // Done (UX review 2026-11, B3): after one tap the card says "Added" with a
   // check and keeps its food list; the box ignores a second tap.
@@ -93,9 +96,9 @@ export default function QuickPicks({
   const listOf = (names) => `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`;
 
   return (
-    <Box data-testid="quick-picks" sx={{ mb: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+    <Box data-testid="quick-picks" sx={{ mb: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
       {heading && (
-        <Typography component="h3" sx={{ fontSize: '1rem', fontWeight: 800, color: 'text.secondary', mt: 0.5 }}>
+        <Typography component="h3" sx={{ fontSize: '0.9375rem', fontWeight: 700, color: 'text.secondary', mt: 0.5 }}>
           {heading}
         </Typography>
       )}
@@ -105,7 +108,7 @@ export default function QuickPicks({
           size="large"
           startIcon={pendingKey === YESTERDAY_KEY
             ? <CircularProgress size={18} color="inherit" aria-hidden />
-            : wholeDone(YESTERDAY_KEY) ? <CheckIcon sx={{ color: 'primary.main' }} /> : <YesterdayIcon />}
+            : wholeDone(YESTERDAY_KEY) ? <CheckIcon sx={{ color: 'primary.main' }} /> : undefined}
           disabled={busy}
           onClick={() => onPick?.(yesterday, YESTERDAY_KEY)}
           aria-label={wholeDone(YESTERDAY_KEY) ? `${sameAs} · Added` : undefined}
@@ -115,7 +118,7 @@ export default function QuickPicks({
         >
           <Box component="span" sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
             <span>{pendingKey === YESTERDAY_KEY ? 'Adding…' : wholeDone(YESTERDAY_KEY) ? `${sameAs} · Added` : sameAs}</span>
-            <Box component="span" sx={{ fontSize: '0.9375rem', fontWeight: 600, color: 'text.secondary' }}>
+            <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 400, color: 'text.secondary' }}>
               {listOf(yesterday.map((f) => f.name))}
             </Box>
           </Box>
@@ -133,7 +136,7 @@ export default function QuickPicks({
             size="large"
             startIcon={pendingKey === key
               ? <CircularProgress size={18} color="inherit" aria-hidden />
-              : done ? <CheckIcon sx={{ color: 'primary.main' }} /> : <PeopleIcon />}
+              : done ? <CheckIcon sx={{ color: 'primary.main' }} /> : undefined}
             disabled={busy}
             aria-label={done ? `${label} · Added` : label}
             data-testid="same-as-household"
@@ -151,7 +154,7 @@ export default function QuickPicks({
           >
             <Box component="span" sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
               <span>{pendingKey === key ? 'Adding…' : done ? `${label} · Added` : label}</span>
-              <Box component="span" sx={{ fontSize: '0.9375rem', fontWeight: 600, color: 'text.secondary' }}>
+              <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 400, color: 'text.secondary' }}>
                 {listOf(member.foods)}
               </Box>
             </Box>
@@ -161,10 +164,10 @@ export default function QuickPicks({
 
       {chips.length > 0 && (
         <Box>
-          <Typography component="h3" sx={{ fontSize: '1rem', fontWeight: 800, color: 'text.secondary', mb: 1, display: 'flex', alignItems: 'center', gap: 0.75 }}>
-            <AgainIcon sx={{ fontSize: 20 }} aria-hidden /> Again
+          <Typography component="h3" sx={{ fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary', mb: 0.5 }}>
+            Again
           </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }} data-testid="again-chips">
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }} data-testid="again-chips">
             {chips.map((chip) => {
               const key = `quick:${chip.key}`;
               const isMeal = chip.kind === 'meal';
@@ -192,16 +195,17 @@ export default function QuickPicks({
                     // 1.26:1 divider (visual review B5).
                     variant="outlined"
                     sx={{
-                      height: 48,
-                      borderRadius: 999,
-                      fontSize: '1rem',
+                      height: 44,
+                      borderRadius: 0,
+                      fontSize: '0.875rem',
                       bgcolor: theme.palette.background.paper,
                       borderWidth: 1.5,
+                      borderColor: 'text.primary',
                       color: 'text.primary',
                       maxWidth: '100%',
-                      '& .MuiChip-label': { px: 1.75, fontSize: '1rem', fontWeight: 700 },
-                      '& .MuiChip-icon': { color: produce.text },
-                      '@media (hover: hover)': { '&:hover': { bgcolor: produce.tint } },
+                      '& .MuiChip-label': { px: 1.25, fontSize: '0.875rem', fontWeight: 700 },
+                      '& .MuiChip-icon': { color: 'text.primary' },
+                      '@media (hover: hover)': { '&:hover': { bgcolor: theme.palette.action.hover } },
                     }}
                   />
                   {done && onMore && (
@@ -210,7 +214,7 @@ export default function QuickPicks({
                       disabled={busy}
                       onClick={() => onMore(key, next, chip.item)}
                       aria-label={`Make it ${next} ${chip.label}`}
-                      sx={{ minHeight: 48, borderRadius: 999, borderWidth: 2, fontWeight: 800, fontSize: '0.9375rem', px: 1.5, whiteSpace: 'nowrap', flexShrink: 0, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
+                      sx={{ minHeight: 44, borderWidth: 2, fontWeight: 700, fontSize: '0.875rem', px: 1.5, whiteSpace: 'nowrap', flexShrink: 0, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
                     >
                       Make it {next}
                     </Button>

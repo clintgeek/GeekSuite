@@ -31,7 +31,10 @@ const OfflineIndicator = () => {
           top: 70,
           right: 16,
           zIndex: 1300,
-          boxShadow: 2
+          boxShadow: 'none',
+          border: (t) => `2px solid ${t.palette.text.primary}`,
+          borderRadius: 0,
+          fontWeight: 700,
         }}
       />
 

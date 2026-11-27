@@ -1,7 +1,6 @@
 import React from 'react';
 import { Box, Button, Typography } from '@mui/material';
-import { useTheme, alpha } from '@mui/material/styles';
-import { readableOn } from '@geeksuite/ui';
+import { useTheme } from '@mui/material/styles';
 import { cal, fmt } from '../../utils/plainWords.js';
 
 /**
@@ -35,11 +34,7 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
   const { name, low, high, logged } = question;
   if (!Number.isFinite(low) || !Number.isFinite(high)) return null;
 
-  const muted = readableOn(
-    theme.palette.text.secondary,
-    alpha(theme.palette.warning.main, 0.08),
-    { under: theme.palette.background.paper }
-  );
+  const muted = theme.palette.text.secondary;
 
   /** The end that is NOT what we already logged is the one worth offering. */
   const options = [
@@ -56,9 +51,8 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
         mb: 1.5,
         px: 1.5,
         py: 1.25,
-        borderRadius: 2,
-        border: `1px solid ${alpha(theme.palette.warning.main, 0.35)}`,
-        backgroundColor: alpha(theme.palette.warning.main, 0.08)
+        borderTop: `1px solid ${theme.palette.text.primary}`,
+        borderBottom: `1px solid ${theme.palette.text.primary}`
       }}
     >
       <Typography sx={{ fontSize: '1rem', color: theme.palette.text.primary, fontWeight: 700 }}>
@@ -75,7 +69,7 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
             variant="outlined"
             disabled={busy}
             onClick={() => onAnswer(question, option.value)}
-            sx={{ minHeight: 48, borderRadius: 999, fontSize: '0.9375rem', fontWeight: 700, px: 2 }}
+            sx={{ minHeight: 48, fontSize: '0.9375rem', fontWeight: 700, px: 2 }}
           >
             {option.label}
           </Button>

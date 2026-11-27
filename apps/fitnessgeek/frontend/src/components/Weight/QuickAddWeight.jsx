@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
   TextField,
   Button,
   Alert
@@ -15,6 +13,7 @@ import DateField from '../primitives/DateField.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 import ThumbFab from '../primitives/ThumbFab.jsx';
+import Surface from '../primitives/Surface.jsx';
 
 const SAVE_FAILED = "Couldn’t save that weight. Check your connection and try again.";
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -135,11 +134,11 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
   return (
     <>
       {/* Quick Add Card for desktop */}
-      <Card sx={{
+      <Surface sx={{
         width: '100%',
         display: { xs: 'none', md: 'block' }
       }}>
-        <CardContent sx={{ p: 3 }}>
+        <Box>
           {/* The card submits WITHOUT opening the dialog, so it needs its own
               error surface — the dialog's Alert is not mounted on this path,
               and a failure here would otherwise be as silent as the bug this
@@ -178,8 +177,8 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
               {cardNote ? 'Replace' : 'Log'}
             </Button>
           </Box>
-        </CardContent>
-      </Card>
+        </Box>
+      </Surface>
 
       {/* Phones: the thumb-zone "Log weight" button opens the dialog. */}
       <ThumbFab label="Log weight" testId="log-weight-fab" onClick={openDialog} />

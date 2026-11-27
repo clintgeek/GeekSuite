@@ -47,7 +47,7 @@
   width: 200px;
   height: 200px;
   border: 2px solid #fff;
-  border-radius: 8px;
+  border-radius: 0;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
 }
 
@@ -59,7 +59,7 @@
   right: -2px;
   bottom: -2px;
   border: 2px solid #2196F3;
-  border-radius: 8px;
+  border-radius: 0;
   animation: pulse 2s infinite;
 }
 
@@ -123,7 +123,7 @@
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.7);
-  border-radius: 8px;
+  border-radius: 0;
   z-index: 10;
 }
 

@@ -31,8 +31,9 @@ import { createAppTheme } from '../../theme/theme';
 // with a light theme so text/dividers stay readable when the app is in dark mode.
 const lightReportTheme = createAppTheme('light');
 // The report prints on white whatever the app's mode, so it reads the light
-// Market Morning set: basil for the header, the cream divider for rules.
-const REPORT_INK = lightReportTheme.palette.primary.main;
+// set: ink on white for the header (it is a printout, not a screen), the
+// divider grey for rules. The face is the theme's Archivo, corners are square.
+const REPORT_INK = lightReportTheme.palette.text.primary;
 const REPORT_RULE = lightReportTheme.palette.divider;
 const REPORT_PANEL = lightReportTheme.palette.background.default;
 
@@ -342,7 +343,7 @@ const BPReport = ({ bpLogs, onClose }) => {
               justifyContent: 'center',
               width: 50,
               height: 50,
-              borderRadius: '50%',
+              borderRadius: 0,
               bgcolor: REPORT_INK,
               mr: 2
             }}>
@@ -371,7 +372,7 @@ const BPReport = ({ bpLogs, onClose }) => {
           </Box>
 
           {/* Disclaimer */}
-          <Box sx={{ mb: 2, p: 2, bgcolor: REPORT_PANEL, borderRadius: 1 }}>
+          <Box sx={{ mb: 2, p: 2, bgcolor: REPORT_PANEL, borderRadius: 0 }}>
             <Typography variant="body2" color="text.secondary">
               Based on data from the American Heart Association. This report is not intended to be used for medical purposes.
             </Typography>
@@ -410,7 +411,7 @@ const BPReport = ({ bpLogs, onClose }) => {
               height: 200,
               width: '100%',
               border: `1px solid ${REPORT_RULE}`,
-              borderRadius: 1,
+              borderRadius: 0,
               overflow: 'hidden'
             }}>
               <BPChartNivo
@@ -434,7 +435,7 @@ const BPReport = ({ bpLogs, onClose }) => {
                   sx={{
                     p: 1.5,
                     border: `1px solid ${REPORT_RULE}`,
-                    borderRadius: 1,
+                    borderRadius: 0,
                     backgroundColor: '#ffffff'
                   }}
                 >
@@ -447,7 +448,7 @@ const BPReport = ({ bpLogs, onClose }) => {
                       alignItems: 'center',
                       px: 1.5,
                       py: 0.5,
-                      borderRadius: 1,
+                      borderRadius: 0,
                       backgroundColor: week.category.color,
                       color: 'white',
                       fontWeight: 600,
@@ -504,7 +505,7 @@ const BPReport = ({ bpLogs, onClose }) => {
                           alignItems: 'center',
                           px: 1.5,
                           py: 0.5,
-                          borderRadius: 1,
+                          borderRadius: 0,
                           backgroundColor: week.category.color,
                           color: 'white',
                           fontWeight: 600,
@@ -539,7 +540,7 @@ const BPReport = ({ bpLogs, onClose }) => {
                   alignItems: 'center',
                   gap: 1,
                   border: `2px solid ${cat.color}`,
-                  borderRadius: 1,
+                  borderRadius: 0,
                   px: 1,
                   py: 0.5,
                   bgcolor: cat.color + '20'
@@ -547,7 +548,7 @@ const BPReport = ({ bpLogs, onClose }) => {
                   <Box sx={{
                     width: 12,
                     height: 12,
-                    borderRadius: '50%',
+                    borderRadius: 0,
                     bgcolor: cat.color,
                     display: 'inline-block'
                   }} />

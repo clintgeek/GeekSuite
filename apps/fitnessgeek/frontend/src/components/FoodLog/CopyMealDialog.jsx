@@ -12,7 +12,7 @@ import {
   Chip
 } from '@mui/material';
 import { ContentCopy as CopyIcon } from '@mui/icons-material';
-import { readableOn, useGeekDialogFullScreen } from '@geeksuite/ui';
+import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { mealLabel, mealWord } from '../../utils/plainWords.js';
@@ -272,7 +272,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
               onClick={() => fillIn(preset)}
               variant="outlined"
               // An action pill: 44 tall, round (visual review B5/B6).
-              sx={{ height: 44, borderRadius: 999, fontSize: '0.875rem' }}
+              sx={{ height: 44, fontSize: '0.875rem' }}
             />
           ))}
         </Box>
@@ -358,17 +358,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
         </Box>
 
         {/* What will happen, in words */}
-        <Box sx={{
-          mt: 3,
-          p: 2,
-          bgcolor: 'action.hover',
-          // A nested tile: smaller than the dialog's radius (B6).
-          borderRadius: '16px',
-          border: '1px solid',
-          borderColor: 'divider'
-        }}>
-          {/* action.hover is a tint over the dialog paper, not the paper: the
-              summary read 4.4:1 as text.secondary before it was measured. */}
+        <Box sx={{ mt: 3, pt: 1.5, borderTop: (t) => `5px solid ${t.palette.text.primary}` }}>
           <Typography
             data-testid="copy-summary"
             role="status"
@@ -377,9 +367,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
               fontWeight: 600,
               color: fromMealType && !sameSpot && !nothingThere
                 ? theme.palette.text.primary
-                : readableOn(theme.palette.text.secondary, theme.palette.action.hover, {
-                  under: theme.palette.background.paper,
-                }),
+                : theme.palette.text.secondary,
             })}
           >
             {summary}

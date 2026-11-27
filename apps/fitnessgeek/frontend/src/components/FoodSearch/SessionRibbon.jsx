@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import { Undo as UndoIcon, CheckCircle as LoggedIcon } from '@mui/icons-material';
-import { useTheme, alpha, keyframes } from '@mui/material/styles';
+import { useTheme, keyframes } from '@mui/material/styles';
 import { useGeekToastClearance } from '@geeksuite/ui';
 import { sittingWhat } from './entries.js';
 
@@ -97,11 +97,8 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
         gap: 1,
         px: 2,
         py: 1,
-        borderRadius: 3,
-        border: `1px solid ${alpha(primary, 0.35)}`,
+        border: `2px solid ${theme.palette.text.primary}`,
         backgroundColor: theme.palette.background.paper,
-        backdropFilter: 'blur(8px)',
-        boxShadow: `0 10px 30px -18px ${alpha(theme.palette.common.black, 0.6)}`,
         animation: `${riseIn} 260ms cubic-bezier(0.22, 1, 0.36, 1)`,
         pb: `calc(${theme.spacing(1)} + var(--safe-area-inset-bottom, 0px))`
       }}
@@ -111,7 +108,7 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
         {/* Two lines whatever the name (harness 2026-11-18: "Greek Yogurt,
             Plain Whole Milk added to lunch" wrapped to three): the name on
             one line, cut with an ellipsis; where and how much under it. */}
-        <Typography data-testid="ribbon-what" noWrap sx={{ fontSize: '1rem', fontWeight: 800, color: 'text.primary', lineHeight: 1.3 }}>
+        <Typography data-testid="ribbon-what" noWrap sx={{ fontSize: '1rem', fontWeight: 700, color: 'text.primary', lineHeight: 1.3 }}>
           {what}{' '}
         </Typography>
         <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', lineHeight: 1.3 }}>
@@ -135,7 +132,7 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
           onClick={onDone}
           disabled={busy}
           data-testid="session-done"
-          sx={{ minHeight: 48, borderRadius: 999, fontWeight: 800, fontSize: '1rem', px: 2.5, boxShadow: 'none', flexShrink: 0 }}
+          sx={{ minHeight: 48, fontWeight: 700, fontSize: '1rem', px: 2.5, boxShadow: 'none', flexShrink: 0 }}
         >
           Done
         </Button>

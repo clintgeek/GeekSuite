@@ -2,7 +2,7 @@ import React, { useMemo, useRef } from 'react';
 import { Box, Typography } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { ResponsiveLine } from '@nivo/line';
-import { Surface, SectionLabel, buildChartTheme } from '../primitives';
+import { buildChartTheme } from '../primitives';
 import { bodyCompTrendSeries } from './bodyCompFormat.js';
 import ChartTooltip from '../Weight/chartTooltip.jsx';
 import { macroColors } from '../../theme/theme.jsx';
@@ -77,7 +77,7 @@ const Panel = ({ label, series, color, xMin, xMax, chartTheme, showAxis }) => {
           useMesh
           enableSlices="x"
           curve="monotoneX"
-          lineWidth={2.5}
+          lineWidth={3}
           sliceTooltip={({ slice }) => (guard.armed() ? (
             <ChartTooltip
               chartRef={chartRef}
@@ -98,7 +98,7 @@ const Panel = ({ label, series, color, xMin, xMax, chartTheme, showAxis }) => {
             ({ lineGenerator, series: all }) =>
               all.map(({ id, data: pts, color: c }) =>
                 id.endsWith('readings') ? null : (
-                  <path key={id} d={lineGenerator(pts.map((p) => p.position))} fill="none" stroke={c} strokeWidth={2.5} />
+                  <path key={id} d={lineGenerator(pts.map((p) => p.position))} fill="none" stroke={c} strokeWidth={3} />
                 )),
             ({ points }) =>
               points
@@ -123,8 +123,8 @@ const BodyCompTrend = ({ scans = [] }) => {
   const xMax = allX[allX.length - 1];
 
   return (
-    <Surface>
-      <SectionLabel sx={{ mb: 0.75 }}>Fat and lean mass over time</SectionLabel>
+    <Box sx={{ pt: 1 }}>
+      <Typography component="h4" sx={{ fontWeight: 900, fontSize: '1.0625rem', lineHeight: 1.2, mb: 0.5 }}>Fat and lean mass over time</Typography>
       <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', mb: 2 }}>
         Line: 7-day average · dots: each scan
       </Typography>
@@ -161,7 +161,7 @@ const BodyCompTrend = ({ scans = [] }) => {
           />
         </Box>
       )}
-    </Surface>
+    </Box>
   );
 };
 

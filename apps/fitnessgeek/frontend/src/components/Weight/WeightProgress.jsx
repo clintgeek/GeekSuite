@@ -1,19 +1,11 @@
 import React, { useMemo } from 'react';
-import { Box, Typography, Card, CardContent, LinearProgress, Chip, Button } from '@mui/material';
-import { useTheme, alpha } from '@mui/material/styles';
-import {
-  Flag as GoalIcon,
-  EditOutlined as EditIcon,
-  CalendarToday as CalendarIcon,
-  Speed as SpeedIcon,
-  ArrowForward as ArrowIcon
-} from '@mui/icons-material';
+import { Box, Typography, Button } from '@mui/material';
+import { Flag as GoalIcon } from '@mui/icons-material';
 import { differenceInWeeks, differenceInDays, parseISO, format } from 'date-fns';
 import { shortDay } from '../../utils/dates.js';
 import { utcDateString } from '@geeksuite/utils';
 import { programPace, neededPacePerWeek, trendSince } from './weightTrend.js';
-import { StatNumber, SectionLabel } from '../primitives';
-import { trackColor } from '../../theme/theme.jsx';
+import { LabelPanel, FactHeadline, FactRow, FactColumnHead, LabelBar, Rule, Tag } from '../primitives';
 
 const WeightProgress = ({
   weightLogs = [],
@@ -28,7 +20,6 @@ const WeightProgress = ({
   // Simple (review L25): the trend in words first, and no chip or pace maths.
   simple = false
 }) => {
-  const theme = useTheme();
   const insights = useMemo(() => {
     if (!goal || !goal.enabled || !currentWeight || !goal.startDate || !goal.goalDate) {
       return null;
@@ -132,75 +123,59 @@ const WeightProgress = ({
     // Simple with no goal still leads with the trend, once there is one.
     const looseTrend = simple && noGoal ? trendSince(weightLogs, null) : null;
     const trendLine = looseTrend ? (
-      <Typography component="h2" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 800, lineHeight: 1.2, mb: 1.5, textAlign: 'left' }}>
+      <Typography component="h3" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 800, lineHeight: 1.2, my: 1.5, textAlign: 'left' }}>
         {trendWords(looseTrend, unitWord(unit))}
       </Typography>
     ) : null;
     if (noGoal && firstRunGoal === 'lose' && onEditGoal) {
       // One sentence, one button. No heading announcing what's missing.
       return (
-        <Card>
-          <CardContent sx={{ p: 3 }}>
-            {trendLine}
-            <Typography sx={{ color: 'text.primary', fontSize: '1.0625rem', lineHeight: 1.5, mb: 2 }}>
-              You said you&rsquo;d like to lose a little. Set a goal and this page will show how it&rsquo;s going.
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<GoalIcon />}
-              onClick={onEditGoal}
-              fullWidth
-              sx={{ minHeight: 48, borderRadius: '999px', textTransform: 'none', fontWeight: 700, maxWidth: { sm: 320 } }}
-            >
-              Set your goal
-            </Button>
-          </CardContent>
-        </Card>
+        <LabelPanel level={1} title="Body Facts">
+          {trendLine}
+          <Typography sx={{ color: 'text.primary', fontSize: '1.0625rem', lineHeight: 1.5, mt: trendLine ? 0 : 1.5, mb: 2 }}>
+            You said you&rsquo;d like to lose a little. Set a goal and this page will show how it&rsquo;s going.
+          </Typography>
+          <Button
+            variant="outlined"
+            startIcon={<GoalIcon />}
+            onClick={onEditGoal}
+            sx={{ minHeight: 48, width: { xs: '100%', sm: 'auto' } }}
+          >
+            Set your goal
+          </Button>
+        </LabelPanel>
       );
     }
     return (
-      <Card>
-        <CardContent sx={{ p: 4, textAlign: 'center' }}>
-          {trendLine}
-          <GoalIcon sx={{ fontSize: 48, color: theme.palette.text.disabled, mb: 2 }} />
-          <Typography variant="h6" sx={{ color: theme.palette.text.primary, mb: 1 }}>
-            {needsWeighIn ? 'Weigh in to see your progress' : 'No weight goal yet'}
-          </Typography>
-          <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 3 }}>
-            {needsWeighIn
-              ? 'Your goal is set. Log a weight and your progress shows here.'
-              : 'Set a weight goal and this page will show how it’s going.'}
-          </Typography>
-          {onEditGoal && !needsWeighIn && (
-            <Button
-              variant="contained"
-              startIcon={<GoalIcon />}
-              onClick={onEditGoal}
-              sx={{
-                borderRadius: '999px',
-                px: 3,
-                textTransform: 'none',
-                fontWeight: 700,
-              }}
-            >
-              Set your goal
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+      <LabelPanel level={1} title="Body Facts">
+        {trendLine}
+        <Typography sx={{ fontWeight: 700, fontSize: '1.0625rem', mt: 1.5, mb: 0.5 }}>
+          {needsWeighIn ? 'Weigh in to see your progress' : 'No weight goal yet'}
+        </Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+          {needsWeighIn
+            ? 'Your goal is set. Log a weight and your progress shows here.'
+            : 'Set a weight goal and this page will show how it’s going.'}
+        </Typography>
+        {onEditGoal && !needsWeighIn && (
+          <Button
+            variant="outlined"
+            startIcon={<GoalIcon />}
+            onClick={onEditGoal}
+            sx={{ minHeight: 48, width: { xs: '100%', sm: 'auto' } }}
+          >
+            Set your goal
+          </Button>
+        )}
+      </LabelPanel>
     );
   }
 
-  // Theme palette only — no hex literals (F10). Nothing on this card is red
-  // (review D-2: the plan says "nothing turns red"): behind plan is a warm
-  // warning tint with the words "Behind plan" — never colour alone. The
-  // produce colours mean meals only (visual review B2), so not lemon.
-  const isDark = theme.palette.mode === 'dark';
+  // Theme palette only — no hex literals (F10). Nothing on this panel is red
+  // (review D-2: the plan says "nothing turns red"): behind plan is the
+  // warning fill with the words "Behind plan" — never colour alone; ahead and
+  // on track are the blue.
   const u = unitWord(unit);
-  const tileBg = isDark ? alpha(theme.palette.text.primary, 0.04) : theme.palette.background.default;
-  // Nested tiles take the smaller radius inside the card (B6).
-  const tile = { p: 2, borderRadius: '16px', backgroundColor: tileBg, border: `1px solid ${theme.palette.divider}` };
-
   const total = Math.abs(goal.targetWeight - goal.startWeight);
   const moved = (total * (insights.progressPercent || 0)) / 100;
   const losing = goal.targetWeight < goal.startWeight;
@@ -210,180 +185,117 @@ const WeightProgress = ({
     : 'Holding steady';
   const basis = `From your 7-day average, ${Number(currentWeight).toFixed(1)} ${u}`;
   const trend = simple ? trendSince(weightLogs, goal, currentWeight) : null;
+  const pct = Math.round(insights.progressPercent || 0);
+  const goalByDate = goal?.goalDate ? fmtYmd(utcDateString(goal.goalDate)) : '';
 
   const status = insights.isAhead
-    ? { label: 'Ahead of plan', bg: alpha(theme.palette.primary.main, isDark ? 0.16 : 0.1), ink: theme.palette.text.primary }
+    ? { label: 'Ahead of plan', bg: 'primary.main' }
     : insights.isBehind
-      ? { label: 'Behind plan', bg: alpha(theme.palette.warning.main, isDark ? 0.2 : 0.14), ink: theme.palette.text.primary }
-      : { label: 'On track', bg: alpha(theme.palette.primary.main, isDark ? 0.16 : 0.1), ink: theme.palette.text.primary };
+      ? { label: 'Behind plan', bg: 'warning.main' }
+      : { label: 'On track', bg: 'primary.main' };
+
+  const rateText = insights.currentRate === null
+    ? '—'
+    : `${Math.abs(insights.currentRate).toFixed(1)} ${u} a week`;
 
   return (
-    <Card>
-      <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
-        {/* Simple leads with the trend in words (review L25): how it's going,
-            not the goal maths. */}
-        {trend && (
-          <Box sx={{ mb: 2.5 }}>
-            <Typography component="h2" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 800, lineHeight: 1.2 }}>
-              {trendWords(trend, u)}
-            </Typography>
-            <Typography sx={{ mt: 0.5, fontSize: '1rem', color: 'text.secondary' }}>{basis}</Typography>
-          </Box>
-        )}
-
-        {/* The goal: start → target */}
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            mb: 3,
-            gap: 2,
-          }}
-        >
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <SectionLabel sx={{ mb: 1 }}>Your goal</SectionLabel>
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'baseline',
-                gap: { xs: 1, sm: 1.5 },
-                flexWrap: 'wrap',
-              }}
-            >
-              <StatNumber
-                value={goal.startWeight}
-                unit={u}
-                size="display"
-                decimals={0}
-                // Muted ink, not alpha grey: it read as "disabled" (A7).
-                color={theme.palette.text.muted || theme.palette.text.secondary}
-              />
-              <ArrowIcon sx={{ color: 'text.secondary', fontSize: 20, alignSelf: 'center' }} />
-              <StatNumber
-                value={goal.targetWeight}
-                unit={u}
-                size="display"
-                decimals={0}
-                color={theme.palette.primary.main}
-              />
-            </Box>
-          </Box>
-          {onEditGoal && (
-            <Button
-              size="small"
-              variant="tonal"
-              startIcon={<EditIcon />}
-              onClick={onEditGoal}
-              sx={{ minHeight: 44, flexShrink: 0 }}
-            >
-              Change goal
-            </Button>
-          )}
+    <LabelPanel
+      level={1}
+      title="Body Facts"
+      meta="7-day average"
+      metaRight={
+        <>
+          Goal <b>{trim1(goal.targetWeight)}</b> {u}{goalByDate ? ` by ${goalByDate}` : ''}
+        </>
+      }
+    >
+      {/* Simple leads with the trend in words (review L25): how it's going,
+          not the goal maths. */}
+      {trend && (
+        <Box sx={{ py: 1.25 }}>
+          <Typography component="h3" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 800, lineHeight: 1.2 }}>
+            {trendWords(trend, u)}
+          </Typography>
+          <Typography sx={{ mt: 0.5, fontSize: '1rem', color: 'text.secondary' }}>{basis}</Typography>
         </Box>
+      )}
 
-        {/* Progress: a count, not a percent (review D-2) */}
-        <Box sx={{ mb: simple ? 0 : 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mb: 1, flexWrap: 'wrap' }}>
-            <Typography variant="body2" data-testid="weight-progress-count" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-              {progressText}
-            </Typography>
-            <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-              {trim1(insights.remainingWeight || 0)} {u} to go
-            </Typography>
-          </Box>
-          <LinearProgress
-            variant="determinate"
-            value={insights.progressPercent}
-            aria-label={`Progress to goal weight: ${progressText}`}
-            sx={{
-              height: 12,
-              borderRadius: '999px',
-              backgroundColor: trackColor(theme),
-              '& .MuiLinearProgress-bar': {
-                borderRadius: '999px',
-                backgroundColor: theme.palette.primary.main
-              }
-            }}
+      <FactHeadline caption="Amount this week" name="Weight" value={Number(currentWeight).toFixed(1)} unit={u} />
+      <LabelBar value={insights.progressPercent} label={`Progress to goal weight: ${progressText}`} />
+      {/* One basis for "to go", said out loud (review D-3). */}
+      {!trend && (
+        <Typography data-testid="weight-basis" sx={{ fontSize: '0.9375rem', color: 'text.secondary', mb: 0.5 }}>
+          {basis}
+        </Typography>
+      )}
+
+      <Rule weight="medium" />
+      {!simple && <FactColumnHead>% of goal</FactColumnHead>}
+      <FactRow first name="Started" amount={`${trim1(goal.startWeight)} ${u}`} />
+      <FactRow
+        name={<span data-testid="weight-progress-count">{progressText}</span>}
+        percent={simple ? undefined : `${pct}%`}
+      />
+      <FactRow
+        name={`${trim1(insights.remainingWeight || 0)} ${u} to go`}
+        percent={simple ? undefined : `${Math.max(0, 100 - pct)}%`}
+      />
+
+      {/* Simple stops there: no status, no pace maths (review L25). */}
+      {!simple && (
+        <>
+          <FactRow
+            name="Pace"
+            amount={
+              <>
+                {rateText}
+                <Tag sx={{ ml: 0.75, bgcolor: status.bg }}>
+                  <span data-testid="weight-status">{status.label}</span>
+                </Tag>
+              </>
+            }
           />
-          {/* One basis for "to go", said out loud (review D-3). */}
-          {!trend && (
-            <Typography data-testid="weight-basis" sx={{ mt: 1, fontSize: '0.9375rem', color: 'text.secondary' }}>
-              {basis}
+          <FactRow
+            name="Time left"
+            amount={`${insights.weeksToGoal || 0} ${(insights.weeksToGoal || 0) === 1 ? 'week' : 'weeks'}`}
+            of={`· ${insights.daysToGoal || 0} ${(insights.daysToGoal || 0) === 1 ? 'day' : 'days'} until ${goalByDate || '—'}`}
+          />
+
+          <Rule weight="medium" />
+          {/* Pace: hers beside the one the dates need (review D-2) */}
+          <Box data-testid="weight-pace" sx={{ pt: 1 }}>
+            <Typography sx={{ fontWeight: 600, lineHeight: 1.4 }}>
+              {paceSentence(insights, goal, u)}
             </Typography>
-          )}
-        </Box>
+            {insights.currentRate === null && (
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                {rateWaitText(insights.pace)}
+              </Typography>
+            )}
+          </Box>
 
-        {/* Simple stops there: no chip, no pace maths (review L25). */}
-        {!simple && (
-          <>
-            <Box sx={{ mb: 3 }}>
-              <Chip
-                label={status.label}
-                data-testid="weight-status"
-                sx={{
-                  backgroundColor: status.bg,
-                  color: status.ink,
-                  fontWeight: 700,
-                  borderRadius: '999px',
-                  height: 28
-                }}
-              />
-            </Box>
+          {/* Projection, in words (review D-2) */}
+          <Box data-testid="weight-projection" sx={{ pt: 1, pb: 0.5 }}>
+            <Typography component="span" sx={{ fontWeight: 700, display: 'block' }}>
+              {projectionHeadline(insights, goal)}
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              {projectionCaption(insights, goal, u)}
+            </Typography>
+          </Box>
+        </>
+      )}
 
-            <Box sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-              gap: 2
-            }}>
-              {/* Pace: hers beside the one the dates need (review D-2) */}
-              <Box sx={tile} data-testid="weight-pace">
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <SpeedIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
-                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600 }}>
-                    Your pace
-                  </Typography>
-                </Box>
-                <Typography sx={{ fontWeight: 700, color: theme.palette.text.primary, lineHeight: 1.4 }}>
-                  {paceSentence(insights, goal, u)}
-                </Typography>
-                {insights.currentRate === null && (
-                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                    {rateWaitText(insights.pace)}
-                  </Typography>
-                )}
-              </Box>
-
-              {/* Time left */}
-              <Box sx={tile}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <CalendarIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
-                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600 }}>
-                    Time left
-                  </Typography>
-                </Box>
-                <Typography variant="h6" sx={{ color: theme.palette.text.primary }}>
-                  {insights.weeksToGoal || 0} {(insights.weeksToGoal || 0) === 1 ? 'week' : 'weeks'}
-                </Typography>
-                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                  {insights.daysToGoal || 0} {(insights.daysToGoal || 0) === 1 ? 'day' : 'days'} until {goal?.goalDate ? fmtYmd(utcDateString(goal.goalDate)) : '—'}
-                </Typography>
-              </Box>
-
-              {/* Projection, in words (review D-2) */}
-              <Box sx={{ ...tile, gridColumn: { xs: '1', sm: 'span 2' } }} data-testid="weight-projection">
-                <Typography variant="body1" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-                  {projectionHeadline(insights, goal)}
-                </Typography>
-                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                  {projectionCaption(insights, goal, u)}
-                </Typography>
-              </Box>
-            </Box>
-          </>
-        )}
-      </CardContent>
-    </Card>
+      {onEditGoal && (
+        <Button
+          variant="text"
+          onClick={onEditGoal}
+          sx={{ minHeight: 44, px: 0, mt: 0.5, fontWeight: 700, color: 'primary.main', justifyContent: 'flex-start', '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }}
+        >
+          Change goal
+        </Button>
+      )}
+    </LabelPanel>
   );
 };
 

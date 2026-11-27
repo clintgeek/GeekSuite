@@ -15,14 +15,10 @@ import {
   TextField,
 } from '@mui/material';
 import {
-  MonitorHeart as BPIcon,
-  HealthAndSafety as HealthAlertIcon,
-  Person as PersonIcon,
-  Security as AccountIcon,
   ExpandMore as ExpandIcon,
   Check as CheckIcon,
 } from '@mui/icons-material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import { GeekErrorState, useToast } from '@geeksuite/ui';
 import { useAuth } from '@geeksuite/auth';
 import { settingsService } from '../services/settingsService.js';
@@ -35,7 +31,7 @@ import ExperienceSettings from '../components/Settings/ExperienceSettings.jsx';
 import HeightField from '../components/FitnessGoals/HeightField.jsx';
 import { parseHeightToInches } from '../components/FitnessGoals/calorieCalc.js';
 import { useExperience } from '../contexts/ExperienceContext.jsx';
-import { Surface } from '../components/primitives';
+import { LabelPanel, Page } from '../components/primitives';
 import { SWITCH_ROW } from '../components/Settings/switchRow.js';
 
 /**
@@ -82,21 +78,6 @@ const SEXES = [
 
 const plausibleAge = (v) => Number.isInteger(Number(v)) && Number(v) >= 13 && Number(v) <= 110;
 
-function SectionTitle({ icon: Icon, children, id }) {
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5, gap: 1.25 }}>
-      {Icon && <Icon sx={{ color: 'primary.main' }} />}
-      <Typography
-        component="h2"
-        id={id}
-        sx={{ fontSize: '1.375rem', fontWeight: 800, color: 'text.primary', letterSpacing: '-0.01em' }}
-      >
-        {children}
-      </Typography>
-    </Box>
-  );
-}
-
 function GoalChoice({ selected, onClick, title }) {
   const theme = useTheme();
   return (
@@ -110,9 +91,10 @@ function GoalChoice({ selected, onClick, title }) {
         px: 2,
         minHeight: 56,
         width: '100%',
-        borderRadius: '16px',
+        borderRadius: 0,
+        // The chosen one: a 2px blue border and a blue tick, no tinted fill.
         border: `2px solid ${selected ? theme.palette.primary.main : theme.palette.divider}`,
-        bgcolor: selected ? alpha(theme.palette.primary.main, 0.08) : 'background.paper',
+        bgcolor: 'background.paper',
         '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
       }}
     >
@@ -194,8 +176,8 @@ function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved }) {
   useFlushOnLeave(saveName);
 
   return (
-    <Surface sx={{ mb: 2, borderRadius: '24px' }} id="you" data-testid="about-you">
-      <SectionTitle icon={PersonIcon}>About you</SectionTitle>
+    <LabelPanel title="About you" titleComponent="h2" id="you" data-testid="about-you">
+      <Box sx={{ height: 16 }} />
 
       <TextField
         fullWidth
@@ -228,7 +210,7 @@ function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved }) {
       ) : (
         <ProfileFields profile={profile} onProfileSaved={onProfileSaved} />
       )}
-    </Surface>
+    </LabelPanel>
   );
 }
 
@@ -285,6 +267,7 @@ function ProfileFields({ profile, onProfileSaved }) {
             Used to work out your calorie target.
           </Typography>
           <TextField
+            fullWidth
             label="Age"
             type="number"
             value={age}
@@ -496,8 +479,8 @@ const Settings = () => {
     return (
       <>
         {/* Garmin */}
-        <Surface sx={{ mb: 2 }} id="garmin">
-          <SectionTitle icon={BPIcon}>Garmin</SectionTitle>
+        <LabelPanel title="Garmin" titleComponent="h2" id="garmin">
+          <Box sx={{ height: 12 }} />
           <FormControlLabel
             control={
               <Switch
@@ -545,11 +528,11 @@ const Settings = () => {
               {garminSaving ? 'Saving…' : connected ? 'Update Garmin login' : 'Connect Garmin'}
             </Button>
           )}
-        </Surface>
+        </LabelPanel>
 
         {/* Health alerts — per-user opt-outs (settings.health_alerts, default on) */}
-        <Surface sx={{ mb: 2 }} id="health-alerts">
-          <SectionTitle icon={HealthAlertIcon}>Health alerts</SectionTitle>
+        <LabelPanel title="Health alerts" titleComponent="h2" id="health-alerts">
+          <Box sx={{ height: 8 }} />
           <FormControlLabel
             control={
               <Switch
@@ -564,23 +547,23 @@ const Settings = () => {
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
             Suggests screening when your watch records blood-oxygen dips overnight. Wrist readings are noisy with movement and sleep position — turn this off if you’ve already discussed them with your doctor.
           </Typography>
-        </Surface>
+        </LabelPanel>
       </>
     );
   };
 
   const rest = (
-    <>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.75, md: 2.25 } }}>
       {/* Household — once, here (it used to be on Profile too). */}
-      <Box sx={{ mb: 2 }} id="household">
+      <Box id="household">
         <HouseholdSettings />
       </Box>
 
       {settingsSections()}
 
       {/* Account */}
-      <Surface sx={{ mb: 2 }} id="account">
-        <SectionTitle icon={AccountIcon}>Account</SectionTitle>
+      <LabelPanel title="Account" titleComponent="h2" id="account">
+        <Box sx={{ height: 12 }} />
         <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem' }}>Signed in as</Typography>
         <Typography sx={{ fontSize: '1.0625rem', fontWeight: 700, wordBreak: 'break-word', mb: 2 }} data-testid="account-email">
           {profile?.email || user?.email || ''}
@@ -588,12 +571,12 @@ const Settings = () => {
         <Button variant="outlined" color="error" onClick={() => logout?.()} sx={{ minHeight: 44 }}>
           Sign out
         </Button>
-      </Surface>
-    </>
+      </LabelPanel>
+    </Box>
   );
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 820, mx: 'auto' }}>
+    <Page narrow>
       {/* The top bar already says "Settings"; the page doesn't repeat it. */}
       <ExperienceSettings id="looks">{themeSelect}</ExperienceSettings>
 
@@ -612,7 +595,7 @@ const Settings = () => {
             aria-expanded={moreOpen}
             aria-controls="more-settings"
             endIcon={<ExpandIcon sx={{ transform: moreOpen ? 'rotate(180deg)' : 'none', transition: 'transform 150ms' }} />}
-            sx={{ minHeight: 56, mb: 2, fontSize: '1.0625rem', fontWeight: 700, justifyContent: 'space-between', px: 2.5, borderRadius: '16px', border: '1px solid', borderColor: 'divider' }}
+            sx={{ minHeight: 56, fontSize: '1.0625rem', fontWeight: 700, justifyContent: 'space-between', px: 2.5, border: '2px solid', borderColor: 'text.primary', color: 'text.primary' }}
           >
             More settings
           </Button>
@@ -621,7 +604,7 @@ const Settings = () => {
           </Collapse>
         </>
       ) : rest}
-    </Box>
+    </Page>
   );
 };
 

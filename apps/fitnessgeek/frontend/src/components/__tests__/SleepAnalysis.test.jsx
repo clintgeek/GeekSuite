@@ -9,7 +9,7 @@
  * were really one-a-minute samples.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 
 const getSleepAnalysis = vi.fn();
 vi.mock('../../services/influxService', () => ({
@@ -52,7 +52,8 @@ describe('the headline', () => {
     getSleepAnalysis.mockResolvedValue(analysis());
     render(<SleepAnalysis date="2026-09-22" />);
     expect(await screen.findByText('82/100')).toBeInTheDocument();
-    expect(screen.getByText(/^Good /)).toBeInTheDocument();
+    // The label sits in the headline beside the score (the Body Battery row also says "Good").
+    expect(within(screen.getByText('82/100').parentElement).getByText('Good')).toBeInTheDocument();
   });
 
   it('says there is no score rather than printing a blank or a zero', async () => {

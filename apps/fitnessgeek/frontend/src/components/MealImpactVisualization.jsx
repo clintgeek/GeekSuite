@@ -3,16 +3,12 @@ import { apiService } from '../services/apiService';
 import { influxService } from '../services/influxService';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Stack,
-  Chip,
   CircularProgress,
   Alert,
   ToggleButton,
   ToggleButtonGroup,
-  Divider,
   Grid,
   useTheme
 } from '@mui/material';
@@ -24,6 +20,7 @@ import {
 } from '@mui/icons-material';
 import { ResponsiveLine } from '@nivo/line';
 import { buildChartTheme } from './primitives/chartTheme.js';
+import { LabelPanel, Tag, Rule } from './primitives';
 import { clockTime } from '../utils/dates.js';
 import { fmt, grams } from '../utils/plainWords.js';
 import {
@@ -120,7 +117,6 @@ function calculateMealImpact(intradayData, mealTime) {
  * Meal impact analysis card
  */
 function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
-  const theme = useTheme();
 
   const getMealTime = () => {
     return clockTime(meal.time);
@@ -134,25 +130,25 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
     return change > 10 ? 'error' : change < -5 ? 'success' : 'default';
   };
 
-  return (
-    <Card variant="outlined" sx={{ mb: 2 }}>
-      <CardContent>
-        <Stack spacing={2}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Stack direction="row" spacing={1} alignItems="center">
-              <MealIcon color="primary" />
-              <Box>
-                <Typography variant="subtitle1" fontWeight="bold">
-                  {meal.name}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {`${getMealTime()} · ${fmt(meal.calories)} cal · Protein ${grams(meal.protein)}${grams(meal.protein) === '—' ? '' : 'g'}`}
-                </Typography>
-              </Box>
-            </Stack>
-          </Stack>
+  // A change is coloured only when it has a status (worse / better); the
+  // number beside it is the words.
+  const DeltaTag = ({ children, metric, change }) => {
+    const status = getImpactColor(change, metric);
+    return (
+      <Tag sx={status === 'default' ? undefined : { bgcolor: `${status}.main`, color: `${status}.contrastText` }}>
+        {children}
+      </Tag>
+    );
+  };
 
-          <Divider />
+  return (
+    <LabelPanel title={meal.name} titleComponent="h3" sx={{ mb: 0 }}>
+        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+          <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+            {`${getMealTime()} · ${fmt(meal.calories)} cal · Protein ${grams(meal.protein)}${grams(meal.protein) === '—' ? '' : 'g'}`}
+          </Typography>
+
+          <Rule weight="thin" />
 
           <Grid container spacing={2}>
             {hrImpact && (
@@ -165,11 +161,7 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
                   <Typography variant="body2">
                     {hrImpact.preAvg} → {hrImpact.postAvg} bpm
                   </Typography>
-                  <Chip
-                    label={`${hrImpact.change >= 0 ? '+' : ''}${hrImpact.change} bpm`}
-                    size="small"
-                    color={getImpactColor(hrImpact.change, 'hr')}
-                  />
+                  <DeltaTag metric='hr' change={hrImpact.change}>{`${hrImpact.change >= 0 ? '+' : ''}${hrImpact.change} bpm`}</DeltaTag>
                 </Stack>
               </Grid>
             )}
@@ -184,11 +176,7 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
                   <Typography variant="body2">
                     {stressImpact.preAvg} → {stressImpact.postAvg}
                   </Typography>
-                  <Chip
-                    label={`${stressImpact.change >= 0 ? '+' : ''}${stressImpact.change}`}
-                    size="small"
-                    color={getImpactColor(stressImpact.change, 'stress')}
-                  />
+                  <DeltaTag metric='stress' change={stressImpact.change}>{`${stressImpact.change >= 0 ? '+' : ''}${stressImpact.change}`}</DeltaTag>
                 </Stack>
               </Grid>
             )}
@@ -203,11 +191,7 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
                   <Typography variant="body2">
                     {batteryImpact.preAvg} → {batteryImpact.postAvg}
                   </Typography>
-                  <Chip
-                    label={`${batteryImpact.change >= 0 ? '+' : ''}${batteryImpact.change}`}
-                    size="small"
-                    color={getImpactColor(batteryImpact.change, 'battery')}
-                  />
+                  <DeltaTag metric='battery' change={batteryImpact.change}>{`${batteryImpact.change >= 0 ? '+' : ''}${batteryImpact.change}`}</DeltaTag>
                 </Stack>
               </Grid>
             )}
@@ -224,8 +208,7 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
             </Typography>
           </Box>
         </Stack>
-      </CardContent>
-    </Card>
+    </LabelPanel>
   );
 }
 
@@ -334,17 +317,17 @@ export default function MealImpactVisualization({ date }) {
     switch (selectedMetric) {
       case 'heartRate':
         data = intradayData?.heartRate;
-        color = theme.palette.error.main;
+        color = theme.palette.primary.main;
         label = 'Heart rate (bpm)';
         break;
       case 'stress':
         data = intradayData?.stress;
-        color = theme.palette.warning.main;
+        color = theme.palette.primary.main;
         label = 'Stress';
         break;
       case 'bodyBattery':
         data = intradayData?.bodyBattery;
-        color = theme.palette.success.main;
+        color = theme.palette.primary.main;
         label = 'Body Battery';
         break;
       default:
@@ -367,17 +350,15 @@ export default function MealImpactVisualization({ date }) {
       name: m.name,
       calories: m.calories
     })),
-    theme.palette.primary.main,
+    theme.palette.text.primary,
     domain
   );
 
   return (
     <Box>
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Stack spacing={2}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography variant="h6">How your body answered each meal</Typography>
+      <LabelPanel title="How your body answered each meal" level={1} sx={{ mb: 2.25 }}>
+          <Stack spacing={2} sx={{ pt: 1.5 }}>
+            <Stack direction="row" justifyContent="flex-start" alignItems="center">
               <ToggleButtonGroup
                 value={selectedMetric}
                 exclusive
@@ -445,23 +426,21 @@ export default function MealImpactVisualization({ date }) {
                   lineWidth={2}
                   enablePoints={false}
                   enableArea
-                  areaOpacity={0.13}
+                  areaOpacity={0.1}
                   markers={mealMarkers}
                   useMesh
                   enableSlices="x"
                   sliceTooltip={({ slice }) => (
                     <Box sx={{
                       backgroundColor: theme.palette.background.paper,
-                      border: `1px solid ${theme.palette.divider}`,
-                      borderRadius: '8px',
+                      border: `2px solid ${theme.palette.text.primary}`,
                       px: 1.5,
                       py: 1,
-                      boxShadow: theme.shadows[3],
                     }}>
                       <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                         {formatClockTime(slice.points[0].data.x)}
                       </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
                         {label}: {slice.points[0].data.y}
                       </Typography>
                     </Box>
@@ -481,20 +460,21 @@ export default function MealImpactVisualization({ date }) {
               </Typography>
             </Alert>
           </Stack>
-        </CardContent>
-      </Card>
+      </LabelPanel>
 
-      {/* Individual Meal Impact Cards */}
-      <Typography variant="h6" sx={{ mb: 2 }}>Meal by meal</Typography>
-      {mealImpacts.map((impact, idx) => (
-        <MealImpactCard
-          key={idx}
-          meal={impact.meal}
-          hrImpact={impact.hrImpact}
-          stressImpact={impact.stressImpact}
-          batteryImpact={impact.batteryImpact}
-        />
-      ))}
+      {/* Individual Meal Impact Cards: one panel per meal, two across from md */}
+      <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 900 }}>Meal by meal</Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 1.75, md: 2.25 } }}>
+        {mealImpacts.map((impact, idx) => (
+          <MealImpactCard
+            key={idx}
+            meal={impact.meal}
+            hrImpact={impact.hrImpact}
+            stressImpact={impact.stressImpact}
+            batteryImpact={impact.batteryImpact}
+          />
+        ))}
+      </Box>
     </Box>
   );
 }

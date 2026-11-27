@@ -1,12 +1,12 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
-import { Surface, SectionLabel, StatNumber } from '../primitives';
+import { Rule, StatNumber } from '../primitives';
 import { describeChange, formatDay, formatSpan } from './bodyCompFormat.js';
 
 /** One signed delta. Neutral ink on purpose: a change is information, not a grade. */
 const Delta = ({ label, value }) => (
   <Box sx={{ minWidth: 0 }}>
-    <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 600, mb: 0.5 }}>
+    <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, mb: 0.25 }}>
       {label}
     </Typography>
     {typeof value === 'number' ? (
@@ -39,9 +39,12 @@ const BodyCompChangeCard = ({ summary }) => {
   if (!change.available) {
     const when = change.available_from ? formatDay(change.available_from) : null;
     return (
-      <Surface>
-        <SectionLabel sx={{ mb: 1.25 }}>Change</SectionLabel>
-        <Typography sx={{ color: 'text.primary', fontSize: '1rem', fontWeight: 600, lineHeight: 1.4 }}>
+      <Box>
+        <Rule weight="medium" sx={{ mt: 2 }} />
+        <Box sx={{ pt: 1 }}>
+          <Typography component="h4" sx={{ fontWeight: 900, fontSize: '1.0625rem', lineHeight: 1.2 }}>Change</Typography>
+        </Box>
+        <Typography sx={{ color: 'text.primary', fontSize: '1rem', fontWeight: 600, lineHeight: 1.4, pt: 0.5 }}>
           {when
             ? `Your first comparison appears around ${when}.`
             : 'Your first comparison appears after two weeks of scans.'}
@@ -50,7 +53,7 @@ const BodyCompChangeCard = ({ summary }) => {
           It compares one week&rsquo;s average with another&rsquo;s two weeks later — close enough
           together and the difference is mostly water.
         </Typography>
-      </Surface>
+      </Box>
     );
   }
 
@@ -59,10 +62,13 @@ const BodyCompChangeCard = ({ summary }) => {
   const latest = formatSpan(change.latest?.from, change.latest?.to);
 
   return (
-    <Surface>
-      <SectionLabel sx={{ mb: 1.25 }}>Change</SectionLabel>
+    <Box>
+      <Rule weight="medium" sx={{ mt: 2 }} />
+      <Box sx={{ pt: 1 }}>
+        <Typography component="h4" sx={{ fontWeight: 900, fontSize: '1.0625rem', lineHeight: 1.2 }}>Change</Typography>
+      </Box>
       {reading && (
-        <Typography sx={{ color: 'text.primary', fontSize: '1rem', fontWeight: 600, lineHeight: 1.45 }}>
+        <Typography sx={{ color: 'text.primary', fontSize: '1rem', fontWeight: 600, lineHeight: 1.45, pt: 0.5 }}>
           {reading}
         </Typography>
       )}
@@ -71,7 +77,7 @@ const BodyCompChangeCard = ({ summary }) => {
           display: 'grid',
           gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           columnGap: 2,
-          mt: 2,
+          mt: 1.5,
         }}
       >
         <Delta label="Fat" value={change.fat_change_lb} />
@@ -82,7 +88,7 @@ const BodyCompChangeCard = ({ summary }) => {
         Average of {baseline} ({change.baseline?.scans} {change.baseline?.scans === 1 ? 'scan' : 'scans'})
         {' '}against {latest} ({change.latest?.scans} {change.latest?.scans === 1 ? 'scan' : 'scans'}).
       </Typography>
-    </Surface>
+    </Box>
   );
 };
 

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Box, Button, ButtonBase, CircularProgress, Collapse, TextField, Typography } from '@mui/material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import { Check as CheckIcon, ExpandMore as ExpandIcon } from '@mui/icons-material';
 import { useInRouterContext, useNavigate } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
@@ -10,6 +10,7 @@ import { errorMessage } from '../../utils/errorMessage.js';
 import { buildCaloriePlan, nutritionGoalPayload, parseHeightToInches } from './calorieCalc.js';
 import { MetabolismCard } from './planProvenance.jsx';
 import HeightField from './HeightField.jsx';
+import { LabelPanel, Page, Rule } from '../primitives';
 
 /**
  * Simple's quick target (IA-1, L8; Chef 2026-10-17): one screen in place of
@@ -66,11 +67,10 @@ function BigChoice({ selected, onClick, title, body, testId }) {
         p: 2,
         minHeight: 64,
         width: '100%',
-        borderRadius: '20px',
-        border: `2px solid ${selected ? theme.palette.primary.main : theme.palette.divider}`,
-        // Chosen = basil at 8% with the basil border (visual review B2): the
-        // Lunch leaf tint meant "lunch" everywhere else.
-        bgcolor: selected ? alpha(theme.palette.primary.main, 0.08) : 'background.paper',
+        // The Label: a square choice with an ink edge; the chosen one takes
+        // the blue edge and a filled blue mark, not a tint.
+        border: `2px solid ${selected ? theme.palette.primary.main : theme.palette.text.primary}`,
+        bgcolor: 'background.paper',
         '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
       }}
     >
@@ -80,13 +80,13 @@ function BigChoice({ selected, onClick, title, body, testId }) {
           width: 28, height: 28, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
           bgcolor: selected ? 'primary.main' : 'transparent',
           color: 'primary.contrastText',
-          border: selected ? 'none' : `2px solid ${theme.palette.text.secondary}`,
+          border: selected ? 'none' : `2px solid ${theme.palette.text.primary}`,
         }}
       >
         {selected && <CheckIcon sx={{ fontSize: 20 }} />}
       </Box>
       <Box>
-        <Typography sx={{ fontSize: '1.125rem', fontWeight: 800, color: 'text.primary' }}>{title}</Typography>
+        <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, color: 'text.primary' }}>{title}</Typography>
         {body && <Typography sx={{ fontSize: '1rem', color: 'text.secondary' }}>{body}</Typography>}
       </Box>
     </ButtonBase>
@@ -233,12 +233,11 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
   })();
 
   return (
-    <Box sx={{ maxWidth: 560, mx: 'auto', px: 2, py: { xs: 2, sm: 4 }, display: 'flex', flexDirection: 'column', gap: 3 }} data-testid="quick-target">
+    <Page narrow data-testid="quick-target">
+      <LabelPanel level={1} title="Set your daily target" titleComponent="h1">
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1.5 }}>
       <Box>
-        <Typography component="h1" sx={{ fontSize: { xs: '1.75rem', sm: '2rem' }, fontWeight: 800, lineHeight: 1.2 }}>
-          Set your daily target
-        </Typography>
-        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem', mt: 1 }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
           {maintain ? 'I’ll work out how much to eat to stay about where you are.' : 'Pick a speed and I’ll work out how much to eat each day.'}
         </Typography>
         {currentTarget && (
@@ -317,7 +316,7 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
 
       {!maintain && (
         <Box>
-          <Typography id="quick-speed-label" component="h2" sx={{ fontWeight: 800, fontSize: '1.25rem', mb: 1.25 }}>How fast?</Typography>
+          <Typography id="quick-speed-label" component="h2" sx={{ fontWeight: 900, fontSize: '1.25rem', mb: 1.25 }}>How fast?</Typography>
           <Box role="radiogroup" aria-labelledby="quick-speed-label" sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
             {SPEEDS.map((s) => (
               <BigChoice
@@ -336,9 +335,9 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
         <Box
           aria-live="polite"
           data-testid="quick-result"
-          sx={{ p: 2.5, borderRadius: '20px', border: '2px solid', borderColor: 'primary.main', bgcolor: 'background.paper' }}
         >
-          <Typography sx={{ fontSize: '1.375rem', fontWeight: 800, color: 'text.primary', lineHeight: 1.3 }}>
+          <Rule weight="medium" sx={{ mb: 1.5 }} />
+          <Typography sx={{ fontSize: '1.375rem', fontWeight: 900, color: 'text.primary', lineHeight: 1.3 }}>
             {`Your daily target: ${cal(plan.dailyCalories)} calories.`}
           </Typography>
           <Typography sx={{ fontSize: '1.0625rem', color: 'text.primary', mt: 0.5 }}>{outcome}</Typography>
@@ -381,15 +380,16 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
           <Button
             variant="contained"
             size="large"
-            fullWidth
             onClick={save}
             disabled={!plan || saving}
-            sx={{ minHeight: 48 }}
+            sx={{ minHeight: 52, width: { xs: '100%', md: 'auto' }, alignSelf: { md: 'flex-start' } }}
           >
             {saving ? 'Saving…' : 'Save'}
           </Button>
         )}
       </Box>
-    </Box>
+      </Box>
+      </LabelPanel>
+    </Page>
   );
 }

@@ -1,17 +1,9 @@
 import React from 'react';
-import {
-  Box,
-  Typography,
-  Button,
-  Avatar
-} from '@mui/material';
+import { Box, Typography, Button } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import {
-  Add as AddIcon,
-  Save as SaveIcon
-} from '@mui/icons-material';
 import FoodLogItem from './FoodLogItem.jsx';
-import { mealLook, mealIcon } from './mealLook.js';
+import { LabelPanel, ListRow } from '../primitives';
+import { mealLook } from './mealLook.js';
 import { mealLabel, mealWord } from '../../utils/plainWords.js';
 
 const MealSection = ({
@@ -37,7 +29,6 @@ const MealSection = ({
   simple = false
 }) => {
   const theme = useTheme();
-  const IconComponent = mealIcon(mealType);
   const look = mealLook(mealType, theme);
   const title = mealLabel(mealType);
   const meal = mealWord(mealType);
@@ -87,146 +78,79 @@ const MealSection = ({
     }
   };
 
-  return (
-    <Box sx={{
-      backgroundColor: theme.palette.background.paper,
-      borderRadius: '20px',
-      boxShadow: theme.shadows[1],
-      overflow: 'hidden',
-      border: `1px solid ${theme.palette.divider}`,
-      transition: 'all 0.2s ease',
-      '&:hover': {
-        boxShadow: theme.shadows[3],
-        transform: 'translateY(-2px)'
-      }
-    }}>
-      {/* Header */}
-      <Box sx={{
-        position: 'relative',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        p: { xs: 2, sm: 2.5 },
-        pt: { xs: 2.75, sm: 3.25 },
-        flexWrap: 'wrap',
-        gap: 1,
-        bgcolor: look.headerBg,
-        // The produce edge along the top, as on Home's meal cards.
-        '&::before': {
-          content: '""',
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: 0,
-          height: 6,
-          bgcolor: look.edge,
-        },
-        borderBottom: (logs.length > 0 || justAdded) ? `1px solid ${theme.palette.divider}` : 'none'
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Avatar
-            sx={{
-              bgcolor: look.badge,
-              color: look.badgeInk,
-              width: { xs: 40, sm: 44 },
-              height: { xs: 40, sm: 44 },
-            }}
-          >
-            <IconComponent sx={{ fontSize: { xs: 20, sm: 24 } }} />
-          </Avatar>
-          <Box>
-            <Typography
-              variant="body1"
-              sx={{
-                fontWeight: 700,
-                fontSize: { xs: '1.0625rem', sm: '1.125rem' },
-                color: theme.palette.text.primary,
-              }}
-            >
-              {title}
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: theme.palette.text.secondary,
-                fontSize: { xs: '0.875rem', sm: '0.9375rem' },
-                fontWeight: 600
-              }}
-            >
-              {logs.length === 0 ? 'Nothing yet' : `${Math.round(mealTotals.calories).toLocaleString('en-US')} cal`}
-            </Typography>
-          </Box>
-        </Box>
+  const hasRows = logs.length > 0;
+  const calories = hasRows ? `${Math.round(mealTotals.calories).toLocaleString('en-US')} cal` : 'Nothing yet';
 
-        <Box sx={{ display: 'flex', gap: { xs: 0.5, sm: 1 }, alignItems: 'center' }}>
-          {/* Save as a meal — Full only, and labelled: the bare floppy disk
-              read as "save my log" (UX review L15). */}
-          {!simple && logs.length > 0 && onSaveMeal && (
+  return (
+    <LabelPanel
+      title={
+        <>
+          <Box
+            component="span"
+            aria-hidden
+            sx={{ display: 'inline-block', width: 12, height: 12, bgcolor: look.badge, mr: 1, verticalAlign: 'baseline' }}
+          />
+          {title}
+        </>
+      }
+      action={
+        <Typography component="span" sx={{ fontSize: '1.0625rem', fontWeight: hasRows ? 700 : 400, color: hasRows ? 'text.primary' : 'text.secondary' }}>
+          {calories}
+        </Typography>
+      }
+    >
+      {/* Empty, the title row already says "Nothing yet" (the same words as
+          Home) and "+ Add" below is the way in. */}
+      {justAdded && <Box sx={{ py: 1 }}>{justAdded}</Box>}
+      {hasRows && (
+        <Box>
+          {logs.map((log, i) => {
+            const food_item = log.food_item || log.food_item_id;
+            const foodId = food_item?._id || food_item?.id;
+            return (
+              <FoodLogItem
+                key={log.id || log._id || `${food_item?.name}-${log.meal_type}`}
+                log={log}
+                onEdit={onEditLog}
+                onDelete={onDeleteLog}
+                showActions={showActions}
+                compact={compact}
+                mode={mode}
+                isFavorite={Boolean(foodId && favoriteFoodIds?.has(String(foodId)))}
+                onFavoriteChange={onFavoriteChange}
+                simple={simple}
+                first={i === 0 && !justAdded}
+              />
+            );
+          })}
+        </Box>
+      )}
+
+      {/* The foot: "+ Add" in the meal's own colour of ink, and (Full only,
+          labelled: the bare floppy disk read as "save my log") Save as a meal. */}
+      {(onAddFood || (!simple && hasRows && onSaveMeal)) && (
+        <ListRow first={!hasRows && !justAdded} sx={{ minHeight: 48 }}>
+          {onAddFood ? (
+            <Button
+              onClick={handleAddFood}
+              aria-label={`Add to ${meal}`}
+              sx={{ minHeight: 44, px: 0, justifyContent: 'flex-start', color: look.text, fontWeight: 700, fontSize: '1rem', textTransform: 'none', '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }}
+            >
+              + Add
+            </Button>
+          ) : <span />}
+          {!simple && hasRows && onSaveMeal && (
             <Button
               onClick={handleSaveMeal}
-              startIcon={<SaveIcon />}
               aria-label={`Save ${meal} as a meal`}
-              sx={{ minHeight: 44, color: 'text.secondary', fontWeight: 700, textTransform: 'none' }}
+              sx={{ minHeight: 44, px: 0, color: 'text.primary', fontWeight: 400, fontSize: '0.875rem', textTransform: 'none', '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }}
             >
               Save as a meal
             </Button>
           )}
-
-          {/* + Add — the same word as the Home meal cards. */}
-          {onAddFood && (
-            <Button
-              onClick={handleAddFood}
-              startIcon={<AddIcon />}
-              aria-label={`Add to ${meal}`}
-              sx={{
-                minHeight: 44,
-                px: 2,
-                borderRadius: 999,
-                color: look.badgeInk,
-                bgcolor: look.badge,
-                fontWeight: 800,
-                textTransform: 'none',
-                boxShadow: 'none',
-                // Ink on the produce fill, the Home card's "+ Add" (5.4–10:1).
-                '&:hover, &:active': { bgcolor: look.badge, filter: 'brightness(0.94)' }
-              }}
-            >
-              Add
-            </Button>
-          )}
-        </Box>
-      </Box>
-
-      {/* Content. Empty, the header already says "Nothing yet" (the
-          same words as Home) and its "+ Add" is the button. */}
-      {(logs.length > 0 || justAdded) && (
-      <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
-        {justAdded && <Box sx={{ mb: logs.length > 0 ? 1.5 : 0 }}>{justAdded}</Box>}
-        {logs.length > 0 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {logs.map((log) => {
-              const food_item = log.food_item || log.food_item_id;
-              const foodId = food_item?._id || food_item?.id;
-              return (
-                <FoodLogItem
-                  key={log.id || log._id || `${food_item?.name}-${log.meal_type}`}
-                  log={log}
-                  onEdit={onEditLog}
-                  onDelete={onDeleteLog}
-                  showActions={showActions}
-                  compact={compact}
-                  mode={mode}
-                  isFavorite={Boolean(foodId && favoriteFoodIds?.has(String(foodId)))}
-                  onFavoriteChange={onFavoriteChange}
-                  simple={simple}
-                />
-              );
-            })}
-          </Box>
-        )}
-      </Box>
+        </ListRow>
       )}
-    </Box>
+    </LabelPanel>
   );
 };
 

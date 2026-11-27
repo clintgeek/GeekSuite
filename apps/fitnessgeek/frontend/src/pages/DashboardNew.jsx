@@ -1,12 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Container, Button, Typography } from '@mui/material';
-import {
-  MonitorWeight as WeightIcon,
-  MonitorHeart as BPIcon,
-  DirectionsWalk as StepsIcon,
-  Whatshot as StreakIcon,
-  Add as AddIcon,
-} from '@mui/icons-material';
+import { Box, Button, Typography } from '@mui/material';
+import { Add as AddIcon } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
@@ -15,8 +9,7 @@ import StatCard from '../components/Dashboard/StatCard.jsx';
 import AIInsightsCard from '../components/Dashboard/AIInsightsCard.jsx';
 import PlanAccuracyBanner from '../components/Dashboard/PlanAccuracyBanner.jsx';
 import { weightStatView } from '../components/Dashboard/weightStatView.js';
-import { Surface, SurfaceSkeleton } from '../components/primitives';
-import PlateRing from '../components/Home/PlateRing.jsx';
+import { Surface, SurfaceSkeleton, Page, LabelPanel, FactHeadline, LabelBar, Rule, Tag } from '../components/primitives';
 import MealCards from '../components/Home/MealCards.jsx';
 import MacroStrip from '../components/Home/MacroStrip.jsx';
 import TodayStrip from '../components/Home/TodayStrip.jsx';
@@ -40,19 +33,23 @@ import { useExperience } from '../contexts/ExperienceContext.jsx';
 import { newestReading, todayStrip } from '../utils/checkIns.js';
 import { errorMessage } from '../utils/errorMessage.js';
 import { caloriesSentence, greetingFor, mealTypeForHour } from '../utils/plainWords.js';
-import { MEAL_ORDER } from '../theme/theme.jsx';
+import { MEAL_ORDER, MEAL_LABELS, mealColors } from '../theme/theme.jsx';
 
 /**
  * Home — "how am I doing today?", answered in words
  * (DOCS/SIMPLE_AND_FULL_PLAN.md items 1, 5, 6).
  *
- * Both faces share the top: a greeting, the plate ("You have 660 calories
- * left today"), the Today strip, and four meal cards whose "+ Add" opens the
- * add sheet already set to that meal. Simple (designed around Heather) stops
- * there and adds "Did you take your meds?". Full (Chef) keeps everything the
- * old dashboard had — the plan banner, macros, keto, the weight / BP / steps /
- * streak cards, removing a food with Undo, and the insights card — just
- * calmer: no day-of-year counter, no truncated date, no ALL-CAPS labels.
+ * Drawn as The Label (DOCS/THEME_REVIEW_2026-11.md): both faces share the
+ * top — a greeting, the page's one filled button ("What did you eat?"), and
+ * the "Today's Facts" panel ("You have 660 calories left today", the day's
+ * calories by meal as one split bar, the check-ins in its foot) — then four
+ * meal panels whose "+ Add" opens the add sheet already set to that meal.
+ * Simple (designed around Heather) stops there and adds "Did you take your
+ * meds?". Full (Chef) keeps everything the old dashboard had — the amount
+ * left set huge, the "% of daily target" rows (macros, keto), the plan
+ * footnote, the weight / BP / steps / streak rows, removing a food with
+ * Undo, and the insights panel. From md up the facts panel sits left and the
+ * meals fill a grid on the right.
  *
  * A Simple person who hasn't finished it sees the three-step first run once —
  * never while their saved settings couldn't be read (`experience.known`).
@@ -452,7 +449,7 @@ const DashboardNew = () => {
   if (!experience.loading && experience.known !== false && isSimple && !firstRunDone) {
     const firstMeal = mealTypeForHour(hour);
     return (
-      <Container maxWidth="sm" sx={{ py: { xs: 2, sm: 4 }, px: { xs: 2, sm: 3 } }}>
+      <Page narrow>
         <FirstRun
           suggestedName={displayName || ''}
           mealType={firstMeal}
@@ -463,278 +460,306 @@ const DashboardNew = () => {
           }}
         />
         {addDialog}
-      </Container>
+      </Page>
     );
   }
 
-  // The day, in full words, under the greeting — never "Friday, Septem…".
-  // On a desktop the top bar already says it, so it shows once (review C6).
+  // The day, in full words, as the eyebrow over the greeting — never
+  // "Friday, Septem…". On a desktop the top bar already says it, so it shows
+  // once (review C6).
   const heading = (
-    <Box>
-      <Typography component="h1" sx={{ fontSize: { xs: isSimple ? '1.875rem' : '1.625rem', sm: '2.25rem' }, fontWeight: 800, lineHeight: 1.15 }}>
-        {greeting}
-      </Typography>
-      <Typography sx={{ mt: 0.25, fontSize: '1.0625rem', color: 'text.secondary', fontWeight: 600, display: { xs: 'block', md: 'none' } }}>
+    <Box sx={{ minWidth: 0 }}>
+      <Typography
+        sx={{
+          display: { xs: 'block', md: 'none' },
+          fontSize: '0.8125rem',
+          fontWeight: 700,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: 'text.secondary',
+        }}
+      >
         {longDay(today)}
+      </Typography>
+      <Typography component="h1" sx={{ mt: 0.25, fontSize: { xs: isSimple ? '1.875rem' : '1.625rem', md: '2.25rem' }, fontWeight: 900, lineHeight: 1.1 }}>
+        {greeting}
       </Typography>
     </Box>
   );
 
   if (loading || experience.loading) {
     return (
-      <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3, md: 4 }, px: { xs: 2, sm: 3 } }}>
-        <Box sx={{ mb: 2.5 }}>{heading}</Box>
+      <Page>
+        {heading}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }} aria-busy="true">
           <SurfaceSkeleton rows={3} showHeader={false} height={240} />
           <SurfaceSkeleton rows={2} showHeader={false} height={200} />
         </Box>
-      </Container>
+      </Page>
     );
   }
 
-  const statTone = {
-    weight: theme.palette.primary.main,
-    bp: theme.palette.error.main,
-    steps: theme.palette.success.main,
-    streak: theme.palette.warning.main,
-  };
+  const fmtN = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
+  const eaten = data.calories.consumed;
+  const goal = data.calories.goal;
+  const hasGoal = goal > 0;
+  const overBy = hasGoal && eaten > goal ? eaten - goal : 0;
+  const mealsLogged = MEAL_ORDER.filter((m) => (data.meals[m]?.foods?.length || 0) > 0).length;
+
+  // "Which meal ate my day": the day's calories by meal, in the four meal
+  // colours, as one split bar (it replaces the plate ring). Measured against
+  // the target; with none, against what was eaten.
+  const scale = hasGoal ? goal : Math.max(eaten, 1);
+  const segments = MEAL_ORDER.map((m) => ({ value: (byMeal[m] / scale) * 100, color: mealColors(m, theme.palette.mode).fill }));
+  const byMealWords = MEAL_ORDER.filter((m) => byMeal[m] > 0).map((m) => `${MEAL_LABELS[m]} ${fmtN(byMeal[m])}`).join(', ');
+  const barLabel = loadProblem
+    ? HOME_LOAD_PROBLEM
+    : `${sentence.headline}. ${detailText}.${byMealWords ? ` By meal: ${byMealWords} calories.` : ''}`;
+
+  // In place of the numbers: never "Nothing logged yet" from a failed read.
+  const problemBlock = (
+    <Box role="status" data-testid="home-load-problem" sx={{ pt: 1 }}>
+      <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.35 }}>
+        {HOME_LOAD_PROBLEM}
+      </Typography>
+      <Button variant="outlined" onClick={retryLoad} disabled={retrying} sx={{ mt: 1.25, minHeight: 48, fontWeight: 700, textTransform: 'none' }}>
+        {retrying ? 'Trying…' : 'Try again'}
+      </Button>
+    </Box>
+  );
+
+  const targetOffer = offerTarget && (
+    <Button
+      variant="outlined"
+      data-testid="set-daily-target"
+      // Simple: the one-screen "How fast?" form; Full: the whole plan.
+      onClick={() => navigate(isSimple ? '/calorie-wizard?quick=1' : '/calorie-wizard')}
+      sx={{ mt: 1.5, minHeight: 48, fontWeight: 700, textTransform: 'none' }}
+    >
+      Set your daily target
+    </Button>
+  );
+
+  const checkInLinks = (
+    <TodayStrip
+      items={strip}
+      sx={{ pt: 1.25 }}
+      onMedsClick={isSimple ? () => medsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : undefined}
+    />
+  );
+
+  // ── Today's Facts: the one main panel (The Label) ──
+  // Full: the amount left set huge, the sentence under it in normal weight,
+  // the by-meal bar, the "% of daily target" rows, the check-ins in the foot,
+  // and the plan footnote last. Simple: the sentence set large, the bar, the
+  // check-ins; no percent column, no macros.
+  const factsPanel = isSimple ? (
+    <LabelPanel level={1} title="Today’s Facts" data-testid="home-hero">
+      {loadProblem ? problemBlock : (
+        <Box sx={{ pt: 1 }}>
+          <Typography data-testid="calories-sentence" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 800, lineHeight: 1.2 }}>
+            {sentence.headline}
+          </Typography>
+          <Typography sx={{ mt: 0.5, fontSize: '1.125rem', color: 'text.secondary' }}>{detailText}</Typography>
+        </Box>
+      )}
+      {targetOffer}
+      <LabelBar segments={segments} label={barLabel} sx={{ mt: 1.5 }} />
+      <Rule weight="medium" sx={{ mt: 1 }} />
+      {checkInLinks}
+    </LabelPanel>
+  ) : (
+    <LabelPanel
+      level={1}
+      title="Today’s Facts"
+      data-testid="home-hero"
+      meta={known.logs ? `${mealsLogged} ${mealsLogged === 1 ? 'meal' : 'meals'} logged` : null}
+      metaRight={hasGoal ? <>Target <b>{fmtN(goal)}</b> cal</> : null}
+    >
+      {loadProblem ? problemBlock : (
+        <>
+          <FactHeadline
+            caption={!hasGoal ? 'Eaten today' : overBy > 0 ? 'Over target today' : 'Amount left today'}
+            name="Calories"
+            value={(
+              <Box component="span" data-testid="plate-number" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+                {overBy > 0 && <Tag sx={{ fontSize: '0.875rem', letterSpacing: '0.04em' }}>Over</Tag>}
+                {fmtN(!hasGoal ? eaten : overBy > 0 ? overBy : goal - eaten)}
+              </Box>
+            )}
+          />
+          {/* The answer in words, for a screen reader and a glance — normal
+              weight, so the number isn't shouted twice. */}
+          <Typography sx={{ mt: 0.75, fontSize: '1rem', lineHeight: 1.4 }}>
+            <span data-testid="calories-sentence">{sentence.headline}</span>
+            <Box component="span" sx={{ color: 'text.secondary' }}> · {detailText}</Box>
+          </Typography>
+        </>
+      )}
+      {targetOffer}
+      <LabelBar segments={segments} label={barLabel} sx={{ mt: 1.25, mb: 0.75 }} />
+      {known.summary && (
+        <>
+          <Rule weight="medium" />
+          <MacroStrip
+            calories={{ current: eaten, goal }}
+            protein={data.macros.protein}
+            carbs={data.macros.carbs}
+            fat={data.macros.fat}
+            mode={mode}
+            netCarbsConsumed={data.netCarbs}
+            netCarbLimit={netCarbLimit}
+            proteinNote={proteinBasis === 'lean_mass' ? 'from lean mass' : null}
+          />
+        </>
+      )}
+      <Rule weight="medium" sx={{ mt: known.summary ? 0 : 0.5 }} />
+      {checkInLinks}
+      {/* The calorie-target warning and the scan-BMR offer: a footnote, not a
+          banner above the panel, so the meals stay above the fold. */}
+      <PlanAccuracyBanner
+        nutritionGoal={nutritionGoal}
+        scanBmr={scanBmr}
+        sx={{ mt: 1.25, pt: 0.75, borderTop: `1px solid ${theme.palette.text.primary}` }}
+      />
+    </LabelPanel>
+  );
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3, md: 4 }, px: { xs: 2, sm: 3 }, pb: { xs: 4, md: 6 } }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 2.5 } }}>
+    <Page>
+      {/* The greeting, and the page's one filled button: "What did you eat?"
+          opens the add sheet on this hour's meal. Full width on a phone, top
+          right at its own width from md (UX review 2026-11, A1; Phase 2.13). */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          alignItems: { xs: 'stretch', md: 'flex-end' },
+          justifyContent: 'space-between',
+          gap: { xs: 1.75, md: 2 },
+        }}
+      >
         {heading}
-
-        {/* Simple: the one thing she came to do, first and above the fold —
-            even with Larger text (review Phase 2.13). It opens the add sheet
-            on the meal for this hour. */}
-        {isSimple && (
-          <Button
-            variant="contained"
-            size="large"
-            fullWidth
-            data-testid="what-did-you-eat"
-            onClick={() => setAddMeal(mealTypeForHour(hour))}
-            sx={{ minHeight: 64, borderRadius: '20px', fontSize: '1.25rem', fontWeight: 800, textTransform: 'none' }}
-          >
-            What did you eat?
-          </Button>
-        )}
-
-        {/* Full: the same job, in the compact form (UX review 2026-11, A1).
-            Chef adds food more than anything else, and the first "+ Add" was
-            a screen and a half down under the plate and macros. One normal
-            pill, not Simple's big bar: it opens the sheet on this hour's meal. */}
-        {!isSimple && (
-          <Button
-            variant="outlined"
-            fullWidth
-            startIcon={<AddIcon aria-hidden />}
-            data-testid="full-add-food"
-            onClick={() => setAddMeal(mealTypeForHour(hour))}
-            sx={{
-              minHeight: 48,
-              borderRadius: '999px',
-              borderWidth: 2,
-              fontSize: '1rem',
-              fontWeight: 800,
-              textTransform: 'none',
-              justifyContent: { xs: 'center', sm: 'flex-start' },
-              maxWidth: { sm: 360 },
-              px: 2.5,
-              '&:hover': { borderWidth: 2 },
-            }}
-          >
-            What did you eat?
-          </Button>
-        )}
-
-        {!isSimple && <PlanAccuracyBanner nutritionGoal={nutritionGoal} scanBmr={scanBmr} />}
-
-        {/* The one question, answered: a plate and a sentence. */}
-        <Surface
-          data-testid="home-hero"
+        <Button
+          variant="contained"
+          startIcon={<AddIcon aria-hidden />}
+          data-testid={isSimple ? 'what-did-you-eat' : 'full-add-food'}
+          onClick={() => setAddMeal(mealTypeForHour(hour))}
           sx={{
-            borderRadius: '28px',
-            p: { xs: 2.5, sm: 3.5 },
-            boxShadow: theme.palette.mode === 'dark'
-              ? '0 18px 40px -24px rgba(0,0,0,0.9)'
-              : '0 18px 40px -28px rgba(92,64,32,0.45)',
+            minHeight: { xs: 56, md: 52 },
+            width: { xs: '100%', md: 'auto' },
+            px: { md: 3.5 },
+            flexShrink: 0,
+            fontSize: isSimple ? '1.25rem' : '1.125rem',
+            fontWeight: 700,
+            textTransform: 'none',
           }}
         >
-          <Box
-            sx={{
-              display: 'flex',
-              // Simple: a smaller plate beside the sentence, so the page is
-              // short enough for "What did you eat?" and the meals to show.
-              flexDirection: isSimple ? 'row' : { xs: 'column', sm: 'row' },
-              alignItems: 'center',
-              gap: isSimple ? 2 : { xs: 2, sm: 4 },
-            }}
-          >
-            <PlateRing
-              eaten={data.calories.consumed}
-              goal={data.calories.goal}
-              byMeal={byMeal}
-              size={isSimple ? 104 : 180}
-              // Full: "72%" in the well; the sentence already says what's left.
-              showNumber={!isSimple && !loadProblem}
-              centre="percent"
-              label={loadProblem ? HOME_LOAD_PROBLEM : `${sentence.headline}. ${detailText}.`}
-            />
-            <Box sx={{ minWidth: 0, textAlign: isSimple ? 'left' : { xs: 'center', sm: 'left' } }}>
-              {loadProblem ? (
-                // In place of the sentence: never "Nothing logged yet" from a failed read.
-                <Box role="status" data-testid="home-load-problem">
-                  <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.35 }}>
-                    {HOME_LOAD_PROBLEM}
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    onClick={retryLoad}
-                    disabled={retrying}
-                    sx={{ mt: 1.25, minHeight: 48, borderRadius: '999px', fontWeight: 800, textTransform: 'none' }}
-                  >
-                    {retrying ? 'Trying…' : 'Try again'}
-                  </Button>
-                </Box>
-              ) : (
-                <>
-                  <Typography component="h2" data-testid="calories-sentence" sx={{ fontSize: isSimple ? { xs: '1.375rem', sm: '1.75rem' } : { xs: '1.625rem', sm: '2rem' }, fontWeight: 800, lineHeight: 1.2 }}>
-                    {sentence.headline}
-                  </Typography>
-                  <Typography sx={{ mt: 0.75, fontSize: '1.125rem', color: 'text.secondary' }}>{detailText}</Typography>
-                </>
-              )}
-              {offerTarget && (
-                <Button
-                  variant="outlined"
-                  data-testid="set-daily-target"
-                  // Simple: the one-screen "How fast?" form; Full: the whole plan.
-                  onClick={() => navigate(isSimple ? '/calorie-wizard?quick=1' : '/calorie-wizard')}
-                  sx={{ mt: 1.5, minHeight: 48, borderRadius: '999px', fontWeight: 800, textTransform: 'none' }}
-                >
-                  Set your daily target
-                </Button>
-              )}
-            </Box>
-          </Box>
-          {!isSimple && known.summary && (
-            <Box sx={{ mt: 3, pt: 2.5, borderTop: `1px solid ${theme.palette.divider}` }}>
-              <MacroStrip
-                protein={data.macros.protein}
-                carbs={data.macros.carbs}
-                fat={data.macros.fat}
-                mode={mode}
-                netCarbsConsumed={data.netCarbs}
-                netCarbLimit={netCarbLimit}
-                proteinNote={proteinBasis === 'lean_mass' ? 'from lean mass' : null}
-              />
-            </Box>
-          )}
-        </Surface>
+          What did you eat?
+        </Button>
+      </Box>
 
-        <TodayStrip
-          items={strip}
-          onMedsClick={isSimple ? () => medsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : undefined}
-        />
-
-        <Box component="section" aria-labelledby="todays-meals">
-          <Typography id="todays-meals" component="h2" sx={{ fontSize: '1.375rem', fontWeight: 800, mb: 1.5 }}>
-            Today’s meals
-          </Typography>
-          <MealCards
-            meals={data.meals}
-            compact={isSimple}
-            onAdd={setAddMeal}
-            onRemove={isSimple ? undefined : handleRemoveFood}
-            removingIds={removingLogIds}
-            date={today}
-            justAdded={justAdded}
-            unknown={!known.logs}
-          />
+      {/* Phone: one column. From md: the facts panel left (it stays in view),
+          the meals and everything else right. */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: 'minmax(0, 1fr)',
+            md: 'minmax(0, 340px) minmax(0, 1fr)',
+            lg: 'minmax(0, 400px) minmax(0, 1fr)',
+          },
+          gap: { xs: 1.75, md: 3 },
+          alignItems: 'start',
+        }}
+      >
+        <Box sx={{ position: { md: 'sticky' }, top: { md: 76 }, minWidth: 0 }}>
+          {factsPanel}
         </Box>
 
-        {/* No medications yet: a quiet way in, so she can start. */}
-        {isSimple && !meds.loading && !meds.loadError && meds.total === 0 && (
-          <Box>
-            <Button
-              component={RouterLink}
-              to="/medications"
-              variant="text"
-              data-testid="track-meds"
-              sx={{ minHeight: 48, fontWeight: 700, textTransform: 'none', fontSize: '1.0625rem' }}
-            >
-              Track your meds
-            </Button>
-          </Box>
-        )}
-
-        {isSimple && meds.total > 0 && (
-          <Surface ref={medsRef} sx={{ borderRadius: '24px', scrollMarginTop: 88 }}>
-            <MedsChecklist
-              items={meds.items}
-              taken={meds.taken}
-              total={meds.total}
-              onToggle={meds.toggle}
-              saving={meds.saving}
-              error={meds.error}
-              unknown={meds.ticksUnknown}
-              ticksError={meds.ticksError}
-              onRetry={meds.reload}
-            />
-          </Surface>
-        )}
-
-        {!isSimple && (
-          <Box
-            component="section"
-            aria-label="Your numbers"
-            sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: 1.5 }}
-          >
-            <StatCard
-              icon={WeightIcon}
-              label="Weight"
-              value={data.stats.weight.value ?? '—'}
-              unit={data.stats.weight.unit}
-              caption={data.stats.weight.caption}
-              plainValue
-              color={statTone.weight}
-              delay={40}
-            />
-            <StatCard
-              icon={BPIcon}
-              label="Blood pressure"
-              value={data.stats.bloodPressure.systolic ? `${data.stats.bloodPressure.systolic}/${data.stats.bloodPressure.diastolic}` : '—'}
-              unit="mmHg"
-              trend={data.stats.bloodPressure.trend}
-              trendValue={data.stats.bloodPressure.trendValue}
-              color={statTone.bp}
-              delay={80}
-            />
-            <StatCard
-              icon={StepsIcon}
-              label="Steps"
-              value={data.stats.steps.value?.toLocaleString('en-US') ?? '—'}
-              trend={data.stats.steps.trend}
-              trendValue={data.stats.steps.trendValue}
-              color={statTone.steps}
-              delay={120}
-            />
-            <StatCard
-              icon={StreakIcon}
-              label="Days in a row"
-              value={data.stats.streak.value}
-              unit="days"
-              color={statTone.streak}
-              delay={160}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.75, md: 2.25 }, minWidth: 0 }}>
+          <Box component="section" aria-labelledby="todays-meals">
+            <Typography id="todays-meals" component="h2" sx={{ fontSize: '1.25rem', fontWeight: 900, mb: 1.25, scrollMarginTop: 88 }}>
+              Today’s meals
+            </Typography>
+            <MealCards
+              meals={data.meals}
+              compact={isSimple}
+              onAdd={setAddMeal}
+              onRemove={isSimple ? undefined : handleRemoveFood}
+              removingIds={removingLogIds}
+              date={today}
+              justAdded={justAdded}
+              unknown={!known.logs}
             />
           </Box>
-        )}
 
-        {!isSimple && <AIInsightsCard />}
+          {/* No medications yet: a quiet way in, so she can start. */}
+          {isSimple && !meds.loading && !meds.loadError && meds.total === 0 && (
+            <Box>
+              <Button
+                component={RouterLink}
+                to="/medications"
+                variant="text"
+                data-testid="track-meds"
+                sx={{ minHeight: 48, fontWeight: 700, textTransform: 'none', fontSize: '1.0625rem' }}
+              >
+                Track your meds
+              </Button>
+            </Box>
+          )}
+
+          {isSimple && meds.total > 0 && (
+            <Surface ref={medsRef} sx={{ scrollMarginTop: 88 }}>
+              <MedsChecklist
+                items={meds.items}
+                taken={meds.taken}
+                total={meds.total}
+                onToggle={meds.toggle}
+                saving={meds.saving}
+                error={meds.error}
+                unknown={meds.ticksUnknown}
+                ticksError={meds.ticksError}
+                onRetry={meds.reload}
+              />
+            </Surface>
+          )}
+
+          {!isSimple && (
+            <LabelPanel component="section" aria-label="Your numbers" title="Your numbers">
+              <StatCard
+                first
+                label="Weight"
+                value={data.stats.weight.value ?? '—'}
+                unit={data.stats.weight.unit}
+                caption={data.stats.weight.caption}
+              />
+              <StatCard
+                label="Blood pressure"
+                value={data.stats.bloodPressure.systolic ? `${data.stats.bloodPressure.systolic}/${data.stats.bloodPressure.diastolic}` : '—'}
+                unit="mmHg"
+                trend={data.stats.bloodPressure.trend}
+                trendValue={data.stats.bloodPressure.trendValue}
+              />
+              <StatCard
+                label="Steps"
+                value={data.stats.steps.value?.toLocaleString('en-US') ?? '—'}
+                trend={data.stats.steps.trend}
+                trendValue={data.stats.steps.trendValue}
+              />
+              <StatCard
+                label="Days in a row"
+                value={data.stats.streak.value}
+                unit="days"
+              />
+            </LabelPanel>
+          )}
+
+          {!isSimple && <AIInsightsCard />}
+        </Box>
       </Box>
       {addDialog}
-    </Container>
+    </Page>
   );
 };
 

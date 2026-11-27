@@ -5,17 +5,17 @@ import { useTheme } from '@mui/material/styles';
 const SIZE_MAP = {
   page: {
     fontSize: { xs: '2rem', sm: '2.625rem', md: '3rem' },
-    lineHeight: 1.05,
+    lineHeight: 1,
     letterSpacing: '-0.02em',
   },
   section: {
     fontSize: { xs: '1.5rem', sm: '1.875rem' },
-    lineHeight: 1.1,
+    lineHeight: 1.05,
     letterSpacing: '-0.015em',
   },
   card: {
     fontSize: { xs: '1.25rem', sm: '1.5rem' },
-    lineHeight: 1.15,
+    lineHeight: 1.1,
     letterSpacing: '-0.01em',
   },
   inline: {
@@ -26,7 +26,7 @@ const SIZE_MAP = {
 };
 
 /**
- * DisplayHeading — the rounded, heavy Nunito title type (Market Morning).
+ * DisplayHeading — the heavy Archivo title type (The Label).
  *
  * Use for editorial headings: page titles, surface titles, anywhere you want
  * the plain "human" voice.
@@ -50,7 +50,7 @@ const DisplayHeading = ({
       component={asComponent}
       sx={{
         fontFamily: "inherit",
-        fontWeight: 800,
+        fontWeight: 900,
         color: color || theme.palette.text.primary,
         ...sizeStyles,
         ...sx,

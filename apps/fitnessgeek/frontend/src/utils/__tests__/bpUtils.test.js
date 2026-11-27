@@ -85,9 +85,11 @@ describe('categorizeBP colours come from the theme', () => {
     expect(categorizeBP(190, 70).color).toBe(light.error.main);
   });
 
-  it('Stage 1 is the tomato text tone, not an orange', () => {
-    expect(categorizeBP(135, 75).color).toBe(light.produce.breakfast.text);
-    expect(categorizeBP(135, 75, 'dark').color).toBe(dark.produce.breakfast.text);
+  it('Stage 1 is "high" and so is the error colour: one small set, three colours', () => {
+    expect(categorizeBP(135, 75).color).toBe(light.error.main);
+    expect(categorizeBP(135, 75, 'dark').color).toBe(dark.error.main);
+    // The tone NAME stays 'tomato' for callers that tell Stage 1 from Stage 2.
+    expect(categorizeBP(135, 75).tone).toBe('tomato');
   });
 
   it('takes the night tones in dark mode', () => {

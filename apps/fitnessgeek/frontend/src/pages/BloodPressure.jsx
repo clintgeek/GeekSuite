@@ -1,18 +1,12 @@
 import React, { lazy, Suspense, useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Container,
   Typography,
   Box,
   Button,
   ToggleButton,
   ToggleButtonGroup,
-  CircularProgress,
-  Tabs,
-  Tab,
-  useTheme,
-  useMediaQuery,
-  Grid
+  CircularProgress
 } from '@mui/material';
 import {
   MonitorHeart as BPIcon,
@@ -20,7 +14,7 @@ import {
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
-import { EmptyState, SuspenseSurface } from '../components/primitives';
+import { EmptyState, Page, SuspenseSurface } from '../components/primitives';
 import BPInsights from '../components/BloodPressure/BPInsights.jsx';
 import QuickAddBP from '../components/BloodPressure/QuickAddBP.jsx';
 import BPLogList from '../components/BloodPressure/BPLogList.jsx';
@@ -48,8 +42,6 @@ const BPHRChart = lazy(() => import('../components/BloodPressure/BPHRChart.jsx')
 const BPReport = lazy(() => import('../components/BloodPressure/BPReport.jsx'));
 
 const BloodPressure = () => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { notify } = useToast();
   const [bpLogs, setBPLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -348,157 +340,138 @@ const BloodPressure = () => {
     );
   }
 
+  const gap = { xs: 1.75, md: 2.25 };
+
   return (
-    // On a phone the page's last card clears the "Add BP" ThumbFab (visual
-    // review C1): it used to sit over the end of the readings list.
-    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 'calc(88px + env(safe-area-inset-bottom))', sm: 'calc(88px + env(safe-area-inset-bottom))', md: 3 }, maxWidth: 960, mx: 'auto' }}>
-      {/* Editorial header. "View report" lives up here, not in the full-width row at the
-          page's first scroll where the thumb-zone "Log BP" button rests
-          (review item 9). */}
-      <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
-        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem', flex: '1 1 240px' }}>
-          Track your blood pressure and heart health over time.
-        </Typography>
-        {bpLogs.length > 0 && (
-          <Button
-            onClick={() => setShowReport(true)}
-            variant="tonal"
-            size="small"
-            startIcon={<PdfIcon />}
-          >
-            View report
-          </Button>
-        )}
-      </Box>
+    // `fab`: Page leaves the clearance the "Add BP" ThumbFab needs under the
+    // last panel on a phone and a portrait tablet (visual review C1; the
+    // 2026-11-26 tablet bug).
+    <Page fab>
+      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
+        Track your blood pressure and heart health over time.
+      </Typography>
 
-      {/* The answer first: the week's average, in words (review D-1). A
-          brand-new account has no average, and on a phone its only way in
-          was the floating button: give the page its own first step. */}
-      <Box sx={{ mb: 3 }}>
-        {bpLogs.length === 0 ? (
-          <EmptyState
-            icon={BPIcon}
-            title="No readings yet"
-            copy="Log a reading and I’ll show your average here."
-            action={(
-              <Button
-                variant="contained"
-                size="large"
-                onClick={() => setSearchParams((prev) => {
-                  const next = new URLSearchParams(prev);
-                  next.set('add', '1');
-                  return next;
-                })}
-                sx={{ minHeight: 56, fontWeight: 800 }}
-              >
-                Log your first reading
-              </Button>
-            )}
-          />
-        ) : (
-          <BPInsights bpLogs={bpLogs} />
-        )}
-      </Box>
-
-      {/* Charts. The range toggle sits ABOVE the donut and the trend it
-          governs, and the donut's title names the window (review D-1). */}
-      {bpLogs.length > 0 && (
+      {bpLogs.length === 0 ? (
+        /* A brand-new account has no average, and on a phone its only way in
+           was the floating button: give the page its own first step. */
+        <EmptyState
+          icon={BPIcon}
+          title="No readings yet"
+          copy="Log a reading and I’ll show your average here."
+          action={(
+            <Button
+              variant="contained"
+              size="large"
+              onClick={() => setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.set('add', '1');
+                return next;
+              })}
+              sx={{ minHeight: 56, width: { xs: '100%', md: 'auto' } }}
+            >
+              Log your first reading
+            </Button>
+          )}
+        />
+      ) : (
         <>
-          {/* Time range (View report moved to the page header) */}
+          {/* Phone: one column, in order. From md: Pressure Facts (about
+              400px) left; the range toggle and the charts it governs wide on
+              the right. */}
           <Box
             sx={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              mb: 3,
+              display: 'grid',
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '400px minmax(0, 1fr)' },
+              gap,
+              alignItems: 'start',
             }}
           >
-            <ToggleButtonGroup
-              size="small"
-              value={timeRangeState}
-              exclusive
-              aria-label="Which readings to show"
-              data-testid="bp-range-toggle"
-              onChange={(_e, v) => { if (v) handleTimeRangeChange(v); }}
-              sx={{
-                '& .MuiToggleButton-root': {
-                  minHeight: { xs: 44, sm: 34 },
-                  minWidth: { xs: 56, sm: 44 },
-                  fontSize: '0.8125rem',
-                  // A touch tablet is not a mouse: keep the 44px target.
-                  '@media (pointer: coarse)': { minHeight: 44, minWidth: 56 },
-                },
-              }}
-            >
-              <ToggleButton value="7" aria-label="7 days">7d</ToggleButton>
-              <ToggleButton value="30" aria-label="30 days">30d</ToggleButton>
-              <ToggleButton value="365" aria-label="1 year">1y</ToggleButton>
-              <ToggleButton value="all">All</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
+            {/* The answer first: the week's average, in words (review D-1). */}
+            <BPInsights bpLogs={bpLogs} />
 
-          {insufficientDataMessage && (
-            <Typography
-              sx={{
-                display: 'block',
-                fontSize: '0.75rem',
-                color: 'warning.main',
-                mb: 2,
-                textAlign: 'center',
-              }}
-            >
-              {insufficientDataMessage}
-            </Typography>
-          )}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap, minWidth: 0 }}>
+              {/* Time range and "View report" in one row. The range toggle
+                  sits ABOVE the donut and the trend it governs, and the
+                  donut's title names the window (review D-1). "View report"
+                  stays up here, out of the lane of the floating Log BP button
+                  (review item 9). */}
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                <ToggleButtonGroup
+                  size="small"
+                  value={timeRangeState}
+                  exclusive
+                  aria-label="Which readings to show"
+                  data-testid="bp-range-toggle"
+                  onChange={(_e, v) => { if (v) handleTimeRangeChange(v); }}
+                  sx={{
+                    '& .MuiToggleButton-root': {
+                      minHeight: { xs: 44, sm: 34 },
+                      minWidth: { xs: 56, sm: 44 },
+                      fontSize: '0.8125rem',
+                      // A touch tablet is not a mouse: keep the 44px target.
+                      '@media (pointer: coarse)': { minHeight: 44, minWidth: 56 },
+                    },
+                  }}
+                >
+                  <ToggleButton value="7" aria-label="7 days">7d</ToggleButton>
+                  <ToggleButton value="30" aria-label="30 days">30d</ToggleButton>
+                  <ToggleButton value="365" aria-label="1 year">1y</ToggleButton>
+                  <ToggleButton value="all">All</ToggleButton>
+                </ToggleButtonGroup>
+                <Button
+                  onClick={() => setShowReport(true)}
+                  variant="outlined"
+                  startIcon={<PdfIcon />}
+                  sx={{ minHeight: 44 }}
+                >
+                  View report
+                </Button>
+              </Box>
 
-          <Box sx={{ mb: 3 }}>
-            <SuspenseSurface rows={3} height={220}>
-              <BPCategoryDistribution bpLogs={filteredBPLogs} windowLabel={RANGE_WORDS[timeRangeState]} />
-            </SuspenseSurface>
-          </Box>
+              {insufficientDataMessage && (
+                <Typography sx={{ fontSize: '0.8125rem', color: 'warning.main', fontWeight: 600 }}>
+                  {insufficientDataMessage}
+                </Typography>
+              )}
 
-          <Box sx={{ mb: 3 }}>
-            <SuspenseSurface rows={4} height={320}>
-              <BPChartNivo
-                data={filteredBPLogs}
-                title="Your blood pressure over time"
-              />
-            </SuspenseSurface>
+              <SuspenseSurface rows={3} height={220}>
+                <BPCategoryDistribution bpLogs={filteredBPLogs} windowLabel={RANGE_WORDS[timeRangeState]} />
+              </SuspenseSurface>
+
+              <SuspenseSurface rows={4} height={320}>
+                <BPChartNivo
+                  data={filteredBPLogs}
+                  title="Your blood pressure over time"
+                />
+              </SuspenseSurface>
+            </Box>
           </Box>
 
           {/* Heart Rate series from Garmin */}
           {hrSeries && hrSeries.length > 0 && (
-            <Box sx={{ mb: 3 }}>
-              <SuspenseSurface rows={4} height={300}>
-                <BPHRChart data={hrSeries} title="Heart rate (Garmin)" />
-              </SuspenseSurface>
-            </Box>
+            <SuspenseSurface rows={4} height={300}>
+              <BPHRChart data={hrSeries} title="Heart rate (Garmin)" />
+            </SuspenseSurface>
           )}
         </>
       )}
 
-      {/* Quick Add and Log List Grid */}
-      <Grid container spacing={3}>
-        <Grid item xs={12}>
-          <QuickAddBP
-            onAdd={handleAddBP}
-            unit="mmHg"
-            autoOpen={autoOpenAdd}
-            onAutoOpened={clearAddParam}
-          />
-        </Grid>
-        {/* The empty state above already says "No readings yet". */}
-        {bpLogs.length > 0 ? (
-          <Grid item xs={12} sx={{ width: '100%' }}>
-            <BPLogList
-              logs={bpLogs}
-              onDelete={handleDeleteBP}
-              onEdit={handleEditBP}
-              unit="mmHg"
-            />
-          </Grid>
-        ) : null}
-      </Grid>
+      {/* Quick Add (a desktop panel; the FAB on phones) and the log */}
+      <QuickAddBP
+        onAdd={handleAddBP}
+        unit="mmHg"
+        autoOpen={autoOpenAdd}
+        onAutoOpened={clearAddParam}
+      />
+      {/* The empty state above already says "No readings yet". */}
+      {bpLogs.length > 0 ? (
+        <BPLogList
+          logs={bpLogs}
+          onDelete={handleDeleteBP}
+          onEdit={handleEditBP}
+          unit="mmHg"
+        />
+      ) : null}
 
       {/* Edit dialog — a separate instance from QuickAddBP's own "add"
           dialog, opened from a BPLogList row and pre-filled from it. See
@@ -522,7 +495,7 @@ const BloodPressure = () => {
           />
         </Suspense>
       )}
-    </Box>
+    </Page>
   );
 };
 
