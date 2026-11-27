@@ -14,10 +14,10 @@ import feedUrlModule from '@geeksuite/schemas/newsgeek/feedUrl';
 import prefsSchemaModule from '@geeksuite/schemas/newsgeek/prefs';
 import pathRulesModule from '@geeksuite/schemas/newsgeek/pathRules';
 import {
-  createContext, rankFrontPage, sectionClause, sectionOf, whyChips, LOCAL_WINDOW_DAYS,
+  createContext, rankFrontPage, sectionClause, sectionOf, whyChips, isWireAuthor, LOCAL_WINDOW_DAYS,
 } from './ranking.js';
 import {
-  collapseDuplicates, dupInfo, DUP_WINDOW_MS, OBITUARY_HOSTS,
+  collapseDuplicates, collapseStories, dupInfo, DUP_WINDOW_MS, OBITUARY_HOSTS,
 } from './dedupe.js';
 
 const {
@@ -684,6 +684,7 @@ const rankingContext = (places, viewer, now) => createContext({
 function shapeArticle(a, src, placeMap, ctx, group = null) {
   return {
     id: String(a._id),
+    storyId: a.storyId ? String(a.storyId) : null,
     title: a.title,
     url: a.url,
     excerpt: a.excerpt || '',
@@ -698,7 +699,7 @@ function shapeArticle(a, src, placeMap, ctx, group = null) {
     sections: src.sections || [],
     places: placesOf(a.places, placeMap),
     section: group?.section || sectionOf(ctx, a, src),
-    why: whyChips(ctx, a, src),
+    why: group?.why || whyChips(ctx, a, src),
     alsoIn: group?.alsoIn || [],
   };
 }
@@ -719,10 +720,15 @@ const OBITUARY_HOST_REGEX = new RegExp(`^(?:[^.]+\\.)*(?:${OBITUARY_HOSTS.map(es
 
 /**
  * The other copies of this page's stories: articles in the same list (every
- * filter but the section and the cursor) within DUP_WINDOW_MS of the page,
- * whose title key matches a page row's, or that are obituary-shaped. One read.
+ * filter but the section and the cursor) that either
+ *  - are within DUP_WINDOW_MS of the page and have a page row's title key, or
+ *    are obituary-shaped; or
+ *  - (`stories`, 2026-11-27) share a page row's storyId, whenever published:
+ *    a story runs for days, and its earlier tellings decide whether it was
+ *    already shown on an earlier page.
+ * One read.
  */
-async function duplicateContext({ rows, base, walled, sourceMap }) {
+async function duplicateContext({ rows, base, walled, sourceMap, stories = false }) {
   const keys = new Set();
   for (const r of rows) {
     const info = dupInfo(r, sourceMap.get(String(r.sourceId)));
@@ -730,20 +736,37 @@ async function duplicateContext({ rows, base, walled, sourceMap }) {
     keys.add(info.key);
     if (r.titleKey) keys.add(r.titleKey);
   }
-  if (!keys.size) return [];
+  const storyIds = stories ? [...new Map(rows.filter((r) => r.storyId).map((r) => [String(r.storyId), r.storyId])).values()] : [];
+  if (!keys.size && !storyIds.length) return [];
   const times = rows.map((r) => new Date(r.publishedAt).getTime());
+  const or = [];
+  if (keys.size) {
+    or.push({
+      publishedAt: { $gte: new Date(Math.min(...times) - DUP_WINDOW_MS), $lte: new Date(Math.max(...times) + DUP_WINDOW_MS) },
+      $or: [{ titleKey: { $in: [...keys] } }, { title: { $regex: /obituary/i } }, { publisherDomain: { $regex: OBITUARY_HOST_REGEX } }],
+    });
+  }
+  if (storyIds.length) or.push({ storyId: { $in: storyIds } });
   const and = [
     ...base,
     { _id: { $nin: rows.map((r) => r._id) } },
-    { publishedAt: { $gte: new Date(Math.min(...times) - DUP_WINDOW_MS), $lte: new Date(Math.max(...times) + DUP_WINDOW_MS) } },
-    { $or: [{ titleKey: { $in: [...keys] } }, { title: { $regex: /obituary/i } }, { publisherDomain: { $regex: OBITUARY_HOST_REGEX } }] },
+    { $or: or },
   ];
   if (walled) and.push({ $nor: [walled] });
   return NewsArticle.find({ $and: and }, { embedding: 0 }).limit(DUP_CONTEXT_MAX).lean();
 }
 
 /**
- * newsArticles. Newest first; duplicates collapse WITHIN the page (dedupe.js):
+ * newsArticles. Newest first; stories collapse WITHIN the page (dedupe.js
+ * collapseStories, 2026-11-27: every article of one story, not only copies of
+ * one headline). One source's own page (`sourceId`) is the exception: it lists
+ * every article that source published, so only headline copies collapse.
+ *
+ * A section page keeps a story only when the STORY's section is the page's.
+ * The vote (dedupe.js storySection) always picks a section one of the story's
+ * own articles is filed under, so the story is on exactly one section page.
+ *
+ * The page mechanics (unchanged):
  *  - the page fetches up to limit × 2 rows (≤200), plus one read for the
  *    other copies of those stories around them (duplicateContext);
  *  - a group sits where its newest copy on the page sits, and is shown as
@@ -809,8 +832,10 @@ async function articlePage(args, viewer) {
 
   const sourceMap = new Map(sources.map((s) => [String(s._id), s]));
   const placeMap = placeMapOf(places);
-  const context = await duplicateContext({ rows, base, walled, sourceMap });
-  const groups = collapseDuplicates({ ctx, articles: [...rows, ...context], sourceById: sourceMap });
+  // One source's page lists all of that source's articles: no story grouping there.
+  const byStory = sourceId == null;
+  const context = await duplicateContext({ rows, base, walled, sourceMap, stories: byStory });
+  const groups = (byStory ? collapseStories : collapseDuplicates)({ ctx, articles: [...rows, ...context], sourceById: sourceMap });
 
   const rowIndex = new Map(rows.map((r, i) => [String(r._id), i]));
   const beforeMs = !after && before != null ? new Date(before).getTime() : null;
@@ -823,7 +848,9 @@ async function articlePage(args, viewer) {
   for (const g of groups) {
     const onPage = g.members.map((m) => rowIndex.get(String(m.article._id))).filter((i) => i != null);
     if (!onPage.length) continue;                       // only copies around the page
-    if (section && g.section !== section) continue;     // the group belongs to another section
+    // The story belongs to another section. One of its articles is filed there by the
+    // article rule too (the vote always picks some member's own section), so that page shows it.
+    if (section && g.section !== section) continue;
     const shownEarlier = pagedPast != null && g.members.some((m) => !rowIndex.has(String(m.article._id))
       && pagedPast(m.article) && inThisList(m));
     if (shownEarlier) continue;
@@ -844,13 +871,61 @@ async function articlePage(args, viewer) {
 }
 
 // ---------------------------------------------------------------------------
+// One story (newsStory): every telling the caller can see
+// ---------------------------------------------------------------------------
+
+const STORY_ARTICLES_MAX = 400;
+const STORY_ITEMS_MAX = 100;
+
+/**
+ * The same visibility, Free-to-read and hidden-publisher rules as the lists.
+ * Two reads beside the viewer's: sources + gazetteer, then the articles.
+ */
+async function storyPage(id, viewer) {
+  const storyId = toObjectId(id, 'id');
+  const now = new Date();
+  const [sources, places] = await Promise.all([
+    NewsSource.find(visibleSourceClause(viewer), SOURCE_LIST_FIELDS).lean(),
+    loadAllPlaces(),
+  ]);
+  if (!sources.length) return null;
+  const and = [{ storyId }, { sourceId: { $in: sources.map((s) => s._id) } }, unexpired(now)];
+  const muted = mutedClause(sources, viewer);
+  if (muted) and.push({ $nor: [muted] });
+  const walled = viewer.freeToReadOnly ? paywalledClause(sources, viewer) : null;
+  if (walled) and.push({ $nor: [walled] });
+  const rows = await NewsArticle.find({ $and: and }, { embedding: 0 }).sort({ publishedAt: -1, _id: -1 }).limit(STORY_ARTICLES_MAX).lean();
+  if (!rows.length) return null;
+
+  const ctx = rankingContext(places, viewer, now);
+  const sourceById = new Map(sources.map((s) => [String(s._id), s]));
+  // The story as Today sees it: its headline, section and voices.
+  const whole = collapseStories({ ctx, articles: rows, sourceById }).sort((a, b) => b.members.length - a.members.length)[0];
+  // Its tellings: copies of one headline folded together, newest first.
+  const tellings = collapseDuplicates({ ctx, articles: rows, sourceById }).sort((a, b) => b.newestAt - a.newestAt).slice(0, STORY_ITEMS_MAX);
+  const placeMap = placeMapOf(places);
+  const times = rows.map((r) => new Date(r.publishedAt).getTime());
+  return {
+    id: String(storyId),
+    title: whole.rep.title,
+    section: whole.section,
+    sourceCount: whole.voices,
+    firstAt: new Date(Math.min(...times)),
+    lastAt: new Date(Math.max(...times)),
+    articles: tellings.map((g) => shapeArticle(g.rep, g.source, placeMap, ctx, g)),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Today: the front page (ranking.js)
 // ---------------------------------------------------------------------------
 
 // Scoring needs only these; the chosen stories are read in full afterwards.
 // Duplicate collapse (dedupe.js) also needs the title, publisher and link.
+// Stories (2026-11-27) need the story id, and the byline to tell wire copy.
 const CANDIDATE_FIELDS = {
   sourceId: 1, publishedAt: 1, expiresAt: 1, places: 1, publisherDomain: 1, title: 1, titleKey: 1, publisher: 1, url: 1,
+  storyId: 1, author: 1,
 };
 
 async function frontPage(viewer) {
@@ -879,7 +954,10 @@ async function frontPage(viewer) {
   ]);
 
   const ctx = rankingContext(places, viewer, now);
-  const ranked = rankFrontPage({ ctx, candidates, sources, counts, quotas: viewer.sectionQuotas, collapse: collapseDuplicates });
+  // Wire copy (an AP byline in a local paper) inherits nothing from its carrier. Today only.
+  for (const c of candidates) if (isWireAuthor(c.author)) c.wire = true;
+  const wire = new Set(candidates.filter((c) => c.wire).map((c) => String(c._id)));
+  const ranked = rankFrontPage({ ctx, candidates, sources, counts, quotas: viewer.sectionQuotas, collapse: collapseStories });
   const chosen = ranked.flatMap((s) => s.items.map((e) => e.article._id));
   const full = chosen.length ? await NewsArticle.find({ _id: { $in: chosen } }, { embedding: 0 }).lean() : [];
   const byId = new Map(full.map((a) => [String(a._id), a]));
@@ -893,7 +971,11 @@ async function frontPage(viewer) {
       moreCount: s.moreCount,
       items: s.items
         .filter((e) => byId.has(String(e.article._id))) // purged between the two reads
-        .map((e) => shapeArticle(byId.get(String(e.article._id)), e.source, placeMap, ctx, { section: e.section, alsoIn: e.alsoIn })),
+        .map((e) => {
+          const a = byId.get(String(e.article._id));
+          if (wire.has(String(a._id))) a.wire = true;
+          return shapeArticle(a, e.source, placeMap, ctx, { section: e.section, alsoIn: e.alsoIn, why: e.why });
+        }),
     })).filter((s) => s.items.length),
   };
 }
@@ -1007,6 +1089,11 @@ export const resolvers = {
     newsFrontPage: async (_, __, { user }) => {
       requireUser(user);
       return frontPage(await viewerOf(user, { withRole: false }));
+    },
+
+    newsStory: async (_, { id }, { user }) => {
+      requireUser(user);
+      return storyPage(id, await viewerOf(user, { withRole: false }));
     },
 
     newsSuggestedSources: async (_, __, { user }) => {

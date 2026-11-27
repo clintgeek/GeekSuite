@@ -105,16 +105,17 @@ export function createWorker({
   async function pass() {
     const at = now();
     const [sources, places] = await Promise.all([
-      Source.find({ status: 'active' }).lean(),
+      // Broken sources too: they are retried once a day and come back by themselves (pollFeed).
+      Source.find({ status: { $in: ['active', 'broken'] } }).lean(),
       Place.find({}, { slug: 1, name: 1, aliases: 1, parentId: 1, kind: 1 }).lean(),
     ]);
     const matcher = buildPlaceMatcher(places);
     // An aggregator item from a publisher we already read directly is a
     // duplicate: compare against every active non-aggregator homepage.
-    const directDomains = [...new Set(sources.filter((s) => s.kind !== 'aggregator').map((s) => domainOf(s.homepage)).filter(Boolean))];
+    const directDomains = [...new Set(sources.filter((s) => s.kind !== 'aggregator' && s.status === 'active').map((s) => domainOf(s.homepage)).filter(Boolean))];
     const due = dueFeeds(sources, at);
     const { run, deferred } = throttleDue(due, { at, lastBloxAt, minGapMs: bloxMinGapMs });
-    state.activeSources = sources.length;
+    state.activeSources = sources.filter((s) => s.status === 'active').length;
     state.feedsDue = due.length;
 
     let polled = 0;

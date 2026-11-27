@@ -50,6 +50,8 @@ describe('excerpts', () => {
 
   test('unknown named entities are left as text', () => {
     assert.equal(decodeEntities('a &bogus; b'), 'a &bogus; b');
+    // Capitals too: PBS wrote "&Aacute;brego García" (2026-11-26).
+    assert.equal(decodeEntities('&Aacute;brego Garc&iacute;a, S&atilde;o Paulo, &Ntilde;u'), 'Ábrego García, São Paulo, Ñu');
   });
 });
 

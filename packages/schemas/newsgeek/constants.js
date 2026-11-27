@@ -18,7 +18,9 @@ const SECTIONS = ['local', 'state', 'national', 'world', 'tech'];
 const STORY_SECTIONS = ['local', 'state', 'national', 'world', 'tech', 'around'];
 
 // discovered → verified → active; broken after repeated failures (or a stale
-// feed); retired by hand. Only `active` sources are polled.
+// feed); retired by hand. `active` sources are polled on their interval; a
+// `broken` one is still tried once a day and goes back to `active` when it
+// answers (2026-11-27).
 const SOURCE_STATUSES = ['discovered', 'verified', 'active', 'broken', 'retired'];
 
 const FEED_FORMATS = ['rss', 'atom', 'nws'];
@@ -48,6 +50,7 @@ const COLLECTIONS = {
   places: 'places',
   articles: 'articles',
   prefs: 'prefs',
+  stories: 'stories',
 };
 
 module.exports = {

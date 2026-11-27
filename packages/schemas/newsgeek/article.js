@@ -29,7 +29,8 @@ function articleDefinition(mongoose) {
     fetchedAt: { type: Date, required: true },
     expiresAt: { type: Date, default: null },      // NWS alerts: leaves the briefing after this
     places: { type: [mongoose.Schema.Types.ObjectId], default: [] },
-    // N1 (clustering) fills these; N0 leaves them empty.
+    // N1 (clustering) fills these: the embed indexer the vector, the story
+    // assigner the story. An article with no story yet still shows, on its own.
     embedding: {
       model: { type: String, default: null },
       vector: { type: [Number], default: undefined },
@@ -46,6 +47,8 @@ function createArticleSchema(mongoose) {
   schema.index({ publishedAt: -1 });
   schema.index({ places: 1, publishedAt: -1 });
   schema.index({ storyId: 1 });
+  // The story assigner's queue: no story yet, oldest first (jobs/storyAssigner.js).
+  schema.index({ storyId: 1, publishedAt: 1 });
   return schema;
 }
 

@@ -77,8 +77,31 @@ export const typeDefs = gql`
     paywalled: Boolean!
   }
 
+  # One event as several outlets told it (2026-11-27; the backend's story
+  # assigner groups the articles, apps/newsgeek/DOCS/CLUSTERING.md). Per
+  # reader: only articles from sources the caller sees, with Free to read and
+  # hidden publishers applied.
+  type NewsStory {
+    id: ID!
+    # The headline Today would show for it.
+    title: String!
+    # local | state | national | world | tech | around, for the caller.
+    section: String!
+    # Distinct outlets (a syndicated copy adds none).
+    sourceCount: Int!
+    firstAt: Date!
+    lastAt: Date!
+    # One item per telling, newest first; copies of one headline are folded
+    # into its alsoIn. At most 100.
+    articles: [NewsArticle!]!
+  }
+
   type NewsArticle {
     id: ID!
+    # The story this article belongs to (2026-11-27): the id for newsStory.
+    # Null until the backend has assigned one (minutes after ingest), and for
+    # articles older than its look-back.
+    storyId: ID
     title: String!
     url: String!
     excerpt: String!
@@ -261,6 +284,9 @@ export const typeDefs = gql`
     newsArticles(section: String, placeId: ID, sourceId: ID, before: Date, cursor: String, limit: Int): NewsArticlePage!
     # Today: the ranked front page for the caller (ranking.js).
     newsFrontPage: NewsFrontPage!
+    # One story, every telling of it the caller can see (2026-11-27). Null when
+    # the id is unknown or nothing of it is visible to the caller.
+    newsStory(id: ID!): NewsStory
     # Aggregator articles, last 30 days, grouped by publisher domain, minus domains a
     # non-aggregator source already reads; top 30 by count.
     newsSuggestedSources: [NewsSuggestion!]!

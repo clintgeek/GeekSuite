@@ -6,7 +6,7 @@
 import { describe, test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import constants from '@geeksuite/schemas/newsgeek/constants';
-import { pollFeed, backoffMs, MAX_BACKOFF_MIN } from '../src/ingest/pollFeed.js';
+import { pollFeed, normalizeItem, backoffMs, MAX_BACKOFF_MIN, BROKEN_RETRY_MS, FILE_NAME_TITLE } from '../src/ingest/pollFeed.js';
 import { buildPlaceMatcher } from '../src/ingest/places.js';
 import { USER_AGENT } from '../src/ingest/fetchFeed.js';
 import { noJitter } from '../src/ingest/platform.js';
@@ -332,6 +332,30 @@ describe('failures', () => {
     assert.equal(src.feeds[0].consecutiveFailures, BROKEN_AFTER_FAILURES);
   });
 
+  test('a broken source is still tried, once a day (2026-11-27: eight had been dark for six weeks)', async () => {
+    await Source.updateOne({ slug: 'kark' }, { $set: { status: 'broken', 'feeds.0.consecutiveFailures': BROKEN_AFTER_FAILURES } });
+    const out = await poll('kark', fakeFetch({ 'https://www.kark.com/news/feed/': status(500) }));
+    assert.equal(out.ok, false);
+    const src = await load('kark');
+    assert.equal(src.status, 'broken');
+    assert.equal(src.feeds[0].nextPollAt.getTime(), NOW.getTime() + BROKEN_RETRY_MS);
+    // One short of the threshold still backs off at the 6 h ceiling, not a day.
+    await Source.updateOne({ slug: 'katv' }, { $set: { 'feeds.0.consecutiveFailures': BROKEN_AFTER_FAILURES - 2 } });
+    await poll('katv', fakeFetch({ 'https://katv.com/news/local.rss': status(500) }));
+    assert.equal((await load('katv')).feeds[0].nextPollAt.getTime(), NOW.getTime() + MAX_BACKOFF_MIN * MIN);
+  });
+
+  test('a broken source that answers again is active again', async () => {
+    await Source.updateOne({ slug: 'arkadelphian' }, { $set: { status: 'broken', 'feeds.0.consecutiveFailures': BROKEN_AFTER_FAILURES, 'feeds.0.lastError': 'HTTP 429' } });
+    const out = await poll('arkadelphian', fakeFetch({ [ARK_FEED]: ok(fixture('rss.xml')) }));
+    assert.equal(out.ok, true);
+    const src = await load('arkadelphian');
+    assert.equal(src.status, 'active');
+    assert.equal(src.feeds[0].consecutiveFailures, 0);
+    assert.equal(src.feeds[0].lastError, null);
+    assert.ok(await Article.countDocuments({ sourceId: src._id }) > 0);
+  });
+
   test('a retired source is never flipped to broken', async () => {
     await Source.updateOne({ slug: 'kark' }, { $set: { status: 'retired', 'feeds.0.consecutiveFailures': BROKEN_AFTER_FAILURES + 5 } });
     await poll('kark', fakeFetch({ 'https://www.kark.com/news/feed/': status(500) }));
@@ -413,6 +437,19 @@ describe('targeted state writes', () => {
     assert.equal(after2.feeds.length, 2);
     assert.equal(after2.feeds[0].lastHttpStatus, 200);
     assert.equal(after2.feeds[1].lastFetchAt, null, 'only the polled feed was written');
+  });
+});
+
+describe('a bare file name is not a headline', () => {
+  test('"IMG_7944#2.jpg" is dropped as file_title; a headline that mentions a file is kept', () => {
+    const source = { _id: 's1', name: 'Paper', kind: 'journalism', homepage: 'https://paper.test', places: [] };
+    const feed = { url: 'https://paper.test/feed' };
+    const item = (title) => normalizeItem({ title, link: 'https://paper.test/a', guid: 'g1', date: NOW.toISOString() }, { source, feed, fetchedAt: NOW });
+    assert.equal(item('IMG_7944#2.jpg').drop, 'file_title');
+    assert.equal(item('scan0003.PNG').drop, 'file_title');
+    assert.equal(item('Board of Directors Regular Meeting Materials (PDF)').drop, undefined);
+    assert.equal(item('County releases budget.jpg scans to the public').drop, undefined);
+    assert.ok(FILE_NAME_TITLE.test('photo.jpeg'));
   });
 });
 

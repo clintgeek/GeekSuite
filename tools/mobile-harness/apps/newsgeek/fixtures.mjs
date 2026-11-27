@@ -80,6 +80,8 @@ const pl = (id) => {
 const A = (id, mins, o) => ({
   __typename: 'NewsArticle',
   id,
+  // Stories (2026-11-27): null until the backend has grouped the article.
+  storyId: null,
   url: `https://example.com/${id}/`,
   excerpt: null,
   expiresAt: null,
@@ -129,6 +131,7 @@ const ARTICLES = [
     publisher: 'KATV', sourceId: 's-katv', sourceName: 'KATV', sourceKind: 'journalism',
     sections: ['state'], places: [pl('arkansas')],
     // An AP story three other stations ran too; the gateway shows one copy.
+    storyId: 'st-pursuit',
     alsoIn: [
       { __typename: 'NewsAlsoIn', publisher: 'KARK', url: 'https://example.com/kark/pursuit-i30/', sourceId: 's-kark' },
       { __typename: 'NewsAlsoIn', publisher: 'THV11', url: 'https://example.com/thv11/pursuit-i30/', sourceId: 's-thv11' },
@@ -308,7 +311,55 @@ const publisherPrefs = (mode) => ({
 // ── Today: the front page ───────────────────────────────────────────────────
 const byId = (id) => ARTICLES.find((a) => a.id === id);
 const front = (id, section, why, o = {}) => ({ ...(byId(id) ?? A(id, 0, {})), ...o, section, why });
+// Top Stories (2026-11-27): the story the most outlets told leads the paper,
+// with "N sources" and the section it would otherwise be in as its chips.
+const TOP_STORY = A('t1', 50, {
+  title: 'Supreme Court strikes down the tariff order in a 6-3 ruling',
+  excerpt: 'The justices said the president exceeded the authority Congress gave him; refunds to importers are not yet settled.',
+  publisher: 'NPR', sourceId: 's-npr', sourceName: 'NPR', sourceKind: 'journalism', sections: ['national'],
+  storyId: 'st-tariff',
+  alsoIn: [
+    { __typename: 'NewsAlsoIn', publisher: 'PBS NewsHour', url: 'https://example.com/pbs/tariff-ruling/', sourceId: 's-pbs' },
+    { __typename: 'NewsAlsoIn', publisher: 'The Hill', url: 'https://example.com/hill/tariff-ruling/', sourceId: 's-hill' },
+    { __typename: 'NewsAlsoIn', publisher: 'AP News', url: 'https://example.com/ap/tariff-ruling/', sourceId: 's-gnews' },
+    { __typename: 'NewsAlsoIn', publisher: 'KATV', url: 'https://example.com/katv/tariff-ruling/', sourceId: 's-katv' },
+    { __typename: 'NewsAlsoIn', publisher: 'BBC News', url: 'https://example.com/bbc/tariff-ruling/', sourceId: 's-bbc' },
+  ],
+});
+// The story page (`/story/:id`): one item per telling, newest first.
+const TELLING = (id, mins, publisher, title, excerpt, o = {}) => A(id, mins, {
+  title, excerpt, publisher, sourceId: 's-npr', sourceName: publisher, sourceKind: 'journalism', sections: ['national'], storyId: 'st-tariff', ...o,
+});
+const STORIES = {
+  'st-tariff': {
+    __typename: 'NewsStory',
+    id: 'st-tariff',
+    title: TOP_STORY.title,
+    section: 'national',
+    sourceCount: 12,
+    firstAt: ago(1500),
+    lastAt: ago(50),
+    articles: [
+      { ...TOP_STORY, alsoIn: [] },
+      TELLING('t2', 95, 'The Hill', 'Five takeaways from the tariff ruling', 'What the decision means for the trade deals struck since spring, and for the next fight in Congress.'),
+      TELLING('t3', 180, 'PBS NewsHour', 'Justices void the tariff order', 'A look at the majority opinion, the two dissents and what importers can expect next.'),
+      TELLING('t4', 240, 'AP News', 'Supreme Court rules against the president on tariffs', '', {
+        viaAggregator: true, publisherDomain: 'apnews.com', sourceId: 's-gnews', sourceName: 'Google News: South Arkansas', sourceKind: 'aggregator',
+        alsoIn: [
+          { __typename: 'NewsAlsoIn', publisher: 'KATV', url: 'https://example.com/katv/tariff-ruling/', sourceId: 's-katv' },
+          { __typename: 'NewsAlsoIn', publisher: 'KARK', url: 'https://example.com/kark/tariff-ruling/', sourceId: 's-kark' },
+        ],
+      }),
+      TELLING('t5', 1500, 'BBC News', 'US top court to rule on Trump tariffs within days', 'The case has been watched closely in capitals from Ottawa to Beijing.'),
+    ],
+  },
+};
+
 const FRONT_SECTIONS = [
+  {
+    key: 'top', title: 'Top Stories', moreCount: 0,
+    items: [{ ...TOP_STORY, section: 'national', why: ['12 sources', 'National'] }],
+  },
   {
     key: 'local', title: 'Local', moreCount: 7,
     items: [
@@ -458,6 +509,9 @@ export async function routes(ctx) {
       case 'NewsFrontPage':
         if (mode === 'error') return GATEWAY_ERROR;
         return { newsFrontPage: frontPageFor(mode) };
+      case 'NewsStory':
+        if (mode === 'error') return GATEWAY_ERROR;
+        return { newsStory: STORIES[vars.id] ?? null };
       case 'NewsHomePlaces':
         return { newsPrefs: { __typename: 'NewsPrefs', homePlaces: mode === 'nonadmin' ? [] : HOME_PLACES } };
       case 'NewsSetHomePlaces':

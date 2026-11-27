@@ -261,6 +261,26 @@ export const scenes = [
       return undefined;
     },
   },
+  // Stories (2026-11-27). Today now leads with Top Stories (scene 26 shows it).
+  // A story's "Also in" list, opened: the outlets, then "All coverage →".
+  {
+    name: '53-also-in-all-coverage',
+    goto: '/',
+    wait: 1600,
+    freshPage: true,
+    async setup(page, h) {
+      const btn = page.getByRole('button', { name: /^Also in PBS NewsHour/ });
+      if (!(await btn.count())) return false;
+      await btn.first().click();
+      await page.getByTestId('all-coverage').first().waitFor({ timeout: 5000 });
+      await h.settle(400);
+      return undefined;
+    },
+  },
+  // The story page: the headline, "12 sources · National", every telling.
+  { name: '54-story', goto: '/story/st-tariff', wait: 1600 },
+  // A story that has aged out of the paper.
+  { name: '55-story-gone', goto: '/story/st-none', wait: 1600 },
 ];
 
 export const waivers = [];

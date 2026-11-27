@@ -330,6 +330,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `newsSource(id: ID!)` | `NewsSource` |
 | `newsArticles(section: String, placeId: ID, sourceId: ID, before: Date, cursor: String, limit: Int)` | `NewsArticlePage!` |
 | `newsFrontPage` | `NewsFrontPage!` |
+| `newsStory(id: ID!)` | `NewsStory` |
 | `newsSuggestedSources` | `[NewsSuggestion!]!` |
 
 **Mutations**

@@ -32,6 +32,12 @@ const DAY_MS = 24 * HOUR_MS;
 
 /** Backoff ceiling: a failing feed is still tried at least every 6 h. */
 export const MAX_BACKOFF_MIN = 6 * 60;
+/**
+ * A BROKEN source is still tried, this often (2026-11-27). Before, only
+ * `active` sources were polled, so a source that broke stayed dead until
+ * someone revived it by hand: eight had been dark for six weeks.
+ */
+export const BROKEN_RETRY_MS = 24 * HOUR_MS;
 /** A Retry-After longer than this is treated as this (a typo'd header must not park a feed for a year). */
 export const MAX_RETRY_AFTER_MS = 24 * HOUR_MS;
 /** Same source + same normalized title within this window = the same article. */
@@ -43,6 +49,8 @@ export const STALE_FLOOR_MS = 3 * DAY_MS;
 export const STALE_GAP_SAMPLE = 10;
 
 const ERROR_MAX = 300;
+/** A title that is only a media file's name. */
+export const FILE_NAME_TITLE = /^\S+\.(?:jpe?g|png|gif|webp|heic|mp4|mov)$/i;
 
 const isDupKey = (err) => err?.code === 11000;
 
@@ -101,6 +109,8 @@ export function normalizeItem(raw, {
   let title = cleanTitle(raw.title);
   if (isAggregator) title = stripPublisherSuffix(title, publisher);
   if (!title) return { drop: 'no_title' };
+  // A bare file name is a photo page, not a story ("IMG_7944#2.jpg", seen on Today 2026-11-27).
+  if (FILE_NAME_TITLE.test(title)) return { drop: 'file_title' };
 
   // The link. N0 keeps a Google News wrapper as-is (unwrapping is a follow-up).
   let url = String(raw.link || '').trim();
@@ -254,7 +264,9 @@ async function recordFailure({ Source, source, feed, at, status, message, retryA
   const backoff = backoffMs(effectivePollMin(feed), failures, retryAfterMs);
   // Jittered like every nextPollAt, but never earlier than a Retry-After asked.
   const asked = Number.isFinite(retryAfterMs) ? Math.min(retryAfterMs, MAX_RETRY_AFTER_MS) : 0;
-  const delay = Math.max(jitter(backoff), asked);
+  let delay = Math.max(jitter(backoff), asked);
+  // Past the broken threshold the feed is only tried once a day.
+  if (failures >= BROKEN_AFTER_FAILURES) delay = Math.max(delay, jitter(BROKEN_RETRY_MS));
   await writeFeedState(Source, source, feed, {
     lastFetchAt: at,
     lastHttpStatus: status ?? null,
@@ -346,6 +358,12 @@ export async function pollFeed({
     fields.stale = await isStale({ Article, source, feed, now: at });
   }
   await writeFeedState(Source, source, feed, fields);
+
+  // A broken source that answers again is active again (its other feeds too).
+  if (source.status === 'broken') {
+    const res2 = await Source.updateOne({ _id: source._id, status: 'broken' }, { $set: { status: 'active' } });
+    if ((res2.modifiedCount || 0) > 0) log?.info({ event: 'source_recovered', source: source.slug }, 'broken source answered; active again');
+  }
 
   if (fields.stale && !feed.stale) {
     log?.warn({ event: 'feed_stale', source: source.slug }, 'feed answers but has stopped producing new items');

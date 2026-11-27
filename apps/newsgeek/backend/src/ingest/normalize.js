@@ -17,6 +17,10 @@ const NAMED_ENTITIES = {
   ntilde: 'ñ', ccedil: 'ç', uuml: 'ü', ouml: 'ö', auml: 'ä', szlig: 'ß', thinsp: ' ',
   ensp: ' ', emsp: ' ', zwnj: '', zwj: '', shy: '', prime: '′', Prime: '″', dagger: '†',
   euro: '€', pound: '£', cent: '¢', sect: '§', para: '¶',
+  // Capitals and the rest of the accents names are written with ("&Aacute;brego García", PBS, 2026-11-26).
+  Aacute: 'Á', Eacute: 'É', Iacute: 'Í', Oacute: 'Ó', Uacute: 'Ú', Ntilde: 'Ñ', Ccedil: 'Ç', Uuml: 'Ü', Ouml: 'Ö', Auml: 'Ä',
+  Agrave: 'À', Egrave: 'È', acirc: 'â', ecirc: 'ê', icirc: 'î', ocirc: 'ô', ucirc: 'û', atilde: 'ã', otilde: 'õ',
+  igrave: 'ì', ograve: 'ò', ugrave: 'ù', euml: 'ë', iuml: 'ï', aring: 'å', oslash: 'ø', aelig: 'æ',
 };
 
 /** Decode HTML character references (named — the common set — and numeric). */

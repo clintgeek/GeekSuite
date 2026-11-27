@@ -153,6 +153,25 @@ const BASE_SOURCES = [
     slug: 'bbc-world', name: 'BBC News', homepage: 'https://www.bbc.com/news', kind: 'journalism', sections: ['world'], places: [],
     feeds: [feed('https://feeds.bbci.co.uk/news/world/rss.xml', 15)], access: walled('bbc-world', EXCERPT), notes: 'World feed.',
   },
+  // World (2026-11-27): BBC was the only world-first source, so World was
+  // never more than two BBC stories. Each feed fetched that day with the
+  // honest UA and returned items; all four are free to read.
+  {
+    slug: 'guardian-world', name: 'The Guardian', homepage: 'https://www.theguardian.com/world', kind: 'journalism', sections: ['world'], places: [],
+    feeds: [feed('https://www.theguardian.com/world/rss', 15)], access: EXCERPT, notes: 'World feed. Same outlet as guardian-us: one voice in a story.',
+  },
+  {
+    slug: 'al-jazeera', name: 'Al Jazeera', homepage: 'https://www.aljazeera.com', kind: 'journalism', sections: ['world'], places: [],
+    feeds: [feed('https://www.aljazeera.com/xml/rss/all.xml', 15)], access: EXCERPT, notes: 'All-news feed.',
+  },
+  {
+    slug: 'dw-world', name: 'DW', homepage: 'https://www.dw.com/en', kind: 'journalism', sections: ['world'], places: [],
+    feeds: [feed('https://rss.dw.com/rdf/rss-en-world', 30)], access: EXCERPT, notes: 'Deutsche Welle, English world feed (RDF).',
+  },
+  {
+    slug: 'france-24', name: 'France 24', homepage: 'https://www.france24.com/en', kind: 'journalism', sections: ['world'], places: [],
+    feeds: [feed('https://www.france24.com/en/rss', 30)], access: EXCERPT, notes: 'English feed.',
+  },
   {
     slug: 'guardian-us', name: 'The Guardian', homepage: 'https://www.theguardian.com', kind: 'journalism', sections: ['national'], places: ['us'],
     feeds: [feed('https://www.theguardian.com/us-news/rss', 15)], access: EXCERPT, notes: 'US news feed.',

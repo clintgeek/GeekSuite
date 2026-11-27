@@ -32,6 +32,7 @@ const __dirname = path.dirname(__filename);
  * @param {Function} [options.validateSession] attachUser's session check override
  * @param {() => object} [options.workerStatus] the ingest worker's status()
  * @param {() => object} [options.embedStatus]  the embedding indexer's status()
+ * @param {() => object} [options.storyStatus]  the story assigner's status()
  * @param {() => number} [options.dbState]     mongoose readyState override (tests)
  * @param {Function} [options.discoverFetch]   discovery's guarded fetch (tests pass a
  *   createSafeFetch with a fake resolver); default: the production SSRF guard
@@ -44,6 +45,7 @@ export function createApp(options = {}) {
     validateSession,
     workerStatus = () => null,
     embedStatus = () => null,
+    storyStatus = () => null,
     dbState = () => mongoose.connection.readyState,
     discoverFetch = safeFetch,
     discoverModels = { Place, Source },
@@ -112,6 +114,7 @@ export function createApp(options = {}) {
   app.get('/api/health', (req, res) => {
     const w = workerStatus();
     const e = embedStatus();
+    const st = storyStatus();
     res.status(200).json({
       status: 'healthy',
       database: dbState() === 1 ? 'connected' : 'disconnected',
@@ -138,6 +141,17 @@ export function createApp(options = {}) {
           pending: e.pending,
           lastError: e.lastError,
           backoffUntil: e.backoffUntil,
+        }
+        : null,
+      // N1 phase 2: the story queue (articles with a vector and no story yet).
+      stories: st
+        ? {
+          enabled: st.enabled,
+          lastRunAt: st.lastRunAt,
+          lastRunAssigned: st.lastRunAssigned,
+          lastRunJoined: st.lastRunJoined,
+          pending: st.pending,
+          lastError: st.lastError,
         }
         : null,
     });

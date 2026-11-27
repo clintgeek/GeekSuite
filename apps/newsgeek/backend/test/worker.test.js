@@ -85,7 +85,22 @@ describe('tick', () => {
     assert.equal(f.calls.length, firstTickUrls + 1);
   });
 
-  test('only active sources are polled; "check now" (nextPollAt = now) is picked up', async () => {
+  test('a broken source is polled too (it comes back by itself), and is not counted as active', async () => {
+    const f = fakeFetch(Object.fromEntries(allFeedUrls.map((u) => [u, status(304)])));
+    await createWorker({ models, fetchImpl: f, now: () => NOW }).tick();
+    const later = new Date(NOW.getTime() + 2 * MIN);
+    await models.Source.updateMany({ 'feeds.url': { $in: bloxUrls } }, { $set: { 'feeds.$[].nextPollAt': new Date(later.getTime() + 60 * MIN) } });
+    await models.Source.updateOne({ slug: 'kark' }, { $set: { status: 'broken', 'feeds.$[].nextPollAt': later } });
+    const w = createWorker({ models, fetchImpl: f, now: () => later });
+    const out = await w.tick();
+    assert.equal(out.due, 1);
+    assert.equal(f.calls.at(-1).url, 'https://www.kark.com/news/feed/');
+    assert.equal(w.status().activeSources, SOURCES.length - 1);
+    // It answered (304), so it is active again.
+    assert.equal((await models.Source.findOne({ slug: 'kark' }).lean()).status, 'active');
+  });
+
+  test('a retired source is never polled; "check now" (nextPollAt = now) is picked up', async () => {
     const f = fakeFetch(Object.fromEntries(allFeedUrls.map((u) => [u, status(304)])));
     await createWorker({ models, fetchImpl: f, now: () => NOW }).tick();
     await models.Source.updateOne({ slug: 'kark' }, { $set: { status: 'retired' } });

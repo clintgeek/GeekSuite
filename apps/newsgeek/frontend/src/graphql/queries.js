@@ -90,6 +90,7 @@ export const GET_NEWS_ARTICLES = gql`
     newsArticles(section: $section, placeId: $placeId, sourceId: $sourceId, cursor: $cursor, limit: $limit) {
       items {
         id
+        storyId
         title
         url
         excerpt
@@ -223,6 +224,7 @@ export const GET_NEWS_FRONT_PAGE = gql`
         moreCount
         items {
           id
+          storyId
           title
           url
           excerpt
@@ -246,6 +248,49 @@ export const GET_NEWS_FRONT_PAGE = gql`
             id
             name
           }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * One story, every telling of it the reader can see (`/story/:id`,
+ * 2026-11-27): the headline Today would show, how many outlets told it, and
+ * one item per telling, newest first. Null when nothing of it is visible.
+ */
+export const GET_NEWS_STORY = gql`
+  query NewsStory($id: ID!) {
+    newsStory(id: $id) {
+      id
+      title
+      section
+      sourceCount
+      firstAt
+      lastAt
+      articles {
+        id
+        storyId
+        title
+        url
+        excerpt
+        publisher
+        publishedAt
+        expiresAt
+        sourceId
+        sourceName
+        sourceKind
+        publisherDomain
+        viaAggregator
+        alsoIn {
+          publisher
+          url
+          sourceId
+        }
+        sections
+        places {
+          id
+          name
         }
       }
     }

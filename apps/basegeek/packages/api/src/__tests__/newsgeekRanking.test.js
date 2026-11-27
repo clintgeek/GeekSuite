@@ -4,7 +4,7 @@
  * page", Chef 2026-10-11). No Mongo: plain rows in, sections out.
  */
 import {
-  createContext, ringIndex, sectionOf, rankFrontPage, judge, whyChips, typicalGapMs, freshness, perSourceCap,
+  createContext, ringIndex, sectionOf, rankFrontPage, judge, whyChips, typicalGapMs, freshness, sourceCap,
   PER_SOURCE_CAP, RING_WEIGHTS, ARKANSAS_WEIGHT, WINDOW_DAYS, SECTION_ORDER, SECTION_TITLES,
 } from '../graphql/newsgeek/ranking.js';
 
@@ -173,22 +173,22 @@ describe('the story’s section, per reader', () => {
 });
 
 describe('pace-normalised freshness', () => {
-  it('typicalGap is 7 days / weekly count, clamped to [1 h, 3 days]', () => {
+  it('typicalGap is 7 days / weekly count, clamped to [6 h, 1 day] (2026-11-27; was [1 h, 3 days])', () => {
     expect(typicalGapMs(7)).toBe(D);
-    expect(typicalGapMs(280)).toBe(H);
-    expect(typicalGapMs(0)).toBe(3 * D);
+    expect(typicalGapMs(280)).toBe(6 * H);
+    expect(typicalGapMs(0)).toBe(D);
   });
 
   it('nothing older than the window scores', () => {
     expect(freshness(WINDOW_DAYS * D + 1, 7, WINDOW_DAYS * D)).toBe(0);
   });
 
-  it('a 7-a-week paper’s 2-day-old story outranks a 40-a-day source’s 6-hour-old story at equal locality', () => {
+  it('at the same age, a 7-a-week paper’s story outranks a 40-a-day source’s (pace still helps, inside the clamp)', () => {
     const weekly = S('weekly', { sections: ['state'], places: [id('arkansas')] });
     const firehose = S('firehose', { sections: ['state'], places: [id('arkansas')] });
     const counts = new Map([[weekly._id, 7], [firehose._id, 280]]);
-    const slow = A(weekly, { age: 2 * D, title: 'slow' });
-    const fast = A(firehose, { age: 6 * H, title: 'fast' });
+    const slow = A(weekly, { age: D, title: 'slow' });
+    const fast = A(firehose, { age: D - H, title: 'fast' });
     const ctx = ctxFor();
     expect(judge(ctx, slow, weekly, 7).section).toBe('state');
     const out = rank({ candidates: [fast, slow], sources: [weekly, firehose], counts });
@@ -231,36 +231,41 @@ describe('locality and priority', () => {
   });
 });
 
-describe('diversity: at most perSourceCap(quota) stories per source per section', () => {
-  it('the cap is 5 for a block of 8 or more, else half the block rounded up', () => {
+describe('diversity: at most sourceCap(quota, priority) stories per source per section', () => {
+  it('a favourite may take half the block (at most 5), any other source a quarter (at least 1)', () => {
     expect(PER_SOURCE_CAP).toBe(5);
-    expect([8, 10, 20].map(perSourceCap)).toEqual([5, 5, 5]);
-    // State 5, National 5, World 3, Tech 4, Around 3 (Chef, 2026-10-11).
-    expect([5, 5, 3, 4, 3].map(perSourceCap)).toEqual([3, 3, 2, 2, 2]);
-    expect([0, 1, 2, 6, 7].map(perSourceCap)).toEqual([0, 1, 1, 3, 4]);
+    // Local 8, State 5, National 5, World 3, Tech 4, Around 3.
+    expect([8, 5, 5, 3, 4, 3].map((q) => sourceCap(q))).toEqual([2, 1, 1, 1, 1, 1]);
+    expect([8, 5, 5, 3, 4, 3].map((q) => sourceCap(q, 'favorite'))).toEqual([4, 3, 3, 2, 2, 2]);
+    expect([10, 20].map((q) => sourceCap(q))).toEqual([3, 5]);
+    expect([10, 20].map((q) => sourceCap(q, 'favorite'))).toEqual([5, 5]);
+    expect(sourceCap(0)).toBe(0);
+    expect(sourceCap(0, 'favorite')).toBe(0);
   });
 
-  it('a 5-slot block where one source has 5 strong stories shows at most 3 of them', () => {
+  it('a 5-slot block where one source has 5 strong stories shows one of them', () => {
     const big = S('big', { sections: ['state'] });
     const small = S('small', { sections: ['state'] });
-    const counts = new Map([[big._id, 7], [small._id, 7]]);
+    const tiny = S('tiny', { sections: ['state'] });
+    const counts = new Map([[big._id, 7], [small._id, 7], [tiny._id, 7]]);
     const bigs = [1, 2, 3, 4, 5].map((i) => A(big, { age: i * H, title: `big${i}` }));
-    const weak = [1, 2].map((i) => A(small, { age: (3 + i) * D, title: `small${i}` }));
+    const weak = [A(small, { age: 4 * D, title: 'small' }), A(tiny, { age: 5 * D, title: 'tiny' })];
     const ctx = ctxFor();
     expect(judge(ctx, weak[0], small, 7).score).toBeLessThan(judge(ctx, bigs[4], big, 7).score);
-    const out = rank({ candidates: [...bigs, ...weak], sources: [big, small], counts });
-    expect(titlesIn(out, 'state')).toEqual(['big1', 'big2', 'big3', 'small1', 'small2']);
+    const out = rank({ candidates: [...bigs, ...weak], sources: [big, small, tiny], counts });
+    expect(titlesIn(out, 'state')).toEqual(['big1', 'small', 'tiny']);
   });
 
-  it('Local (quota 8) still allows 5 from one source', () => {
+  it('Local (quota 8) allows 2 from one source, 4 from a favourite', () => {
     const big = S('big-local', { places: [id('arkadelphia')] });
     const counts = new Map([[big._id, 7]]);
     const bigs = [1, 2, 3, 4, 5, 6].map((i) => A(big, { age: i * H, title: `l${i}` }));
-    const out = rank({ candidates: bigs, sources: [big], counts });
-    expect(titlesIn(out, 'local')).toEqual(['l1', 'l2', 'l3', 'l4', 'l5']);
+    expect(titlesIn(rank({ candidates: bigs, sources: [big], counts }), 'local')).toEqual(['l1', 'l2']);
+    const fav = ctxFor({ favoriteSourceIds: [big._id] });
+    expect(titlesIn(rank({ candidates: bigs, sources: [big], counts, ctx: fav }), 'local')).toEqual(['l1', 'l2', 'l3', 'l4']);
   });
 
-  it('the 6th story from one source is held back while a lower-scored story from another gets in', () => {
+  it('the story past the cap is held back while a lower-scored story from another source gets in', () => {
     const big = S('big', { sections: ['national'] });
     const small = S('small', { sections: ['national'] });
     const counts = new Map([[big._id, 7], [small._id, 7]]);
@@ -269,8 +274,8 @@ describe('diversity: at most perSourceCap(quota) stories per source per section'
     const ctx = ctxFor();
     expect(judge(ctx, lower, small, 7).score).toBeLessThan(judge(ctx, bigs[5], big, 7).score);
     const out = rank({ candidates: [...bigs, lower], sources: [big, small], counts, quotas: { ...QUOTAS, national: 10 } });
-    expect(titlesIn(out, 'national')).toEqual(['big1', 'big2', 'big3', 'big4', 'big5', 'small']);
-    expect(out.find((s) => s.key === 'national').moreCount).toBe(1);
+    expect(titlesIn(out, 'national')).toEqual(['big1', 'big2', 'big3', 'small']);
+    expect(out.find((s) => s.key === 'national').moreCount).toBe(3);
   });
 
   it('Google News items count against their publisher’s domain, not the aggregator', () => {
@@ -279,8 +284,8 @@ describe('diversity: at most perSourceCap(quota) stories per source per section'
     const fromA = [1, 2, 3, 4, 5, 6].map((i) => A(gn, { age: i * H, domain: 'apnews.com', title: `ap${i}` }));
     const fromB = [7, 8].map((i) => A(gn, { age: i * H, domain: 'www.reuters.com', title: `r${i}` }));
     const out = rank({ candidates: [...fromA, ...fromB], sources: [gn], counts, quotas: { ...QUOTAS, national: 10 } });
-    // 5 from apnews.com (the 6th held back) and both Reuters: 7 from ONE aggregator source.
-    expect(titlesIn(out, 'national')).toEqual(['ap1', 'ap2', 'ap3', 'ap4', 'ap5', 'r7', 'r8']);
+    // 3 from apnews.com (the rest held back) and both Reuters: 5 from ONE aggregator source.
+    expect(titlesIn(out, 'national')).toEqual(['ap1', 'ap2', 'ap3', 'r7', 'r8']);
   });
 });
 

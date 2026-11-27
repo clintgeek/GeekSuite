@@ -36,7 +36,9 @@
  *
  * When the gateway collapsed other copies of the story into this one
  * (`alsoIn`, feed hygiene), a quiet "Also in KARK +2" line closes the item
- * (AlsoIn); the headline still goes to this copy.
+ * (AlsoIn); the headline still goes to this copy. That list ends with "All
+ * coverage →" (the story's page, `/story/:id`) unless `storyLink` is false:
+ * the story page itself passes that.
  */
 import React from 'react';
 import { Box, Link, Typography } from '@mui/material';
@@ -61,6 +63,7 @@ export default function ArticleItem({
   hideChips = [],
   lead = false,
   headingLevel = 'h2',
+  storyLink = true,
 }) {
   const official = article.sourceKind === 'official';
   const publisher = article.publisher || article.sourceName;
@@ -156,7 +159,12 @@ export default function ArticleItem({
           {article.excerpt}
         </Typography>
       ) : null}
-      <AlsoIn alsoIn={article.alsoIn} openInNewTab={openInNewTab} sx={{ mt: 1, position: 'relative', zIndex: 1 }} />
+      <AlsoIn
+        alsoIn={article.alsoIn}
+        openInNewTab={openInNewTab}
+        storyId={storyLink ? article.storyId : null}
+        sx={{ mt: 1, position: 'relative', zIndex: 1 }}
+      />
     </Box>
   );
 }
