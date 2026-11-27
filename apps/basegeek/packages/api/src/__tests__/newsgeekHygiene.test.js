@@ -252,6 +252,144 @@ describe('newsArticles (Everything and section pages)', () => {
   });
 });
 
+describe('newsArticles groups by story (2026-11-27)', () => {
+  const BY_CURSOR = `query($cursor: String, $limit: Int, $sourceId: ID, $section: String) { newsArticles(cursor: $cursor, limit: $limit, sourceId: $sourceId, section: $section) { nextCursor items { ${ITEM} } } }`;
+  const titles = (page) => page.items.map((i) => i.title);
+
+  it('four outlets on one event are ONE row on Everything, with the others under alsoIn', async () => {
+    const story = new mongoose.Types.ObjectId();
+    const srcs = await Promise.all(['KATV', 'KARK', 'THV11', 'FOX16'].map((name) => mkSource({ name })));
+    const heads = ['Man arrested on arson charges in Neely Road fire', 'Arson arrest made in Neely Road house fire', 'Police arrest man in Neely Road arson', 'Neely Road fire: man faces arson charges'];
+    for (let i = 0; i < 4; i += 1) await mkArticle(srcs[i], heads[i], { age: (i + 1) * H, storyId: story });
+    await mkArticle(srcs[0], 'Legislature returns for a fiscal session in April', { age: 6 * H });
+    const page = (await ok(BY_CURSOR, {})).newsArticles;
+    expect(page.items).toHaveLength(2);
+    expect(heads).toContain(page.items[0].title);
+    expect(page.items[0].alsoIn).toHaveLength(3);
+    expect(titles(page)[1]).toBe('Legislature returns for a fiscal session in April');
+  });
+
+  it('paging: a story shown on page 1 never comes back on a later page as its older tellings, and nothing is skipped', async () => {
+    const story = new mongoose.Types.ObjectId();
+    const katv = await mkSource({ name: 'KATV' });
+    const kark = await mkSource({ name: 'KARK' });
+    const T = (k) => `Unique state story number ${k} for story paging`;
+    await mkArticle(katv, 'Army detonates the stockpile in Iowa', { age: 1 * H, storyId: story });
+    await mkArticle(katv, T(1), { age: 2 * H });
+    await mkArticle(katv, T(2), { age: 3 * H });
+    await mkArticle(kark, 'Army plans to detonate stockpile in Iowa', { age: 100 * H, storyId: story }); // days earlier
+    await mkArticle(kark, T(3), { age: 101 * H });
+    const p1 = (await ok(BY_CURSOR, { limit: 2 })).newsArticles;
+    expect(p1.items).toHaveLength(2);
+    expect(p1.items[0].alsoIn.map((a) => a.publisher)).toEqual(['KARK']);
+    expect(titles(p1)[1]).toBe(T(1));
+    const p2 = (await ok(BY_CURSOR, { limit: 2, cursor: p1.nextCursor })).newsArticles;
+    expect(titles(p2)).toEqual([T(2), T(3)]);
+    // A full page always offers a next one; it is empty, and the story's old telling is not on it.
+    const p3 = (await ok(BY_CURSOR, { limit: 2, cursor: p2.nextCursor })).newsArticles;
+    expect(p3.items).toEqual([]);
+    expect(p3.nextCursor).toBeNull();
+  });
+
+  it('one source’s own page lists every article it published: a story’s tellings stay separate there', async () => {
+    const story = new mongoose.Types.ObjectId();
+    const hill = await mkSource({ name: 'The Hill', sections: ['national'], places: [P.us._id] });
+    const pbs = await mkSource({ name: 'PBS NewsHour', sections: ['national'], places: [P.us._id] });
+    await mkArticle(hill, 'Nvidia reinstates its chief executive', { age: 3 * H, storyId: story });
+    await mkArticle(hill, 'Five takeaways from the Nvidia reversal', { age: 2 * H, storyId: story });
+    await mkArticle(pbs, 'Nvidia board brings back its CEO', { age: H, storyId: story });
+    expect((await ok(BY_CURSOR, {})).newsArticles.items).toHaveLength(1);
+    const own = (await ok(BY_CURSOR, { sourceId: String(hill._id) })).newsArticles;
+    expect(titles(own)).toEqual(['Five takeaways from the Nvidia reversal', 'Nvidia reinstates its chief executive']);
+  });
+
+  it('section pages: the story is on its own section’s page once, and on no other', async () => {
+    const story = new mongoose.Types.ObjectId();
+    const katv = await mkSource({ name: 'KATV' });
+    const hill = await mkSource({ name: 'The Hill', sections: ['national'], places: [P.us._id] });
+    const pbs = await mkSource({ name: 'PBS NewsHour', sections: ['national'], places: [P.us._id] });
+    await mkArticle(katv, 'What the tariff ruling means for shoppers', { age: 3 * H, storyId: story });
+    await mkArticle(hill, 'Court strikes down the tariff order', { age: 2 * H, storyId: story });
+    await mkArticle(pbs, 'Justices void the tariff order', { age: H, storyId: story });
+    const national = (await ok(BY_CURSOR, { section: 'national' })).newsArticles;
+    expect(national.items).toHaveLength(1);
+    expect(national.items[0].section).toBe('national');
+    expect(national.items[0].alsoIn).toHaveLength(2);
+    expect((await ok(BY_CURSOR, { section: 'state' })).newsArticles.items).toEqual([]);
+  });
+
+  it('section pages: two out-of-town papers on one story are one row on Around', async () => {
+    await ok(`mutation($ids: [ID!]!) { newsSetHomePlaces(placeIds: $ids) { freeToReadOnly } }`, { ids: [String(P.arkadelphia._id), String(P.clark._id)] });
+    const story = new mongoose.Types.ObjectId();
+    const a = await mkSource({ name: 'Pine Bluff Commercial', sections: ['local'], places: [] });
+    const b = await mkSource({ name: 'Stuttgart Daily Leader', sections: ['local'], places: [] });
+    await mkArticle(a, 'Youth deer harvest shows a steady foundation', { age: 2 * H, storyId: story });
+    await mkArticle(b, 'AGFC reports on the youth deer harvest', { age: H, storyId: story });
+    const around = (await ok(BY_CURSOR, { section: 'around' })).newsArticles;
+    expect(around.items).toHaveLength(1);
+    expect(around.items[0].alsoIn).toHaveLength(1);
+  });
+});
+
+describe('newsStory: one story, every telling the caller can see (2026-11-27)', () => {
+  const STORY = `query($id: ID!) { newsStory(id: $id) { id title section sourceCount firstAt lastAt articles { ${ITEM} storyId } } }`;
+  const T = 'Court strikes down the tariff order in a 6-3 ruling';
+
+  async function seedStory() {
+    const story = new mongoose.Types.ObjectId();
+    const s = {
+      hill: await mkSource({ name: 'The Hill', sections: ['national'], places: [P.us._id] }),
+      pbs: await mkSource({ name: 'PBS NewsHour', sections: ['national'], places: [P.us._id] }),
+      katv: await mkSource({ name: 'KATV' }),
+      gnAp: await mkSource({ name: 'Google News: AP', kind: 'aggregator', sections: ['national', 'world'], places: [P.us._id] }),
+    };
+    await mkArticle(s.gnAp, T, { age: 6 * H, storyId: story, publisher: 'AP News', publisherDomain: 'apnews.com' });
+    await mkArticle(s.katv, T, { age: 5 * H, storyId: story });                       // a copy of AP's
+    await mkArticle(s.hill, 'Tariff order falls at the Supreme Court', { age: 4 * H, storyId: story });
+    await mkArticle(s.hill, 'Five takeaways from the tariff ruling', { age: 2 * H, storyId: story });
+    await mkArticle(s.pbs, 'Justices void the tariff order', { age: H, storyId: story });
+    await mkArticle(s.pbs, 'Something else entirely happened today', { age: H });
+    return { story, s };
+  }
+
+  it('returns the story’s headline, section and outlets, and one item per telling, newest first', async () => {
+    const { story } = await seedStory();
+    const st = (await ok(STORY, { id: String(story) })).newsStory;
+    expect(st.id).toBe(String(story));
+    expect(st.section).toBe('national');
+    expect(st.sourceCount).toBe(3);                    // AP (KATV's copy adds none), The Hill, PBS
+    expect(st.articles.map((a) => a.title)).toEqual([
+      'Justices void the tariff order', 'Five takeaways from the tariff ruling', 'Tariff order falls at the Supreme Court', T,
+    ]);
+    expect(st.articles[3].alsoIn).toHaveLength(1);     // the copy, folded
+    expect(st.articles.every((a) => a.storyId === String(story))).toBe(true);
+    expect(st.articles.map((a) => a.title)).toContain(st.title);
+    // Seeded 6 h and 1 h ago, a few milliseconds apart.
+    expect(Math.abs(new Date(st.lastAt).getTime() - new Date(st.firstAt).getTime() - 5 * H)).toBeLessThan(1000);
+  });
+
+  it('articles carry their storyId on Today and the lists (null with no story)', async () => {
+    const { story } = await seedStory();
+    const LIST = `{ newsArticles { items { title storyId } } }`;
+    const items = (await ok(LIST)).newsArticles.items;
+    expect(items.find((i) => i.title === 'Something else entirely happened today').storyId).toBeNull();
+    expect(items.filter((i) => i.storyId === String(story))).toHaveLength(1);
+  });
+
+  it('keeps the reader’s rules: a source switched off is not in it; nothing visible is null; so is an unknown or malformed id', async () => {
+    const { story, s } = await seedStory();
+    await ok(`mutation($id: ID!) { newsSetSourceOn(id: $id, on: false) { id } }`, { id: String(s.hill._id) });
+    const st = (await ok(STORY, { id: String(story) })).newsStory;
+    expect(st.sourceCount).toBe(2);
+    expect(st.articles.map((a) => a.sourceName)).not.toContain('The Hill');
+    for (const src of [s.pbs, s.katv, s.gnAp]) await ok(`mutation($id: ID!) { newsSetSourceOn(id: $id, on: false) { id } }`, { id: String(src._id) });
+    expect((await ok(STORY, { id: String(story) })).newsStory).toBeNull();
+    expect((await ok(STORY, { id: String(new mongoose.Types.ObjectId()) })).newsStory).toBeNull();
+    expect((await run(STORY, { id: 'nope' })).errors?.[0]?.extensions?.code).toBe('BAD_USER_INPUT');
+    expect((await run(STORY, { id: String(story) }, null)).errors?.[0]?.extensions?.code).toBe('UNAUTHENTICATED');
+  });
+});
+
 describe('pathExclude (per-source URL path rules)', () => {
   const SRC = 'id pathExclude';
   const CREATE = `mutation($input: NewsSourceInput!) { newsCreateSource(input: $input) { ${SRC} } }`;

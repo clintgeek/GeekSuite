@@ -442,3 +442,35 @@ measurements and every rule are in the plan's "Stories on the front page (2026-1
   Huawei verdict; Nov 26 Ábrego García, the Iowa detonation, SpaceX. Local held the Little
   Rock arson arrest (4 outlets, one item) and a Garland County felony beside The Arkadelphian.
 
+### 2026-11-27, later: deployed; then story grouping on every list and the story page
+
+- **The first change set is live.** Pushed `65245322..760508e4` on Chef's word ("push and keep
+  going"). CI, the image release and the mobile harness passed on that commit.
+  - newsgeek rolled at 02:22; the story backfill was empty at 02:27 (12,683 articles, 8,871
+    stories, 978 of them told by two or more outlets). `stories.lastError` null.
+  - **basegeek rolled nine minutes later** (02:31): its image publishes last and missed
+    Watchtower's pass. In between, the old gateway served the old paper. Nothing broke, because
+    the first change set had no schema change. **A UI that selects a new field must not ride
+    in the same push as its gateway change.**
+  - Two broken sources came back by themselves on the first ticks (DeWitt Era-Enterprise, SAU
+    Tech). The six Blox ones still answer 429 and are now tried once a day. 94 active, 6 broken.
+  - The four world sources were polled within a minute. World on Today went from one or two BBC
+    stories to three outlets (Al Jazeera, France 24, BBC).
+  - `newsFrontPage` for Chef, warm: about 600 ms over 9,300 candidates, as before stories. The
+    first call after a gateway restart: about 1.4 s.
+- **Second change set** (the rules are in the plan's "Stories on the front page" and "The story
+  page"):
+  - **A, gateway** (additive): `newsArticles` groups by story on Everything and the section
+    pages (not on one source's own page); `NewsArticle.storyId`; `newsStory(id)`.
+  - **B, UI** (selects `storyId`, calls `newsStory`): the story page `/story/:id`, and "All
+    coverage →" at the end of a story's opened "Also in" list.
+  - **Deploy order: A, confirm basegeek is running it, then B.** Confirm with
+    `docker exec basegeek grep -c newsStory src/graphql/newsgeek/typeDefs.js` (not 0).
+  - Harness: Today's fixture leads with Top Stories; scenes 53 (Also in, opened), 54 (the story
+    page), 55 (a story that is gone). 220 scenes, phone and desktop, a11y enforcing: 0
+    violations.
+- **Dropped while building it:** a guard for a story "whose section none of its articles is
+  filed under". A revert-check showed its test passed either way; working the vote through
+  showed the case cannot happen (the vote always picks some member's own section), so the guard
+  and the test were removed.
+

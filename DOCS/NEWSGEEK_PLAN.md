@@ -4,7 +4,7 @@
 reader you wish Google News were") and the decisions below. Status: N0 live (ingest,
 Latest, Sources, reader-added sources, the Source sheet); the front page (Today, per-reader
 ranking) built 2026-10-11 ahead of clustering; ingest hygiene (platform throttle, path
-rules, excerpt boilerplate, display-time duplicate collapse) built 2026-10-11; N1 phase 1 (embeddings and the golden-set tools, `apps/newsgeek/DOCS/CLUSTERING.md`) built 2026-10-11; **N1 phase 2 (story assignment), coverage in the ranking and Top Stories built 2026-11-27** ("Stories on the front page" below); N2 (the story page, read state, Saved, follows) not started.*
+rules, excerpt boilerplate, display-time duplicate collapse) built 2026-10-11; N1 phase 1 (embeddings and the golden-set tools, `apps/newsgeek/DOCS/CLUSTERING.md`) built 2026-10-11; **N1 phase 2 (story assignment), coverage in the ranking, Top Stories, story grouping on every list and the story page built 2026-11-27** ("Stories on the front page" below); the rest of N2 (read state, Saved, follows) not started.*
 
 ## What it is
 
@@ -811,8 +811,14 @@ one function, so any of it can be turned back on Chef's word.*
   one voice. Official sources never join a story.
 - The item shows **"N sources"** as its first why-chip (N = outlets in the last 48 h, when 2 or
   more) and lists the other outlets under "Also in", one link per outlet, at most 5.
-- **Everything and the section pages are unchanged**: one article per row, the title-key collapse
-  within a page. So "More Local →" can list as separate rows what Today showed as one story.
+- **Everything and the section pages group by story too** (second change set, the same day):
+  every article of one story is one row, where its newest article on that page sits, with the
+  other outlets under "Also in". A story shown on an earlier page never comes back on a later
+  one as its older tellings. A section page keeps a story only when the story's section (the
+  vote) is that page's, so a story is on exactly one section page.
+- **One source's own page is the exception** (`newsArticles(sourceId)`, "More from this source",
+  Recent stories): it lists every article that source published, so only headline copies
+  collapse there.
 
 ### The story's section: a vote, one per outlet
 - A **strong** vote is earned by the article: Local by a ring place of its own, State by an own
@@ -867,9 +873,31 @@ The section pages do not apply this (their Mongo filter has no byline rule).
 - An item whose title is only a media file's name ("IMG_7944#2.jpg") is dropped
   (`drops.file_title`). Capital-letter entities are decoded ("&Aacute;brego").
 
+### The story page (`/story/:id`)
+- **Reached from "All coverage →"**, the last entry of a story's opened "Also in" list (Today,
+  Everything, the section pages). It is there whenever the article has a story.
+- **Shows:** the headline Today would show; "12 sources · National"; "First told 2d ago · latest
+  1h ago"; then **one item per telling, newest first**: publisher, their headline, their
+  excerpt, a link out (the reader's opener and window mode apply, as everywhere). Copies of
+  one headline are folded under "Also in". We still never reproduce an article.
+- **Per reader:** only articles from sources the reader sees, with Free to read and hidden
+  publishers applied. `sourceCount` counts outlets among those.
+- **Gone:** an unknown id, or a story none of the reader's sources told, says "This story has
+  left the paper." and offers the way back to Today.
+- Not on it yet (N2): save, dismiss, follow a term, the official-notices band.
+
+```graphql
+type NewsArticle { storyId: ID }        # added; null until assigned, and for articles past the look-back
+type NewsStory {
+  id: ID!  title: String!  section: String!  sourceCount: Int!  firstAt: Date!  lastAt: Date!
+  articles: [NewsArticle!]!             # one per telling, newest first, at most 100; copies in alsoIn
+}
+extend type Query { newsStory(id: ID!): NewsStory }   # null when nothing of it is visible; a bad id is BAD_USER_INPUT
+```
+Additive: the gateway ships first, the UI (which selects `storyId`) after it is live.
+
 ### Not built (the honest list)
-- The story page (`/story/:id`), read state, Saved, follows and mutes: N2, as before.
-- Story grouping on Everything and the section pages.
+- Read state, Saved, follows and mutes: N2, as before.
 - Google News links are still redirect wrappers with no excerpt. A story told only by AP or
   Reuters is still shown through one.
 - No images. No LLM summaries.

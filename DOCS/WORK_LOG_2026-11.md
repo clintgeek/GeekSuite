@@ -1040,3 +1040,13 @@ then "Give it your best shot. Do whatever you think will fix this app before I g
   can never be true for a ring-local paper naming its own town, because ingest merges the source's places
   into the article's; basegeek's startup log prints the last four characters of each AI provider key.
 
+### The same day, later: deployed, then stories everywhere and a story page
+
+- **Deployed** on Chef's "push and keep going" (`760508e4`). Backfill done in five minutes: 8,871 stories,
+  978 told by two or more outlets. Two broken sources revived themselves. The gateway rolled nine minutes
+  after the app (its image publishes last), harmless here because nothing in the schema changed.
+- **Built next, on the branch:** Everything and the section pages group by story (one source's own page
+  does not); `newsStory(id)` and `NewsArticle.storyId` in the gateway; the story page `/story/:id` with every
+  telling newest first; "All coverage →" at the end of a story's "Also in" list. Gateway first, then the UI.
+- **Verified:** gateway NewsGeek suites 267, frontend 372, harness 220 scenes with a11y enforcing, 0 violations.
+

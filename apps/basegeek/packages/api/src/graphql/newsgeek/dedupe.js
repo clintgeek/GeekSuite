@@ -357,7 +357,7 @@ function readable(m) {
  *   typical headline over an angle;
  * - a link that serves the reader (readable);
  * - an outlet that is itself in that section; a newsroom whose beat this is;
- * - the newest words.
+ * - the newest words; among copies of them, the original.
  */
 function storyRepCompare(ctx, section) {
   const native = (m) => (HOME_SECTIONS.has(section) ? true : firstSection(m.source) === section);
@@ -373,6 +373,7 @@ function storyRepCompare(ctx, section) {
     own(m) ? 0 : 1,
     native(m) ? 0 : 1,
     -m.toldAt,
+    time(m.article), // among copies of the same words, the original
   ];
   return (a, b) => {
     const ra = rank(a);
