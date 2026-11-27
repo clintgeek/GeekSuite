@@ -55,16 +55,35 @@ const Sidebar = () => {
       brand={<Brand />}
       sections={navSectionsFor(effectiveMode)}
       activeId={activeNavId(location.pathname)}
-      sx={{ bgcolor: CHROME_BG }}
+      // The list region scrolls on its own (brand pinned above it) if a short
+      // window, or Larger text, still outgrows the column; a thin chalk
+      // scrollbar says so. At 1280x800 nothing scrolls (see ROW_PX below).
+      sx={{
+        bgcolor: CHROME_BG,
+        '& [data-geek-sidebar="body"]': {
+          scrollbarWidth: 'thin',
+          scrollbarColor: `${MUTED} transparent`,
+          '&::-webkit-scrollbar': { width: 8 },
+          '&::-webkit-scrollbar-thumb': { backgroundColor: MUTED, borderRadius: 4 },
+          '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
+        },
+      }}
       chromeSx={{ flexShrink: 0 }}
       // The primitive's caption ink is `text.secondary`, which follows the app
       // mode; on the board it would be dark ink in light mode. Captions use
       // the chalk's own muted ink in both modes.
-      sectionLabelSx={{ color: MUTED, textTransform: 'none', letterSpacing: 0, fontSize: '0.8125rem', fontWeight: 700 }}
+      sectionLabelSx={{ color: MUTED, textTransform: 'none', letterSpacing: 0, fontSize: '0.8125rem', lineHeight: 1.4, pb: 0, fontWeight: 700 }}
       itemSx={{
         color: MUTED,
         borderRadius: 999,
+        // Density: 13 rows must fit 800px. Row = 44px (the touch floor: a
+        // tablet in landscape uses this sidebar) with no gap between rows; the
+        // primitive's default stacks padding and margins to ~54px a row.
+        minHeight: 44,
+        py: 0,
         mx: 1,
+        my: 0,
+        '& .MuiListItemText-root': { my: 0 },
         transition: 'background-color 0.15s ease, color 0.15s ease',
         '& .MuiListItemText-primary': { fontSize: '0.9375rem', fontWeight: 600 },
         '& .MuiListItemIcon-root': { color: 'inherit' },
