@@ -5,6 +5,7 @@ export const place = (id, name, kind = 'county') => ({ __typename: 'NewsPlace', 
 export const article = (id, overrides = {}) => ({
   __typename: 'NewsArticle',
   id,
+  storyId: null,
   title: `Headline ${id}`,
   url: `https://arkadelphian.com/${id}/`,
   excerpt: `Excerpt for ${id}.`,

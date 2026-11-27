@@ -9,9 +9,13 @@
  * link (44px target) to its copy at that publisher. Nothing at all when there are no other copies.
  * Each link is that outlet's ORIGINAL url (never the reader's opener for the
  * story), opened in a new tab or in this window as `openInNewTab` says.
+ *
+ * When the story has a page (`storyId`, 2026-11-27), the opened list ends
+ * with "All coverage →": every telling of the story, in the app.
  */
 import React, { useId, useState } from 'react';
 import { Box, ButtonBase, Link } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 import { ExpandMore as ExpandIcon, OpenInNew as OpenIcon } from '@mui/icons-material';
 import { GOTHIC } from '../theme/theme';
 import { linkTargetProps } from '../utils/openUrl';
@@ -55,7 +59,9 @@ const linkSx = {
   '&:focus-visible': { outline: '2px solid', outlineOffset: 2 },
 };
 
-export default function AlsoIn({ alsoIn, openInNewTab = true, sx }) {
+export const ALL_COVERAGE = 'All coverage →';
+
+export default function AlsoIn({ alsoIn, openInNewTab = true, storyId = null, sx }) {
   const [open, setOpen] = useState(false);
   const listId = `also-in-${useId().replace(/:/g, '')}`;
   const label = alsoInLabel(alsoIn);
@@ -81,6 +87,13 @@ export default function AlsoIn({ alsoIn, openInNewTab = true, sx }) {
             </Link>
           </Box>
         ))}
+        {storyId ? (
+          <Box component="li" sx={{ display: 'flex' }}>
+            <Link component={RouterLink} to={`/story/${encodeURIComponent(storyId)}`} underline="always" data-testid="all-coverage" sx={{ ...linkSx, fontWeight: 700 }}>
+              {ALL_COVERAGE}
+            </Link>
+          </Box>
+        ) : null}
       </Box>
     </Box>
   );

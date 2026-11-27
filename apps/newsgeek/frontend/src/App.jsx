@@ -28,6 +28,7 @@ import { SIDEBAR_SX } from './theme/theme';
 const SourcesView = lazy(() => import('./views/SourcesView'));
 const SourceDetailView = lazy(() => import('./views/SourceDetailView'));
 const SettingsView = lazy(() => import('./views/SettingsView'));
+const StoryView = lazy(() => import('./views/StoryView'));
 
 export function Booting({ label = 'Fetching the paper…' }) {
   return (
@@ -69,7 +70,8 @@ function SectionPage() {
 
 /**
  * The route table. Today (`/`) is the front page; Everything (`/everything`)
- * is every story newest first; `/s/:section` is one section of it.
+ * is every story newest first; `/s/:section` is one section of it;
+ * `/story/:id` is one story as every outlet told it.
  */
 export function AppRoutes() {
   return (
@@ -77,6 +79,7 @@ export function AppRoutes() {
       <Route path="/" element={<TodayView />} />
       <Route path="/everything" element={<LatestView />} />
       <Route path="/s/:section" element={<SectionPage />} />
+      <Route path="/story/:id" element={lazyRoute(<StoryView />)} />
       <Route path="/sources" element={lazyRoute(<SourcesView />)} />
       <Route path="/sources/:id" element={lazyRoute(<SourceDetailView />)} />
       <Route path="/settings" element={lazyRoute(<SettingsView />)} />
