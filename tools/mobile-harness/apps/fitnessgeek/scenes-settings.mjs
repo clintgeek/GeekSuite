@@ -303,7 +303,17 @@ const medications = [
       }
       const save = dialog.getByRole('button', { name: /^save$/i });
       await must(save, 'Save');
-      if (h.isPhone) await must(dialog.locator('[data-testid="thumb-save"]'), 'Save in the footer');
+      // Full-screen (under 600px wide) Save lives in the thumb-zone footer
+      // (thumb-save). At 600px and up the dialog is a window, so there is no
+      // thumb-save: Save is the window's primary action and must sit inside
+      // the viewport without scrolling the page.
+      if (h.width < 600) {
+        await must(dialog.locator('[data-testid="thumb-save"]'), 'Save in the footer');
+      } else {
+        if (await dialog.locator('[data-testid="thumb-save"]').count()) throw new Error('windowed dialog drew the phone footer');
+        const box = await save.boundingBox();
+        if (!box || box.y < 0 || box.y + box.height > h.height || box.x < 0 || box.x + box.width > h.width) throw new Error(`Save is not in view: ${JSON.stringify(box)}`);
+      }
       await save.scrollIntoViewIfNeeded();
     },
   }),
