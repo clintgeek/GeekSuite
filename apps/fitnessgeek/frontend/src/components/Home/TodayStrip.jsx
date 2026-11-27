@@ -9,7 +9,7 @@ import { tonalColors } from '../../theme/theme.jsx';
  * as a row of rounded pills.
  *
  * Each check-in is a link to the place you do it, so the strip is navigation
- * as much as a status line. Done is a quiet grey pill with a ✓; not yet is
+ * as much as a status line. Done is a pale green pill with a ✓ (the words stay in the normal ink); not yet is
  * a tinted blue pill (something to press), never red — missing a weigh-in is not an
  * error. The items come from `todayStrip()` (utils/checkIns.js).
  */
@@ -43,9 +43,9 @@ export default function TodayStrip({ items = [], onMedsClick, sx }) {
               minHeight: 44,
               px: 3.5,
               borderRadius: 999,
-              bgcolor: item.done ? alpha(theme.palette.text.primary, theme.palette.mode === 'dark' ? 0.1 : 0.06) : tonal.bg,
+              bgcolor: item.done ? alpha(theme.palette.success.main, theme.palette.mode === 'dark' ? 0.2 : 0.13) : tonal.bg,
               color: item.done ? 'text.primary' : tonal.ink,
-              '@media (hover: hover)': { '&:hover': { bgcolor: item.done ? alpha(theme.palette.text.primary, 0.1) : tonal.hover } },
+              '@media (hover: hover)': { '&:hover': { bgcolor: item.done ? alpha(theme.palette.success.main, 0.22) : tonal.hover } },
               '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
             }}
           >

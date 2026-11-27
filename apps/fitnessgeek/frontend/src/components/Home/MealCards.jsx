@@ -2,12 +2,18 @@ import React, { useState } from 'react';
 import { Box, Button, IconButton, Menu, MenuItem, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { Add as AddIcon, MoreHoriz as MoreIcon } from '@mui/icons-material';
+import EggAltIcon from '@mui/icons-material/EggAlt';
+import LunchDiningIcon from '@mui/icons-material/LunchDining';
+import DinnerDiningIcon from '@mui/icons-material/DinnerDining';
+import CookieIcon from '@mui/icons-material/Cookie';
 import { MEAL_ORDER, mealColors } from '../../theme/theme.jsx';
 import { mealLabel, mealWord } from '../../utils/plainWords.js';
 import { Surface } from '../primitives';
 import FoodLogItem from '../FoodLog/FoodLogItem.jsx';
 import { caloriesOf } from '../FoodLog/amount.js';
 import { logsByMeal } from './mealGroups.js';
+
+const MEAL_ICON = { breakfast: EggAltIcon, lunch: LunchDiningIcon, dinner: DinnerDiningIcon, snack: CookieIcon };
 
 /**
  * The day's meals (DOCS/ONE_APP_PLAN.md §1.5): ONE card holding a grouped
@@ -20,12 +26,15 @@ import { logsByMeal } from './mealGroups.js';
  * things done once in a while: Copy from another day, and Save as a meal
  * (only when the meal has something in it). A food row opens Edit.
  *
- * The meal colour is a small dot only, never a background.
+ * Each meal has a small picture in its own colour (an egg, a sandwich, a
+ * dinner plate, a cookie) on a pale round of the same colour. Decoration:
+ * the meal's name is always beside it.
  */
 function MealCard({ mealType, logs = [], onAdd, onEdit, onCopy, onSaveMeal, justAdded = null, unknown = false }) {
   const theme = useTheme();
   const [menuAt, setMenuAt] = useState(null);
   const colour = mealColors(mealType, theme.palette.mode);
+  const MealIcon = MEAL_ICON[mealType] || CookieIcon;
   const label = mealLabel(mealType);
   const meal = mealWord(mealType);
   const total = logs.reduce((sum, log) => sum + caloriesOf(log), 0);
@@ -50,8 +59,10 @@ function MealCard({ mealType, logs = [], onAdd, onEdit, onCopy, onSaveMeal, just
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 44 }}>
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, minWidth: 0 }}>
-            <Box aria-hidden sx={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, bgcolor: colour.fill }} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+            <Box aria-hidden sx={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', bgcolor: colour.tint }}>
+              <MealIcon sx={{ fontSize: 16, color: colour.fill }} />
+            </Box>
             <Typography
               id={`meal-card-${mealType}-title`}
               component="h3"
@@ -119,7 +130,7 @@ function MealCard({ mealType, logs = [], onAdd, onEdit, onCopy, onSaveMeal, just
       {justAdded && <Box sx={{ py: 1 }}>{justAdded}</Box>}
 
       {hasRows && (
-        <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0, pl: 5, pb: 1 }}>
+        <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0, pl: 9, pb: 1 }}>
           {logs.map((log, i) => (
             <Box component="li" key={log.id || log._id || i}>
               <FoodLogItem log={log} onEdit={onEdit} />

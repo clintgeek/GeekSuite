@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, keyframes } from '@mui/material/styles';
 import { trackColor } from '../../theme/theme.jsx';
 
 /**
@@ -10,6 +10,9 @@ import { trackColor } from '../../theme/theme.jsx';
  * words beside it must say the same thing. `value` is a percent; anything
  * over 100 draws a full ring (say "over" in words, and pass `color` if the
  * ring should change with it).
+ *
+ * The arc sweeps in once when it appears and eases to a new value after;
+ * neither happens for someone who asked for reduced motion.
  */
 export default function Ring({ value = 0, size = 132, stroke = 12, color, children, sx }) {
   const theme = useTheme();
@@ -21,7 +24,13 @@ export default function Ring({ value = 0, size = 132, stroke = 12, color, childr
       <svg aria-hidden width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block' }}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={trackColor(theme)} strokeWidth={stroke} />
         {pct > 0 && (
-          <circle
+          <Box
+            component="circle"
+            sx={{
+              animation: `${keyframes`from { stroke-dasharray: 0 ${c}; }`} 700ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
+              transition: 'stroke-dasharray 500ms cubic-bezier(0.2, 0.8, 0.2, 1), stroke 200ms',
+              '@media (prefers-reduced-motion: reduce)': { animation: 'none', transition: 'none' },
+            }}
             cx={size / 2}
             cy={size / 2}
             r={r}

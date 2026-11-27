@@ -91,3 +91,47 @@ Data, calculations, targets, API and GraphQL contracts. No backend change. The s
   unchanged from the old Food log gear. Not fixed here because which index the server reads was not
   confirmed. Worth its own look.
 
+
+## Wanted next (Chef, 2026-11-27: "put that on a list")
+
+Aim: an ordinary person fares as well here as in MyFitnessPal or FatSecret. Two users, one iOS and one
+Android. Android can take a sideloaded wrapper; iOS has to stay a PWA. Nothing here is started.
+
+**Fitness, simpler and more of it**
+- A plain "I exercised" entry ("walked 30 minutes"): AI reads the sentence, a fixed MET table does the maths.
+- Withings (official OAuth API): scale and blood-pressure cuff readings straight in.
+- Strava (official OAuth API and webhooks): workouts from most watches and phones.
+- Health data from the phones is NOT wanted (Chef, 2026-11-27): the server reads Garmin directly. No
+  Health Connect wrapper, no Apple Shortcut.
+- Garmin today is an unofficial library with a stored password. Works; fragile.
+
+**Barcode scanning on iOS (first: Heather is on an iPhone, and Chef calls it "a trying experience")**
+Read from `components/BarcodeScanner/BarcodeScanner.jsx`, not yet confirmed on a device:
+- iOS has no native detector, so it takes the fallback path, and that path opens the camera twice. We open
+  a 1080p stream on a chosen camera; then ZXing's `decodeFromVideoDevice(null, ...)` opens its own stream
+  with default settings and replaces ours. The resolution, the camera choice and the torch all apply to a
+  stream that is no longer on screen.
+- The decoder is the pure-JavaScript ZXing (0.19.1), which is weak on slightly blurred 1D codes, and it is
+  fetched from unpkg each time, so a weak signal in a shop means no scanner at all.
+- The camera filter drops any label containing "wide", which excludes iOS's "Back Dual Wide Camera", the
+  one that switches lens to focus up close. Newer iPhones cannot focus the main lens nearer than ~15cm.
+- `html5-qrcode` is in package.json and nothing imports it.
+Fix, in order: one stream that we own; a WebAssembly build of zxing-cpp bundled with the app (same detect
+loop as Android, no CDN); decode only the centre band; a "Take a photo instead" button (the native camera
+focuses properly, then we decode the still); and on a miss, "photograph the label".
+
+**Food data**
+- Photo of a nutrition label -> an exact entry, for when a barcode misses.
+- Chain-restaurant items (MenuStat is a public dataset).
+- Measure the barcode hit rate on a real pantry shelf before adding sources.
+- Recipe from a URL -> a saved meal.
+
+**PWA**
+- Web push (iOS 16.4+ once installed to the home screen, and Android): "log dinner", "meds", weigh-in.
+- App icon badge for unticked meds.
+- Manifest shortcuts (Android long-press): Log food, Log weight.
+- Offline logging queue (log with no signal, send later).
+
+**Still complex**
+- Goal setup (the calorie plan flow). Plain-words pass on Trends > Health and Settings.
+- Hide Garmin, home-data-server and scan-import surfaces from anyone who has not connected them.

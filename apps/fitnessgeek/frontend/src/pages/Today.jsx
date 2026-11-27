@@ -9,6 +9,7 @@ import AIInsightsCard from '../components/Dashboard/AIInsightsCard.jsx';
 import PlanAccuracyBanner from '../components/Dashboard/PlanAccuracyBanner.jsx';
 import { Surface, SurfaceSkeleton, Page } from '../components/primitives';
 import DayHeader from '../components/Home/DayHeader.jsx';
+import { daylightFor } from '../components/Home/daylight.js';
 import WhatIsLeft from '../components/Home/WhatIsLeft.jsx';
 import DayDetails from '../components/Home/DayDetails.jsx';
 import MealCards from '../components/Home/MealCards.jsx';
@@ -247,6 +248,7 @@ const Today = () => {
   const mealsLogged = MEAL_ORDER.filter((m) => logs.some((log) => (MEAL_ORDER.includes(log.meal_type) ? log.meal_type : 'snack') === m)).length;
   const detailText = `${offerTarget ? 'A daily target makes losing a little easier.' : sentence.detail}${
     known.logs && mealsLogged > 0 ? ` · ${mealsLogged} ${mealsLogged === 1 ? 'meal' : 'meals'} logged` : ''}`;
+  const daylight = daylightFor(hour, theme.palette.mode);
   const greeting = `${greetingFor(hour)}${displayName ? `, ${displayName}` : ''}`;
   const strip = todayStrip({
     weights: checkIns.weights,
@@ -324,6 +326,7 @@ const Today = () => {
       day={selectedDate}
       today={today}
       greeting={greeting}
+      daylight={daylight}
       onPrevious={() => setSelectedDate((d) => shiftDay(d, -1))}
       onNext={() => setSelectedDate((d) => shiftDay(d, 1))}
       onToday={() => setSelectedDate(today)}
@@ -366,6 +369,7 @@ const Today = () => {
       headline={sentence.headline}
       detail={detailText}
       problem={problemBlock || null}
+      wash={isToday ? daylight.wash : null}
       offer={offerTarget && (
         <Button
           variant="outlined"

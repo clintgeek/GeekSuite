@@ -41,12 +41,13 @@ const Brand = ({ chrome }) => (
         color: 'primary.contrastText',
         display: 'grid',
         placeItems: 'center',
-        fontSize: '0.8125rem',
-        fontWeight: 700,
-        letterSpacing: '-0.02em',
       }}
     >
-      FG
+      {/* The same three-quarter ring as the app icon. */}
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeOpacity="0.35" strokeWidth="3" />
+        <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray="30.6 40.8" transform="rotate(-90 9 9)" />
+      </svg>
     </Box>
     <Typography
       variant="h5"

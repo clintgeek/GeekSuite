@@ -132,7 +132,7 @@ describe('what is left, in words', () => {
     // 660 sits in the ring; the sentence beside it says it once more in
     // words, and nothing says it a third time (review D-14).
     expect(screen.getByTestId('plate-number')).toHaveTextContent(/^660$/);
-    expect(screen.getByText('Amount left today')).toBeInTheDocument();
+    expect(screen.queryByText('Amount left today')).toBeNull();
     expect(document.body.textContent.match(/660/g)).toHaveLength(2);
     expect(screen.getByTestId('home-hero')).toHaveTextContent('1,680 eaten of 2,340 · 2 meals logged');
     // No day-of-year counter, no receipt number.

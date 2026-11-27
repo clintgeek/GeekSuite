@@ -345,3 +345,19 @@ and the flattened nesting. Only the skin was backed out.
   anyone set; the tile says "of 8,000 today", not "goal".
 - **The by-meal split bar is gone from Full Home** (the ring and the Eaten bar replace it); Simple
   keeps it.
+
+### Personality pass (2026-11-27)
+
+Chef: "Does it have personality? Not annoying levels of theme, but enough personality to make it something
+you want to interact with while mostly staying out of your way?" Sage's read: clean, and anonymous. Added,
+all decoration (the words already say everything):
+
+- **The page follows the day.** Today's "what is left" card has a faint sky wash (peach in the morning,
+  clear blue at midday, amber in the evening, indigo at night) and a small sun or moon by the date.
+  `components/Home/daylight.js`. Today only; another day is plain paper.
+- **Meals have a picture**, not a dot: an egg, a sandwich, a dinner plate, a cookie, each on a pale round of
+  the meal's colour.
+- **The ring sweeps in** when it appears and eases to a new value. Off under reduced motion.
+- **A done check-in looks done**: pale green, not grey.
+- **The brand mark is the ring** from the app icon, not the letters "FG".
+- **One less "left today".** The caption over the sentence is gone when the title and sentence already say it.
