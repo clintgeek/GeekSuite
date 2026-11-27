@@ -65,7 +65,9 @@ Everything else is one tap away and never in front.
 - **Navigation, sidebar:** Today · Weight · Blood pressure · Medications · Trends · Saved foods.
   Settings stays in the account menu. Calorie plan is reached from Settings and from the target on
   Today; Import a scan from the Weight page and Settings. Both keep their routes.
-- **Navigation, phone tabs:** Today · Weight · Trends · More. The More page lists Blood pressure,
+- **Navigation, phone tabs (revised 2026-11-28):** Today · Weight · Pressure · Meds · More, so each daily
+  job has a tab. More lists Trends, Saved foods, Calorie plan, Import a scan, Settings and the other Geek
+  apps. The phone header has no hamburger and no app grid. *Originally:* Today · Weight · Trends · More. The More page lists Blood pressure,
   Medications, Saved foods, Calorie plan, Import a scan, Settings.
 
 ## What does not change
