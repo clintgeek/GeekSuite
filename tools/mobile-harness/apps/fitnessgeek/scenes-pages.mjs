@@ -1,21 +1,23 @@
-// Wave A scenes (pages): Food Log, Home, Weight, My Foods, My Meals, the
-// household views, the empty states, the ErrorBoundary, Activity and the
-// Health dashboard. Prefix 5x. See scenes.mjs for how this file is gathered.
+// Wave A scenes (pages): Today (its rows, dialogs, other days, failed loads
+// and empty states), Saved foods, Weight, More and the sidebar, the first run,
+// the ErrorBoundary, and Trends (Food, Activity, Health). Prefix 5x, plus 20x
+// (first run) and 70x/71x (the two container pages). See scenes.mjs for how
+// this file is gathered.
 //
 // Everything here is page-scoped: a scene stubs its own GraphQL (and REST) and
 // takes it away again in teardown, because one page serves every scene of a
 // viewport. The two things that cannot be undone (a fixed clock) are in `tail`.
 import { json, corsHeaders } from '../../lib/net.mjs';
 import {
-  OPS, SETTINGS, DERIVED, DAILY_SUMMARY, WEIGHTS, SAVED_MEALS, FOODS, BPS, experienceOf, heatherOps,
+  OPS, SETTINGS, DERIVED, DAILY_SUMMARY, SAVED_MEALS, experienceOf,
 } from './fixtures.mjs';
-import { must, scrollToSection, HEATHER, isoLocal } from './helpers.mjs';
+import { must, scrollToSection, isoLocal, setDetails, openMealMenu, openEdit } from './helpers.mjs';
 import { withHistoryBounds, bareOpOf } from './history-ops.mjs';
 
 // `must`, but it waits a few seconds first: a dialog's content (a household log,
 // a copy count) arrives after a request, and a dark first run is the slow one.
 const need = async (locator, what) => {
-  await locator.first().waitFor({ timeout: 5000 }).catch(() => {});
+  await locator.first().waitFor({ timeout: 8000 }).catch(() => {});
   return must(locator, what);
 };
 
@@ -161,12 +163,20 @@ const ledger = (rows, goal = 2340, over = {}) => ({
   GetFoodLogActivity: { foodLogs: rows.map((r) => ({ __typename: 'FoodLog', id: r.id, log_date: r.log_date })) },
 });
 
-const FULL = { GetFitnessExperience: experienceOf({ mode: 'full', first_run_done: true }) };
-const fullOps = (rows, extra = {}) => ({ ...OPS, ...FULL, ...ledger(rows), ...extra });
-// Heather: Simple, no history of any kind, whatever `rows` says is today.
-const simpleOps = (rows, extra = {}) => ({ ...heatherOps(HEATHER, { today: rows }), ...ledger(rows, 1800), ...extra });
+// Chef, with `rows` as his food log (each row on its own day).
+const dayOps = (rows, extra = {}) => ({ ...OPS, ...ledger(rows), ...extra });
+const absent = async (locator, what) => {
+  if (await locator.count()) throw new Error(`still on the page: ${what}`);
+};
+const landedOn = (page, path, query = {}) => {
+  const url = new URL(page.url());
+  if (url.pathname !== path) throw new Error(`landed on ${url.pathname}${url.search}, wanted ${path}`);
+  for (const [k, v] of Object.entries(query)) {
+    if (url.searchParams.get(k) !== v) throw new Error(`landed on ${url.pathname}${url.search}, wanted ${k}=${v}`);
+  }
+};
 
-// ── Fixtures for the Food Log scenes ────────────────────────────────────────
+// ── Fixtures for the Today scenes ────────────────────────────────────────
 
 // Scene brief a-foodlog 1: two eggs at 78 cal, Greek yogurt 190, and a lunch
 // food at 1.5 servings of 4 oz (so the row says "6 oz"). Dinner is empty.
@@ -176,62 +186,116 @@ const logDay = (day = TODAY) => [
   row('Chicken salad wrap', 'lunch', 1.5, 210, { day, size: 4, unit: 'oz', macros: [18, 20, 7] }),
 ];
 
-// ── The Food Log ────────────────────────────────────────────────────────────
+// ── Today: the meals, their rows and their dialogs ──────────────────────────
 
-const foodLogScenes = [
-  // Simple Log, today: plain rows (name, amount, calories), only "+ Add" in the
-  // header, no Copy link, "Nothing yet" on the empty dinner.
-  pageScene('50-simple-log-today', () => simpleOps(logDay()), async (page, h) => {
+const menuItem = async (menu, name) => must(menu.getByRole('menuitem', { name }), `"${name}" in the menu`);
+const detailToggle = (dlg) => dlg.locator('button[aria-controls="edit-log-detail"]');
+
+const todayScenes = [
+  // Today's rows: name, amount and calories, the whole row one button that
+  // opens Edit; "Nothing yet" on the empty dinner. Copy and Save-as-a-meal are
+  // in each meal's "more" menu, not on the page.
+  pageScene('50-today-rows', () => dayOps(logDay()), async (page, h) => {
     await need(page.getByRole('button', { name: /^Edit Egg, ×2, 156 cal$/ }), 'Egg row with its amount');
     await need(page.getByText('6 oz', { exact: true }), 'the "6 oz" amount');
-    await need(page.getByText('Nothing yet', { exact: true }), 'dinner "Nothing yet"');
-    if (await page.getByRole('button', { name: /copy a meal/i }).count()) throw new Error('Simple shows Copy a meal');
-    if (await page.getByText('Save as a meal').count()) throw new Error('Simple shows "Save as a meal"');
-    await scrollToSection(page, h, '#meal-section-breakfast', 88);
-  }, { path: '/food-log' }),
+    const dinner = (await (await need(page.locator('[data-testid="meal-total-dinner"]'), 'dinner total')).innerText()).trim();
+    if (dinner !== 'Nothing yet') throw new Error(`the empty dinner reads "${dinner}"`);
+    const card = page.locator('[data-testid="meal-cards"]');
+    // No star, pencil or trash to aim at: a row is one button.
+    for (const gone of ['Edit', 'Remove', 'Delete']) await absent(card.getByRole('button', { name: gone, exact: true }), `a row "${gone}" button`);
+    await absent(card.getByRole('button', { name: /favou?rite/i }), 'a row favourite star');
+    if ((await card.locator('li button').count()) !== 3) throw new Error(`${await card.locator('li button').count()} buttons in 3 food rows`);
+    await absent(page.getByRole('button', { name: /copy a meal/i }), 'the old "Copy a meal" link on the page');
+    await absent(page.getByRole('button', { name: /save .* as a meal/i }), 'the old per-meal "Save as a meal" button on the page');
+    await scrollToSection(page, h, '#meal-card-breakfast', 88);
+  }),
 
-  // Full Log, same fixture: star, pencil and Remove on each row, "Save as a meal"
-  // and "Add" in the header, and the Copy / household links under the meals.
-  pageScene('50b-full-log-today', () => fullOps(logDay()), async (page, h) => {
-    await need(page.getByRole('button', { name: 'Edit', exact: true }).first(), 'a row pencil');
-    await need(page.getByRole('button', { name: 'Remove', exact: true }).first(), 'a row Remove');
-    await need(page.getByRole('button', { name: /save breakfast as a meal/i }), 'Save as a meal');
-    await need(page.getByRole('button', { name: /copy a meal from another day/i }), 'Copy a meal link');
-    await scrollToSection(page, h, '#meal-section-breakfast', 88);
-  }, { path: '/food-log' }),
+  // A meal's "more" menu, open: Copy from another day, and Save as a meal —
+  // which is off for a meal with nothing in it.
+  pageScene('50i-meal-more-menu', () => dayOps(logDay()), async (page, h) => {
+    const empty = await openMealMenu(page, h, 'dinner');
+    await menuItem(empty, 'Copy from another day');
+    const save = await menuItem(empty, 'Save as a meal');
+    if ((await save.getAttribute('aria-disabled')) !== 'true') throw new Error('"Save as a meal" is live on an empty meal');
+    await h.esc(400);
+    const more = page.locator('[data-testid="meal-more-breakfast"]');
+    const menu = await openMealMenu(page, h, 'breakfast');
+    if ((await more.getAttribute('aria-expanded')) !== 'true') throw new Error('the "more" button does not say its menu is open');
+    await menuItem(menu, 'Copy from another day');
+    if ((await (await menuItem(menu, 'Save as a meal')).getAttribute('aria-disabled')) === 'true') throw new Error('"Save as a meal" is off on a meal with food in it');
+    if ((await menu.getByRole('menuitem').count()) !== 2) throw new Error(`the menu has ${await menu.getByRole('menuitem').count()} items, wanted 2`);
+  }, { dialog: true }),
 
-  // Edit entry in Simple: tap the Egg row. Calories, Servings, Day and Meal, then
-  // Remove, and Save full-width at the bottom.
-  pageScene('50c-edit-entry-simple', () => simpleOps(logDay()), async (page, h) => {
-    await (await need(page.getByRole('button', { name: /^Edit Egg, ×2/ }), 'Egg row')).click();
-    await h.settle(800);
-    const dlg = await need(page.getByRole('dialog'), 'edit dialog');
+  // Edit a food, just opened: tap the Egg row. Total calories first, then
+  // Servings, Day, Meal; "Per serving and nutrition" closed; Remove and Save.
+  pageScene('50c-edit-entry', () => dayOps(logDay()), async (page, h) => {
+    const dlg = await openEdit(page, h, 'Egg');
+    const calories = await need(dlg.getByLabel('Calories', { exact: true }), 'the total calories field');
+    if ((await calories.inputValue()) !== '156') throw new Error(`total calories reads "${await calories.inputValue()}", wanted 156 (2 × 78)`);
+    const first = await dlg.locator('input, [role="slider"], [role="combobox"]').first().getAttribute('id');
+    if (first !== (await calories.getAttribute('id'))) throw new Error('total calories is not the first field in the dialog');
+    const toggle = await need(detailToggle(dlg), 'the "Per serving and nutrition" disclosure');
+    if ((await toggle.innerText()).trim() !== 'Per serving and nutrition') throw new Error(`the disclosure reads "${await toggle.innerText()}"`);
+    if ((await toggle.getAttribute('aria-expanded')) !== 'false') throw new Error('"Per serving and nutrition" should start closed');
+    await absent(dlg.locator('#edit-log-detail'), 'the per-serving fields, before the disclosure is opened');
     await need(dlg.getByRole('button', { name: /^save/i }), 'Save');
-    await need(dlg.getByText('Remove', { exact: false }).first(), 'Remove');
-  }, { path: '/food-log', dialog: true }),
+    // Delete lives here now: the rows have no trash.
+    await need(dlg.getByRole('button', { name: 'Remove Egg' }), 'Remove');
+  }, { dialog: true }),
 
-  // Edit entry in Full: the pencil opens per-serving inputs, Remove, Save at the bottom.
-  pageScene('50d-edit-entry-full', () => fullOps(logDay()), async (page, h) => {
-    await (await need(page.getByRole('button', { name: 'Edit', exact: true }).first(), 'row pencil')).click();
-    await h.settle(800);
-    const dlg = await need(page.getByRole('dialog'), 'edit dialog');
+  // …with "Per serving and nutrition" open: the per-serving inputs and the
+  // nutrition for the servings entered.
+  pageScene('50d-edit-entry-details', () => dayOps(logDay()), async (page, h) => {
+    const dlg = await openEdit(page, h, 'Egg');
+    const toggle = await need(detailToggle(dlg), 'the "Per serving and nutrition" disclosure');
+    await toggle.click();
+    await h.settle(600);
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') throw new Error('"Per serving and nutrition" did not open');
+    const detail = await need(dlg.locator('#edit-log-detail'), 'the per-serving fields');
+    const perServing = await need(detail.getByLabel(/^Calories \(per serving\)/), 'Calories (per serving)');
+    if ((await perServing.inputValue()) !== '78') throw new Error(`per-serving calories reads "${await perServing.inputValue()}", wanted 78`);
+    await need(detail.getByText(/^Nutrition for 2 servings:/), 'the "Nutrition for 2 servings" line');
+    await need(detail.getByText('156 cal', { exact: true }), 'the total for 2 servings');
     await need(dlg.getByRole('button', { name: /^save/i }), 'Save');
-  }, { path: '/food-log', dialog: true }),
+    await toggle.scrollIntoViewIfNeeded();
+    await h.settle(300);
+  }, { dialog: true }),
 
-  // Copy a meal, just opened: "Choose which meal to copy." and Copy dim.
-  pageScene('50e-copy-meal-opened', () => fullOps(logDay()), async (page, h) => {
-    await (await need(page.getByRole('button', { name: /copy a meal from another day/i }), 'Copy link')).click();
-    await h.settle(800);
+  // Removing a food: row → Edit → Remove. The dialog closes and the toast
+  // says what went, with Undo.
+  pageScene('50k-remove-undo', () => dayOps(logDay()), async (page, h) => {
+    const dlg = await openEdit(page, h, 'Greek yogurt');
+    await (await need(dlg.getByRole('button', { name: 'Remove Greek yogurt' }), 'Remove')).click();
+    await h.settle(900);
+    if (await page.getByRole('dialog').count()) throw new Error('the edit dialog stayed open after Remove');
+    const toast = await need(page.locator('[data-geek-toast]').filter({ hasText: 'Removed Greek yogurt' }), 'the "Removed Greek yogurt" toast');
+    await need(toast.getByRole('button', { name: 'Undo' }), 'Undo on the toast');
+    const box = await toast.first().boundingBox();
+    const vp = page.viewportSize();
+    if (!box || box.x < 0 || box.y < 0 || box.x + box.width > vp.width + 0.5 || box.y + box.height > vp.height + 0.5) throw new Error(`the toast runs off the screen: ${JSON.stringify(box)}`);
+  }),
+
+  // Copy from another day, out of Breakfast's menu: it opens already set to
+  // that meal on the day before, says so in a sentence with the number of
+  // foods, and Copy is live.
+  pageScene('50e-copy-meal-opened', () => dayOps([...logDay(YEST), ...logDay()]), async (page, h) => {
+    const menu = await openMealMenu(page, h, 'breakfast');
+    await (await menuItem(menu, 'Copy from another day')).click();
+    await h.settle(900);
     const dlg = await need(page.getByRole('dialog'), 'copy dialog');
-    await need(dlg.getByText('Choose which meal to copy.'), 'the opening summary');
-    await need(dlg.getByRole('button', { name: /^copy$/i, disabled: true }), 'Copy disabled');
-  }, { path: '/food-log', dialog: true }),
+    const summary = (await (await need(dlg.locator('[data-testid="copy-summary"]'), 'the summary sentence')).innerText()).trim();
+    h.log(`copy summary: ${summary}`);
+    const want = `Copy your breakfast from ${weekdayOf(YEST)} into today’s breakfast (2 foods)`;
+    if (summary !== want) throw new Error(`the copy summary reads "${summary}", wanted "${want}"`);
+    await need(dlg.getByRole('button', { name: /^copy$/i, disabled: false }), 'Copy live');
+  }, { dialog: true }),
 
   // Copy a meal from Sarah (who shares her log): Whose log = Sarah, Which meal =
   // Dinner. The summary reads "Copy Sarah's dinner from <day> into today's dinner
   // (3 foods)" and Copy is live at the bottom.
-  pageScene('50f-copy-meal-sarah', () => fullOps(logDay()), async (page, h) => {
-    await (await need(page.getByRole('button', { name: /copy a meal from another day/i }), 'Copy link')).click();
+  pageScene('50f-copy-meal-sarah', () => dayOps(logDay()), async (page, h) => {
+    const menu = await openMealMenu(page, h, 'dinner');
+    await (await menuItem(menu, 'Copy from another day')).click();
     await h.settle(800);
     const dlg = await need(page.getByRole('dialog'), 'copy dialog');
     await (await need(dlg.getByRole('combobox', { name: /whose log/i }), 'Whose log')).click();
@@ -242,33 +306,76 @@ const foodLogScenes = [
     await h.settle(900);
     await need(dlg.getByText(/Copy Sarah’s dinner from .* into today’s dinner \(3 foods\)/), 'the Sarah summary');
     await need(dlg.getByRole('button', { name: /^copy$/i, disabled: false }), 'Copy live');
-  }, { path: '/food-log', dialog: true }),
+  }, { dialog: true }),
 
   // What your household ate: "What Sarah ate today" with a Copy to your log on each meal.
-  pageScene('50g-household-view', () => fullOps(logDay()), async (page, h) => {
-    await (await need(page.getByRole('button', { name: /what your household ate/i }), 'household link')).click();
+  pageScene('50g-household-view', () => dayOps(logDay()), async (page, h) => {
+    await (await need(page.locator('[data-testid="household-link"]'), 'household link')).click();
     await h.settle(1200);
     const dlg = await need(page.getByRole('dialog'), 'household dialog');
     try {
       await need(dlg.getByText(/What Sarah ate today/), 'What Sarah ate today');
     } catch (e) { throw new Error(`${e.message} :: ${(await dlg.innerText()).slice(0, 300).replace(/\n/g, ' | ')}`); }
     await need(dlg.getByRole('button', { name: /^Copy Sarah’s .* to your log$/ }).first(), 'Copy to your log');
-  }, { path: '/food-log', dialog: true }),
+  }, { dialog: true }),
 
-  // Save a meal from the Full Log: the name box, the foods in it, and the save at the bottom.
-  pageScene('50h-save-as-meal', () => fullOps(logDay()), async (page, h) => {
-    await (await need(page.getByRole('button', { name: /save breakfast as a meal/i }), 'Save as a meal')).click();
+  // Save a meal, out of Breakfast's menu: the name box, the foods in it, and the save at the bottom.
+  pageScene('50h-save-as-meal', () => dayOps(logDay()), async (page, h) => {
+    const menu = await openMealMenu(page, h, 'breakfast');
+    await (await menuItem(menu, 'Save as a meal')).click();
     await h.settle(800);
-    await need(page.getByRole('dialog'), 'save-meal dialog');
-  }, { path: '/food-log', dialog: true }),
+    const dlg = await need(page.getByRole('dialog'), 'save-meal dialog');
+    await need(dlg.getByText('Greek yogurt').first(), 'the meal’s foods in the dialog');
+  }, { dialog: true }),
 
-  // An empty Log in a brand-new account (Full): four "Nothing yet" meals, no target.
-  pageScene('57c-empty-log', () => newAccount('full'), async (page) => {
-    await need(page.getByText('Nothing yet', { exact: true }).first(), 'an empty meal');
-  }, { path: '/food-log' }),
-  pageScene('57d-empty-log-simple', () => newAccount('simple'), async (page) => {
-    await need(page.getByText('Nothing yet', { exact: true }).first(), 'an empty meal');
-  }, { path: '/food-log' }),
+  // Another day, reached with Previous: the header says "Yesterday" over its
+  // date, "Today" brings it back, the card is "Calories for this day" in the
+  // past tense, and the check-ins and meds (today's business) are gone.
+  pageScene('50j-today-previous-day', () => dayOps([
+    ...logDay(YEST),
+    row('Ribeye, grilled', 'dinner', 1, 465, { day: YEST, macros: [39, 0, 35] }),
+    ...logDay(),
+  ]), async (page, h) => {
+    const title = page.locator('[data-testid="day-header-title"]');
+    const titleNow = async () => (await title.innerText()).trim();
+    await need(page.locator('[data-testid="today-strip"]'), 'the check-in pills on today');
+    await (await need(page.getByRole('button', { name: 'Previous day' }), 'Previous day')).click();
+    await h.settle(1200);
+    if ((await titleNow()) !== 'Yesterday') throw new Error(`after Previous the h1 reads "${await titleNow()}"`);
+    await (await need(page.locator('[data-testid="back-to-today"]'), 'the way back to today')).click();
+    await h.settle(1200);
+    if (!/^Good /.test(await titleNow())) throw new Error(`"Today" did not come back to today (h1 "${await titleNow()}")`);
+    await absent(page.locator('[data-testid="back-to-today"]'), '"Today" (back) while on today');
+    await page.getByRole('button', { name: 'Previous day' }).click();
+    await h.settle(1400);
+    if ((await titleNow()) !== 'Yesterday') throw new Error(`the h1 reads "${await titleNow()}"`);
+    const date = (await (await need(page.locator('[data-testid="day-header-date"]'), 'the date over "Yesterday"')).innerText()).trim();
+    if (!date.startsWith(weekdayOf(YEST))) throw new Error(`the date line reads "${date}", wanted ${weekdayOf(YEST)}, …`);
+    await need(page.getByRole('heading', { name: 'Calories for this day' }), 'the card title for another day');
+    // 2,340 less yesterday's 156 + 190 + 315 + 465.
+    const sentence = (await page.locator('[data-testid="calories-sentence"]').innerText()).trim();
+    if (sentence !== 'You had 1,214 calories left') throw new Error(`yesterday's sentence reads "${sentence}"`);
+    await need(page.getByRole('heading', { name: 'Meals', exact: true }), 'the meals heading without "Today’s"');
+    await need(page.getByRole('button', { name: /^Edit Ribeye, grilled, 465 cal$/ }), 'yesterday’s dinner');
+    await absent(page.locator('[data-testid="today-strip"]'), 'today’s check-in pills on another day');
+    await absent(page.locator('[data-testid="meds-checklist"]'), 'today’s meds on another day');
+    await need(page.locator('[data-testid="your-numbers"]'), 'Your numbers (the newest readings, whichever day)');
+  }, { wait: 1800 }),
+
+  // The add sheet for a day with no history behind it: no Again chips and no
+  // "Same as yesterday", only the box, its microphone and Log it (dim).
+  pageScene('21a-add-sheet-no-history', () => dayOps([]), async (page, h) => {
+    // A draft from an earlier scene's lunch sheet would be "words".
+    await page.evaluate(() => { try { sessionStorage.clear(); } catch { /* blocked */ } });
+    await (await need(page.getByRole('button', { name: /^add to lunch$/i }).first(), 'Add to lunch')).click();
+    await h.settle(900);
+    const sheet = await need(page.getByRole('dialog'), 'add sheet');
+    await need(sheet.locator('[data-testid="speak-button"]'), 'microphone button');
+    await need(sheet.getByLabel('Tell me what you ate'), 'the composer box');
+    await need(sheet.locator('[data-testid="log-it"][disabled]'), 'Log it, dim until there are words');
+    await absent(sheet.locator('[data-testid="again-chips"]'), 'Again chips with no history');
+    await absent(sheet.locator('[data-testid="same-as-yesterday"]'), '"Same as yesterday" with no yesterday');
+  }, { dialog: true }),
 ];
 
 // ── Brand-new account: everything empty ─────────────────────────────────────
@@ -285,9 +392,10 @@ const noGoalSettings = (base = SETTINGS) => ({
   weight_goal: null,
   nutrition_goal: { ...base.nutrition_goal, enabled: false, start_date: null, start_weight: null, target_weight: null, bmr: null, daily_calorie_target: null },
 });
-const newAccount = (mode, patch = {}) => ({
+// A person who has been through the first run and logged nothing since.
+const newAccount = (patch = {}) => ({
   ...OPS,
-  GetFitnessExperience: experienceOf({ mode, first_run_done: true, preferred_name: 'Heather', ...patch }),
+  GetFitnessExperience: experienceOf({ first_run_done: true, preferred_name: 'Heather', ...patch }),
   ...ledger([], 0),
   GetDailySummary: (v = {}) => ({ dailySummary: ZERO_SUMMARY(v.date) }),
   GetDerivedMacros: { derivedMacros: NO_TARGET },
@@ -299,28 +407,49 @@ const newAccount = (mode, patch = {}) => ({
   GetFitnessFoods: { fitnessFoods: [] },
   GetFitnessMedications: { fitnessMedications: [] },
   GetFitnessUserSettings: { fitnessUserSettings: noGoalSettings() },
-  GetLoginStreak: { loginStreak: { __typename: 'LoginStreak', current_streak: 0, longest_streak: 0, last_login: TODAY } },
+  GetLoginStreak: { loginStreak: { __typename: 'LoginStreak', currentStreak: 0, longestStreak: 0, lastLoginDate: TODAY, streakStartDate: null } },
   GetGarminDaily: { garminDaily: null },
 });
 
-// ── My Foods, My Meals ──────────────────────────────────────────────────────
+// ── Saved foods: Meals and Foods ────────────────────────────────────────────
 
 const food = (id, name, brand, source, cal, extra = {}) => ({
   __typename: 'FitnessFood', id, name, brand, serving_size: 100, serving_unit: 'g', barcode: null, is_verified: false,
   nutrition: nutr(cal), ...(source === undefined ? {} : { source }), ...extra,
 });
 
+// The container's own tabs: both there, both whole, the right one selected,
+// and the tab's page without a second <Page> or a repeated title inside it.
+async function assertContainerTabs(page, h, label, names, selected) {
+  const list = await need(page.getByRole('tablist', { name: label }), `the "${label}" tabs`);
+  const tabs = await list.getByRole('tab').evaluateAll((els) => els.map((el) => {
+    const r = el.getBoundingClientRect();
+    return { label: el.innerText.trim(), clipped: el.scrollWidth > el.clientWidth + 1, x: r.x, right: r.right, selected: el.getAttribute('aria-selected') === 'true' };
+  }));
+  if (tabs.map((t) => t.label).join(' · ') !== names.join(' · ')) throw new Error(`"${label}" tabs read ${tabs.map((t) => t.label).join(' · ')}`);
+  const vw = page.viewportSize().width;
+  const off = tabs.filter((t) => t.clipped || t.x < -0.5 || t.right > vw + 0.5);
+  if (off.length) throw new Error(`"${label}" tabs cut off: ${off.map((t) => t.label).join(', ')}`);
+  const on = tabs.filter((t) => t.selected).map((t) => t.label).join(',');
+  if (on !== selected) throw new Error(`"${label}" has "${on}" selected, wanted "${selected}"`);
+  await need(page.locator(`[role="tabpanel"][aria-labelledby="tab-${selected.toLowerCase()}"]`), `the ${selected} panel`);
+  h.log(`${label}: ${tabs.map((t) => `${t.label}${t.selected ? '*' : ''}`).join(' · ')}`);
+}
+const SAVED_TABS = ['Meals', 'Foods'];
+
 const libraryScenes = [
-  // My Foods with nothing in it: the empty state and the way in.
-  pageScene('51-my-foods-empty', () => ({ ...OPS, ...FULL, GetFitnessFoods: { fitnessFoods: [] } }), async (page) => {
+  // Saved foods › Foods with nothing in it: the empty state and the way in.
+  // The old /my-foods address opens this tab.
+  pageScene('51-my-foods-empty', () => ({ ...OPS, GetFitnessFoods: { fitnessFoods: [] } }), async (page, h) => {
+    landedOn(page, '/saved-foods', { tab: 'foods' });
+    await assertContainerTabs(page, h, 'Saved foods sections', SAVED_TABS, 'Foods');
     await need(page.getByRole('button', { name: /new food/i }), 'New food');
   }, { path: '/my-foods' }),
 
-  // My Foods rows by source: "usda" says USDA, an unknown or missing source says
+  // Foods rows by source: "usda" says USDA, an unknown or missing source says
   // nothing at all (UX review 2.7), a custom food says "My food".
   pageScene('51a-my-foods-sources', () => ({
     ...OPS,
-    ...FULL,
     GetFitnessFoods: {
       fitnessFoods: [
         food('mf1', 'Chicken breast, cooked', null, 'usda', 165),
@@ -335,17 +464,38 @@ const libraryScenes = [
     await need(page.getByText('Protein bar, peanut butter').first(), 'unknown-source row');
     await need(page.getByText('Grandma’s banana bread').first(), 'missing-source row');
     if (await page.getByText(/^unknown$/i).count()) throw new Error('an unknown source says "Unknown"');
-  }, { path: '/my-foods' }),
+  }, { path: '/saved-foods?tab=foods' }),
 
-  // My Meals with SAVED_MEALS.
-  pageScene('51b-my-meals', () => ({ ...OPS, ...FULL, GetFitnessMeals: { fitnessMeals: SAVED_MEALS } }), async (page) => {
+  // Saved foods › Meals with SAVED_MEALS. The old /my-meals address opens it.
+  pageScene('51b-my-meals', () => ({ ...OPS, GetFitnessMeals: { fitnessMeals: SAVED_MEALS } }), async (page, h) => {
+    landedOn(page, '/saved-foods', { tab: 'meals' });
+    await assertContainerTabs(page, h, 'Saved foods sections', SAVED_TABS, 'Meals');
     await need(page.getByText('Usual breakfast').first(), 'a saved meal');
   }, { path: '/my-meals' }),
 
-  // My Meals, nothing saved yet.
-  pageScene('51c-my-meals-empty', () => ({ ...OPS, ...FULL, GetFitnessMeals: { fitnessMeals: [] } }), async (page) => {
+  // Meals, nothing saved yet.
+  pageScene('51c-my-meals-empty', () => ({ ...OPS, GetFitnessMeals: { fitnessMeals: [] } }), async (page) => {
     await need(page.locator('main, #root').first(), 'the page');
-  }, { path: '/my-meals' }),
+  }, { path: '/saved-foods?tab=meals' }),
+
+  // Saved foods as it opens from the sidebar or More: no ?tab=, so Meals; a
+  // tap on Foods swaps the panel and writes ?tab=foods without adding a
+  // history entry.
+  pageScene('71-saved-foods-meals', () => OPS, async (page, h) => {
+    await assertContainerTabs(page, h, 'Saved foods sections', SAVED_TABS, 'Meals');
+    await need(page.getByText('Usual breakfast').first(), 'a saved meal');
+    await absent(page.getByRole('heading', { level: 1 }).filter({ hasText: /^(My meals|Saved foods)$/ }), 'a page title repeated under the top bar');
+  }, { path: '/saved-foods' }),
+  pageScene('71a-saved-foods-foods', () => OPS, async (page, h) => {
+    const before = await page.evaluate(() => window.history.length);
+    await (await need(page.getByRole('tab', { name: 'Foods', exact: true }), 'the Foods tab')).click();
+    await h.settle(1200);
+    landedOn(page, '/saved-foods', { tab: 'foods' });
+    if ((await page.evaluate(() => window.history.length)) !== before) throw new Error('changing tab pushed a history entry');
+    await assertContainerTabs(page, h, 'Saved foods sections', SAVED_TABS, 'Foods');
+    await need(page.getByText('Greek Yogurt, Plain Whole Milk').first(), 'a saved food');
+    await need(page.getByRole('button', { name: /new food/i }), 'New food');
+  }, { path: '/saved-foods' }),
 ];
 
 // ── Home ────────────────────────────────────────────────────────────────────
@@ -353,21 +503,27 @@ const libraryScenes = [
 const HOME_PROBLEM = /Can’t reach FitnessGeek right now\. What you logged is safe\./;
 const FAILING_READS = new Set(['GetFoodLogs', 'GetDailySummary', 'GetDerivedMacros', 'GetFitnessWeights']);
 
-// Home after a failed load, Simple and Full: the reads 502, so the hero says it
-// couldn't reach FitnessGeek (with Try again), the meal cards say "—", and there
-// is no "Weigh in" chip and no "Nothing yet" to read as an empty day.
+// Today after a failed load: the reads 502, so the card says it couldn't reach
+// FitnessGeek (with Try again), every meal says "—", and there is no "Weigh in"
+// chip and no "Nothing yet" to read as an empty day.
 const homeFailed = (name, build) => pageScene(name, () => ({ ops: build(), fail: (op) => FAILING_READS.has(op) }), async (page) => {
   await need(page.locator('[data-testid="home-load-problem"]'), 'the load-problem line');
   await need(page.getByText(HOME_PROBLEM), 'the sentence');
   await need(page.getByRole('button', { name: 'Try again' }), 'Try again');
   if (await page.getByText('Nothing yet', { exact: true }).count()) throw new Error('"Nothing yet" shown after a failed read');
+  for (const meal of ['breakfast', 'lunch', 'dinner', 'snack']) {
+    const total = (await (await need(page.locator(`[data-testid="meal-total-${meal}"]`), `${meal} total`)).innerText()).trim();
+    if (total !== '—') throw new Error(`${meal} reads "${total}" after a failed read, wanted "—"`);
+  }
+  await absent(page.locator('[data-testid="calories-sentence"]'), 'a calories sentence after a failed read');
+  await absent(page.locator('[data-testid="plate-number"]'), 'a number in the ring after a failed read');
   if (await page.getByText(/^Weigh in/).count()) throw new Error('a Weigh in chip after a failed read');
 }, { path: '/dashboard', wait: 2200 });
 
-// The meal cards after a load that worked and a reload that did not: she removes
-// something, the reads behind it 502, and the cards keep their foods while the
-// line says so. `armed` flips after the first paint.
-const homeReloadFailed = (name, build, { simple = false } = {}) => {
+// The meals after a load that worked and a reload that did not: something is
+// removed (row → Edit → Remove), the reads behind it 502, and the meals keep
+// their foods while the line says so. `armed` flips after the first paint.
+const homeReloadFailed = (name, build) => {
   const state = { armed: false };
   return {
     name,
@@ -378,8 +534,9 @@ const homeReloadFailed = (name, build, { simple = false } = {}) => {
         await h.settle(1500);
         await need(page.getByText(/Greek yogurt|Chicken salad wrap/).first(), 'a food on the cards');
         state.armed = true;
-        // Anything that changes the day reloads Home; a Remove is the simplest.
-        await (await need(page.getByRole('button', { name: 'Remove Greek yogurt from breakfast' }), 'Remove on a card')).click();
+        // Anything that changes the day reloads Today; a Remove is the simplest.
+        const dlg = await openEdit(page, h, 'Greek yogurt');
+        await (await need(dlg.getByRole('button', { name: 'Remove Greek yogurt' }), 'Remove in the edit dialog')).click();
         await h.settle(1500);
         try { await need(page.getByText(HOME_PROBLEM), 'the line after the failed reload'); } catch (e) {
           throw new Error(`${e.message} :: ${(await page.locator('body').innerText()).slice(0, 700).replace(/\n/g, ' | ')}`);
@@ -398,36 +555,34 @@ const homeAmountRows = () => [
 ];
 
 const homeScenes = [
-  homeFailed('52-home-failed-simple', () => simpleOps(logDay())),
-  homeFailed('52a-home-failed-full', () => fullOps(logDay())),
-  homeReloadFailed('52b-home-reload-failed-full', () => fullOps(logDay())),
+  homeFailed('52-home-failed', () => dayOps(logDay())),
+  homeReloadFailed('52b-home-reload-failed', () => dayOps(logDay())),
 
-  // Amounts on Home: Simple merges the two eggs into "Egg ×2" and says "Toast ×2".
-  pageScene('52c-home-amounts-simple', () => simpleOps(homeAmountRows()), async (page) => {
-    await need(page.getByText('Egg', { exact: false }).filter({ hasText: '×2' }).first(), '"Egg ×2"');
-    await need(page.getByText('Toast', { exact: false }).filter({ hasText: '×2' }).first(), '"Toast ×2"');
-  }),
-  // Full lists each entry: Egg, Egg, Toast ×2.
-  pageScene('52d-home-amounts-full', () => fullOps(homeAmountRows()), async (page, h) => {
-    await need(page.getByText('Toast', { exact: false }).filter({ hasText: '×2' }).first(), '"Toast ×2"');
+  // Amounts on Today: every entry is its own row — Egg, Egg, Toast ×2 — so
+  // each can be opened and changed on its own.
+  pageScene('52d-home-amounts', () => dayOps(homeAmountRows()), async (page, h) => {
+    const eggs = await page.getByRole('button', { name: /^Edit Egg, 78 cal$/ }).count();
+    if (eggs !== 2) throw new Error(`expected two Egg rows, saw ${eggs}`);
+    await need(page.getByRole('button', { name: /^Edit Toast, ×2, 160 cal$/ }), '"Toast ×2"');
+    await need(page.getByText('Toast', { exact: false }).filter({ hasText: '×2' }).first(), '"Toast ×2" on the row');
     await scrollToSection(page, h, '#todays-meals', 88);
   }),
 
-  // Full Home, fat over target: the Fat row reads "Fat 99 g of 78" with a
-  // "21 over" tag and 127%, and the Eaten row says 72% (The Label, 2026-11).
-  {
-    ...pageScene('52e-home-fat-over', () => ({
-      ...OPS,
-      ...FULL,
-      ...ledger(logDay(), 2340, { fat_grams: 99, calories: 1685 }),
-    }), async (page) => {
-      const strip = page.locator('[data-testid="macro-strip"]');
-      await need(strip.getByText(/Fat\s*99 g\s*of 78/), 'the Fat row "Fat 99 g of 78"');
-      await need(strip.getByText(/^21 over$/i), 'the "21 over" tag');
-      await need(strip.getByText('127%', { exact: true }), 'Fat at 127%');
-      await need(page.getByText('72%', { exact: true }).first(), 'Eaten at 72%');
-    }),
-  },
+  // Today, fat over target, with "Macros and details" open: the Fat row reads
+  // "Fat 99 g of 78" with a "21 over" tag and 127%, and the Eaten row says 72%.
+  pageScene('52e-home-fat-over', () => ({
+    ...OPS,
+    ...ledger(logDay(), 2340, { fat_grams: 99, calories: 1685 }),
+  }), async (page, h) => {
+    await absent(page.locator('[data-testid="macro-strip"]'), 'the macro rows before the disclosure is opened');
+    await setDetails(page, h, true);
+    const strip = page.locator('[data-testid="today-details"] [data-testid="macro-strip"]');
+    await need(strip.getByText(/Fat\s*99 g\s*of 78/), 'the Fat row "Fat 99 g of 78"');
+    await need(strip.getByText(/^21 over$/i), 'the "21 over" tag');
+    await need(strip.getByText('127%', { exact: true }), 'Fat at 127%');
+    await need(strip.getByText('72%', { exact: true }).first(), 'Eaten at 72%');
+    await scrollToSection(page, h, '[data-testid="home-hero"]', 88);
+  }),
 ];
 
 // ── Weight ──────────────────────────────────────────────────────────────────
@@ -459,8 +614,7 @@ const weightOps = (base, weights) => ({
   GetFitnessWeights: { fitnessWeights: weights },
   GetFitnessUserSettings: { fitnessUserSettings: withGoal(base.GetFitnessUserSettings.fitnessUserSettings) },
 });
-const fullWeight = (weights = goalWeights()) => weightOps(fullOps([]), weights);
-const simpleWeight = (weights = goalWeights()) => weightOps(simpleOps([]), weights);
+const goalWeight = (weights = goalWeights()) => weightOps(dayOps([]), weights);
 
 // The chart box is the element after the "lb" caption.
 const chartBox = (page, testid) => page.locator(`[data-testid="${testid}"] + *`).first();
@@ -537,26 +691,27 @@ async function tapChartTooltip(page, h, box) {
 }
 
 const weightScenes = [
-  // The goal card in Full: the pace sentence, "12.1 of 37 lb lost", the basis
-  // line, a lemon "Behind plan" chip, and the projection in words.
-  pageScene('53-weight-goal-full', () => fullWeight(), async (page) => {
+  // The goal card: the trend in words first ("Down 12.1 lb since June") over
+  // its basis line, then the goal maths — "12.1 of 37 lb lost", the pace
+  // sentence, a "Behind plan" chip, and the projection in words.
+  pageScene('53-weight-goal', () => goalWeight(), async (page) => {
+    const words = (await (await need(page.locator('[data-testid="weight-trend-words"]'), 'the trend words')).innerText()).trim();
+    if (!/^Down 1\d(\.\d)? lb since /.test(words)) throw new Error(`trend words say "${words}"`);
     await need(page.getByText(/You’re losing [\d.]+ lb a week/), 'the pace sentence');
     await need(page.getByText(/of 37 lb lost/), '"… of 37 lb lost"');
     await need(page.getByText(/From your 7-day average, 21\d\.\d lb/), 'the basis line');
     await need(page.getByText('Behind plan', { exact: true }), 'the Behind plan chip');
-  }, { path: '/weight', wait: 1800 }),
-
-  // The goal card in Simple: "Down 12.1 lb since June", and no chip or tiles.
-  pageScene('53a-weight-goal-simple', () => simpleWeight(), async (page) => {
-    await need(page.locator('[data-testid="weight-trend-words"]'), 'the trend words');
-    const words = await page.locator('[data-testid="weight-trend-words"]').innerText();
-    if (!/^Down 1\d(\.\d)? lb since /.test(words)) throw new Error(`trend words say "${words}"`);
-    if (await page.getByText('Behind plan', { exact: true }).count()) throw new Error('Simple shows the plan chip');
+    // One page for everybody: body composition is always on it, and from md
+    // the weigh-in is a card in the left column (the thumb button below it).
+    await need(page.locator('#body-composition'), 'body composition');
+    const fab = page.locator('[data-testid="log-weight-fab"]');
+    const card = page.getByRole('button', { name: /^(log weight|save|replace)$/i });
+    if (!(await fab.count()) && !(await card.count())) throw new Error('no way to weigh in on the Weight page');
   }, { path: '/weight', wait: 1800 }),
 
   // The weight dialog on a day that already has a weight: "You already have 218.7
   // for today. Saving replaces it." and the button says Replace.
-  pageScene('53b-weight-replace-warning', () => fullWeight(goalWeights({ today: 218.7 })), async (page, h) => {
+  pageScene('53b-weight-replace-warning', () => goalWeight(goalWeights({ today: 218.7 })), async (page, h) => {
     await (await need(page.getByRole('button', { name: /log weight/i }).first(), 'Log weight')).click();
     await h.settle(800);
     const dlg = await need(page.getByRole('dialog'), 'weight dialog');
@@ -566,7 +721,7 @@ const weightScenes = [
 
   // The same dialog with the day moved to one without a weigh-in: the note goes
   // and the button says Save again.
-  pageScene('53c-weight-save-other-day', () => fullWeight(goalWeights({ today: 218.7 })), async (page, h) => {
+  pageScene('53c-weight-save-other-day', () => goalWeight(goalWeights({ today: 218.7 })), async (page, h) => {
     await (await need(page.getByRole('button', { name: /log weight/i }).first(), 'Log weight')).click();
     await h.settle(800);
     const dlg = await need(page.getByRole('dialog'), 'weight dialog');
@@ -579,14 +734,14 @@ const weightScenes = [
 
   // The weight trend, tapped on its right half: the tooltip stays inside the card
   // in one-line rows, and the "lb" caption sits above the chart.
-  pageScene('53d-weight-tooltip', () => fullWeight(), async (page, h) => {
+  pageScene('53d-weight-tooltip', () => goalWeight(), async (page, h) => {
     await scrollToSection(page, h, 'text=Weight trend', 88);
     await need(page.locator('[data-testid="weight-y-unit"]'), 'the lb caption');
     await tapChartTooltip(page, h, chartBox(page, 'weight-y-unit'));
   }, { path: '/weight', wait: 1800, viewports: ['phone'], freshPage: true }),
 
   // The body-composition trend, the same tap.
-  pageScene('53e-bodycomp-tooltip', () => fullWeight(), async (page, h) => {
+  pageScene('53e-bodycomp-tooltip', () => goalWeight(), async (page, h) => {
     await scrollToSection(page, h, '#body-composition');
     await scrollToSection(page, h, 'text=Line: 7-day average · dots: each scan', 160);
     await need(page.locator('[data-testid="bodycomp-y-unit"]'), 'the lb caption');
@@ -594,43 +749,39 @@ const weightScenes = [
   }, { path: '/weight', wait: 1800, viewports: ['phone'], freshPage: true }),
 
   // A brand-new account's Weight page: no logs, no goal, and a way to start.
-  pageScene('57a-weight-empty', () => newAccount('full'), async (page) => {
-    await need(page.getByText('Set your goal', { exact: false }).first(), 'the Set your goal prompt');
-  }, { path: '/weight', wait: 1800 }),
-  pageScene('57e-weight-empty-simple', () => newAccount('simple'), async (page) => {
+  pageScene('57a-weight-empty', () => newAccount(), async (page) => {
     await need(page.getByText('Set your goal', { exact: false }).first(), 'the Set your goal prompt');
   }, { path: '/weight', wait: 1800 }),
   // And Blood pressure with no readings.
-  pageScene('57b-bp-empty', () => newAccount('full'), async (page) => {
+  pageScene('57b-bp-empty', () => newAccount(), async (page) => {
     await need(page.locator('main, #root').first(), 'the page');
   }, { path: '/blood-pressure', wait: 1800 }),
 ];
 
-// ── More, the sidebar, first run, empty Home ────────────────────────────────
+// ── The sidebar, first run, empty Today ─────────────────────────────────────
+
+const SIDEBAR = ['Today', 'Weight', 'Blood pressure', 'Medications', 'Trends', 'Saved foods'];
 
 const moreScenes = [
-  // More in Simple: Check-ins and You first, "Everything else" with the "needs…"
-  // lines, and no Profile row.
-  pageScene('54-more-simple-order', () => simpleOps([]), async (page) => {
-    await need(page.locator('[data-testid="more-page"]'), 'More page');
-    if (await page.getByRole('link', { name: /^profile/i }).count()) throw new Error('Simple More still lists Profile');
-    await need(page.getByText(/needs/i).first(), 'a "needs…" line');
-    const heads = await page.locator('[data-testid="more-page"] h2').allInnerTexts();
-    if (heads[0] !== 'Check-ins' || heads[1] !== 'You') throw new Error(`More order is ${heads.join(', ')}`);
-  }, { path: '/more', wait: 1400, viewports: ['phone'] }),
-
-  // The Full sidebar on desktop: the sections, and no Profile.
-  pageScene('54a-sidebar-full', () => fullOps(logDay()), async (page) => {
-    await need(page.getByText('Settings', { exact: true }).first(), 'Settings in the sidebar');
-    await need(page.getByText('Looking back', { exact: true }), 'the sidebar sections');
-    if (await page.getByText(/^Profile$/).count()) throw new Error('the sidebar still lists Profile');
-  }, { path: '/dashboard', wait: 1500, viewports: ['desktop'] }),
+  // The sidebar on desktop: six rows, in order, with no group headings, and
+  // none of the pages that moved inside Trends and Saved foods.
+  pageScene('54a-sidebar', () => dayOps(logDay()), async (page) => {
+    const body = await need(page.locator('[data-geek-sidebar="body"]'), 'the sidebar list');
+    const rows = (await body.getByRole('link').or(body.getByRole('button')).allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+    if (rows.join(' · ') !== SIDEBAR.join(' · ')) throw new Error(`the sidebar reads ${rows.join(' · ')}`);
+    for (const gone of ['Looking back', 'Food', 'Profile', 'Reports', 'Activity', 'Health', 'My meals', 'My foods', 'Food log', 'Home']) {
+      await absent(body.getByText(gone, { exact: true }), `"${gone}" in the sidebar`);
+    }
+  }, { path: '/dashboard', wait: 1500, viewports: ['desktop', 'tablet-landscape'] }),
 ];
 
-// Heather before she has answered anything: step 3 of the first run.
-const firstRunOps = () => ({
-  ...newAccount('simple'),
-  GetFitnessExperience: experienceOf({ mode: null, first_run_done: false, preferred_name: null }),
+// A person before they have answered anything. The three-step first run is
+// the one thing the saved `mode` is still read for: it shows to a person who
+// never chose and has no history (20, 20a), and to one saved as "simple" who
+// never finished it (55, 55a) — these are the only scenes that set it.
+const firstRunOps = (mode = null) => () => ({
+  ...newAccount(),
+  GetFitnessExperience: experienceOf({ mode, first_run_done: false, preferred_name: null }),
 });
 const toStep3 = async (page, h, { goal = null } = {}) => {
   await (await need(page.getByRole('button', { name: /^next$/i }).first(), 'Next')).click();
@@ -641,50 +792,64 @@ const toStep3 = async (page, h, { goal = null } = {}) => {
 };
 
 const firstRunScenes = [
+  // First run: a person who never chose, and has never logged, lands here
+  // instead of Today.
+  pageScene('20-first-run', firstRunOps(), async (page) => {
+    await need(page.locator('[data-testid="first-run"]'), 'first run');
+    await absent(page.locator('[data-testid="home-hero"]'), 'Today behind the first run');
+    await absent(page.locator('[data-testid="day-header"]'), 'the day header behind the first run');
+  }),
+  pageScene('20a-first-run-goal', firstRunOps(), async (page, h) => {
+    const next = await need(page.getByRole('button', { name: /^next$/i }).first(), 'Next');
+    await next.click();
+    await h.settle(500);
+    await need(page.getByRole('radio', { name: /keep my weight steady/i }), 'goal choices');
+  }, { viewports: ['phone'] }),
+
   // Step 3: "Try logging your <meal>", "Add my <meal>", and Maybe later.
-  pageScene('55-first-run-step3', firstRunOps, async (page, h) => {
+  pageScene('55-first-run-step3', firstRunOps('simple'), async (page, h) => {
+    await need(page.locator('[data-testid="first-run"]'), 'first run');
     await toStep3(page, h, { goal: /lose a little weight/i });
     await need(page.getByRole('heading', { name: /try logging your/i }), 'step 3');
     await need(page.getByRole('button', { name: 'Maybe later' }), 'Maybe later');
   }, { viewports: ['phone'] }),
 
-  // Home right after "Maybe later" with "Lose a little weight" picked and no
-  // target: the plate offers "Set your daily target", never "Nothing logged".
-  pageScene('55a-home-after-maybe-later', firstRunOps, async (page, h) => {
+  // Today right after "Maybe later" with "Lose a little weight" picked and no
+  // target: the card offers "Set your daily target", never "Nothing logged".
+  pageScene('55a-home-after-maybe-later', firstRunOps('simple'), async (page, h) => {
     await toStep3(page, h, { goal: /lose a little weight/i });
     await (await need(page.getByRole('button', { name: 'Maybe later' }), 'Maybe later')).click();
     await h.settle(1500);
+    await absent(page.locator('[data-testid="first-run"]'), 'the first run after "Maybe later"');
     await need(page.locator('[data-testid="set-daily-target"]'), 'Set your daily target');
   }, { viewports: ['phone'] }),
 
-  // A brand-new account's Home, Simple and Full: no target, no logs, no weights.
-  pageScene('57f-home-empty-simple', () => newAccount('simple'), async (page) => {
+  // A brand-new account's Today: no target, no logs, no weights, no meds.
+  // Four meals that say "Nothing yet", and a quiet way in to medications.
+  pageScene('57f-today-empty', () => newAccount(), async (page) => {
     try { await need(page.locator('#todays-meals'), 'the meals heading'); } catch (e) {
       throw new Error(`${e.message} :: ${(await page.locator('body').innerText()).slice(0, 500).replace(/\n/g, ' | ')}`);
     }
-  }, { wait: 1800 }),
-  pageScene('57g-home-empty-full', () => newAccount('full'), async (page) => {
-    try { await need(page.locator('#todays-meals'), 'the meals heading'); } catch (e) {
-      throw new Error(`${e.message} :: ${(await page.locator('body').innerText()).slice(0, 500).replace(/\n/g, ' | ')}`);
-    }
+    await absent(page.locator('[data-testid="first-run"]'), 'the first run for a person who finished it');
+    const empties = await page.getByText('Nothing yet', { exact: true }).count();
+    if (empties !== 4) throw new Error(`expected four "Nothing yet" meals, saw ${empties}`);
+    await need(page.locator('[data-testid="track-meds"]'), 'Track your meds');
   }, { wait: 1800 }),
 ];
 
 // ── The ErrorBoundary ───────────────────────────────────────────────────────
 
-// A logged entry whose snapshot and food both lack nutrition: the Full Log row
-// reads `nutrition.calories_per_serving` off nothing and throws mid-render, and the
-// boundary under the router answers "Something went wrong." with a Reload button.
-const brokenRow = () => {
-  const r = row('Broken entry', 'lunch', 1, 100);
-  return { ...r, nutrition: null, calculatedNutrition: null };
-};
-const boundaryScene = pageScene('56-error-boundary', () => fullOps([brokenRow()]), async (page) => {
+// Today no longer falls over on a logged entry with no nutrition (it reads
+// through amount.js now, which answers 0), so the boundary is reached the way
+// a bad deploy would reach it: a saved-foods answer with a hole in it, which a
+// list row reads `nutrition` off and throws mid-render. The boundary under the
+// router answers "Something went wrong." with a Reload button.
+const boundaryScene = pageScene('56-error-boundary', () => ({ ...OPS, GetFitnessFoods: { fitnessFoods: [null] } }), async (page) => {
   await need(page.locator('[data-testid="error-boundary"]'), 'the ErrorBoundary screen');
   await need(page.getByRole('button', { name: 'Reload' }), 'Reload');
-}, { path: '/food-log', wait: 1500 });
+}, { path: '/saved-foods?tab=foods', wait: 1500 });
 
-// ── Activity and the Health dashboard (Garmin) ─────────────────────────────
+// ── Trends: Activity and Health (Garmin) ─────────────────────────────
 
 const iso = (hh, mm = 0, day = TODAY) => new Date(`${day}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`).toISOString();
 
@@ -714,7 +879,7 @@ const GARMIN_ON = {
     ],
   },
 };
-const activityOps = (extra = {}) => ({ ...OPS, ...FULL, ...GARMIN_ON, ...extra });
+const activityOps = (extra = {}) => ({ ...OPS, ...GARMIN_ON, ...extra });
 
 // Raw InfluxQL rows, one every ten minutes up to the afternoon, under the
 // measurement's own column names (intradaySeries.js).
@@ -777,17 +942,21 @@ async function influxRoutes(page, { sleep = SLEEP_ANALYSIS, recovery = RECOVERY,
 // meals by created_at; log_date is only the day.
 const timedDay = () => logDay().map((r, i) => ({ ...r, created_at: iso([7, 7, 12][i], [10, 15, 20][i]) }));
 
-// A Health-dashboard scene: influx on, the REST answers up, the tab clicked.
-const healthScene = (name, tabName, check, { influxOn = true, answers } = {}) => ({
+// A Trends › Health scene: influx on, the REST answers up, the section's pill
+// tab clicked. `path` lets one scene arrive by the old /health address.
+const TREND_TABS = ['Food', 'Activity', 'Health'];
+const healthScene = (name, tabName, check, { influxOn = true, answers, path = '/trends?tab=health' } = {}) => ({
   name,
   async setup(page, h) {
     await influxRoutes(page, answers);
     try {
-      await withOps(page, { ...OPS, ...FULL, ...(influxOn ? INFLUX_ON : {}), ...ledger(timedDay()), ...GARMIN_ON }, async () => {
-        await page.goto(h.base + '/health', { waitUntil: 'networkidle' });
+      await withOps(page, { ...OPS, ...(influxOn ? INFLUX_ON : {}), ...ledger(timedDay()), ...GARMIN_ON }, async () => {
+        await page.goto(h.base + path, { waitUntil: 'networkidle' });
         await h.settle(1500);
+        landedOn(page, '/trends', { tab: 'health' });
+        await assertContainerTabs(page, h, 'Trends sections', TREND_TABS, 'Health');
         if (tabName) {
-          await (await need(page.getByRole('tab', { name: tabName }), `the ${tabName} tab`)).click();
+          await (await need(healthTabs(page).getByRole('tab', { name: tabName }), `the ${tabName} tab`)).click();
           await h.settle(1500);
         }
         await check(page, h);
@@ -803,15 +972,18 @@ const healthScene = (name, tabName, check, { influxOn = true, answers } = {}) =>
   },
 });
 
-// Every Health tab whole: none with its label cut, and the selected one on
-// screen. On a phone five full-width tabs cut "Settings" off the end; they
-// scroll sideways now (d-fixes).
+// Health's own sections, under Trends: a lighter row of small pill tabs
+// (aria-label "Health sections"), every one whole — none with its label cut —
+// and the selected one on screen. On a phone five full-width tabs cut
+// "Settings" off the end; they scroll sideways now (d-fixes).
+const healthTabs = (page) => page.locator('[data-testid="health-tabs"]');
 async function assertTabsWhole(page, h) {
   const vp = page.viewportSize();
-  const tabs = await page.getByRole('tab').evaluateAll((els) => els.map((el) => {
+  await need(page.getByRole('tablist', { name: 'Health sections' }), 'the "Health sections" pill tabs');
+  const tabs = await healthTabs(page).getByRole('tab').evaluateAll((els) => els.map((el) => {
     const r = el.getBoundingClientRect();
     const label = el.innerText.trim();
-    return { label, clipped: el.scrollWidth > el.clientWidth + 1, x: r.x, right: r.right, selected: el.getAttribute('aria-selected') === 'true' };
+    return { label, clipped: el.scrollWidth > el.clientWidth + 1, x: r.x, right: r.right, h: r.height, selected: el.getAttribute('aria-selected') === 'true' };
   }));
   h.log(`tabs ${JSON.stringify(tabs.map((t) => [t.label, Math.round(t.x), Math.round(t.right)]))}`);
   if (tabs.length !== 5) throw new Error(`expected 5 tabs, saw ${tabs.length}`);
@@ -819,11 +991,46 @@ async function assertTabsWhole(page, h) {
   if (cut.length) throw new Error(`tab labels cut: ${cut.map((t) => t.label).join(', ')}`);
   const sel = tabs.find((t) => t.selected);
   if (!sel || sel.x < -0.5 || sel.right > vp.width + 0.5) throw new Error(`the selected tab is off screen: ${JSON.stringify(sel)}`);
+  // Two rows of tabs, one above the other: the outer one first.
+  const outer = await page.getByRole('tablist', { name: 'Trends sections' }).boundingBox();
+  const inner = await healthTabs(page).boundingBox();
+  if (!outer || !inner || inner.y < outer.y + outer.height - 1) throw new Error(`Health's tabs are not below the Trends tabs: ${JSON.stringify({ outer, inner })}`);
 }
 
 const garminScenes = [
-  // Activity with a connected Garmin: today so far, the night's sleep, recent workouts.
+  // Trends › Food, as Trends opens from the navigation: no ?tab=, so Food.
+  pageScene('70-trends-food', () => OPS, async (page, h) => {
+    await assertContainerTabs(page, h, 'Trends sections', TREND_TABS, 'Food');
+    await need(page.locator('[data-testid="reports-food"]'), 'the Food report');
+    await absent(page.getByRole('tablist', { name: 'Health sections' }), 'Health’s tabs on the Food tab');
+  }, { path: '/trends', wait: 1800 }),
+
+  // Trends › Activity, reached by tapping its tab: the panel swaps, the
+  // address says ?tab=activity, no history entry is added, and the page's old
+  // "Activity" title is not repeated under the tab that already says it.
+  pageScene('70a-trends-activity', () => activityOps(), async (page, h) => {
+    const before = await page.evaluate(() => window.history.length);
+    await (await need(page.getByRole('tab', { name: 'Activity', exact: true }), 'the Activity tab')).click();
+    await h.settle(1800);
+    landedOn(page, '/trends', { tab: 'activity' });
+    if ((await page.evaluate(() => window.history.length)) !== before) throw new Error('changing tab pushed a history entry');
+    await assertContainerTabs(page, h, 'Trends sections', TREND_TABS, 'Activity');
+    await need(page.getByText('Today so far'), 'Today so far');
+    await absent(page.getByRole('heading', { name: 'Activity', exact: true }), 'an "Activity" heading under the Activity tab');
+    await absent(page.locator('[data-testid="reports-food"]'), 'the Food report under the Activity tab');
+  }, { path: '/trends', wait: 1800 }),
+
+  // Trends › Health from the top: the two rows of tabs, Overview selected.
+  healthScene('70b-trends-health', null, async (page, h) => {
+    await assertTabsWhole(page, h);
+    await need(healthTabs(page).getByRole('tab', { name: /overview/i, selected: true }), 'Overview selected');
+    await need(page.locator('svg[role="img"]').first(), 'a chart');
+  }),
+
+  // Activity with a connected Garmin: today so far, the night's sleep, recent
+  // workouts. The old /activity address opens the tab.
   pageScene('58-activity-garmin', () => activityOps(), async (page) => {
+    landedOn(page, '/trends', { tab: 'activity' });
     await need(page.getByText('Today so far'), 'Today so far');
     await need(page.getByText('Morning Run').first(), 'a recent workout');
   }, { path: '/activity', wait: 1800 }),
@@ -834,16 +1041,17 @@ const garminScenes = [
   }), async (page) => {
     await need(page.getByText('Garmin isn’t connected'), 'the empty state');
     await need(page.getByRole('link', { name: 'Connect Garmin' }), 'Connect Garmin');
-  }, { path: '/activity', wait: 1500 }),
+  }, { path: '/trends?tab=activity', wait: 1500 }),
 
-  // The Health dashboard with the home data server off: what it needs, and the switch.
+  // Health with the home data server off: what it needs, and the switch. The
+  // old /health address opens the tab.
   healthScene('59-health-off', null, async (page) => {
     await need(page.getByText('Turn on the home data server first'), 'the turn-on prompt');
-  }, { influxOn: false }),
+  }, { influxOn: false, path: '/health' }),
 
   // Health, Overview: heart rate, stress and Body Battery through the day.
   healthScene('59a-health-overview', 'Overview', async (page, h) => {
-    await need(page.getByRole('tab', { name: /overview/i, selected: true }), 'Overview selected');
+    await need(healthTabs(page).getByRole('tab', { name: /overview/i, selected: true }), 'Overview selected');
     await assertTabsWhole(page, h);
     await need(page.locator('svg[role="img"]').first(), 'a chart');
   }),
@@ -854,7 +1062,7 @@ const garminScenes = [
   }),
   // Meal impact: how her heart rate answered the day's meals.
   healthScene('59c-health-meal-impact', 'Meal impact', async (page) => {
-    await need(page.getByRole('tab', { name: /meal impact/i, selected: true }), 'Meal impact selected');
+    await need(healthTabs(page).getByRole('tab', { name: /meal impact/i, selected: true }), 'Meal impact selected');
     // Cards name the food and its calories. They read fields the rows don't
     // have, so every card said "Meal" and "0 cal" (d-fixes).
     await need(page.getByText('Greek yogurt', { exact: true }).first(), 'the Greek yogurt card');
@@ -869,7 +1077,7 @@ const garminScenes = [
   }),
   // Settings tab: the data-server switch and the baselines.
   healthScene('59e-health-settings', 'Settings', async (page, h) => {
-    await need(page.getByRole('tab', { name: /settings/i, selected: true }), 'Settings selected');
+    await need(healthTabs(page).getByRole('tab', { name: /settings/i, selected: true }), 'Settings selected');
     await assertTabsWhole(page, h);
   }),
   // The days the server has nothing for: sleep and recovery say so in a sentence.
@@ -879,28 +1087,37 @@ const garminScenes = [
 ];
 
 export const scenes = [
-  ...foodLogScenes, ...libraryScenes, ...homeScenes, ...weightScenes, ...moreScenes, ...firstRunScenes, boundaryScene, ...garminScenes,
+  ...todayScenes, ...libraryScenes, ...homeScenes, ...weightScenes, ...moreScenes, ...firstRunScenes, boundaryScene, ...garminScenes,
 ];
 
-void FOODS; void BPS; void WEIGHTS; void scrollToSection;
-
-// The one scene that cannot be undone: the clock is fixed at 19:00, so the
-// Log's inline box picks "dinner". The Log on Yesterday names the day it adds to.
+// The one scene that cannot be undone: the clock is fixed at 19:00, so the add
+// box picks "dinner". Today on Yesterday by a link (?date=): the box on the
+// page (md and up) names the day it adds to.
 export const tail = [
   {
-    name: '50a-simple-log-yesterday',
+    name: '50a-today-yesterday',
     async setup(page, h) {
       const evening = new Date();
       evening.setHours(19, 0, 0, 0);
       await page.clock.setFixedTime(evening);
-      await withOps(page, simpleOps([...logDay(YEST), ...logDay(TODAY)]), async () => {
-        await page.goto(`${h.base}/food-log?date=${YEST}`, { waitUntil: 'networkidle' });
+      await withOps(page, dayOps([...logDay(YEST), ...logDay(TODAY)]), async () => {
+        await page.goto(`${h.base}/dashboard?date=${YEST}`, { waitUntil: 'networkidle' });
         await h.settle(1500);
-        const head = await need(page.locator('[data-testid="inline-add-day"]'), 'the inline box heading');
-        const text = await head.innerText();
-        const want = `Add to ${weekdayOf(YEST)}’s dinner (yesterday)`;
-        if (text !== want) throw new Error(`inline box says "${text}", wanted "${want}"`);
+        const title = (await (await need(page.locator('h1[data-testid="day-header-title"]'), 'the day (the page h1)')).innerText()).trim();
+        if (title !== 'Yesterday') throw new Error(`?date=${YEST} shows "${title}"`);
+        await need(page.locator('[data-testid="back-to-today"]'), 'the way back to today');
         await need(page.getByRole('button', { name: /^Edit Egg, ×2/ }), 'yesterday\'s Egg row');
+        const want = `Add to ${weekdayOf(YEST)}’s dinner (yesterday)`;
+        if (h.isPhone) {
+          // No box on a phone's page: the button opens the sheet, and the
+          // sheet names the day (36 and 46 shoot it).
+          await need(page.locator('[data-testid="what-did-you-eat"]'), '"What did you eat?"');
+          await absent(page.locator('[data-testid="inline-add-day"]'), 'the inline add box on a phone');
+        } else {
+          const head = await need(page.locator('[data-testid="inline-add-day"]'), 'the inline box heading');
+          const text = await head.innerText();
+          if (text !== want) throw new Error(`inline box says "${text}", wanted "${want}"`);
+        }
       });
     },
     teardown: (page) => page.unroute('**/graphql'),

@@ -8,6 +8,8 @@ Simple face is designed around **Heather** (Chef, 2026-09-27).*
 > (`THEME_REVIEW_2026-11.md`). Simple and Full, the navigation and the logging flows stand as written; the
 > look, the fonts, the colours and the plate ring do not.
 > **Later that day:** The Label was itself replaced by **"Daylight"** (`DASHBOARD_REDESIGN_SPEC.md`).
+> **2026-11-27: superseded.** Simple and Full no longer exist. FitnessGeek is one app (`ONE_APP_PLAN.md`).
+> This document is history.
 
 ## What the data says (production, last 30 days)
 

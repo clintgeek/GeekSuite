@@ -44,7 +44,6 @@ export const FOOD_LOGS = [
   foodLog('l7', 'Almonds', 'Blue Diamond', 'snack', 1, nut(164, 6, 6, 14, 3.5)),
 ];
 
-// ── Simple and Full (apps/fitnessgeek/DOCS/SIMPLE_AND_FULL_PLAN.md) ────────
 // Four weeks of Chef-shaped history for the "Again" chips and "Same as
 // yesterday's …": yogurt and blueberries most breakfasts, the Caesar most
 // lunches, ribeye twice a week. Food ids match FOOD_LOGS so a chip is the
@@ -119,13 +118,17 @@ export const MED_LOGS = [
   { _id: 'ml1', medication_id: 'm1', time_of_day: 'morning', taken: true, log_date: `${TODAY}T00:00:00.000Z`, created_at: `${TODAY}T13:02:00.000Z` },
 ];
 
-// Chef, who never chose a mode: the default rule sees his logs → Full.
-export const EXPERIENCE_UNSET = {
+// The saved "experience" document (ONE_APP_PLAN.md: there is one app; the
+// old `mode` field is only read, to decide who still needs the three-step
+// first run). Chef never chose a mode and has logs, so he never sees it. The
+// first-run scenes are the only ones that set `mode` or leave the history
+// empty; everything else patches larger_text / preferred_name / goal at most.
+export const EXPERIENCE = {
   __typename: 'FitnessUserSettings', id: 'us1',
   experience: { __typename: 'FitnessExperienceSettings', mode: null, larger_text: false, first_run_done: false, preferred_name: null, goal: null },
 };
 export const experienceOf = (patch) => ({
-  fitnessUserSettings: { ...EXPERIENCE_UNSET, experience: { ...EXPERIENCE_UNSET.experience, ...patch } },
+  fitnessUserSettings: { ...EXPERIENCE, experience: { ...EXPERIENCE.experience, ...patch } },
 });
 
 export const SETTINGS = {
@@ -169,14 +172,6 @@ export const SETTINGS = {
   ai: {
     __typename: 'AiSettings', enabled: true,
     features: {
-      // Off by default (R124 flipped the shared factory default to `false`;
-      // this feature is now the opt-in AND the kill switch — see
-      // `apps/fitnessgeek/frontend/src/utils/quickAddPreference.js`). Every
-      // scene shares this context-wide fixture, so leaving this `true` here
-      // made "Describe a meal" render on scenes that never opted in. Scene
-      // `11-quickadd-proposal` flips it on for itself with a page-scoped
-      // GraphQL stub, same pattern as bookgeek's `07-what-next`/
-      // `08-edit-metadata-draft` (README "Night 2").
       __typename: 'AiFeatures', natural_language_food_logging: false, meal_suggestions: true,
       nutrition_analysis: true, goal_recommendations: true,
     },
@@ -397,7 +392,7 @@ export const OPS = {
   UpdateFitnessUserSettings: { updateFitnessUserSettings: { __typename: 'FitnessUserSettings', id: 'us1', theme: 'dark' } },
   GetFoodLogs: foodLogsFor(FOOD_LOGS, HISTORY),
   GetFoodLogActivity: { foodLogs: FOOD_LOGS.map((l) => ({ __typename: 'FoodLog', id: l.id, log_date: l.log_date })) },
-  GetFitnessExperience: { fitnessUserSettings: EXPERIENCE_UNSET },
+  GetFitnessExperience: { fitnessUserSettings: EXPERIENCE },
   GetFitnessWeights: { fitnessWeights: WEIGHTS },
   GetBodyCompositionSummary: { bodyCompositionSummary: BODY_COMP_SUMMARY },
   GetBodyCompositions: { bodyCompositions: BODY_COMP_SCANS },
@@ -420,10 +415,10 @@ export const OPS = {
   GetFitnessFood: { fitnessFood: FOODS[0] },
   GetFitnessMeals: { fitnessMeals: SAVED_MEALS },
   GetFitnessMedications: { fitnessMedications: MEDS },
-  GetLoginStreak: { loginStreak: { __typename: 'LoginStreak', current_streak: 12, longest_streak: 31, last_login: TODAY } },
+  GetLoginStreak: { loginStreak: { __typename: 'LoginStreak', currentStreak: 12, longestStreak: 31, lastLoginDate: TODAY, streakStartDate: daysAgo(11) } },
   // The dashboard records a login on mount; without this the harness logs an
   // unstubbed op on every run.
-  RecordLoginStreak: { recordLoginStreak: { __typename: 'LoginStreak', current_streak: 12, longest_streak: 31, last_login: TODAY } },
+  RecordLoginStreak: { recordLoginStreak: { __typename: 'LoginStreak', currentStreak: 12, longestStreak: 31, lastLoginDate: TODAY, streakStartDate: daysAgo(11) } },
   GetFitnessHousehold: {
     fitnessHousehold: {
       __typename: 'Household', household_id: 'h1', display_name: 'Chef',
@@ -497,47 +492,6 @@ export const USER = {
   ...DEFAULT_USER,
   profile: { age: 44, height: '6\'1"', gender: 'male' },
 };
-
-// Heather: settings, no logs of any kind, two medications (one of three doses
-// taken). `experience` decides which of her screens a scene sees.
-const HEATHER_TODAY = [
-  foodLog('hl1', 'Scrambled eggs', null, 'breakfast', 2, nut(91, 6, 1, 7, 0)),
-  foodLog('hl2', 'Whole wheat toast', null, 'breakfast', 1, nut(80, 4, 14, 1, 2)),
-];
-export const heatherOps = (experience, { today = HEATHER_TODAY } = {}) => ({
-  ...OPS,
-  GetFitnessExperience: experienceOf(experience),
-  GetFoodLogs: foodLogsFor(today, []),
-  GetFoodLogActivity: { foodLogs: [] },
-  GetFitnessWeights: { fitnessWeights: [] },
-  GetBps: { bloodPressures: [] },
-  GetFitnessMeals: { fitnessMeals: [] },
-  GetDailySummary: {
-    dailySummary: {
-      ...DAILY_SUMMARY,
-      calorieGoal: 1800,
-      totals: { ...DAILY_SUMMARY.totals, calories: today.reduce((a, l) => a + l.nutrition.calories_per_serving * l.servings, 0) },
-      meals: {
-        __typename: 'MealTotals',
-        breakfast: { __typename: 'MealTotal', calories: today.reduce((a, l) => a + l.nutrition.calories_per_serving * l.servings, 0), protein_grams: 16, carbs_grams: 16, fat_grams: 15 },
-        lunch: { __typename: 'MealTotal', calories: 0, protein_grams: 0, carbs_grams: 0, fat_grams: 0 },
-        dinner: { __typename: 'MealTotal', calories: 0, protein_grams: 0, carbs_grams: 0, fat_grams: 0 },
-        snack: { __typename: 'MealTotal', calories: 0, protein_grams: 0, carbs_grams: 0, fat_grams: 0 },
-      },
-    },
-  },
-  GetDerivedMacros: {
-    derivedMacros: { ...DERIVED, today: { ...DERIVED.today, base_calories: 1800, activity_add_kcal: 0, target_calories: 1800 } },
-  },
-  GetFitnessUserSettings: {
-    fitnessUserSettings: {
-      ...SETTINGS,
-      garmin: { ...SETTINGS.garmin, enabled: false, username: null },
-      nutrition_goal: { ...SETTINGS.nutrition_goal, enabled: false, bmr: null, daily_calorie_target: null },
-      household: { ...SETTINGS.household, display_name: 'Heather' },
-    },
-  },
-});
 
 /** OPS with the settings document's nutrition_goal patched — for page-scoped stubs. */
 export const opsWithPlan = (patch, extra = {}) => ({

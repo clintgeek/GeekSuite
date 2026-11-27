@@ -7,8 +7,9 @@ import { Check as CheckIcon } from '@mui/icons-material';
 import { mealWord } from '../../utils/plainWords.js';
 
 /**
- * Simple mode's first run (SIMPLE_AND_FULL_PLAN.md, "Simple mode,
- * specifically for Heather"): three plain steps and nothing to configure.
+ * The first run, for a person who has never used the app (ONE_APP_PLAN.md
+ * §1; `useExperience().needsFirstRun`): three plain steps and nothing to
+ * configure.
  *
  *   1. What should we call you?
  *   2. What's your goal?  (lose a little / keep steady / just keep track)

@@ -62,7 +62,9 @@ const shiftDate = (dateString, deltaDays) => {
  *   - Copy sits at the bottom on a phone (thumbSaveProps);
  *   - a copy ends with the standard toast, whose Undo removes what was added.
  *
- * In Simple the page hides its link: "Same as …" in the add sheet covers her.
+ * It opens from a meal's "more" menu on Today (already set to that meal), and
+ * from the household view. "Same as yesterday's …" in the add sheet is the
+ * one-tap version of the common case.
  */
 const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = null }) => {
   const fullScreen = useGeekDialogFullScreen();

@@ -15,6 +15,7 @@ import {
   SportsGymnastics as GymIcon,
 } from '@mui/icons-material';
 import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
+import Shell from './embeddedShell.jsx';
 import { fitnessGeekService } from '../services/fitnessGeekService';
 import { DisplayHeading, StatNumber, EmptyState, LabelPanel, FactHeadline, FactRow, Rule, ListRow, Page } from '../components/primitives';
 import { localDateString } from '@geeksuite/utils';
@@ -115,7 +116,7 @@ const ActivityCard = ({ activity, first }) => {
   );
 };
 
-const Activity = () => {
+const Activity = ({ embedded = false }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [garminNotEnabled, setGarminNotEnabled] = useState(false);
@@ -214,11 +215,11 @@ const Activity = () => {
   ].filter(Boolean);
 
   return (
-    <Page>
+    <Shell embedded={embedded}>
       {/* Editorial header */}
       <Box>
-        <DisplayHeading size="page">Activity</DisplayHeading>
-        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+        {!embedded && <DisplayHeading size="page">Activity</DisplayHeading>}
+        <Typography sx={{ color: 'text.secondary', mt: embedded ? 0 : 0.5, fontSize: '0.9375rem' }}>
           Your Garmin fitness data and recent activities.
         </Typography>
       </Box>
@@ -365,7 +366,7 @@ const Activity = () => {
           </Button>
         </Box>
       )}
-    </Page>
+    </Shell>
   );
 };
 

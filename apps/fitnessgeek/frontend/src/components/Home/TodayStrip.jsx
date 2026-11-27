@@ -5,7 +5,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { tonalColors } from '../../theme/theme.jsx';
 
 /**
- * "Weighed ✓ · BP — · Meds 2 of 3" (SIMPLE_AND_FULL_PLAN.md item 6), drawn
+ * "Weighed ✓ · BP — · Meds 2 of 3" (today's check-ins, ONE_APP_PLAN.md §1.4), drawn
  * as a row of rounded pills.
  *
  * Each check-in is a link to the place you do it, so the strip is navigation

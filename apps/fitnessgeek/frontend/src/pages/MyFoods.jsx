@@ -17,6 +17,7 @@ import { useFoodManagement } from '../hooks/useFoodManagement.js';
 import FoodListItem from '../components/MyFoods/FoodListItem.jsx';
 import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
 import RecipeBuilderDialog from '../components/MyFoods/RecipeBuilderDialog.jsx';
+import Shell from './embeddedShell.jsx';
 import { foodService } from '../services/foodService.js';
 import { errorMessage } from '../utils/errorMessage.js';
 import FoodDeleteDialog from '../components/MyFoods/FoodDeleteDialog.jsx';
@@ -33,7 +34,7 @@ const EMPTY_FOOD_FORM = {
   serving_unit: 'oz'
 };
 
-const MyFoods = () => {
+const MyFoods = ({ embedded = false }) => {
   const {
     foods,
     loading,
@@ -221,14 +222,14 @@ const MyFoods = () => {
 
   if (loading) {
     return (
-      <Page>
+      <Shell embedded={embedded}>
         <SurfaceSkeleton rows={5} />
-      </Page>
+      </Shell>
     );
   }
 
   return (
-    <Page>
+    <Shell embedded={embedded}>
       <Typography sx={{ color: 'text.secondary', fontSize: '1rem' }}>
         Your custom entries and everything you’ve saved for quick access.
       </Typography>
@@ -319,7 +320,7 @@ const MyFoods = () => {
         onConfirm={handleDeleteConfirm}
         loading={deleteLoading}
       />
-    </Page>
+    </Shell>
   );
 };
 

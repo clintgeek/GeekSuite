@@ -7,17 +7,16 @@ import logger from '../utils/logger.js';
 import { displayNameFrom } from '../components/Layout/userDisplay.js';
 
 /**
- * Simple and Full, per person (DOCS/SIMPLE_AND_FULL_PLAN.md).
+ * The person's own settings for how the app greets and reads to them
+ * (DOCS/ONE_APP_PLAN.md): Larger text, the first-run answers, and whether
+ * they still need the first run.
  *
- * Holds the person's `experience` settings — Simple or Full, Larger text, the
- * first-run answers — and the mode they actually see: what they chose, or,
- * when they never chose, the default read off their own history
- * (utils/experience.js). Stored on the settings document; written partially.
- *
- * A derived mode is SAVED the first time it is worked out (review B4), so a
- * person's face never flips by itself: before, an unsaved Simple person who
- * logged one breakfast was Full on the next load. A saved mode is never
- * touched here.
+ * There is ONE app now, not Simple and Full. The old saved `mode` is still
+ * read, for one job only: deciding who gets the three-step first run. A
+ * person saved as "simple" who never finished it does; so does a person with
+ * no saved mode and nothing logged in 90 days (utils/experience.js). Anyone
+ * saved as "full", or with recent history, never sees it. Nothing writes
+ * `mode` any more.
  *
  * A failed read is not "never chose" (review B5). The last known answer
  * stays, the cache is left alone, the first run stays hidden, and the read
@@ -90,8 +89,6 @@ export const ExperienceProvider = ({ children, today: todayProp }) => {
   // Whose cache is painted. Swapped during render (not in an effect) so a
   // different person never sees one frame of the last person's face.
   const [paintedFor, setPaintedFor] = useState(null);
-  // A derived mode is saved once per person per session, not on every load.
-  const derivedSavedFor = useRef(new Set());
 
   useEffect(() => { dropLegacyCache(); }, []);
 
@@ -128,14 +125,12 @@ export const ExperienceProvider = ({ children, today: todayProp }) => {
         setLoading(false);
         return;
       }
-      let next = { ...DEFAULTS, ...(experience || {}) };
+      const next = { ...DEFAULTS, ...(experience || {}) };
       let derived = null;
-      let answered = false;
       if (!isExperienceMode(next.mode)) {
         try {
           const activity = await experienceService.activity((a) => hasRecentActivity(a, today));
           derived = decideMode({ savedMode: null, activity, today });
-          answered = true;
         } catch {
           // The history couldn't be read: the last answer, else Simple —
           // shown, but not saved, because it isn't really an answer.
@@ -150,20 +145,6 @@ export const ExperienceProvider = ({ children, today: todayProp }) => {
       writeCache(userKey, { saved: next, derivedMode: derived });
       setLoading(false);
 
-      if (answered && userKey && !derivedSavedFor.current.has(userKey)) {
-        derivedSavedFor.current.add(userKey);
-        try {
-          await experienceService.update({ mode: derived });
-          if (cancelled) return;
-          next = { ...savedRef.current, mode: isExperienceMode(savedRef.current.mode) ? savedRef.current.mode : derived };
-          setSaved(next);
-          writeCache(userKey, { saved: next, derivedMode: derived });
-        } catch (err) {
-          // Still derived; the next load works it out and tries again.
-          derivedSavedFor.current.delete(userKey);
-          logger.debug('Could not save the derived mode', err?.message);
-        }
-      }
     })();
     return () => { cancelled = true; };
   }, [authLoading, isAuthenticated, userKey, today, attempt, setSaved]);
@@ -209,21 +190,16 @@ export const ExperienceProvider = ({ children, today: todayProp }) => {
     // False while the saved settings couldn't be read: show nothing that
     // depends on "never chose" (the first run).
     known: !readFailed,
-    savedMode: isExperienceMode(saved.mode) ? saved.mode : null,
-    effectiveMode,
-    isSimple: effectiveMode === 'simple',
+    // Has never used the app and never finished the three steps.
+    needsFirstRun: !readFailed && effectiveMode === 'simple' && !saved.first_run_done,
     largerText: Boolean(saved.larger_text),
     firstRunDone: Boolean(saved.first_run_done),
     preferredName: saved.preferred_name || null,
     // What to call them: their own answer, else the account's first name.
     displayName: saved.preferred_name || (user ? displayNameFrom(user) : null),
     goal: saved.goal || null,
-    setMode: (mode) => update({ mode }),
     setLargerText: (on) => update({ larger_text: Boolean(on) }),
-    // Finishing the first run also SAVES Simple. The default rule is "Full if
-    // they logged anything in 90 days" — left unsaved, Heather's first
-    // breakfast would flip her into Full on the next load.
-    completeFirstRun: (answers = {}) => update({ ...answers, first_run_done: true, mode: 'simple' }),
+    completeFirstRun: (answers = {}) => update({ ...answers, first_run_done: true }),
     update,
   }), [loading, readFailed, saved, effectiveMode, update, user]);
 
@@ -232,21 +208,17 @@ export const ExperienceProvider = ({ children, today: todayProp }) => {
 
 /**
  * Outside a provider (a unit test mounting one component) this answers
- * "Full, normal text, nothing pending" rather than throwing, so every
- * existing component test keeps rendering the face it was written against.
+ * "normal text, nothing pending" rather than throwing.
  */
 const FALLBACK = {
   loading: false,
   known: true,
-  savedMode: null,
-  effectiveMode: 'full',
-  isSimple: false,
+  needsFirstRun: false,
   largerText: false,
   firstRunDone: true,
   preferredName: null,
   displayName: null,
   goal: null,
-  setMode: async () => ({ ok: false }),
   setLargerText: async () => ({ ok: false }),
   completeFirstRun: async () => ({ ok: false }),
   update: async () => ({ ok: false }),

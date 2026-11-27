@@ -1,11 +1,12 @@
 /**
- * DashboardNew wiring for the body-data plan: the stale-plan banner shows for
- * Chef's real saved plan, the protein target is captioned when derivedMacros
- * set it from lean mass, and the Weight card shows the smoothed change or
- * says why it can't.
+ * Today's wiring for the body-data plan: the stale-plan note shows for
+ * Chef's real saved plan (on the card, not behind the disclosure); the
+ * protein target is captioned when derivedMacros set it from lean mass
+ * (behind "Macros and details"); and the Weight tile shows the smoothed
+ * change or says why it can't.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../services/fitnessGeekService.js', () => ({
@@ -35,7 +36,7 @@ const { goalsService } = await import('../../services/goalsService.js');
 const { weightService } = await import('../../services/weightService.js');
 const { settingsService } = await import('../../services/settingsService.js');
 const { bodyCompService } = await import('../../services/bodyCompService.js');
-const { default: DashboardNew } = await import('../DashboardNew.jsx');
+const { default: Today } = await import('../Today.jsx');
 
 const CHEF_PLAN = { enabled: true, mode: 'standard', bmr: 3314, tdee: 3977, daily_calorie_target: 2977 };
 const derived = (protein_basis) => ({
@@ -52,16 +53,23 @@ function setup({ ng = CHEF_PLAN, basis = 'lean_mass', weight = { totalChange: -2
   bodyCompService.getSummary.mockResolvedValue({ data: { bmr: { bmr: 2104, source: 'scan', lean_mass_lb: 177, scans: 8 } } });
   goalsService.getDerivedMacros.mockResolvedValue(derived(basis));
   weightService.getWeightStats.mockResolvedValue({ success: true, data: weight });
-  render(<MemoryRouter><DashboardNew /></MemoryRouter>);
+  render(<MemoryRouter><Today /></MemoryRouter>);
 }
 
-describe('DashboardNew — body data', () => {
-  beforeEach(() => vi.clearAllMocks());
+describe('Today — body data', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    try { window.localStorage.clear(); } catch { /* jsdom */ }
+  });
+
+  const openDetails = async () => fireEvent.click(await screen.findByTestId('macros-details-toggle'));
 
   it("shows the stale-plan banner for Chef's saved plan", async () => {
     setup();
     const banner = await screen.findByTestId('plan-accuracy-banner');
     expect(banner).toHaveAttribute('data-kind', 'stale');
+    // A warning is not a detail: it shows with the disclosure closed.
+    expect(screen.queryByTestId('today-details')).toBeNull();
   });
 
   it('shows no banner without a plan', async () => {
@@ -72,12 +80,14 @@ describe('DashboardNew — body data', () => {
 
   it('captions the protein target "from lean mass" only when derivedMacros says so', async () => {
     setup();
+    await openDetails();
     expect(await screen.findByTestId('macro-note-protein')).toHaveTextContent('from lean mass');
   });
 
   it('no protein caption on the goal-weight rule', async () => {
     setup({ basis: 'goal_weight' });
-    await screen.findByText('Today’s meals');
+    await openDetails();
+    expect(await screen.findByTestId('macro-strip')).toBeInTheDocument();
     expect(screen.queryByTestId('macro-note-protein')).toBeNull();
   });
 

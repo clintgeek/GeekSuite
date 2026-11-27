@@ -7,7 +7,6 @@ import {
   CircularProgress,
   Button,
   ButtonBase,
-  Collapse,
   FormControl,
   InputLabel,
   Select,
@@ -15,10 +14,10 @@ import {
   TextField,
 } from '@mui/material';
 import {
-  ExpandMore as ExpandIcon,
   Check as CheckIcon,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
+import { Link as RouterLink } from 'react-router-dom';
 import { GeekErrorState, useToast } from '@geeksuite/ui';
 import { useAuth } from '@geeksuite/auth';
 import { settingsService } from '../services/settingsService.js';
@@ -38,7 +37,7 @@ import { SWITCH_ROW } from '../components/Settings/switchRow.js';
  * Settings — one page for everything about the person and the app (UX
  * review 2026-10-17, IA-2: Profile folded in; /profile lands on #you).
  *
- *   1. How it looks   Simple/Full, Larger text, Theme
+ *   1. How it looks   Larger text, Theme
  *   2. About you      the name the greeting uses, the goal, age/height/sex
  *   3. Household
  *   4. Garmin
@@ -56,8 +55,9 @@ import { SWITCH_ROW } from '../components/Settings/switchRow.js';
  * switches that would save them (review P2; a Save over a failed load once
  * turned Garmin off).
  *
- * Simple (L17) shows How it looks and About you, then "More settings" for
- * the rest. Units are gone: nothing in the app read them.
+ * Units are gone: nothing in the app read them. Calorie plan and Import a
+ * scan have no row in the navigation (DOCS/ONE_APP_PLAN.md §3); "Plans and
+ * imports" is one of the ways to them.
  */
 
 const SAVED = ['Saved', { tone: 'success', duration: 2000 }];
@@ -297,7 +297,6 @@ function ProfileFields({ profile, onProfileSaved }) {
 const Settings = () => {
   const { themePreference, setThemePreference } = useAppTheme();
   const { user, logout } = useAuth() || {};
-  const { isSimple } = useExperience();
   const { notify } = useToast();
 
   const [settings, setSettings] = useState(null);
@@ -310,17 +309,6 @@ const Settings = () => {
 
   const [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState(null);
-
-  // Simple keeps the rest folded away — opened by default only when a link
-  // points into it (#account and the like).
-  const [moreOpen, setMoreOpen] = useState(() => {
-    try {
-      const hash = window.location.hash.replace('#', '');
-      return Boolean(hash) && !['you', 'looks'].includes(hash);
-    } catch {
-      return false;
-    }
-  });
 
   useEffect(() => {
     loadSettings();
@@ -587,23 +575,19 @@ const Settings = () => {
         onProfileSaved={(patch) => setProfile((prev) => ({ ...prev, ...patch }))}
       />
 
-      {isSimple ? (
-        <>
-          <Button
-            fullWidth
-            onClick={() => setMoreOpen((v) => !v)}
-            aria-expanded={moreOpen}
-            aria-controls="more-settings"
-            endIcon={<ExpandIcon sx={{ transform: moreOpen ? 'rotate(180deg)' : 'none', transition: 'transform 150ms' }} />}
-            sx={{ minHeight: 56, fontSize: '1.0625rem', fontWeight: 700, justifyContent: 'space-between', px: 2.5, border: '1px solid', borderColor: 'divider', borderRadius: '12px', color: 'text.primary' }}
-          >
-            More settings
+      {/* The two pages with no row in the navigation. */}
+      <LabelPanel title="Plans and imports" titleComponent="h2" id="plans" data-testid="settings-plans">
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+          <Button component={RouterLink} to="/calorie-wizard" variant="outlined" sx={{ minHeight: 44, textTransform: 'none', fontWeight: 600 }}>
+            Calorie plan
           </Button>
-          <Collapse in={moreOpen} id="more-settings" unmountOnExit>
-            {rest}
-          </Collapse>
-        </>
-      ) : rest}
+          <Button component={RouterLink} to="/scan-import" variant="outlined" sx={{ minHeight: 44, textTransform: 'none', fontWeight: 600 }}>
+            Import a scan
+          </Button>
+        </Box>
+      </LabelPanel>
+
+      {rest}
     </Page>
   );
 };

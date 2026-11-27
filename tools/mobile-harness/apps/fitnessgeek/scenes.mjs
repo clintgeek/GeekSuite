@@ -1,11 +1,14 @@
-// FitnessGeek — the M1/M2 pilot surfaces (MOBILE_UI_PLAN.md), plus the Night 2
-// AI quick-add scene (R115/R126). Scenes are independent: any scene that
-// needs a dialog open re-navigates and re-opens it rather than relying on a
-// previous scene's state.
+// FitnessGeek. ONE app (apps/fitnessgeek/DOCS/ONE_APP_PLAN.md): Today is the
+// old Home and Food log in one page, Trends holds Reports / Activity / Health,
+// Saved foods holds My meals / My foods, and there is no Simple or Full mode.
+// One person (Chef, the context's fixtures) walks every scene; a scene that
+// needs another state patches his data for itself. Scenes are independent:
+// any scene that needs a dialog open re-navigates and re-opens it rather than
+// relying on a previous scene's state.
 import { json } from '../../lib/net.mjs';
-import { OPS, FOODS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithPlan, experienceOf, DESCRIBED_SOUP } from './fixtures.mjs';
+import { OPS, FOODS, FOOD_LOGS, MEDS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithPlan, experienceOf, DESCRIBED_SOUP } from './fixtures.mjs';
 import {
-  must, withPageOps, scrollToSection, HEATHER, SPEECH_STUB, heatherScene, foodRoutes, dropFoodRoutes,
+  must, withPageOps, scrollToSection, SPEECH_STUB, foodRoutes, dropFoodRoutes, setDetails, openMealMenu,
   soupSuggest, fageSuggest, fageDeep, composerScene, typeInto, SOUP, YESTERDAY,
 } from './helpers.mjs';
 
@@ -43,33 +46,140 @@ const SCAN_PLAN = {
 };
 
 
-// The opt-in is server-side now (`ai.features.natural_language_food_logging`
-// on the settings document, R124 — see
-// `apps/fitnessgeek/frontend/src/utils/quickAddPreference.js`), off by
-// default in fixtures.mjs's context-wide SETTINGS so no scene above this one
-// renders "Describe a meal". Scene 11 flips it on for itself only, via a
-// page-scoped GetFitnessUserSettings stub (page.route() beats ctx.route()
-// for a matching request — README "Night 2"), and must stay the LAST scene
-// in the file for the same reason.
-
-// The wizard scenes are Full's: in Simple, /calorie-wizard opens the one-screen
-// quick target instead (wave A). Chef is Full by the default rule (he has
-// logs), but these say so outright rather than lean on it.
-const FULL_USER = { GetFitnessExperience: experienceOf({ mode: 'full', first_run_done: true }) };
+const count = (locator) => locator.count();
+const absent = async (locator, what) => {
+  if (await count(locator)) throw new Error(`still on the page: ${what}`);
+};
+const landedOn = (page, path, query = {}) => {
+  const url = new URL(page.url());
+  if (url.pathname !== path) throw new Error(`landed on ${url.pathname}${url.search}, wanted ${path}`);
+  for (const [k, v] of Object.entries(query)) {
+    if (url.searchParams.get(k) !== v) throw new Error(`landed on ${url.pathname}${url.search}, wanted ${k}=${v}`);
+  }
+};
 
 export const scenes = [
-  { name: '01-home', goto: '/dashboard', wait: 1600 },
-  { name: '02-log', goto: '/food-log', wait: 1600 },
   {
-    // The add sheet, opened from Breakfast's "+ Add". The Log page has no
-    // floating "Log food" button any more, in either mode (UX review 2026-11,
-    // A2/B6: the add box is on the page and the button covered "+ Add").
-    name: '03-food-dialog',
-    viewports: ['phone'],
-    goto: '/food-log',
+    // Today, from the top: the day and a greeting, what is left (ring and
+    // sentence) with "Macros and details" CLOSED, one way to add food, the
+    // check-in pills, the meals in one card.
+    name: '01-home',
+    goto: '/dashboard',
     wait: 1600,
     async setup(page, h) {
-      const add = await must(page.getByRole('button', { name: /^add to breakfast$/i }).first(), 'Breakfast’s "+ Add"');
+      // Closed until asked for is the default; the choice is remembered per
+      // device, so start from a device that has never chosen.
+      await page.evaluate(() => { try { localStorage.removeItem('fg.today.details.v1'); } catch { /* blocked */ } });
+      await page.reload({ waitUntil: 'networkidle' });
+      await h.settle(1600);
+      await absent(page.locator('[data-testid="first-run"]'), 'the first run, for a person with history');
+      await must(page.locator('[data-testid="day-header"]'), 'the day header');
+      await must(page.locator('[data-testid="day-header-date"]'), 'the date over the greeting');
+      const title = (await (await must(page.locator('h1[data-testid="day-header-title"]'), 'the greeting (the page h1)')).innerText()).trim();
+      if (!/^Good (morning|afternoon|evening)/.test(title)) throw new Error(`Today's h1 reads "${title}", wanted a greeting`);
+      await absent(page.locator('[data-testid="back-to-today"]'), '"Today" (back) while on today');
+      await must(page.getByRole('button', { name: 'Previous day' }), 'Previous day');
+      await must(page.getByRole('button', { name: 'Next day' }), 'Next day');
+      await must(page.locator('[data-testid="home-hero"]'), 'the "what is left" card');
+      await must(page.locator('[data-testid="plate-number"]'), 'the number in the ring');
+      const sentence = (await (await must(page.locator('[data-testid="calories-sentence"]'), 'the calories sentence')).innerText()).trim();
+      // 2,340 target less the fixtures' 1,680 eaten.
+      if (sentence !== 'You have 660 calories left today') throw new Error(`the sentence reads "${sentence}"`);
+      const toggle = await must(page.locator('[data-testid="macros-details-toggle"]'), '"Macros and details"');
+      if ((await toggle.getAttribute('aria-expanded')) !== 'false') throw new Error('"Macros and details" should start closed');
+      await absent(page.locator('[data-testid="today-details"]'), 'the details, before the disclosure is opened');
+      await absent(page.locator('[data-testid="macro-strip"]'), 'the macro rows, before the disclosure is opened');
+      // One way to add: the filled button on a phone, the box itself from md.
+      await absent(page.locator('[data-testid="full-add-food"]'), 'the old "full-add-food" button');
+      if (h.isPhone) {
+        await must(page.locator('[data-testid="what-did-you-eat"]'), '"What did you eat?"');
+        await absent(page.locator('[data-testid="inline-add"]'), 'the inline add box on a phone');
+      } else {
+        await must(page.locator('[data-testid="inline-add"]').getByLabel('Tell me what you ate'), 'the add box on the page');
+        await absent(page.locator('[data-testid="what-did-you-eat"]'), '"What did you eat?" beside an inline add box');
+      }
+      await must(page.locator('[data-testid="today-strip"]'), 'the check-in pills');
+      await must(page.locator('[data-testid="meal-cards"]'), 'the meals card');
+    },
+  },
+  {
+    // …with "Macros and details" open: the budget rows (Eaten, Protein, Carbs,
+    // Fat), the activity add-back in a sentence, "Change today's target" and
+    // the way to the calorie plan. Protein says where its target came from.
+    name: '01b-today-details',
+    setup: (page, h) => withPageOps(page, {
+      ...OPS,
+      GetDerivedMacros: { derivedMacros: { ...OPS.GetDerivedMacros.derivedMacros, rules: { ...OPS.GetDerivedMacros.derivedMacros.rules, protein_basis: 'lean_mass' } } },
+    }, async () => {
+      await page.goto(h.base + '/dashboard', { waitUntil: 'networkidle' });
+      await h.settle(1600);
+      await setDetails(page, h, true);
+      const details = page.locator('[data-testid="today-details"]');
+      const strip = await must(details.locator('[data-testid="macro-strip"]'), 'the macro rows');
+      // 1,680 of 2,340 eaten (the fixtures' totals).
+      await must(strip.getByText(/Eaten\s*1,680 cal/), 'the Eaten row');
+      await must(strip.getByText('72%', { exact: true }), 'Eaten at 72%');
+      for (const row of ['Protein', 'Carbs', 'Fat']) await must(strip.getByText(row, { exact: true }), `the ${row} row`);
+      const note = (await (await must(strip.locator('[data-testid="macro-note-protein"]'), 'where the protein target came from')).innerText()).trim();
+      if (!/from lean mass$/.test(note)) throw new Error(`the protein note reads "${note}"`);
+      const allowance = (await (await must(details.locator('[data-testid="activity-allowance"]'), 'the activity add-back sentence')).innerText()).trim();
+      if (allowance !== 'Includes 240 extra for today’s activity.') throw new Error(`the allowance reads "${allowance}"`);
+      const editor = await must(details.locator('#calorie-goal-panel[data-testid="day-target-editor"]'), 'the day target editor');
+      if ((await editor.getByLabel('Change today’s target').inputValue()) !== '2340') throw new Error('the day target editor does not start on today’s 2,340');
+      await must(details.locator('[data-testid="calorie-plan-link"]'), 'the way to the calorie plan');
+      await scrollToSection(page, h, '[data-testid="home-hero"]', 88);
+    }),
+    teardown: (page) => page.unroute('**/graphql'),
+  },
+  {
+    // The same, eating keto: fat first, then protein, then the net-carb line
+    // against its limit; a food that lists no fiber says what that means.
+    name: '01c-today-details-keto',
+    setup: (page, h) => withPageOps(page, {
+      ...opsWithPlan({ mode: 'keto' }),
+      GetFoodLogs: (vars = {}) => {
+        const day = OPS.GetFoodLogs(vars).foodLogs;
+        // Almonds, as a catalog row that never listed fiber.
+        return { foodLogs: day.map((l) => (l.id === 'l7' ? { ...l, nutrition: { ...l.nutrition, fiber_grams: null }, calculatedNutrition: { ...l.calculatedNutrition, fiber_grams: null } } : l)) };
+      },
+    }, async () => {
+      await page.goto(h.base + '/dashboard', { waitUntil: 'networkidle' });
+      await h.settle(1600);
+      await setDetails(page, h, true);
+      const strip = await must(page.locator('[data-testid="today-details"] [data-testid="macro-strip"]'), 'the macro rows');
+      // 87.5 g carbs less 14.4 g fiber in the fixtures' summary, against a 20 g limit.
+      await must(strip.getByText(/Net carbs\s*73 g\s*of 20/), 'the net-carb line "Net carbs 73 g of 20"');
+      await must(strip.getByText(/^Over your limit$/i), 'net carbs over, in words');
+      await absent(strip.getByText('Carbs', { exact: true }), 'a plain Carbs row in keto');
+      const rows = (await strip.innerText()).replace(/\s+/g, ' ');
+      if (!(rows.indexOf('Fat') < rows.indexOf('Protein') && rows.indexOf('Protein') < rows.indexOf('Net carbs'))) throw new Error(`keto order is wrong: ${rows.slice(0, 160)}`);
+      await must(page.locator('[data-testid="missing-fiber-note"]'), 'the no-fiber note');
+      await scrollToSection(page, h, '[data-testid="home-hero"]', 88);
+    }),
+    teardown: (page) => page.unroute('**/graphql'),
+  },
+  {
+    // The old Food log address: /food-log lands on Today and keeps its query,
+    // so a link to a meal still opens on that meal.
+    name: '02-log',
+    goto: '/food-log?meal=dinner',
+    wait: 1800,
+    async setup(page) {
+      landedOn(page, '/dashboard', { meal: 'dinner' });
+      await must(page.locator('#meal-card-dinner[data-testid="meal-card-dinner"]'), 'dinner in the meals card');
+      const top = (await page.locator('#meal-card-dinner').boundingBox())?.y;
+      const vh = page.viewportSize().height;
+      if (top == null || top < 0 || top > vh * 0.75) throw new Error(`?meal=dinner did not bring dinner into view (top ${top && Math.round(top)} of ${vh})`);
+    },
+  },
+  {
+    // The add sheet, opened from Breakfast's "Add".
+    name: '03-food-dialog',
+    viewports: ['phone'],
+    goto: '/dashboard',
+    wait: 1600,
+    async setup(page, h) {
+      const add = await must(page.getByRole('button', { name: /^add to breakfast$/i }).first(), 'Breakfast’s "Add"');
       await add.click();
       await h.settle(900);
       await must(page.getByRole('dialog'), 'the add sheet');
@@ -77,17 +187,17 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
-    // A converted form dialog, full-screen below sm: Copy Meal off the Log page.
+    // A converted form dialog, full-screen below sm: Copy from another day,
+    // out of a meal's "more" menu (it was a link under the Food log's meals).
     name: '04-copy-meal-dialog',
-    goto: '/food-log',
+    goto: '/dashboard',
     wait: 1600,
     async setup(page, h) {
-      // Copy Meal moved out of the stacked row ahead of the date and under
-      // the meals, in words (SIMPLE_AND_FULL_PLAN.md item 8).
-      const copy = await must(page.getByRole('button', { name: /copy a meal/i }).first(), 'Copy a meal');
-      await copy.click();
+      const menu = await openMealMenu(page, h, 'breakfast');
+      await (await must(menu.getByRole('menuitem', { name: 'Copy from another day' }), 'Copy from another day')).click();
       await h.settle(800);
-      await must(page.getByRole('dialog'), 'Copy Meal dialog');
+      const dialog = await must(page.getByRole('dialog'), 'the copy dialog');
+      await must(dialog.locator('[data-testid="copy-summary"]'), 'the copy summary sentence');
     },
     teardown: (page, h) => h.esc(400),
   },
@@ -157,7 +267,7 @@ export const scenes = [
   },
   // Blood pressure, with its FAB.
   { name: '07-bp', goto: '/blood-pressure', wait: 1800 },
-  // Reports: Food comes first now — the averages coverage line, and the day
+  // Trends › Food (was Reports; /reports opens it): the averages coverage line, and the day
   // ribbon WITH targets. The ribbon's "Goal:" legend went in wave A; each day
   // card says its status in words instead ("a bit over", "over"), so that is
   // the anchor, and the meal rows carry protein.
@@ -166,6 +276,7 @@ export const scenes = [
     goto: '/reports',
     wait: 1800,
     async setup(page, h) {
+      landedOn(page, '/trends', { tab: 'food' });
       await must(page.locator('[data-testid="reports-food"]'), 'the Food section');
       await must(page.locator('[data-testid="day-status"]').first(), 'day ribbon status words');
       await must(page.locator('[data-testid="meal-row"]').first(), 'meal rows');
@@ -178,7 +289,7 @@ export const scenes = [
   // tall on a phone. The sparklines are one lazy Nivo island.
   {
     name: '07s-reports-body-recovery',
-    goto: '/reports',
+    goto: '/trends?tab=food',
     wait: 2000,
     async setup(page, h) {
       await must(page.locator('[data-testid="trend-restingHR"]'), 'resting HR trend card');
@@ -187,7 +298,7 @@ export const scenes = [
   },
   {
     name: '07t-reports-activity',
-    goto: '/reports',
+    goto: '/trends?tab=food',
     wait: 2000,
     async setup(page, h) {
       await must(page.locator('[data-testid="trend-intensity"]'), 'intensity minutes card');
@@ -196,7 +307,7 @@ export const scenes = [
   },
   {
     name: '07u-reports-body',
-    goto: '/reports',
+    goto: '/trends?tab=food',
     wait: 2000,
     async setup(page, h) {
       await must(page.locator('[data-testid="trend-bp"]'), 'blood pressure card');
@@ -254,11 +365,16 @@ export const scenes = [
      * What it covers now is the real thing: type a sentence into the one box,
      * and the offer to log it is the first thing under it.
      *
-     * The stubs are page-scoped, so this must stay the LAST scene in the file
-     * — page.route() beats ctx.route() only for requests registered after it.
+     * On a phone the box is in the add sheet behind "What did you eat?"; from
+     * md it is on the page (ONE_APP_PLAN.md §1). The stubs are page-scoped
+     * and dropped again in teardown or on a throw.
      */
     name: '11-describe-and-log',
     async setup(page, h) {
+      const drop = async () => {
+        await page.unroute('**/api/foods*');
+        await page.unroute('**/api/logs/describe');
+      };
       // The box's two search waves. Neither should be what answers here, but
       // both fire on a pause, and an unstubbed call would hang the scene.
       await page.route('**/api/foods*', (r) => json(r, { success: true, data: [] }));
@@ -287,23 +403,44 @@ export const scenes = [
         },
       }));
 
-      await page.goto(h.base + '/food-log', { waitUntil: 'networkidle' });
-      await h.settle(1600);
+      try {
+        await page.goto(h.base + '/dashboard', { waitUntil: 'networkidle' });
+        await h.settle(1600);
 
-      // The composer (REVIEW_2026-10 §4): "Tell me what you ate", with Log it
-      // right under it. A sentence folds the list away.
-      const box = await must(page.getByLabel('Tell me what you ate').first(), 'the composer box on the food log');
-      await box.fill('4 chocolate chip pancakes homemade');
-      // Long enough for the 400ms deep-search debounce to come and go, so the
-      // shot is of a settled surface rather than a spinner.
-      await h.settle(900);
+        let scope;
+        if (h.isPhone) {
+          await (await must(page.locator('[data-testid="what-did-you-eat"]'), '"What did you eat?"')).click();
+          await h.settle(900);
+          scope = await must(page.getByRole('dialog'), 'the add sheet');
+        } else {
+          scope = await must(page.locator('[data-testid="inline-add"]'), 'the add box on the page');
+        }
 
-      // Log it is the point of the scene: if it isn't live under the box,
-      // describing has stopped being the primary path.
-      const logIt = await must(page.locator('[data-testid="log-it"]').first(), 'Log it under the box');
-      if (await logIt.isDisabled()) throw new Error('Log it is disabled with a sentence in the box');
+        // The composer (REVIEW_2026-10 §4): "Tell me what you ate", with Log it
+        // right under it. A sentence folds the list away.
+        const box = await must(scope.getByLabel('Tell me what you ate').first(), 'the composer box');
+        await box.fill('4 chocolate chip pancakes homemade');
+        // Long enough for the 400ms deep-search debounce to come and go, so the
+        // shot is of a settled surface rather than a spinner.
+        await h.settle(900);
+
+        // Log it is the point of the scene: if it isn't live under the box,
+        // describing has stopped being the primary path.
+        const logIt = await must(scope.locator('[data-testid="log-it"]').first(), 'Log it under the box');
+        if (await logIt.isDisabled()) throw new Error('Log it is disabled with a sentence in the box');
+      } catch (err) {
+        await drop();
+        throw err;
+      }
     },
-    teardown: (page, h) => h.esc(400),
+    async teardown(page, h) {
+      await h.esc(400);
+      // The words are a draft in the sheet and plain state in the inline box;
+      // neither should follow the page into the next scene.
+      await page.evaluate(() => { try { sessionStorage.clear(); } catch { /* blocked */ } });
+      await page.unroute('**/api/foods*');
+      await page.unroute('**/api/logs/describe');
+    },
   },
   // Body-composition scan import. Reachable from the Android share sheet and
   // from its own file picker, so it is a real destination rather than a
@@ -315,7 +452,7 @@ export const scenes = [
     // scans in a week, four on one day. It must say WHEN ("around 5 Oct"),
     // never a number (§0). A page-scoped GraphQL stub overrides the context's
     // month of scans for this scene only; teardown drops it so nothing after
-    // this sees it (and it sits last for the same reason as scene 11).
+    // this sees it.
     name: '13-weight-body-early',
     setup: (page, h) => withPageOps(page, {
       ...OPS,
@@ -330,10 +467,11 @@ export const scenes = [
     teardown: (page) => page.unroute('**/graphql'),
   },
   {
-    // Dashboard, the other banner: a current plan built on Mifflin while a
+    // Today, the other plan note: a current plan built on Mifflin while a
     // measured BMR exists — the dismissible "A measured BMR is available".
-    // (The stale "needs recalculating" banner is on 01-home: SETTINGS' plan
-    // has a bmr and no bmr_calc_version.)
+    // It is a quiet note at the foot of the "what is left" card now. (The
+    // stale "needs recalculating" note is on 01-home: SETTINGS' plan has a
+    // bmr and no bmr_calc_version.)
     name: '14-home-scan-bmr-banner',
     setup: (page, h) => withPageOps(page, opsWithPlan(CURRENT_MIFFLIN_PLAN), async () => {
       await page.goto(h.base + '/dashboard', { waitUntil: 'networkidle' });
@@ -344,12 +482,12 @@ export const scenes = [
     teardown: (page) => page.unroute('**/graphql'),
   },
   {
-    // Dashboard weight stat: 7-day mean now vs the 7-day mean ~30 days ago.
+    // Today › Your numbers, the weight tile: 7-day mean now vs the 7-day mean ~30 days ago.
     name: '15-home-weight-stat',
     goto: '/dashboard',
     wait: 1800,
     async setup(page, h) {
-      await must(page.getByText(/^7-day avg · /).first(), 'weight stat caption');
+      await must(page.locator('[data-testid="your-numbers"]').getByText(/^7-day avg · /).first(), 'weight tile caption');
       await scrollToSection(page, h, 'text=/^7-day avg · /', 260);
     },
   },
@@ -357,7 +495,7 @@ export const scenes = [
     // Calorie wizard over a saved plan built from the scans: the metabolism
     // card names the source (plan D1).
     name: '16-wizard-scan-source',
-    setup: (page, h) => withPageOps(page, opsWithPlan(SCAN_PLAN, FULL_USER), async () => {
+    setup: (page, h) => withPageOps(page, opsWithPlan(SCAN_PLAN), async () => {
       await page.goto(h.base + '/calorie-wizard', { waitUntil: 'networkidle' });
       await h.settle(1600);
       await must(page.locator('[data-testid="bmr-source"][data-source="scan"]'), 'scan BMR source note');
@@ -376,7 +514,7 @@ export const scenes = [
       plan_type: 'weekender',
       weekly_schedule: [1764, 1764, 1764, 1764, 1764, 2415, 2415],
       daily_calorie_target: 1950,
-    }, FULL_USER), async () => {
+    }), async () => {
       await page.goto(h.base + '/calorie-wizard', { waitUntil: 'networkidle' });
       await h.settle(1600);
       await (await must(page.getByRole('button', { name: /^change plan$/i }).first(), 'Change plan')).click();
@@ -405,7 +543,7 @@ export const scenes = [
         // make the auth interceptor refresh the token on every visit).
         json(r, { available: false, reason: 'not_enabled', days: [], fitnessAge: null, activeKcal30: null }));
       try {
-        await page.goto(h.base + '/reports', { waitUntil: 'networkidle' });
+        await page.goto(h.base + '/trends?tab=food', { waitUntil: 'networkidle' });
         await h.settle(1800);
         await must(page.locator('[data-testid="garmin-not-connected"]'), 'not-connected line');
         await must(page.locator('[data-testid="trend-weight"]'), 'weight card still shown');
@@ -419,96 +557,132 @@ export const scenes = [
   },
 ];
 
-// ── Simple and Full + Market Morning (apps/fitnessgeek/DOCS/SIMPLE_AND_FULL_PLAN.md) ──
-// Page-scoped stubs again, so these sit after everything above. Heather is
-// the Simple face: no logs of any kind, two medications. The scenes THROW on
-// a missing anchor — a skip would say PASS while covering nothing.
+// ── Today's other states, More, Settings, Saved foods ────────────────────
+// Page-scoped stubs where a scene needs its own data. The scenes THROW on a
+// missing anchor — a skip would say PASS while covering nothing.
 
 scenes.push(
-  // Simple home: the plate in words, the Today strip, four meal cards.
-  heatherScene('19-simple-home', HEATHER, async (page) => {
-    await must(page.locator('[data-testid="calories-sentence"]'), 'the calories sentence');
-    await must(page.locator('[data-testid="today-strip"]'), 'Today strip');
-    await must(page.locator('[data-testid="meal-cards"]'), 'meal cards');
-  }),
-  // …scrolled to the check-ins: the strip and "Did you take your meds?".
-  heatherScene('19a-simple-meds', HEATHER, async (page, h) => {
-    await must(page.locator('[data-testid="today-strip-meds"]'), 'meds check-in on the strip');
-    await must(page.locator('[data-testid="meds-checklist"]'), 'meds checklist');
-    await scrollToSection(page, h, '[data-testid="meds-checklist"]', 96);
-  }),
-  // First run: a person who never chose, and has never logged, lands here.
-  heatherScene('20-first-run', { mode: null, first_run_done: false }, async (page) => {
-    await must(page.locator('[data-testid="first-run"]'), 'first run');
-  }),
-  heatherScene('20a-first-run-goal', { mode: null, first_run_done: false }, async (page, h) => {
-    const next = await must(page.getByRole('button', { name: /^next$/i }).first(), 'Next');
-    await next.click();
-    await h.settle(500);
-    await must(page.getByRole('radio', { name: /keep my weight steady/i }), 'goal choices');
-  }, { viewports: ['phone'] }),
-  // Simple's add sheet from a meal card: the big "Say what you ate".
-  heatherScene('21a-simple-add-sheet', HEATHER, async (page, h) => {
-    const add = await must(page.getByRole('button', { name: /^add to lunch$/i }).first(), 'Add to lunch');
-    await add.click();
-    await h.settle(900);
-    await must(page.getByRole('dialog'), 'add sheet');
-    await must(page.locator('[data-testid="speak-button"]'), 'microphone button');
-    // The composer, empty: the box, Log it (dim), "Or tap one you've had".
-    await must(page.getByRole('dialog').getByLabel('Tell me what you ate'), 'the composer box');
-    await must(page.getByRole('dialog').locator('[data-testid="log-it"][disabled]'), 'Log it, dim until there are words');
-  }, { dialog: true }),
-  // Larger text, on Heather's home.
-  heatherScene('22-larger-text', { ...HEATHER, larger_text: true }, async (page) => {
-    const size = await page.evaluate(() => document.documentElement.dataset.textSize);
-    if (size !== 'larger') throw new Error(`larger text not applied (data-text-size=${size})`);
-  }),
-  heatherScene('24a-more-simple', HEATHER, async (page) => {
-    await must(page.locator('[data-testid="more-page"]'), 'More page');
-  }, { path: '/more' }),
   {
-    // Full's add sheet from Home's Lunch card: "Same as yesterday's lunch",
-    // the Again chips, and the microphone (idle) in the box.
+    // Today, scrolled to the check-ins: the pills and "Did you take your
+    // meds?" (today only, for anyone with medications — one of three taken).
+    name: '19a-today-meds',
+    goto: '/dashboard',
+    wait: 1800,
+    async setup(page, h) {
+      await must(page.locator('[data-testid="today-strip-meds"]'), 'meds check-in on the strip');
+      const list = await must(page.locator('[data-testid="meds-checklist"]'), 'meds checklist');
+      const doses = MEDS.reduce((n, m) => n + Math.max(1, m.times_of_day.length), 0);
+      if ((await list.getByRole('checkbox').count()) !== doses) throw new Error(`expected ${doses} dose ticks, saw ${await list.getByRole('checkbox').count()}`);
+      await scrollToSection(page, h, '[data-testid="meds-checklist"]', 96);
+    },
+  },
+  {
+    // Larger text, on Today.
+    name: '22-larger-text',
+    setup: (page, h) => withPageOps(page, { ...OPS, GetFitnessExperience: experienceOf({ larger_text: true }) }, async () => {
+      await page.goto(h.base + '/dashboard', { waitUntil: 'networkidle' });
+      await h.settle(1600);
+      const size = await page.evaluate(() => document.documentElement.dataset.textSize);
+      if (size !== 'larger') throw new Error(`larger text not applied (data-text-size=${size})`);
+      await must(page.locator('[data-testid="calories-sentence"]'), 'the calories sentence');
+    }),
+    teardown: (page) => page.unroute('**/graphql'),
+  },
+  {
+    // The add sheet from Today's Lunch: "Same as yesterday's lunch", the
+    // Again chips, the box with its microphone (idle), and Log it dim until
+    // there are words.
     name: '21-add-sheet-again',
     async setup(page, h) {
       await page.addInitScript(SPEECH_STUB);
       await page.goto(h.base + '/dashboard', { waitUntil: 'networkidle' });
       await h.settle(1600);
+      await page.evaluate(() => { try { sessionStorage.clear(); } catch { /* blocked */ } });
       const add = await must(page.getByRole('button', { name: /^add to lunch$/i }).first(), 'Add to lunch');
       await add.click();
       await h.settle(1200);
-      await must(page.locator('[data-testid="again-chips"]'), 'Again chips');
-      await must(page.locator('[data-testid="same-as-yesterday"]'), 'Same as yesterday');
-      await must(page.getByRole('button', { name: /say what you ate/i }).first(), 'microphone');
+      const sheet = await must(page.getByRole('dialog'), 'add sheet');
+      await must(sheet.locator('[data-testid="again-chips"]'), 'Again chips');
+      await must(sheet.locator('[data-testid="same-as-yesterday"]'), 'Same as yesterday');
+      await must(sheet.getByRole('button', { name: /say what you ate/i }).first(), 'microphone');
+      await must(sheet.locator('[data-testid="speak-button"]'), 'microphone button');
+      await must(sheet.getByLabel('Tell me what you ate'), 'the composer box');
+      await must(sheet.locator('[data-testid="log-it"][disabled]'), 'Log it, dim until there are words');
     },
     teardown: (page, h) => h.esc(400),
   },
   {
-    // Full home, scrolled to the meal cards (with Chef's foods and removes).
-    name: '23-full-home-meals',
+    // Today, scrolled to the meals: ONE card, a row per meal with its total,
+    // "Add" and a "more" menu, and its foods under it. A food row is one
+    // button that opens Edit — no star, pencil or trash on it — and a meal is
+    // not a link.
+    name: '23-today-meals',
     goto: '/dashboard',
     wait: 1800,
     async setup(page, h) {
-      await must(page.locator('[data-testid="macro-strip"]'), 'Full home macro strip');
+      const card = await must(page.locator('[data-testid="meal-cards"]'), 'the meals card');
+      const rows = card.locator('[data-testid="food-log-row"]');
+      if ((await rows.count()) !== FOOD_LOGS.length) throw new Error(`expected ${FOOD_LOGS.length} food rows, saw ${await rows.count()}`);
+      for (const meal of ['breakfast', 'lunch', 'dinner', 'snack']) {
+        const group = await must(card.locator(`section#meal-card-${meal}[data-testid="meal-card-${meal}"]`), `the ${meal} group`);
+        // "Add to breakfast" … "Add to snacks".
+        await must(group.getByRole('button', { name: /^add to (breakfast|lunch|dinner|snacks)$/i }), `the ${meal} "Add"`);
+        await must(card.locator(`[data-testid="meal-more-${meal}"]`), `the ${meal} "more" button`);
+      }
+      // 190 + half of 42.
+      const breakfast = (await card.locator('[data-testid="meal-total-breakfast"]').innerText()).trim();
+      if (breakfast !== '211 cal') throw new Error(`breakfast total reads "${breakfast}"`);
+      await must(card.getByRole('button', { name: 'Edit Sourdough Toast, ×2, 240 cal' }), 'a row named with its amount and calories');
+      // Each food is exactly one button; nothing else to aim at in a row.
+      const inRows = await card.locator('li button, li a').count();
+      if (inRows !== FOOD_LOGS.length) throw new Error(`${inRows} controls inside ${FOOD_LOGS.length} food rows: a row should be one button`);
+      await absent(card.locator('a'), 'a link in the meals card (meals are not links)');
+      await absent(page.locator('[id^="meal-section-"]'), 'the old Food log meal sections');
+      await must(page.locator('[data-testid="household-link"]'), 'the household link');
       await scrollToSection(page, h, '#todays-meals', 88);
     },
   },
-  { name: '24-more', goto: '/more', wait: 1400 },
   {
-    // Settings: Simple or Full, and Larger text, at the top.
+    // More: everything the phone's tabs don't hold — six links, one list, no
+    // group headings, the same for everybody.
+    name: '24-more',
+    goto: '/more',
+    wait: 1400,
+    async setup(page, h) {
+      const more = await must(page.locator('[data-testid="more-page"]'), 'More page');
+      const links = (await more.getByRole('link').evaluateAll((els) => els.map((el) => `${el.getAttribute('href')}|${el.querySelector('p')?.textContent?.trim()}`)));
+      const want = ['/blood-pressure|Blood pressure', '/medications|Medications', '/saved-foods|Saved foods', '/calorie-wizard|Calorie plan', '/scan-import|Import a scan', '/settings|Settings'];
+      if (links.join(' · ') !== want.join(' · ')) throw new Error(`More lists ${links.join(' · ')}`);
+      await absent(more.locator('h2, h3'), 'a group heading on More');
+      await absent(more.getByText(/needs|simple|full view/i), 'a mode-era line on More');
+      if (h.isPhone) {
+        // The phone's tabs: Today · Weight · Trends · More.
+        const tabs = await (await must(page.locator('[data-geek-bottom-nav]'), 'the bottom tab bar')).locator('[data-geek-bottom-nav-item]').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
+        if (tabs.join(' · ') !== 'Today · Weight · Trends · More') throw new Error(`the bottom tabs read ${tabs.join(' · ')}`);
+      }
+    },
+  },
+  {
+    // Settings from the top: "How it looks" is Larger text and the theme.
+    // There is no Simple / Full chooser.
     name: '25-settings-experience',
     goto: '/settings',
     wait: 1600,
     async setup(page) {
-      await must(page.locator('[data-testid="experience-settings"]'), 'experience settings');
+      const looks = await must(page.locator('[data-testid="experience-settings"]'), 'How it looks');
+      await must(looks.getByRole('heading', { name: 'How it looks', level: 2 }), 'the "How it looks" heading');
+      await must(looks.locator('[data-testid="larger-text-switch"]'), 'the Larger text switch');
+      await must(looks.getByLabel('Theme'), 'the theme select');
+      for (const gone of ['mode-simple', 'mode-full', 'simple-view-line']) await absent(page.locator(`[data-testid="${gone}"]`), gone);
+      await absent(page.getByRole('radio', { name: /simple|full/i }), 'a Simple / Full choice');
     },
   },
   {
-    // My Foods with a recipe in it (RECIPES_PLAN.md): the "Recipe · makes 6"
-    // label and the New recipe / New food buttons.
+    // Saved foods › Foods with a recipe in it (RECIPES_PLAN.md): the "Recipe ·
+    // makes 6" label and the New recipe / New food buttons.
     name: '26-my-foods-recipe',
     setup: (page, h) => withPageOps(page, { ...OPS, GetFitnessFoods: { fitnessFoods: [...FOODS, CHILI] } }, async () => {
-      await page.goto(h.base + '/my-foods', { waitUntil: 'networkidle' });
+      await page.goto(h.base + '/saved-foods?tab=foods', { waitUntil: 'networkidle' });
       await h.settle(1400);
       await must(page.getByText('Turkey chili').first(), 'recipe row');
       await must(page.getByRole('button', { name: /new recipe/i }), 'New recipe button');
@@ -520,7 +694,7 @@ scenes.push(
     // AI-estimate marker, the live per-serving preview.
     name: '27-recipe-builder',
     setup: (page, h) => withPageOps(page, { ...OPS, GetFitnessFoods: { fitnessFoods: [...FOODS, CHILI] } }, async () => {
-      await page.goto(h.base + '/my-foods', { waitUntil: 'networkidle' });
+      await page.goto(h.base + '/saved-foods?tab=foods', { waitUntil: 'networkidle' });
       await h.settle(1400);
       await (await must(page.getByRole('button', { name: /edit turkey chili/i }), 'edit recipe')).click();
       await h.settle(900);
@@ -531,13 +705,12 @@ scenes.push(
 );
 
 // ── The food composer (REVIEW_2026-10 §4, Phase 3.16) ────────────────────
-// Every state gets a scene here, Simple (Heather) and Full (Chef); the
-// helpers (composerScene, foodRoutes…) live in helpers.mjs.
+// Every state gets a scene here; the helpers (composerScene, foodRoutes…)
+// live in helpers.mjs.
 
 scenes.push(
   // Typing a sentence: the list folds into "Or pick an exact food (n)".
   composerScene('28-composer-sentence', {
-    simple: true,
     routes: { suggest: soupSuggest },
     fn: async (page, h, sheet) => {
       await typeInto(sheet, SOUP, h);
@@ -545,16 +718,8 @@ scenes.push(
       if (await sheet.getByText(/nothing found|fewer words/i).count()) throw new Error('"Nothing found" on a sentence');
     },
   }),
-  composerScene('28a-composer-sentence-full', {
-    routes: { suggest: soupSuggest },
-    fn: async (page, h, sheet) => {
-      await typeInto(sheet, SOUP, h);
-      await must(sheet.locator('[data-testid="exact-food-toggle"]'), '"Or pick an exact food"');
-    },
-  }),
   // A short name: the list open, "+ Add" and "190 cal" on every row.
   composerScene('29-composer-short-query', {
-    simple: true,
     routes: { suggest: fageSuggest, deep: fageDeep },
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'fage', h, 1200);
@@ -562,11 +727,11 @@ scenes.push(
       await must(sheet.getByText('190 cal').first(), '"190 cal"');
     },
   }),
-  composerScene('29a-composer-short-query-full', {
+  // …and after the first add, the pill is "Make it 2".
+  composerScene('29a-composer-short-query-added', {
     routes: { suggest: fageSuggest, deep: fageDeep },
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'fage', h, 1200);
-      // After the first add, the pill is "Make it 2".
       await (await must(sheet.getByRole('button', { name: /^Add Greek Yogurt, Plain Whole Milk/ }).first(), 'the yogurt row')).click();
       await h.settle(900);
       await must(sheet.getByRole('button', { name: /^Make it 2/ }), '"Make it 2"');
@@ -577,7 +742,6 @@ scenes.push(
     let release = null;
     return {
       ...composerScene('30-composer-thinking', {
-        simple: true,
         viewports: ['phone'],
         routes: {
           suggest: soupSuggest,
@@ -600,63 +764,60 @@ scenes.push(
         await h.settle(400);
         await h.esc(400);
         await dropFoodRoutes(page);
-        await page.unroute('**/graphql');
       },
     };
   })(),
-  // Simple's result card: it stays open on what landed.
-  composerScene('31-composer-result-simple', {
-    simple: true,
-    routes: { suggest: soupSuggest },
-    fn: async (page, h, sheet) => {
-      await typeInto(sheet, SOUP, h, 400);
-      await sheet.locator('[data-testid="log-it"]').click();
-      await h.settle(1200);
-      await must(sheet.locator('[data-testid="result-card"]'), 'result card');
-      await must(sheet.getByText('Added to lunch'), '"Added to lunch"');
-    },
-  }),
-  // …and its Fix sheet.
+  // After a describe the sheet closes and the meal carries "Just added"; its
+  // Fix opens the Fix sheet for that entry.
   composerScene('31a-composer-fix-sheet', {
-    simple: true,
     routes: { suggest: soupSuggest },
     fn: async (page, h, sheet) => {
       await typeInto(sheet, SOUP, h, 400);
       await sheet.locator('[data-testid="log-it"]').click();
-      await h.settle(1200);
-      await (await must(sheet.getByRole('button', { name: 'Fix Chicken soup, 1 bowl' }), 'Fix')).click();
+      await h.settle(1600);
+      if (await page.getByRole('dialog').count()) throw new Error('the add sheet should have closed after a describe');
+      const strip = await must(page.locator('[data-testid="meal-card-lunch"] [data-testid="just-added"]'), '"Just added" on lunch');
+      await (await must(strip.getByRole('button', { name: 'Fix Chicken soup, 1 bowl' }), 'Fix')).click();
       await h.settle(700);
       await must(page.locator('[data-testid="fix-sheet"]'), 'Fix sheet');
     },
   }),
-  // Full: the sheet closes, and the meal card carries "Just added".
-  composerScene('32-full-just-added', {
+  // The sheet closes, and the meal carries "Just added" with what landed,
+  // Undo all and Done. No result card stays behind.
+  composerScene('32-just-added', {
     routes: { suggest: soupSuggest },
     fn: async (page, h, sheet) => {
       await typeInto(sheet, SOUP, h, 400);
       await sheet.locator('[data-testid="log-it"]').click();
       await h.settle(1600);
-      if (await page.getByRole('dialog').count()) throw new Error('Full: the add sheet should have closed');
-      await must(page.locator('[data-testid="meal-card-lunch"] [data-testid="just-added"]'), '"Just added" on the lunch card');
+      if (await page.getByRole('dialog').count()) throw new Error('the add sheet should have closed after a describe');
+      if (await page.locator('[data-testid="result-card"]').count()) throw new Error('a result card stayed open after a clean describe');
+      const strip = await must(page.locator('[data-testid="meal-card-lunch"] [data-testid="just-added"]'), '"Just added" on lunch');
+      await must(strip.getByText('Chicken soup, 1 bowl'), 'what landed, by name');
+      await must(strip.getByRole('button', { name: 'Undo all' }), 'Undo all');
+      await must(strip.getByRole('button', { name: 'Done' }), 'Done');
+      if (await page.locator('[data-testid="just-added"]').count() !== 1) throw new Error('"Just added" is on more than the meal it landed in');
       await scrollToSection(page, h, '[data-testid="meal-card-lunch"]', 88);
     },
   }),
-  // …and on the Log page, on the meal section.
-  composerScene('32a-log-just-added', {
-    path: '/food-log',
+  // …and from the box on the page (md and up, where there is no sheet to
+  // close): the same strip on the same meal.
+  composerScene('32a-inline-just-added', {
     sheet: false,
+    viewports: ['desktop', 'tablet-landscape'],
     routes: { suggest: soupSuggest },
     fn: async (page, h) => {
-      await typeInto(page, SOUP, h, 400);
-      await page.locator('[data-testid="log-it"]').first().click();
+      const box = await must(page.locator('[data-testid="inline-add"]'), 'the add box on the page');
+      await typeInto(box, SOUP, h, 400);
+      await box.locator('[data-testid="log-it"]').first().click();
       await h.settle(1600);
-      await must(page.locator('#meal-section-lunch [data-testid="just-added"]'), '"Just added" on the Log page lunch');
-      await scrollToSection(page, h, '#meal-section-lunch', 88);
+      await must(page.locator('#meal-card-lunch [data-testid="just-added"]'), '"Just added" on lunch');
+      if ((await box.getByLabel('Tell me what you ate').inputValue()) !== '') throw new Error('the page box kept its words after logging them');
+      await scrollToSection(page, h, '#meal-card-lunch', 88);
     },
   }),
-  // Errors, with her words kept: no signal, and a failure.
+  // Errors, with the words kept: no signal, and a failure.
   composerScene('33-composer-offline', {
-    simple: true,
     viewports: ['phone'],
     offline: true,
     fn: async (page, h, sheet) => {
@@ -666,7 +827,6 @@ scenes.push(
     },
   }),
   composerScene('34-composer-failure', {
-    simple: true,
     routes: { suggest: soupSuggest, describe: 500 },
     fn: async (page, h, sheet) => {
       await typeInto(sheet, SOUP, h, 400);
@@ -677,7 +837,6 @@ scenes.push(
   }),
   // Day words: ask before logging.
   composerScene('35-composer-day-chip', {
-    simple: true,
     meal: 'dinner',
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'fried chicken and fries last night', h, 400);
@@ -688,10 +847,10 @@ scenes.push(
   }),
   // The add sheet on a day that isn't today names it.
   composerScene('36-add-sheet-yesterday', {
-    path: `/food-log?date=${YESTERDAY}&meal=dinner`,
+    path: `/dashboard?date=${YESTERDAY}&meal=dinner`,
     sheet: false,
     fn: async (page, h) => {
-      await (await must(page.locator('#meal-section-dinner').getByRole('button', { name: /^add to dinner$/i }).first(), 'Dinner "+ Add"')).click();
+      await (await must(page.locator('#meal-card-dinner').getByRole('button', { name: /^add to dinner$/i }).first(), 'Dinner "Add"')).click();
       await h.settle(900);
       await must(page.getByRole('dialog').getByText(/^Add to \w+’s dinner \(yesterday\)$/), 'the title "Add to <weekday>’s dinner (yesterday)"');
     },
@@ -710,9 +869,9 @@ scenes.push(
     async setup(page, h) {
       await foodRoutes(page, { suggest: fageSuggest, deep: fageDeep, suggestMs: 250, deepMs: 1400 });
       try {
-        await page.goto(h.base + '/food-log', { waitUntil: 'networkidle' });
+        await page.goto(h.base + '/dashboard', { waitUntil: 'networkidle' });
         await h.settle(1400);
-        await (await must(page.locator('#meal-section-lunch').getByRole('button', { name: /^add to lunch$/i }).first(), 'Lunch "+ Add"')).click();
+        await (await must(page.locator('#meal-card-lunch').getByRole('button', { name: /^add to lunch$/i }).first(), 'Lunch "+ Add"')).click();
         await h.settle(900);
         const paper = await must(page.locator('[data-testid="add-food-dialog"]'), 'the add dialog');
         const box = await must(paper.getByLabel('Tell me what you ate'), 'the composer box');

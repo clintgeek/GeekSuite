@@ -1,93 +1,23 @@
-# FoodLog Component Library
+# FoodLog components
 
-A clean, reusable component library for food logging features that matches the Dashboard design system.
+What the Today page (`src/pages/Today.jsx`) uses to add to, and change, a
+day's food. The Food log page itself is gone: Home and Food log are one page
+now (`DOCS/ONE_APP_PLAN.md` §1), and `/food-log` redirects to `/dashboard`
+with its query string.
 
-## Components
+| File | What it is |
+|---|---|
+| `AddFoodDialog.jsx` | The add sheet: the `FoodComposer` in a dialog, on the meal that was tapped, plus the barcode scanner. |
+| `FoodLogItem.jsx` | One logged food as a row: name, amount, calories. The whole row opens Edit. |
+| `EditLogDialog.jsx` | Edit one entry: servings, meal, day, calories and nutrition, and Remove. |
+| `SaveMealDialog.jsx` | Save a meal's entries as a meal (from the meal's "more" menu). |
+| `CopyMealDialog.jsx` | Copy a meal or a whole day from another day, or from someone in the household. |
+| `HouseholdLogView.jsx` | What the household ate on the day on screen. |
+| `NutritionInputs.jsx` | The calorie and macro fields `EditLogDialog` uses. |
+| `amount.js` | An entry's amount in a few characters ("×2", "6 oz"), and what it comes to in calories. |
+| `dayWords.js`, `copyWords.js` | Days and copies in words. |
+| `mealLook.js` | A meal's colours and icon for the current theme. |
 
-### `DateNavigator`
-- **Purpose**: Date navigation with previous/next buttons
-- **Props**: `selectedDate`, `onPreviousDay`, `onNextDay`, `formatDate`
-- **Style**: Clean card with theme colors and consistent spacing
-
-### `FoodLogLayout`
-- **Purpose**: Main container with loading, alerts, and consistent styling
-- **Props**: `loading`, `successMessage`, `errorMessage`, `onClearSuccess`, `onClearError`
-- **Style**: Matches Dashboard layout with theme background and spacing
-
-### `AddFoodDialog`
-- **Purpose**: Reusable dialog for adding food to any meal type
-- **Props**: `open`, `onClose`, `onFoodSelect`, `mealType`, `showBarcodeScanner`, `onShowBarcodeScanner`, `onBarcodeScanned`
-- **Features**: Integrated FoodSearch and BarcodeScanner
-- **Style**: Consistent with overall design system
-
-### `NutritionSummary`
-- **Purpose**: Macronutrient breakdown display
-- **Props**: `summary`, `showGoals`
-- **Style**: Grid layout with theme colors, no obvious headers
-
-### `MealSection`
-- **Purpose**: Individual meal type sections (breakfast, lunch, dinner, snack)
-- **Props**: `mealType`, `logs`, `onAddFood`, `onEditLog`, `onDeleteLog`, `onSaveMeal`
-- **Style**: Clean cards with theme colors, subtle headers
-
-### `FoodLogItem`
-- **Purpose**: Individual food item display
-- **Props**: `log`, `onEdit`, `onDelete`, `showActions`, `compact`
-- **Style**: Consistent with overall design system
-
-## Custom Hooks
-
-### `useFoodLog`
-- **Purpose**: Manages all food log operations and state
-- **Returns**: Logs, loading state, messages, nutrition summary, and operation functions
-- **Features**: Automatic data loading, error handling, and state management
-
-## Design Principles
-
-- **No obvious headers** - Subtle, contextual information only
-- **Theme consistency** - Uses MUI theme colors throughout
-- **Mobile-first** - Responsive design with proper spacing
-- **Reusable** - Components can be used across food-related pages
-- **Clean styling** - Consistent borders, shadows, and spacing
-- **Separation of concerns** - Business logic in hooks, UI in components
-
-## Usage
-
-```jsx
-import {
-  DateNavigator,
-  AddFoodDialog,
-  NutritionSummary,
-  MealSection
-} from '../components/FoodLog';
-import { useFoodLog } from '../hooks/useFoodLog';
-import { useFoodLogging } from '../hooks/useFoodLogging';
-
-// Use in pages. `useFoodLog` owns the log list, goals and favourites;
-// `useFoodLogging` owns logging-and-undo (logItems/undoLogs/describeMeal) —
-// see FoodLog.jsx for how the two are composed together.
-const {
-  loading,
-  nutritionSummary,
-  getLogsByMealType,
-  favoriteFoodIds,
-  toggleFavoriteId
-} = useFoodLog(selectedDate);
-
-<DateNavigator {...dateProps} />
-<NutritionSummary summary={nutritionSummary} />
-<MealSection {...mealProps} favoriteFoodIds={favoriteFoodIds} onFavoriteChange={toggleFavoriteId} />
-<AddFoodDialog {...dialogProps} />
-```
-
-Note: this doc previously described a `FoodLogLayout` wrapper and a
-`FoodLogHeader` component; neither exists in the current tree (`FoodLogHeader`
-was deleted as dead code — nothing imported it, see git history for details).
-
-## Architecture Benefits
-
-- **Cleaner pages** - Business logic extracted to hooks
-- **Reusable components** - AddFoodDialog can be used anywhere
-- **Better testing** - Components and hooks can be tested separately
-- **Easier maintenance** - Changes in one place affect everywhere
-- **Consistent patterns** - All food-related features follow same structure
+The meals themselves (one card, a row per meal) are drawn by
+`src/components/Home/MealCards.jsx`, and the day's reads live in
+`src/components/Home/useDayData.js`.

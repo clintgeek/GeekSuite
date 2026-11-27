@@ -7,10 +7,10 @@
 // Prefix 4x. The list's numbers are the old 21–37 composer scenes' neighbours,
 // not replacements: those stay in scenes.mjs.
 import { graphqlRoute } from '../../lib/net.mjs';
-import { OPS, FOOD_LOGS, SUGGEST_LONG, heatherOps } from './fixtures.mjs';
+import { OPS, FOOD_LOGS, SUGGEST_LONG, experienceOf } from './fixtures.mjs';
 import { withHistoryBounds } from './history-ops.mjs';
 import {
-  must, foodRoutes, dropFoodRoutes, scrollToSection, HEATHER, typeInto, SOUP,
+  must, foodRoutes, dropFoodRoutes, scrollToSection, typeInto, SOUP,
   fageSuggest, fageDeep, soupSuggest, wait,
 } from './helpers.mjs';
 
@@ -87,9 +87,7 @@ const clearDrafts = (page) => page.evaluate(() => { try { sessionStorage.clear()
 /**
  * One add-sheet scene. Everything it stubs is page-scoped and undone in
  * teardown and on a throw (one page serves every scene of a viewport).
- *   experience  'simple' (Heather) or 'full' (Chef, the context's own user)
- *   heather     patch on HEATHER (larger_text …)
- *   today       Heather's logs for today
+ *   experience  a patch on the saved experience document (larger_text …)
  *   ops         extra GraphQL ops, or a function returning them
  *   size        a viewport for this scene; restored after
  *   hold        a GraphQL op name to hold until teardown ("Adding…")
@@ -98,7 +96,7 @@ const clearDrafts = (page) => page.evaluate(() => { try { sessionStorage.clear()
  */
 function sheetScene(name, o = {}) {
   const {
-    experience = 'full', heather = {}, today, meal = 'lunch', path = '/dashboard', suggest, deep, suggestMs, deepMs,
+    experience = null, meal = 'lunch', path = '/dashboard', suggest, deep, suggestMs, deepMs,
     describe, ops = {}, size, hold, init, sheet = true, viewports, offline = false, fn,
   } = o;
   const cleanups = [];
@@ -115,7 +113,7 @@ function sheetScene(name, o = {}) {
       try {
         await foodRoutes(page, { suggest, deep, suggestMs, deepMs, ...(describe !== undefined ? { describe } : {}) });
         cleanups.push(() => dropFoodRoutes(page));
-        const base = experience === 'simple' ? heatherOps({ ...HEATHER, ...heather }, today ? { today } : {}) : OPS;
+        const base = experience ? { ...OPS, GetFitnessExperience: experienceOf(experience) } : OPS;
         await graphqlRoute(page, withHistoryBounds({ ...base, ...writeOps(), ...(typeof ops === 'function' ? ops() : ops) }));
         cleanups.push(() => page.unroute('**/graphql'));
         if (hold) {
@@ -141,7 +139,7 @@ function sheetScene(name, o = {}) {
         await h.settle(1400);
         let scope = page;
         if (sheet) {
-          // The run's first scene meets a cold page: give Home a few seconds before calling it missing.
+          // The run's first scene meets a cold page: give Today a few seconds before calling it missing.
           await page.getByRole('button', { name: new RegExp(`^add to ${meal}$`, 'i') }).first().waitFor({ timeout: 8000 }).catch(() => {});
           const add = await must(page.getByRole('button', { name: new RegExp(`^add to ${meal}$`, 'i') }).first(), `Add to ${meal}`);
           await add.click();
@@ -188,7 +186,7 @@ export const scenes = [
   // One tap: the row says "Added" (with a drawn check), its pill says "Make it 2", and the ribbon
   // names the meal from the first item, with Done.
   sheetScene('40-row-tapped-once', {
-    experience: 'simple', meal: 'breakfast', suggest: eggSuggest,
+    meal: 'breakfast', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
       await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
@@ -201,7 +199,7 @@ export const scenes = [
   }),
   // A second tap on the same row is another serving, not another entry.
   sheetScene('40a-row-tapped-twice', {
-    experience: 'simple', meal: 'breakfast', suggest: eggSuggest,
+    meal: 'breakfast', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
       await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
@@ -278,7 +276,7 @@ export const scenes = [
   // is the sheet's sticky foot. Asserts they don't overlap and that Done is
   // what's on top at the middle of Done.
   sheetScene('42-ribbon-with-toast', {
-    experience: 'simple', meal: 'breakfast', suggest: eggSuggest,
+    meal: 'breakfast', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
       await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
@@ -300,7 +298,7 @@ export const scenes = [
   }),
   // Ten seconds later, the toast gone: only the ribbon is left.
   sheetScene('42a-ribbon-toast-gone', {
-    experience: 'simple', meal: 'breakfast', suggest: eggSuggest,
+    meal: 'breakfast', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
       await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
@@ -311,7 +309,7 @@ export const scenes = [
   }),
   // Two different foods: "2 foods added to breakfast", both calorie counts summed.
   sheetScene('42b-ribbon-two-items', {
-    experience: 'simple', meal: 'breakfast', suggest: eggSuggest,
+    meal: 'breakfast', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
       await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
@@ -324,7 +322,7 @@ export const scenes = [
   // ── 43  Long OpenFoodFacts names ──────────────────────────────────────
   // Phone: two-line names, and "Brand · serving · 190 cal" in the subtitle.
   sheetScene('43-long-names-phone', {
-    experience: 'simple', meal: 'lunch', suggest: longSuggest, viewports: ['phone'],
+    meal: 'lunch', suggest: longSuggest, viewports: ['phone'],
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'protein', h, 1100);
       await must(sheet.getByText('Fage Total 0% Greek Yogurt, Plain Nonfat').first(), 'the long Fage name');
@@ -351,7 +349,7 @@ export const scenes = [
   // ── 44  Name mode and sentence mode ───────────────────────────────────
   // "fage" is a name: the list is open and Log it steps back to an outline.
   sheetScene('44-name-mode', {
-    experience: 'simple', meal: 'lunch', suggest: fageSuggest, deep: fageDeep,
+    meal: 'lunch', suggest: fageSuggest, deep: fageDeep,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'fage', h, 1200);
       const logIt = await must(sheet.getByTestId('log-it'), 'Log it');
@@ -362,7 +360,7 @@ export const scenes = [
   }),
   // "two eggs" is a sentence: the filled Log it, the list folded.
   sheetScene('44a-sentence-mode', {
-    experience: 'simple', meal: 'lunch', suggest: eggSuggest,
+    meal: 'lunch', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'two eggs', h, 1000);
       const logIt = await must(sheet.getByTestId('log-it'), 'Log it');
@@ -407,7 +405,7 @@ export const scenes = [
   }),
 
   // ── 46  A backfilled sheet names its days ─────────────────────────────
-  // Food Log page on Yesterday, dinner's "Add": the title says which weekday
+  // Today on Yesterday, dinner's "Add": the title says which weekday
   // "yesterday" is, and the pick says the weekday before it.
   {
     name: '46-backfilled-sheet-naming',
@@ -415,10 +413,10 @@ export const scenes = [
       const day = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
       try {
         await foodRoutes(page, {});
-        await page.goto(`${h.base}/food-log?date=${day(1)}&meal=dinner`, { waitUntil: 'networkidle' });
+        await page.goto(`${h.base}/dashboard?date=${day(1)}&meal=dinner`, { waitUntil: 'networkidle' });
         await clearDrafts(page);
         await h.settle(1400);
-        await (await must(page.getByRole('button', { name: 'Add to Dinner' }).first(), 'Dinner "Add"')).click();
+        await (await must(page.locator('#meal-card-dinner').getByRole('button', { name: /^add to dinner$/i }), 'Dinner "Add"')).click();
         await h.settle(1100);
         const dialog = await must(page.getByRole('dialog'), 'the add sheet');
         await must(dialog.getByText(`Add to ${weekdayAgo(1)}’s dinner (yesterday)`), `the title "Add to ${weekdayAgo(1)}’s dinner (yesterday)"`);
@@ -438,7 +436,7 @@ export const scenes = [
   // ── 47  Offline ───────────────────────────────────────────────────────
   // No signal: the banner, the status line, a disabled mic, her sentence.
   sheetScene('47-offline-sheet', {
-    experience: 'simple', meal: 'lunch', offline: true, viewports: ['phone'],
+    meal: 'lunch', offline: true, viewports: ['phone'],
     fn: async (page, h, sheet) => {
       await typeInto(sheet, SOUP, h, 700);
       await must(sheet.getByText('No signal — I can’t log this yet. Your words are saved here.'), 'the status line');
@@ -449,7 +447,7 @@ export const scenes = [
   }),
   // Closed and reopened, still offline: the words are back.
   sheetScene('47a-offline-reopened', {
-    experience: 'simple', meal: 'lunch', offline: true, viewports: ['phone'],
+    meal: 'lunch', offline: true, viewports: ['phone'],
     fn: async (page, h, sheet) => {
       await typeInto(sheet, SOUP, h, 700);
       await h.esc(500);
@@ -458,9 +456,9 @@ export const scenes = [
       await h.settle(1000);
       const box = await must(page.getByRole('dialog').getByLabel('Tell me what you ate'), 'the box');
       const words = await box.inputValue();
-      // L18: closing the Home sheet used to reset the meal to snack while it
-      // was still mounted, so the lunch draft moved to snack and this box
-      // came back empty (fixed in DashboardNew, d-fixes).
+      // L18: closing the sheet used to reset the meal to snack while it was
+      // still mounted, so the lunch draft moved to snack and this box came
+      // back empty (d-fixes; Today keeps the meal put when the sheet closes).
       if (words !== SOUP) throw new Error(`the words did not come back (box says "${words}")`);
     },
   }),
@@ -469,7 +467,7 @@ export const scenes = [
   // A 401 that survives one refresh: "Please sign in again." and a Sign in
   // button under the box, her words kept.
   sheetScene('48-signed-out', {
-    experience: 'simple', meal: 'lunch', suggest: soupSuggest, describe: 401,
+    meal: 'lunch', suggest: soupSuggest, describe: 401,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, SOUP, h, 400);
       await sheet.getByTestId('log-it').click();
@@ -479,37 +477,39 @@ export const scenes = [
       if ((await sheet.getByLabel('Tell me what you ate').inputValue()) !== SOUP) throw new Error('her words should still be in the box');
     },
   }),
-  // Two rows, two meals: "Added to today" and a meal label under each row.
+  // Two rows, two meals: the sheet closes and each meal carries its own
+  // "Just added" strip — the egg sandwich on breakfast, the steak on dinner.
   sheetScene('48b-mixed-meal-result', {
-    experience: 'simple', meal: 'lunch', suggest: soupSuggest,
+    meal: 'lunch', suggest: soupSuggest,
     describe: reply([said('mx-1', 'Egg sandwich', 'breakfast', 310), said('mx-2', 'Steak, 6 oz', 'dinner', 420)]),
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'an egg sandwich this morning and a steak tonight', h, 400);
       await sheet.getByTestId('log-it').click();
-      await h.settle(1200);
-      await must(sheet.getByText('Added to today'), '"Added to today"');
-      const card = await must(sheet.getByTestId('result-card'), 'the result card');
-      await must(card.getByText(/breakfast/i), 'a breakfast label under a row');
-      await must(card.getByText(/dinner/i), 'a dinner label under a row');
+      await h.settle(1600);
+      if (await page.getByRole('dialog').count()) throw new Error('the add sheet should have closed after a describe');
+      await must(page.locator('#meal-card-breakfast [data-testid="just-added"]').getByText('Egg sandwich'), 'the egg sandwich, just added to breakfast');
+      await must(page.locator('#meal-card-dinner [data-testid="just-added"]').getByText('Steak, 6 oz'), 'the steak, just added to dinner');
+      if (await page.locator('#meal-card-lunch [data-testid="just-added"]').count()) throw new Error('lunch says "Just added" and nothing landed there');
+      await scrollToSection(page, h, '#meal-card-breakfast', 88);
     },
   }),
-  // Full: the sheet closes, the "Just added" strip carries the Undo, and no
-  // toast sits on top of it.
-  sheetScene('48c-full-just-added-no-toast', {
+  // The sheet closes, the "Just added" strip carries the Undo, and no toast
+  // sits on top of it.
+  sheetScene('48c-just-added-no-toast', {
     meal: 'lunch', suggest: soupSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, SOUP, h, 400);
       await sheet.getByTestId('log-it').click();
       await h.settle(1600);
-      if (await page.getByRole('dialog').count()) throw new Error('Full: the add sheet should have closed');
-      await must(page.locator('[data-testid="meal-card-lunch"] [data-testid="just-added"]'), '"Just added" on the lunch card');
+      if (await page.getByRole('dialog').count()) throw new Error('the add sheet should have closed after a describe');
+      await must(page.locator('[data-testid="meal-card-lunch"] [data-testid="just-added"]'), '"Just added" on lunch');
       if (await page.locator('.MuiSnackbar-root').count()) throw new Error('a toast is up over the "Just added" strip');
       await scrollToSection(page, h, '[data-testid="meal-card-lunch"]', 88);
     },
   }),
   // Partly understood: the soup went in, "crackers" did not, with a way back.
   sheetScene('48d-partial-result', {
-    experience: 'simple', meal: 'lunch', suggest: soupSuggest,
+    meal: 'lunch', suggest: soupSuggest,
     describe: reply([said('pt-1', 'Chicken soup, 1 bowl', 'lunch', 220)], { skipped: [{ name: 'crackers' }] }),
     fn: async (page, h, sheet) => {
       await typeInto(sheet, SOUP, h, 400);
@@ -521,7 +521,7 @@ export const scenes = [
   }),
   // Nothing understood: the status line says so and nothing was logged.
   sheetScene('48e-nothing-understood', {
-    experience: 'simple', meal: 'lunch', describe: reply([]),
+    meal: 'lunch', describe: reply([]),
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'asdf qwer zxcv', h, 400);
       await sheet.getByTestId('log-it').click();
@@ -532,7 +532,7 @@ export const scenes = [
   }),
   // The server heard a day we didn't: "Move it to <Weekday>".
   sheetScene('48f-server-heard-day', {
-    experience: 'simple', meal: 'lunch',
+    meal: 'lunch',
     describe: reply([said('dy-1', 'Pasta, 1 cup', 'lunch', 220)], { dayHint: weekdayAgo(3).toLowerCase(), dayWords: [`on ${weekdayAgo(3)}`] }),
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'a cup of pasta, which I had out', h, 400);
@@ -546,7 +546,7 @@ export const scenes = [
   // ── 49  The serving sheet, larger text, phone stability ───────────────
   // Servings (the default) for a food that also has ounces.
   sheetScene('49-serving-sheet-servings', {
-    experience: 'simple', meal: 'breakfast', suggest: eggSuggest,
+    meal: 'breakfast', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
       await (await must(sheet.getByRole('button', { name: /^Change the amount of Egg$/ }), 'Egg amount button')).click();
@@ -557,7 +557,7 @@ export const scenes = [
   }),
   // Ounces.
   sheetScene('49a-serving-sheet-oz', {
-    experience: 'simple', meal: 'breakfast', suggest: eggSuggest,
+    meal: 'breakfast', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
       await (await must(sheet.getByRole('button', { name: /^Change the amount of Egg$/ }), 'Egg amount button')).click();
@@ -570,7 +570,7 @@ export const scenes = [
   }),
   // Cups, for a food measured in them.
   sheetScene('49b-serving-sheet-cup', {
-    experience: 'simple', meal: 'lunch', suggest: soupSuggest,
+    meal: 'lunch', suggest: soupSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'soup', h, 1000);
       await (await must(sheet.getByRole('button', { name: /^Change the amount of Chicken Noodle Soup$/ }), 'Soup amount button')).click();
@@ -584,7 +584,7 @@ export const scenes = [
   // Larger text, with the keyboard up (a 390x540 window, the way a phone
   // keyboard leaves it): Log it must still be on screen without scrolling.
   sheetScene('49c-larger-text-keyboard', {
-    experience: 'simple', heather: { larger_text: true }, meal: 'lunch', suggest: eggSuggest, viewports: ['phone'],
+    experience: { larger_text: true }, meal: 'lunch', suggest: eggSuggest, viewports: ['phone'],
     fn: async (page, h, sheet) => {
       if ((await page.evaluate(() => document.documentElement.dataset.textSize)) !== 'larger') throw new Error('Larger text is not on');
       await typeInto(sheet, 'two eggs and toast', h, 700);
@@ -656,7 +656,7 @@ const hear = (page, text, isFinal) => page.evaluate(([t, f]) => {
   window.__fakeMic.rec.onresult({ resultIndex: 0, results: [row] });
 }, [text, isFinal]);
 const micSheet = (name, fn, extra = {}) => sheetScene(name, {
-  experience: 'simple', meal: 'breakfast', suggest: eggSuggest, init: FAKE_MIC, viewports: ['phone'], fn, ...extra,
+  meal: 'breakfast', suggest: eggSuggest, init: FAKE_MIC, viewports: ['phone'], fn, ...extra,
 });
 const startListening = async (page, h, sheet) => {
   await (await must(sheet.getByRole('button', { name: 'Say what you ate' }), 'the mic')).click();
@@ -679,13 +679,16 @@ export const tail = [
     await h.settle(500);
     await must(sheet.getByTestId('mic-error').getByText(/needs your microphone/), 'the denied message');
   }),
-  // She said it: the words go through describe-and-log and the card says what was heard.
+  // Said aloud: the words go through describe-and-log, the sheet closes, and
+  // the "Just added" strip on that meal says what was heard.
   micSheet('49o-mic-result-heard', async (page, h, sheet) => {
     await startListening(page, h, sheet);
     await hear(page, 'two eggs and toast', true);
     await page.evaluate(() => window.__fakeMic.rec.onend());
-    await h.settle(1500);
-    await must(sheet.getByTestId('result-card').getByText('I heard: “two eggs and toast”'), '"I heard: …"');
+    await h.settle(1800);
+    if (await page.getByRole('dialog').count()) throw new Error('the add sheet should have closed after a describe');
+    await must(page.locator('#meal-card-breakfast [data-testid="just-added"]').getByText('I heard: “two eggs and toast”'), '"I heard: …" on the Just added strip');
+    await scrollToSection(page, h, '#meal-card-breakfast', 88);
   }, {
     describe: reply([said('mic-1', 'Eggs', 'breakfast', 144, 2), said('mic-2', 'Whole wheat toast', 'breakfast', 80)]),
   }),

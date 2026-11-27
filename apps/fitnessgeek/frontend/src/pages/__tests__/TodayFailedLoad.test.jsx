@@ -1,12 +1,14 @@
 /**
- * UX review 2026-10-17 — Home tells the truth about its own reads, and shows
- * amounts:
+ * Today tells the truth about its own reads, and shows amounts (UX review
+ * 2026-10-17, kept through DOCS/ONE_APP_PLAN.md §1 "A failed read is still
+ * never an empty day"):
  *
  *   L1  a failed read is not an empty day: no "Nothing yet", no "Nothing
  *       logged yet today", no "Weigh in +" from a read that failed; what was
  *       on screen stays; one line says FitnessGeek can't be reached, with
  *       Try again. The same after a failed reload following her own log.
- *   L4  "Egg ×2" when servings ≠ 1, and identical names merge in Simple.
+ *       Both halves of the page obey it: the summary and the meals.
+ *   L4  "×2" beside a food when servings ≠ 1; every entry keeps its own row.
  *   L12 after the add sheet closes on a meal, that meal's card scrolls into view.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -49,7 +51,7 @@ vi.mock('../../hooks/useFoodLogging.js', () => ({
     return { logItems: vi.fn(), undoLogs: vi.fn(), describeMeal: vi.fn(), adjustLogCalories: vi.fn() };
   },
 }));
-// The add sheet, reduced to what Home hands it: open, and onClose({ mealType }).
+// The add sheet, reduced to what the page hands it: open, and onClose({ mealType }).
 vi.mock('../../components/FoodLog/AddFoodDialog.jsx', () => ({
   default: ({ open, onClose, mealType }) => (open ? (
     <div role="dialog">
@@ -67,20 +69,19 @@ const { ExperienceContext } = await import('../../contexts/ExperienceContext.jsx
 const { fitnessGeekService } = await import('../../services/fitnessGeekService.js');
 const { goalsService } = await import('../../services/goalsService.js');
 const { weightService } = await import('../../services/weightService.js');
-const { default: DashboardNew } = await import('../DashboardNew.jsx');
+const { default: Today } = await import('../Today.jsx');
 
 const experience = (over = {}) => ({
-  loading: false, known: true, savedMode: 'full', effectiveMode: 'full', isSimple: false, largerText: false,
+  loading: false, known: true, needsFirstRun: false, largerText: false,
   firstRunDone: true, preferredName: null, displayName: 'Chef', goal: null,
-  setMode: vi.fn(), setLargerText: vi.fn(), completeFirstRun: vi.fn(), update: vi.fn(),
+  setLargerText: vi.fn(), completeFirstRun: vi.fn(), update: vi.fn(),
   ...over,
 });
-const SIMPLE = { savedMode: 'simple', effectiveMode: 'simple', isSimple: true, displayName: 'Heather' };
 
 const renderHome = (value) => render(
   <ThemeProvider theme={createFitnessTheme('light')}>
     <ExperienceContext.Provider value={value}>
-      <MemoryRouter><DashboardNew /></MemoryRouter>
+      <MemoryRouter><Today /></MemoryRouter>
     </ExperienceContext.Provider>
   </ThemeProvider>
 );
@@ -102,12 +103,17 @@ const badDay = () => {
   weightService.getWeightLogs.mockImplementation(down);
 };
 
-beforeEach(() => { vi.clearAllMocks(); onChanged = null; goodDay(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+  onChanged = null;
+  goodDay();
+  try { window.localStorage.clear(); } catch { /* jsdom */ }
+});
 
-describe('Home on a failed load (L1)', () => {
-  it.each([['Simple', SIMPLE], ['Full', {}]])('%s: a first load that fails never reads as an empty day', async (_mode, over) => {
+describe('Today on a failed load (L1)', () => {
+  it('a first load that fails never reads as an empty day', async () => {
     badDay();
-    renderHome(experience({ ...over, goal: 'lose' }));
+    renderHome(experience({ goal: 'lose' }));
     const problem = await screen.findByTestId('home-load-problem');
     expect(problem).toHaveTextContent(PROBLEM);
     expect(within(problem).getByRole('button', { name: 'Try again' })).toBeInTheDocument();
@@ -116,14 +122,22 @@ describe('Home on a failed load (L1)', () => {
     expect(text).not.toMatch(/Nothing logged yet today/);
     expect(text).not.toMatch(/Weigh in/);
     expect(screen.queryByTestId('calories-sentence')).toBeNull();
+    expect(screen.queryByTestId('plate-number')).toBeNull();
     // No target offer off a target that was never read.
     expect(screen.queryByTestId('set-daily-target')).toBeNull();
+    // The meals are unknown, not empty.
+    for (const meal of ['breakfast', 'lunch', 'dinner', 'snack']) {
+      expect(screen.getByTestId(`meal-total-${meal}`)).toHaveTextContent('—');
+    }
+    // And the details never draw zeros from a summary that was never read.
+    fireEvent.click(screen.getByTestId('macros-details-toggle'));
+    expect(screen.getByTestId('today-details')).toBeInTheDocument();
     expect(screen.queryByTestId('macro-strip')).toBeNull();
   });
 
   it('Try again reads the day again, and the sentence comes back', async () => {
     badDay();
-    renderHome(experience(SIMPLE));
+    renderHome(experience());
     const problem = await screen.findByTestId('home-load-problem');
     goodDay();
     await act(async () => { fireEvent.click(within(problem).getByRole('button', { name: 'Try again' })); });
@@ -132,8 +146,8 @@ describe('Home on a failed load (L1)', () => {
     expect(screen.getByText('Greek yogurt')).toBeInTheDocument();
   });
 
-  it('a failed reload after her own log keeps the cards she filled, and says so', async () => {
-    renderHome(experience(SIMPLE));
+  it('a failed reload after her own log keeps the rows she filled, and says so', async () => {
+    renderHome(experience());
     await screen.findByText('Greek yogurt');
     expect(screen.getByTestId('today-strip-weight')).toHaveAttribute('data-done', 'true');
     badDay();
@@ -142,36 +156,33 @@ describe('Home on a failed load (L1)', () => {
     expect(screen.getByText('Greek yogurt')).toBeInTheDocument();
     expect(screen.getByText('Caesar salad')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Nothing logged yet today|Weigh in/);
-    expect(within(screen.getByTestId('meal-card-breakfast')).queryByText('Nothing yet')).toBeNull();
+    expect(screen.getByTestId('meal-total-breakfast')).toHaveTextContent('190 cal');
     expect(screen.getByTestId('today-strip-weight')).toHaveAttribute('data-done', 'true');
+  });
+
+  it('only the meals failing still says so, and still never says "Nothing yet"', async () => {
+    fitnessGeekService.getLogsForDate.mockImplementation(down);
+    renderHome(experience());
+    expect(await screen.findByTestId('home-load-problem')).toHaveTextContent(PROBLEM);
+    expect(screen.getByTestId('meal-cards').textContent).not.toMatch(/Nothing yet/);
   });
 });
 
-describe('amounts on Home (L4)', () => {
-  it('Simple: two Egg entries merge to "Egg ×2"; a 2-serving toast reads "Toast ×2"', async () => {
+describe('amounts on Today (L4)', () => {
+  it('each entry keeps its own row, with its amount beside the name', async () => {
     fitnessGeekService.getLogsForDate.mockImplementation(() => Promise.resolve([
       log('e1', 'Egg', 'breakfast', 78),
       log('e2', 'Egg', 'breakfast', 78),
-      log('t', 'Toast', 'lunch', 90, 2),
-    ]));
-    renderHome(experience(SIMPLE));
-    const breakfast = await screen.findByTestId('meal-card-breakfast');
-    expect(within(breakfast).getByText('Egg ×2')).toBeInTheDocument();
-    expect(within(breakfast).queryByText('Egg')).toBeNull();
-    expect(within(breakfast).queryByText(/more/)).toBeNull();
-    expect(within(screen.getByTestId('meal-card-lunch')).getByText('Toast ×2')).toBeInTheDocument();
-  });
-
-  it('Full: each entry keeps its own row (and its ✕), with its amount', async () => {
-    fitnessGeekService.getLogsForDate.mockImplementation(() => Promise.resolve([
-      log('e1', 'Egg', 'breakfast', 78),
       log('t', 'Toast', 'breakfast', 90, 1.5),
+      log('m', 'Milk', 'lunch', 100, 2),
     ]));
     renderHome(experience());
     const breakfast = await screen.findByTestId('meal-card-breakfast');
-    expect(within(breakfast).getByText('Egg')).toBeInTheDocument();
-    expect(within(breakfast).getByText('Toast ×1.5')).toBeInTheDocument();
-    expect(within(breakfast).getAllByRole('button', { name: /^Remove / })).toHaveLength(2);
+    const rows = within(breakfast).getAllByTestId('food-log-row');
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveAccessibleName('Edit Egg, 78 cal');
+    expect(rows[2]).toHaveAccessibleName('Edit Toast, ×1.5, 135 cal');
+    expect(within(screen.getByTestId('meal-card-lunch')).getByTestId('food-log-row')).toHaveAccessibleName('Edit Milk, ×2, 200 cal');
   });
 });
 

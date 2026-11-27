@@ -16,9 +16,7 @@ const WeightProgress = ({
   // The first run's answer, in her words (`experience.goal`). "Lose a little"
   // was stored and never used (review Phase 2.14); here it turns the empty
   // card into the next step.
-  firstRunGoal = null,
-  // Simple (review L25): the trend in words first, and no chip or pace maths.
-  simple = false
+  firstRunGoal = null
 }) => {
   const insights = useMemo(() => {
     if (!goal || !goal.enabled || !currentWeight || !goal.startDate || !goal.goalDate) {
@@ -120,8 +118,8 @@ const WeightProgress = ({
     const noGoal = !goal || !goal.enabled;
     // A goal with nothing to measure yet is not a missing goal.
     const needsWeighIn = !noGoal && !currentWeight;
-    // Simple with no goal still leads with the trend, once there is one.
-    const looseTrend = simple && noGoal ? trendSince(weightLogs, null) : null;
+    // With no goal the card still leads with the trend, once there is one.
+    const looseTrend = noGoal ? trendSince(weightLogs, null) : null;
     const trendLine = looseTrend ? (
       <Typography component="h3" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 700, lineHeight: 1.2, my: 1.5, textAlign: 'left' }}>
         {trendWords(looseTrend, unitWord(unit))}
@@ -184,7 +182,7 @@ const WeightProgress = ({
     ? `${trim1(moved)} of ${trim1(total)} ${u} ${movedWord}`
     : 'Holding steady';
   const basis = `From your 7-day average, ${Number(currentWeight).toFixed(1)} ${u}`;
-  const trend = simple ? trendSince(weightLogs, goal, currentWeight) : null;
+  const trend = trendSince(weightLogs, goal, currentWeight);
   const pct = Math.round(insights.progressPercent || 0);
   const goalByDate = goal?.goalDate ? fmtYmd(utcDateString(goal.goalDate)) : '';
 
@@ -209,14 +207,14 @@ const WeightProgress = ({
         </>
       }
     >
-      {/* Simple leads with the trend in words (review L25): how it's going,
-          not the goal maths. */}
+      {/* Leads with the trend in words (review L25): how it's going, then the
+          goal maths below. */}
       {trend && (
         <Box sx={{ py: 1.25 }}>
           <Typography component="h3" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 700, lineHeight: 1.2 }}>
             {trendWords(trend, u)}
           </Typography>
-          <Typography sx={{ mt: 0.5, fontSize: '1rem', color: 'text.secondary' }}>{basis}</Typography>
+          <Typography data-testid="weight-basis" sx={{ mt: 0.5, fontSize: '1rem', color: 'text.secondary' }}>{basis}</Typography>
         </Box>
       )}
 
@@ -230,19 +228,19 @@ const WeightProgress = ({
       )}
 
       <Rule weight="medium" />
-      {!simple && <FactColumnHead>% of goal</FactColumnHead>}
+      <FactColumnHead>% of goal</FactColumnHead>
       <FactRow first name="Started" amount={`${trim1(goal.startWeight)} ${u}`} />
       <FactRow
         name={<span data-testid="weight-progress-count">{progressText}</span>}
-        percent={simple ? undefined : `${pct}%`}
+        percent={`${pct}%`}
       />
       <FactRow
         name={`${trim1(insights.remainingWeight || 0)} ${u} to go`}
-        percent={simple ? undefined : `${Math.max(0, 100 - pct)}%`}
+        percent={`${Math.max(0, 100 - pct)}%`}
       />
 
-      {/* Simple stops there: no status, no pace maths (review L25). */}
-      {!simple && (
+      {/* Pace and projection sit below the trend and the goal. */}
+      {(
         <>
           <FactRow
             name="Pace"
@@ -331,7 +329,7 @@ function gapInWords(days) {
   return `about ${m} month${m === 1 ? '' : 's'}`;
 }
 
-/** "Down 12.1 lb since June" (Simple's headline). */
+/** "Down 12.1 lb since June" (the card's headline). */
 function trendWords({ change, since }, u) {
   if (Math.abs(change) < 0.5) return `About the same since ${monthName(since)}`;
   return `${change < 0 ? 'Down' : 'Up'} ${trim1(Math.abs(change))} ${u} since ${monthName(since)}`;

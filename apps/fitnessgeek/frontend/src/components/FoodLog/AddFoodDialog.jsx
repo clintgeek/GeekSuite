@@ -32,9 +32,9 @@ import { addedMessage, mealWord } from '../../utils/plainWords.js';
  * it was, logging in place and growing the SessionRibbon tray, because
  * picking several items is a session the person ends, not the app.
  *
- * In Simple a describe does not close it either (Chef, 2026-10-16): the sheet
- * stays on a result card with Done. FoodComposer decides; this passes
- * `onJustAdded` through for Full's "Just added" strip.
+ * After a describe the sheet closes and the meal it landed in shows a "Just
+ * added" strip with Fix and Undo (ONE_APP_PLAN.md §2). FoodComposer decides
+ * when; this passes `onJustAdded` through for the strip.
  *
  * THE DAY IS IN THE TITLE when it isn't today: "Add to yesterday's dinner",
  * "Add to Wednesday's dinner" (REVIEW_2026-10 Phase 1.5). Heather backfills
@@ -67,7 +67,7 @@ const AddFoodDialog = ({
   initialQuery = '',
   ketoMode = false,
   // The day being logged to — feeds the "Again" chips and "Same as
-  // yesterday's …" (SIMPLE_AND_FULL_PLAN.md item 2).
+  // yesterday's …".
   date = null
 }) => {
   const { offerUndo } = useUndoToast(onUndo);

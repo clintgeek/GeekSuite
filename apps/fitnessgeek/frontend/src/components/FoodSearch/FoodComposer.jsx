@@ -18,7 +18,6 @@ import { readDraft, writeDraft, draftsAvailable } from './composerDraft.js';
 import { useSpeechInput } from '../../hooks/useSpeechInput.js';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus.js';
 import { useToday } from '../../hooks/useToday.js';
-import { useExperience } from '../../contexts/ExperienceContext.jsx';
 import { addedMessage, cal, mealLabel, mealWord } from '../../utils/plainWords.js';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { useUndoToast, runUndo } from './undoToast.jsx';
@@ -61,13 +60,14 @@ import {
  *   thinking  the box is read-only, Log it says "Working it out…" with a
  *             spinner, and every other way to write is off. After 8 s:
  *             "Still working — this one's taking a moment."
- *   result    Simple stays open on what landed: "✓ Added to lunch", each
- *             entry with its calories and Fix, Undo all and Done. Full closes
- *             (Chef: "the one-tap … should close to show it completed") and
- *             hands the entries to `onJustAdded`, which puts a "Just added"
- *             strip on that meal's card. Anything left to look at — a skip, a
- *             portion question, a day the server heard that we didn't ask
- *             about — keeps the result open in Full too.
+ *   result    A clean describe closes (Chef: "the one-tap … should close to
+ *             show it completed") and hands the entries to `onJustAdded`,
+ *             which puts a "Just added" strip on that meal's card. A caller
+ *             can pass resultStyle="card" to stay open on what landed:
+ *             "✓ Added to lunch", each entry with its calories and Fix, Undo
+ *             all and Done. Anything left to look at — a skip, a portion
+ *             question, a day the server heard that we didn't ask about —
+ *             keeps the result open either way.
  *   error     plain words, with her text still in the box: no signal (Log it
  *             is off until it's back), "That didn't go through. Tap Log it to
  *             try again." (the same Idempotency-Key on that retry, C2), "I
@@ -168,7 +168,7 @@ const FoodComposer = ({
   showQuickPicks = false,
   // The day being logged to (YYYY-MM-DD); today when not given.
   date = null,
-  // 'card' (stay open on the result) or 'close'. Default: Simple → card.
+  // 'card' (stay open on the result) or 'close'. Default: close.
   resultStyle,
   voice = true,
   className
@@ -188,11 +188,10 @@ const FoodComposer = ({
   const sayAdded = useCallback((message, tone = 'success') => {
     addedToast.current = notify(message, { tone });
   }, [notify]);
-  const { isSimple } = useExperience();
   const { isOnline } = useOnlineStatus();
   const today = useToday();
   const day = date || today;
-  const afterDescribe = resultStyle || (isSimple ? 'card' : 'close');
+  const afterDescribe = resultStyle || 'close';
 
   // The sheet's draft: what she typed last time for this day and meal (L18).
   const keepDraft = mode === 'dialog';

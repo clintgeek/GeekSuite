@@ -1,12 +1,14 @@
 /**
- * SUITE_REVIEW_2026-11 FitnessGeek #5 (and the Home half of #1).
+ * SUITE_REVIEW_2026-11 FitnessGeek #5 (and the Home half of #1), kept on
+ * Today (DOCS/ONE_APP_PLAN.md §1).
  *
- * Every food write on Home used to re-run the whole page load: eight reads,
- * five of them live Garmin calls behind `getGarminDaily`, plus every weight
- * and every BP reading ever — to redraw a plate. A food write can change the
+ * Every food write used to re-run the whole page load: eight reads, five of
+ * them live Garmin calls behind `getGarminDaily`, plus every weight and
+ * every BP reading ever — to redraw a ring. A food write can change the
  * day's summary and its logs, nothing else, so those two are all it re-asks.
- * The page's first load (and Try again) still reads everything; Home's
- * weight/BP check-ins ask for the newest few rows, not the whole history.
+ * Moving to another day is the same: only that day's food is asked for. The
+ * page's first load (and Try again) still reads everything; the weight / BP
+ * check-ins ask for the newest few rows, not the whole history.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within, act } from '@testing-library/react';
@@ -23,7 +25,7 @@ const down = () => Promise.reject(Object.assign(new Error('Bad gateway'), { netw
 
 vi.mock('../../services/fitnessGeekService.js', () => ({
   fitnessGeekService: {
-    formatDate: () => '2026-09-27',
+    formatDate: (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
     getDailySummary: vi.fn(),
     getGarminDaily: vi.fn(() => Promise.resolve(null)),
     getLogsForDate: vi.fn(),
@@ -68,20 +70,19 @@ const { goalsService } = await import('../../services/goalsService.js');
 const { weightService } = await import('../../services/weightService.js');
 const { bpService } = await import('../../services/bpService.js');
 const { streakService } = await import('../../services/streakService.js');
-const { default: DashboardNew } = await import('../DashboardNew.jsx');
+const { default: Today } = await import('../Today.jsx');
 
 const experience = (over = {}) => ({
-  loading: false, known: true, savedMode: 'full', effectiveMode: 'full', isSimple: false, largerText: false,
+  loading: false, known: true, needsFirstRun: false, largerText: false,
   firstRunDone: true, preferredName: null, displayName: 'Chef', goal: null,
-  setMode: vi.fn(), setLargerText: vi.fn(), completeFirstRun: vi.fn(), update: vi.fn(),
+  setLargerText: vi.fn(), completeFirstRun: vi.fn(), update: vi.fn(),
   ...over,
 });
-const SIMPLE = { savedMode: 'simple', effectiveMode: 'simple', isSimple: true, displayName: 'Heather' };
 
 const renderHome = (value) => render(
   <ThemeProvider theme={createFitnessTheme('light')}>
     <ExperienceContext.Provider value={value}>
-      <MemoryRouter><DashboardNew /></MemoryRouter>
+      <MemoryRouter><Today /></MemoryRouter>
     </ExperienceContext.Provider>
   </ThemeProvider>
 );
@@ -105,7 +106,7 @@ const OTHER_READS = () => [
 
 beforeEach(() => { vi.clearAllMocks(); onChanged = null; goodDay(); });
 
-describe('Home after a food write', () => {
+describe('Today after a food write', () => {
   it('re-asks only the day\'s summary and logs — no Garmin, weights, BP, goals or streak', async () => {
     renderHome(experience());
     expect(await screen.findByText('Greek yogurt')).toBeInTheDocument();
@@ -122,12 +123,40 @@ describe('Home after a food write', () => {
     expect(fitnessGeekService.getDailySummary).toHaveBeenCalledTimes(1);
     expect(fitnessGeekService.getLogsForDate).toHaveBeenCalledTimes(1);
     for (const fn of OTHER_READS()) expect(fn).not.toHaveBeenCalled();
-    // The plate moved; what was read before (the weigh-in) is still there.
+    // The ring moved; what was read before (the weigh-in) is still there.
     expect(screen.getByText('Caesar salad')).toBeInTheDocument();
     expect(screen.getByText('Weighed')).toBeInTheDocument();
   });
 
-  it('Home asks for the newest few weight and BP rows, not every row ever', async () => {
+  it('moving to another day asks for that day\'s food only, and Garmin is still asked about the real today', async () => {
+    renderHome(experience());
+    await screen.findByText('Greek yogurt');
+    expect(fitnessGeekService.getGarminDaily).toHaveBeenCalledWith(TODAY);
+    vi.clearAllMocks();
+    fitnessGeekService.getLogsForDate.mockImplementation(() => Promise.resolve([log('y', 'Leftover pizza', 'dinner', 600)]));
+    fitnessGeekService.getDailySummary.mockImplementation(() => Promise.resolve({ data: { totals: { calories: 600 }, calorieGoal: 1650, meals: {} } }));
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Previous day' })); });
+
+    expect(await screen.findByText('Leftover pizza')).toBeInTheDocument();
+    expect(fitnessGeekService.getDailySummary).toHaveBeenCalledTimes(1);
+    expect(fitnessGeekService.getDailySummary).toHaveBeenCalledWith('2026-09-26');
+    expect(fitnessGeekService.getLogsForDate).toHaveBeenCalledWith('2026-09-26');
+    for (const fn of OTHER_READS()) expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('Try again reads everything again', async () => {
+    fitnessGeekService.getLogsForDate.mockImplementation(down);
+    renderHome(experience());
+    const problem = await screen.findByTestId('home-load-problem');
+    vi.clearAllMocks();
+    goodDay();
+    await act(async () => { fireEvent.click(within(problem).getByRole('button', { name: 'Try again' })); });
+    expect(await screen.findByText('Greek yogurt')).toBeInTheDocument();
+    for (const fn of OTHER_READS()) expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for the newest few weight and BP rows, not every row ever', async () => {
     renderHome(experience());
     await screen.findByText('Greek yogurt');
     expect(weightService.getWeightLogs).toHaveBeenCalledWith({ limit: 20 });

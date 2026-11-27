@@ -9,6 +9,7 @@ import {
   useTheme
 } from '@mui/material';
 import { GeekErrorState, useToast } from '@geeksuite/ui';
+import Shell from './embeddedShell.jsx';
 import DayRibbon from '../components/Reports/DayRibbon.jsx';
 import BodyRecoverySection from '../components/Reports/BodyRecoverySection.jsx';
 import { AINoteFooter, AI_NOTES_NAME, aiNotesTitle, lastDaysSource } from '../components/Reports/aiNotes.jsx';
@@ -180,7 +181,7 @@ const AIPanel = ({ title, testId, loading, loadingLabel, error, data, empty, emp
   );
 };
 
-const Reports = () => {
+const Reports = ({ embedded = false }) => {
   const { notify } = useToast();
   const [range, setRange] = useState('7');
   const [loading, setLoading] = useState(true);
@@ -328,7 +329,7 @@ const Reports = () => {
   const averageEntries = Object.entries(overview?.averages || {});
 
   return (
-    <Page>
+    <Shell embedded={embedded}>
       <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
         How your eating went, and how your body is trending.
       </Typography>
@@ -580,7 +581,7 @@ const Reports = () => {
       {/* Body and recovery: its own 90-day window and its own loading, so the
           range toggle and the food report's states never reach it. */}
       <BodyRecoverySection />
-    </Page>
+    </Shell>
   );
 };
 

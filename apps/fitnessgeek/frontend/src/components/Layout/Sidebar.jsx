@@ -3,7 +3,7 @@
  *
  * Structure (brand → grouped nav → user chip → Settings → Sign out) belongs
  * to the primitive; this file only supplies the chrome colours (chrome.js,
- * per app mode) and the mode-aware section list.
+ * light or dark) and the rows (navConfig.jsx).
  *
  * `GeekShell nav={…}` decides whether this panel sits in the permanent 220px
  * column or inside the mobile drawer, so there is no `isMobile` / `onClose`
@@ -15,7 +15,6 @@ import { GeekSidebar, geekLayout } from '@geeksuite/ui';
 import { activeNavId, navSectionsFor } from './navConfig.jsx';
 import { useTheme } from '@mui/material/styles';
 import { chromeFor } from './chrome.js';
-import { useExperience } from '../../contexts/ExperienceContext.jsx';
 
 /** Brand block: a small rounded mark and the name. */
 const Brand = ({ chrome }) => (
@@ -61,7 +60,6 @@ const Brand = ({ chrome }) => (
 
 const Sidebar = () => {
   const location = useLocation();
-  const { effectiveMode } = useExperience();
   const theme = useTheme();
   const chrome = chromeFor(theme.palette.mode);
   const { ACCENT, ACTIVE_BG, ACTIVE_INK, CHROME_BG, HOVER_BG, INK, MUTED } = chrome;
@@ -69,11 +67,11 @@ const Sidebar = () => {
   return (
     <GeekSidebar
       brand={<Brand chrome={chrome} />}
-      sections={navSectionsFor(effectiveMode)}
+      sections={navSectionsFor()}
       activeId={activeNavId(location.pathname)}
       // The list region scrolls on its own (brand pinned above it) if a short
       // window, or Larger text, still outgrows the column; a thin
-      // scrollbar says so. At 1280x800 nothing scrolls (see ROW_PX below).
+      // scrollbar says so.
       sx={{
         bgcolor: CHROME_BG,
         '& [data-geek-sidebar="body"]': {
@@ -91,9 +89,9 @@ const Sidebar = () => {
       itemSx={{
         color: MUTED,
         borderRadius: '10px',
-        // Density: 13 rows must fit 800px. Row = 44px (the touch floor: a
-        // tablet in landscape uses this sidebar) with no gap between rows; the
-        // primitive's default stacks padding and margins to ~54px a row.
+        // Row = 44px (the touch floor: a tablet in landscape uses this
+        // sidebar) with no gap between rows; the primitive's default stacks
+        // padding and margins to ~54px a row.
         minHeight: 44,
         py: 0,
         mx: 1,

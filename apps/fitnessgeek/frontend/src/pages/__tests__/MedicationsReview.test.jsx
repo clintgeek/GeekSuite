@@ -94,31 +94,35 @@ describe('a failed list read', () => {
   });
 });
 
+// One way to add: the Add button, a typed name, Save. Nothing needs picking.
 async function openTypedEditor(name = 'Vitamin D') {
-  fireEvent.change(screen.getByLabelText(/Medication name/i), { target: { value: name } });
-  fireEvent.click(screen.getByRole('button', { name: /^Search$/i }));
-  fireEvent.click(await screen.findByRole('button', { name: `Add “${name}” as typed` }));
-  await screen.findByLabelText('Display name');
+  fireEvent.click(await screen.findByRole('button', { name: 'Add a medication' }));
+  fireEvent.change(await screen.findByRole('textbox', { name: /What.s it called\?/ }), { target: { value: name } });
 }
 
 describe('B16 — adding by typed name', () => {
-  it('offers "Add as typed" when RxNorm finds nothing, and saves it with no rxcui', async () => {
+  it('saves a typed name when RxNorm finds nothing, with no rxcui', async () => {
     medsService.save.mockResolvedValue({ id: 'd1', display_name: 'Vitamin D', times_of_day: [] });
     render();
     await screen.findByText('No medications yet');
     await openTypedEditor();
-    expect(screen.getByLabelText('Display name')).toHaveValue('Vitamin D');
+    expect(screen.getByRole('textbox', { name: /What.s it called\?/ })).toHaveValue('Vitamin D');
     fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
     await waitFor(() => expect(medsService.save).toHaveBeenCalled());
     expect(medsService.save.mock.calls[0][0]).toMatchObject({ display_name: 'Vitamin D', rxcui: null });
   });
 
-  it('offers it too when the search is down, with a plain message', async () => {
+  it('still saves it when the search is down, with a plain message', async () => {
     medsService.search.mockRejectedValue(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }));
     render();
     await screen.findByText('No medications yet');
     await openTypedEditor('Fish oil');
+    expect(await screen.findByText(/I can.t look names up right now/, {}, { timeout: 2000 })).toBeInTheDocument();
     expect(screen.queryByText('Network Error')).toBeNull();
+    medsService.save.mockResolvedValue({ id: 'f1', display_name: 'Fish oil', times_of_day: [] });
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+    await waitFor(() => expect(medsService.save).toHaveBeenCalled());
+    expect(medsService.save.mock.calls[0][0]).toMatchObject({ display_name: 'Fish oil', rxcui: null });
   });
 });
 

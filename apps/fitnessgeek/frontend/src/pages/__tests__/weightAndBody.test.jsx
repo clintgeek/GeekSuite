@@ -60,7 +60,7 @@ describe('Weight & body page', () => {
     renderPage();
     // SIMPLE_AND_FULL_PLAN.md item 8: the title used to appear three times
     // (top bar, eyebrow, heading). The top bar keeps it.
-    expect(await screen.findByText(/averaged so one water day doesn.t move the needle/)).toBeInTheDocument();
+    expect(await screen.findByText(/averaged so one heavy day doesn.t move the needle/)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /weight & body/i })).toBeNull();
   });
 

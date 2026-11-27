@@ -19,7 +19,7 @@ const getWeightLogs = vi.fn();
 const createWeightLog = vi.fn();
 const deleteWeightLog = vi.fn();
 const notify = vi.fn();
-let experience = { isSimple: true, goal: null };
+let experience = { goal: null };
 
 vi.mock('../../services/weightService', () => ({
   weightService: {
@@ -50,7 +50,7 @@ const { default: Weight } = await import('../Weight.jsx');
 const renderAt = (url = '/weight') => render(<MemoryRouter initialEntries={[url]}><Weight /></MemoryRouter>);
 
 beforeEach(() => {
-  experience = { isSimple: true, goal: null };
+  experience = { goal: null };
   notify.mockReset();
   getWeightLogs.mockReset().mockResolvedValue({ success: true, data: LOGS });
   createWeightLog.mockReset().mockResolvedValue({ success: true, data: { ...LOGS[0], id: 'w2' } });
@@ -145,7 +145,7 @@ describe('Weight page — delete', () => {
 
 describe('Weight page — the first-run goal is used', () => {
   it('"lose a little" with no goal gets one sentence and a button to set it', async () => {
-    experience = { isSimple: true, goal: 'lose' };
+    experience = { goal: 'lose' };
     renderAt();
     expect(await screen.findByText(/you said you.d like to lose a little/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /set your goal/i })).toBeInTheDocument();

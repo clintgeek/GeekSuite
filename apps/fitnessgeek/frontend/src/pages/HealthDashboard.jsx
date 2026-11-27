@@ -16,11 +16,11 @@ import { useTheme } from '@mui/material/styles';
 import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
-  Settings as SettingsIcon
 } from '@mui/icons-material';
 import { useAuth } from '@geeksuite/auth';
 import { localDateString } from '@geeksuite/utils';
 import { apiService } from '../services/apiService';
+import Shell from './embeddedShell.jsx';
 import InfluxDBSettings from '../components/InfluxDBSettings';
 import { DateField, SuspenseSurface, Page } from '../components/primitives';
 
@@ -139,11 +139,41 @@ const tabsSx = {
   },
 };
 
+// Under Trends the outer tabs are the primary control, so these sections read
+// as a lighter row of small pills. Each tab keeps a 44px hit area; the pill is
+// drawn smaller inside it.
+const pillTabsSx = {
+  minHeight: 44,
+  '& .MuiTabs-indicator': { display: 'none' },
+  '& .MuiTabs-flexContainer': { gap: 1 },
+  '& .MuiTab-root': {
+    position: 'relative',
+    minHeight: 44,
+    minWidth: 0,
+    textTransform: 'none',
+    fontWeight: 600,
+    fontSize: '0.875rem',
+    color: 'text.secondary',
+    px: 3,
+    zIndex: 0,
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      inset: '6px 0',
+      borderRadius: 999,
+      border: (t) => `1px solid ${t.palette.divider}`,
+      zIndex: -1,
+    },
+    '&.Mui-selected': { color: 'primary.contrastText' },
+    '&.Mui-selected::before': { bgcolor: 'primary.main', borderColor: 'primary.main' },
+  },
+};
+
 /**
  * Comprehensive Health Dashboard
  * Displays InfluxDB-powered health analytics
  */
-export default function HealthDashboard() {
+export default function HealthDashboard({ embedded = false }) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   // Five tabs don't fit a phone's width: "Settings" was cut off the end. On a
@@ -192,17 +222,17 @@ export default function HealthDashboard() {
 
   if (checkingInflux) {
     return (
-      <Page>
+      <Shell embedded={embedded}>
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
         </Box>
-      </Page>
+      </Shell>
     );
   }
 
   if (!influxEnabled) {
     return (
-      <Page>
+      <Shell embedded={embedded}>
         <Alert severity="info">
           <AlertTitle>Turn on the home data server first</AlertTitle>
           This page reads your Garmin data from the home data server (InfluxDB).
@@ -220,26 +250,16 @@ export default function HealthDashboard() {
             setInfluxEnabled(true);
           }
         }} />
-      </Page>
+      </Shell>
     );
   }
 
   return (
-    <Page>
+    <Shell embedded={embedded}>
       {/* Editorial header */}
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-end" spacing={2}>
-        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-          Your Garmin data through the day, from the home data server.
-        </Typography>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<SettingsIcon />}
-          onClick={() => setActiveTab(4)}
-        >
-          Settings
-        </Button>
-      </Stack>
+      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
+        Your Garmin data through the day, from the home data server.
+      </Typography>
 
       <DayHeader selectedDate={selectedDate} onChange={handleDateChange} />
 
@@ -247,11 +267,13 @@ export default function HealthDashboard() {
       <Tabs
         value={activeTab}
         onChange={handleTabChange}
-        variant={tabsFit ? 'fullWidth' : 'scrollable'}
-        scrollButtons={tabsFit ? false : 'auto'}
+        variant={tabsFit && !embedded ? 'fullWidth' : 'scrollable'}
+        // The pills swipe sideways; a cut-off pill at the edge says there are more.
+        scrollButtons={embedded || tabsFit ? false : 'auto'}
         allowScrollButtonsMobile
         data-testid="health-tabs"
-        sx={tabsSx}
+        aria-label={embedded ? 'Health sections' : undefined}
+        sx={embedded ? pillTabsSx : tabsSx}
       >
         <Tab label="Overview" />
         <Tab label="Sleep analysis" />
@@ -277,6 +299,6 @@ export default function HealthDashboard() {
           }} />
         )}
       </Box>
-    </Page>
+    </Shell>
   );
 }

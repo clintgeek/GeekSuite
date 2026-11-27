@@ -1,30 +1,29 @@
 /**
- * FitnessGeek navigation config — one source of truth for the sidebar
- * sections, the top bar's page title, the mobile bottom-nav items, and the
- * More page.
+ * FitnessGeek navigation config — one source of truth for the sidebar rows,
+ * the top bar's page title, the mobile bottom-nav items, and the More page
+ * (DOCS/ONE_APP_PLAN.md §3, "Fewer places").
  *
- * DOCS/SIMPLE_AND_FULL_PLAN.md item 6: the check-ins are PLACES, not buttons
- * on Home. The bottom bar is Home · Log · Weight · More, and everything that
- * used to hold a slot (Activity, Profile) moved under More. Nothing is
- * removed: every route in App.jsx is reachable from the More page and, on a
- * desktop, from the sidebar. (Profile folded into Settings, 2026-10-17;
- * /profile redirects there, so it has no row of its own.)
+ * There is one app and one navigation, the same for everybody:
  *
- * Simple mode (the face designed around Heather) shows the same four tabs and
- * a shorter More page — the Weight / BP / Meds check-ins first, then the rest
- * behind a plain "Everything else" heading, ordered by what she uses and
- * saying what each page needs before it shows anything (review IA-9). Full
- * mode lists it all.
+ *   - Sidebar (desktop, and the phone's drawer): Today · Weight · Blood
+ *     pressure · Medications · Trends · Saved foods. Settings is in the
+ *     account menu.
+ *   - Phone tabs: Today · Weight · Trends · More.
+ *   - More: Blood pressure, Medications, Saved foods, Calorie plan, Import a
+ *     scan, Settings.
+ *
+ * Home and Food log are one page, Today. Reports, Activity and the Health
+ * dashboard are the tabs of Trends; My meals and My foods are the tabs of
+ * Saved foods. Their old addresses redirect (App.jsx), so nothing a link or
+ * an installed shortcut points at is gone. "Look up a specific food" lives in
+ * the add sheet; /food-search keeps its route and its title, with no row.
+ * Calorie plan is also reached from the target on Today and from Settings;
+ * Import a scan from the Weight page and from Settings.
  */
-import HomeIcon from '@mui/icons-material/HomeOutlined';
-import RestaurantIcon from '@mui/icons-material/RestaurantOutlined';
+import TodayIcon from '@mui/icons-material/TodayOutlined';
 import MonitorWeightIcon from '@mui/icons-material/MonitorWeightOutlined';
 import MonitorHeartIcon from '@mui/icons-material/MonitorHeartOutlined';
 import MedicationIcon from '@mui/icons-material/MedicationOutlined';
-import FitnessCenterIcon from '@mui/icons-material/FitnessCenterOutlined';
-import TrendingUpIcon from '@mui/icons-material/TrendingUpOutlined';
-import SearchIcon from '@mui/icons-material/SearchOutlined';
-import KitchenIcon from '@mui/icons-material/KitchenOutlined';
 import MenuBookIcon from '@mui/icons-material/MenuBookOutlined';
 import CalculateIcon from '@mui/icons-material/CalculateOutlined';
 import InsightsIcon from '@mui/icons-material/InsightsOutlined';
@@ -34,85 +33,49 @@ import MoreHorizIcon from '@mui/icons-material/MoreHorizOutlined';
 
 export const APP_NAME = 'fitnessgeek';
 
-// One outlined icon set (visual review B7); My foods is the kitchen and My
-// meals the recipe book, so the two no longer share a crossed fork (C12).
+// One outlined icon set (visual review B7).
 const icon = (Icon, size = 20) => <Icon sx={{ fontSize: size }} />;
 
-/**
- * Every destination, once. `simple: true` marks the ones Simple mode keeps in
- * front; the rest are still there, one heading down. `simpleDescription` is
- * Simple's line where it needs to say what a page depends on — a Garmin
- * watch, the smart scale — so a dead end says so before she taps it.
- */
+/** Every destination with a row somewhere, once. */
 export const DESTINATIONS = {
-  home: { id: '/dashboard', label: 'Home', to: '/dashboard', Icon: HomeIcon, simple: true },
-  log: { id: '/food-log', label: 'Food log', to: '/food-log', Icon: RestaurantIcon, simple: true },
-  weight: { id: '/weight', label: 'Weight', to: '/weight', Icon: MonitorWeightIcon, simple: true, description: 'Log your weight and see the trend' },
-  bp: { id: '/blood-pressure', label: 'Blood pressure', to: '/blood-pressure', Icon: MonitorHeartIcon, simple: true, description: 'Log a reading' },
-  meds: { id: '/medications', label: 'Medications', to: '/medications', Icon: MedicationIcon, simple: true, description: 'Your meds, and today’s doses' },
-  activity: { id: '/activity', label: 'Activity', to: '/activity', Icon: FitnessCenterIcon, description: 'Steps, workouts and sleep from Garmin', simpleDescription: 'Steps and sleep — needs a Garmin watch' },
-  health: { id: '/health', label: 'Health dashboard', to: '/health', Icon: TrendingUpIcon, description: 'Heart rate, stress and recovery', simpleDescription: 'Live heart rate and stress — needs setup' },
-  reports: { id: '/reports', label: 'Reports', to: '/reports', Icon: InsightsIcon, description: 'How the week and the month went' },
-  scan: { id: '/scan-import', label: 'Import a scan', to: '/scan-import', Icon: UploadFileIcon, description: 'Body-composition scans from the scale', simpleDescription: 'Body-composition scans — needs the smart scale' },
-  search: { id: '/food-search', label: 'Look up a specific food', to: '/food-search', Icon: SearchIcon, description: 'Pick one exact food or brand from every database' },
-  myFoods: { id: '/my-foods', label: 'My foods', to: '/my-foods', Icon: KitchenIcon, description: 'Foods you made yourself' },
-  myMeals: { id: '/my-meals', label: 'My meals', to: '/my-meals', Icon: MenuBookIcon, description: 'Meals you saved to log in one tap' },
+  today: { id: '/dashboard', label: 'Today', to: '/dashboard', Icon: TodayIcon },
+  weight: { id: '/weight', label: 'Weight', to: '/weight', Icon: MonitorWeightIcon, description: 'Log your weight and see the trend' },
+  bp: { id: '/blood-pressure', label: 'Blood pressure', to: '/blood-pressure', Icon: MonitorHeartIcon, description: 'Log a reading' },
+  meds: { id: '/medications', label: 'Medications', to: '/medications', Icon: MedicationIcon, description: 'Your meds, and today’s doses' },
+  trends: { id: '/trends', label: 'Trends', to: '/trends', Icon: InsightsIcon, description: 'Food, activity and health over time' },
+  saved: { id: '/saved-foods', label: 'Saved foods', to: '/saved-foods', Icon: MenuBookIcon, description: 'Meals and foods you saved' },
   wizard: { id: '/calorie-wizard', label: 'Calorie plan', to: '/calorie-wizard', Icon: CalculateIcon, description: 'Work out a daily calorie target' },
-  settings: { id: '/settings', label: 'Settings', to: '/settings', Icon: SettingsIcon, simple: true, description: 'Simple or Full, larger text, and more' },
+  scan: { id: '/scan-import', label: 'Import a scan', to: '/scan-import', Icon: UploadFileIcon, description: 'Body-composition scans from the scale' },
+  settings: { id: '/settings', label: 'Settings', to: '/settings', Icon: SettingsIcon, description: 'Larger text, theme, your details and more' },
 };
 
-// The More row: a place of its own, not a Home row with its fields swapped.
+// The More row: a place of its own.
 const MORE = { id: '/more', label: 'More', to: '/more', Icon: MoreHorizIcon };
 
 const row = (d) => ({ id: d.id, label: d.label, to: d.to, icon: icon(d.Icon) });
 
-/** Sidebar sections. Plain words, no ALL-CAPS jargon. */
-export function navSectionsFor(mode = 'full') {
+/** The sidebar: six rows, no headings to learn. */
+export function navSectionsFor() {
   const D = DESTINATIONS;
-  if (mode === 'simple') {
-    return [
-      { label: 'Today', items: [D.home, D.log].map(row) },
-      { label: 'Check-ins', items: [D.weight, D.bp, D.meds].map(row) },
-      { label: 'Everything else', items: [row(MORE)] },
-    ];
-  }
   return [
-    { label: 'Today', items: [D.home, D.log].map(row) },
-    { label: 'Check-ins', items: [D.weight, D.bp, D.meds].map(row) },
-    { label: 'Food', items: [D.search, D.myFoods, D.myMeals, D.wizard].map(row) },
-    { label: 'Body and activity', items: [D.activity, D.health, D.scan].map(row) },
-    { label: 'Looking back', items: [D.reports].map(row) },
+    { items: [D.today, D.weight, D.bp, D.meds, D.trends, D.saved].map(row) },
   ];
 }
 
-// The Full list is the superset; kept as a named export for older imports.
-export const navSections = navSectionsFor('full');
+export const navSections = navSectionsFor();
 
-/** The More page: groups of destinations, per mode. */
-export function moreGroupsFor(mode = 'full') {
+/** The More page: everything the phone's tabs don't hold, in one list. */
+export function moreGroupsFor() {
   const D = DESTINATIONS;
-  const checkIns = { label: 'Check-ins', items: [D.bp, D.meds] };
-  const food = { label: 'Food', items: [D.search, D.myMeals, D.myFoods, D.wizard] };
-  const body = { label: 'Body and activity', items: [D.activity, D.health, D.scan] };
-  const back = { label: 'Looking back', items: [D.reports] };
-  const you = { label: 'You', items: [D.settings] };
-  if (mode === 'simple') {
-    // Hers first (My meals, My foods, a specific food, Reports), then the
-    // pages that need something she may not have, each saying what.
-    const simple = (d) => (d.simpleDescription ? { ...d, description: d.simpleDescription } : d);
-    return [
-      checkIns,
-      you,
-      { label: 'Everything else', items: [D.myMeals, D.myFoods, D.search, D.reports, D.wizard, D.activity, D.health, D.scan].map(simple) },
-    ];
-  }
-  return [checkIns, food, body, back, you];
+  return [
+    { label: 'More', items: [D.bp, D.meds, D.saved, D.wizard, D.scan, D.settings] },
+  ];
 }
 
 /** Routes that have a page title but deliberately no nav row. */
 const extraTitles = {
-  '/settings': 'Settings',
   '/more': 'More',
+  '/food-search': 'Look up a specific food',
 };
 
 const allItems = Object.values(DESTINATIONS);
@@ -129,9 +92,8 @@ export function activeNavId(pathname) {
 }
 
 /**
- * Top bar title: the current page's name, or the app name when nothing
- * matches. Home is "Home", the same as its tab (review IA-8); the greeting
- * under it already says the day.
+ * Top bar title: the current page's name, the same word as its row or tab,
+ * or the app name when nothing matches.
  */
 export function pageTitle(pathname) {
   const extra = Object.keys(extraTitles)
@@ -144,23 +106,24 @@ export function pageTitle(pathname) {
   return item?.label ?? APP_NAME;
 }
 
+const TAB_IDS = ['/dashboard', '/weight', '/trends'];
+
 /**
  * The bottom tab bar's active tab. Anything reached through More lights More,
  * so the bar always says where you are.
  */
 export function bottomNavActiveId(pathname) {
   const id = activeNavId(pathname);
-  if (['/dashboard', '/food-log', '/weight'].includes(id)) return id;
-  return '/more';
+  return TAB_IDS.includes(id) ? id : '/more';
 }
 
 /**
- * Mobile bottom tab bar — Home · Log · Weight · More (plan item 6). Max five
- * items, never Logout/Settings; Settings lives under More.
+ * Mobile bottom tab bar — Today · Weight · Trends · More. Never
+ * Logout/Settings; Settings lives under More.
  */
 export const bottomNavItems = [
-  { id: '/dashboard', label: 'Home', to: '/dashboard', icon: icon(HomeIcon, 24) },
-  { id: '/food-log', label: 'Log', to: '/food-log', icon: icon(RestaurantIcon, 24) },
+  { id: '/dashboard', label: 'Today', to: '/dashboard', icon: icon(TodayIcon, 24) },
   { id: '/weight', label: 'Weight', to: '/weight', icon: icon(MonitorWeightIcon, 24) },
+  { id: '/trends', label: 'Trends', to: '/trends', icon: icon(InsightsIcon, 24) },
   { id: '/more', label: 'More', to: '/more', icon: icon(MoreHorizIcon, 24) },
 ];

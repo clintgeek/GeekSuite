@@ -1,6 +1,7 @@
 /**
- * Settings → "How FitnessGeek looks": Simple or Full, and Larger text, each
- * saved the moment it is chosen (DOCS/SIMPLE_AND_FULL_PLAN.md item 5).
+ * Settings → "How it looks" (DOCS/ONE_APP_PLAN.md §2): Larger text, saved
+ * the moment it is switched. There is one app now, so there is no Simple or
+ * Full to choose, and nothing on the panel says either word.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
@@ -9,39 +10,33 @@ import { ExperienceContext } from '../../../contexts/ExperienceContext.jsx';
 import ExperienceSettings from '../ExperienceSettings.jsx';
 
 const value = (over = {}) => ({
-  effectiveMode: 'simple',
-  savedMode: null,
   largerText: false,
-  setMode: vi.fn(() => Promise.resolve({ ok: true })),
   setLargerText: vi.fn(() => Promise.resolve({ ok: true })),
   ...over,
 });
 
-const mount = (v) => render(
+const mount = (v, children = null) => render(
   <GeekToastProvider>
     <ExperienceContext.Provider value={v}>
-      <ExperienceSettings />
+      <ExperienceSettings>{children}</ExperienceSettings>
     </ExperienceContext.Provider>
   </GeekToastProvider>
 );
 
 describe('ExperienceSettings', () => {
-  it('shows the mode being seen, and says when it was never chosen', () => {
+  it('has no Simple / Full chooser, and says neither word', () => {
     mount(value());
-    expect(screen.getByRole('radio', { name: /^Simple/ })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radio', { name: /^Full/ })).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByText(/You haven’t chosen yet, so you’re seeing Simple/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'How it looks' })).toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.queryByTestId('mode-simple')).toBeNull();
+    expect(screen.queryByTestId('mode-full')).toBeNull();
+    expect(screen.queryByTestId('simple-view-line')).toBeNull();
+    expect(screen.getByTestId('experience-settings').textContent).not.toMatch(/Simple|Full/);
   });
 
-  it('choosing Full saves Full', async () => {
+  it('the Larger text switch shows the saved choice and saves a change', async () => {
     const v = value();
-    mount(v);
-    await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /^Full/ })); });
-    expect(v.setMode).toHaveBeenCalledWith('full');
-  });
-
-  it('the Larger text switch saves it', async () => {
-    const v = value({ savedMode: 'simple' });
     mount(v);
     const toggle = screen.getByRole('checkbox', { name: 'Larger text' });
     expect(toggle).not.toBeChecked();
@@ -49,27 +44,21 @@ describe('ExperienceSettings', () => {
     expect(v.setLargerText).toHaveBeenCalledWith(true);
   });
 
-  it('switching to Full offers Undo, and Undo goes back to Simple (L19)', async () => {
-    const v = value({ savedMode: 'simple' });
-    mount(v);
-    await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /^Full/ })); });
-    expect(await screen.findByText('Switched to Full')).toBeInTheDocument();
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
-    expect(v.setMode).toHaveBeenLastCalledWith('simple');
-    expect(await screen.findByText('Back to Simple')).toBeInTheDocument();
-  });
-
   it('the Larger text switch says Saved', async () => {
-    mount(value({ savedMode: 'simple' }));
+    mount(value({ largerText: true }));
+    expect(screen.getByRole('checkbox', { name: 'Larger text' })).toBeChecked();
     await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'Larger text' })); });
     expect(await screen.findByText('Saved')).toBeInTheDocument();
   });
 
-  it('in Full it says what Simple is; in Simple it does not', () => {
-    const { unmount } = mount(value({ effectiveMode: 'full', savedMode: 'full' }));
-    expect(screen.getByTestId('simple-view-line')).toBeInTheDocument();
-    unmount();
-    mount(value());
-    expect(screen.queryByTestId('simple-view-line')).toBeNull();
+  it('a failed save says so', async () => {
+    mount(value({ setLargerText: vi.fn(() => Promise.resolve({ ok: false })) }));
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'Larger text' })); });
+    expect(await screen.findByText('Couldn’t save that. Try again.')).toBeInTheDocument();
+  });
+
+  it('holds the theme picker the page hands it', () => {
+    mount(value(), <div data-testid="theme-picker" />);
+    expect(screen.getByTestId('theme-picker')).toBeInTheDocument();
   });
 });

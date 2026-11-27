@@ -93,11 +93,10 @@ const CalorieGoalWizard = () => {
   // Where the prefilled weight came from: 'average' (7-day), 'latest', or null.
   const [weightBasis, setWeightBasis] = useState(null);
 
-  // Simple's one-screen quick target (IA-1, L8): in Simple, or when Home
-  // links here with ?quick=1. Read from window.location rather than the
-  // router so the wizard still mounts on its own in a test. Full, without
-  // the flag, is the four-step wizard, unchanged.
-  const { isSimple, goal: experienceGoal } = useExperience();
+  // The one-screen quick target (IA-1, L8), when a link says ?quick=1. Read
+  // from window.location rather than the router so the wizard still mounts on
+  // its own in a test. Without the flag it is the four-step wizard.
+  const { goal: experienceGoal } = useExperience();
   const [quickFlag] = useState(() => {
     try {
       return new URLSearchParams(window.location.search).get('quick') === '1';
@@ -105,7 +104,7 @@ const CalorieGoalWizard = () => {
       return false;
     }
   });
-  const quick = isSimple || quickFlag;
+  const quick = quickFlag;
 
   // Load user profile and any existing saved goal on mount
   useEffect(() => {

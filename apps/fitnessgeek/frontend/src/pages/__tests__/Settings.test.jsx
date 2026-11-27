@@ -5,13 +5,16 @@
  *   - Every switch and select saves as it changes ("Saved"); only the Garmin
  *     login has a button. No "Unsaved changes" bar, no Units.
  *   - Writes stay PARTIAL, and nothing is written over a failed load.
- *   - Simple shows How it looks and About you, the rest behind "More settings".
+ *   - One app (DOCS/ONE_APP_PLAN.md): no Simple / Full chooser and no "More
+ *     settings" fold; everything is on the page for everybody. Calorie plan
+ *     and Import a scan, which have no row in the navigation, are linked here.
  *
  * Earlier pins kept: the dead Notifications switches stay gone.
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 const SETTINGS = {
   dashboard: {},
@@ -63,13 +66,9 @@ const { ExperienceContext } = await import('../../contexts/ExperienceContext.jsx
 const { default: Settings } = await import('../Settings.jsx');
 
 const experience = (over = {}) => ({
-  effectiveMode: 'full',
-  savedMode: 'full',
-  isSimple: false,
   largerText: false,
   preferredName: 'Heather',
   goal: 'lose',
-  setMode: vi.fn(() => Promise.resolve({ ok: true })),
   setLargerText: vi.fn(() => Promise.resolve({ ok: true })),
   update: vi.fn(() => Promise.resolve({ ok: true })),
   ...over,
@@ -78,9 +77,11 @@ const experience = (over = {}) => ({
 function mount(over = {}) {
   const value = experience(over);
   return Object.assign(value, { view: render(
-    <ExperienceContext.Provider value={value}>
-      <Settings />
-    </ExperienceContext.Provider>
+    <MemoryRouter>
+      <ExperienceContext.Provider value={value}>
+        <Settings />
+      </ExperienceContext.Provider>
+    </MemoryRouter>
   ) });
 }
 
@@ -105,7 +106,7 @@ describe('Settings — what the page holds', () => {
   it('Profile is folded in: About you, Household once, Account with email and Sign out', async () => {
     mount();
     expect(await screen.findByRole('heading', { name: 'About you' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'How much FitnessGeek shows' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'How it looks' })).toBeInTheDocument();
     expect(screen.getAllByTestId('household')).toHaveLength(1);
     expect(await screen.findByTestId('account-email')).toHaveTextContent('heather@example.com');
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
@@ -234,22 +235,32 @@ describe('Settings — About you (IA-2)', () => {
   });
 });
 
-describe('Settings — Simple (L17) and the Simple view line (L19)', () => {
-  it('Simple shows How it looks and About you; the rest waits behind "More settings"', async () => {
-    mount({ isSimple: true, effectiveMode: 'simple', savedMode: 'simple' });
-    expect(await screen.findByRole('heading', { name: 'About you' })).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Garmin email/i)).toBeNull();
-    expect(screen.queryByTestId('household')).toBeNull();
+describe('Settings — one app (ONE_APP_PLAN.md §2, §3)', () => {
+  it('has no Simple / Full chooser, and keeps Larger text', async () => {
+    const v = mount();
+    await screen.findByRole('heading', { name: 'About you' });
+    expect(screen.queryByRole('radio', { name: /^Simple/ })).toBeNull();
+    expect(screen.queryByRole('radio', { name: /^Full/ })).toBeNull();
     expect(screen.queryByTestId('simple-view-line')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'More settings' }));
-    expect(await screen.findByLabelText(/Garmin email/i)).toBeInTheDocument();
-    expect(screen.getByTestId('household')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\bSimple\b|\bFull\b/);
+    const larger = screen.getByRole('checkbox', { name: 'Larger text' });
+    fireEvent.click(larger);
+    await waitFor(() => expect(v.setLargerText).toHaveBeenCalledWith(true));
   });
 
-  it('Full says what Simple is, in one line', async () => {
+  it('nothing waits behind "More settings": Garmin, Household and Account are on the page for everybody', async () => {
     mount();
-    expect(await screen.findByTestId('simple-view-line')).toHaveTextContent(/Simple shows today, your meals and the check-ins/);
+    expect(await screen.findByLabelText(/Garmin email/i)).toBeInTheDocument();
+    expect(screen.getByTestId('household')).toBeInTheDocument();
+    expect(screen.getByTestId('account-email')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'More settings' })).toBeNull();
+  });
+
+  it('links to Calorie plan and Import a scan, which have no row in the navigation', async () => {
+    mount();
+    const plans = await screen.findByTestId('settings-plans');
+    expect(within(plans).getByRole('link', { name: 'Calorie plan' })).toHaveAttribute('href', '/calorie-wizard');
+    expect(within(plans).getByRole('link', { name: 'Import a scan' })).toHaveAttribute('href', '/scan-import');
   });
 });
 

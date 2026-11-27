@@ -28,7 +28,7 @@ import { useExperience } from '../contexts/ExperienceContext.jsx';
 const WeightTimeline = lazy(() => import('../components/Weight/WeightTimeline.jsx'));
 
 const Weight = () => {
-  const { isSimple, goal: firstRunGoal } = useExperience();
+  const { goal: firstRunGoal } = useExperience();
   const navigate = useNavigate();
   // `?add=1` — the Today strip's "Weigh in" — opens the weight dialog directly.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -116,14 +116,14 @@ const Weight = () => {
     <Page fab>
       {/* The top bar says "Weight"; one plain line says what's here. */}
       <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-        {isSimple
-          ? 'Your weight over time, averaged so one heavy day doesn’t move the needle.'
-          : 'Your weight and what it’s made of, averaged so one water day doesn’t move the needle.'}
+        Your weight over time, averaged so one heavy day doesn’t move the needle.
       </Typography>
 
-      {/* Phone: one column, in order. From md: the summary card (about 400px) left
-          with the Trend chart wide on the right, then body composition and
-          the log in two columns below. */}
+      {/* Phone: one column, in order: the number (the weigh-in is the thumb-zone
+          button), the trend chart, body composition, the log. From md: the
+          weigh-in card and the summary (about 400px) left with the Trend chart
+          wide on the right, then body composition and the log in two columns
+          below. */}
       <Box
         sx={{
           display: 'grid',
@@ -132,15 +132,25 @@ const Weight = () => {
           alignItems: 'start',
         }}
       >
-        <WeightProgress
-          weightLogs={weightLogs}
-          goal={weightGoal}
-          currentWeight={currentWeight}
-          unit="lbs"
-          firstRunGoal={firstRunGoal}
-          simple={isSimple}
-          onEditGoal={() => navigate('/calorie-wizard')}
-        />
+        {/* The quick weigh-in (a card from md; the FAB on phones) and the
+            current number, together. */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.75, md: 2.25 } }}>
+          <QuickAddWeight
+            onAdd={addWeightLog}
+            existingLogs={weightLogs}
+            unit="lbs"
+            autoOpen={autoOpenAdd}
+            onAutoOpened={clearAddParam}
+          />
+          <WeightProgress
+            weightLogs={weightLogs}
+            goal={weightGoal}
+            currentWeight={currentWeight}
+            unit="lbs"
+            firstRunGoal={firstRunGoal}
+            onEditGoal={() => navigate('/calorie-wizard')}
+          />
+        </Box>
 
         <SuspenseSurface rows={4} height={320}>
           <WeightTimeline
@@ -150,42 +160,22 @@ const Weight = () => {
           />
         </SuspenseSurface>
 
-        {/* Body composition — summary, change, fat/lean trend. Full only: body
-            composition is one of the things Simple keeps out of the way. */}
-        {!isSimple && (
-          <BodyCompositionSection
-            summary={bodyComp.summary}
-            scans={bodyComp.scans}
-            loading={bodyComp.loading}
-            error={bodyComp.error}
-            scansError={bodyComp.scansError}
-            onRetry={bodyComp.reload}
-          />
-        )}
+        {/* Body composition — summary, change, fat/lean trend. */}
+        <BodyCompositionSection
+          summary={bodyComp.summary}
+          scans={bodyComp.scans}
+          loading={bodyComp.loading}
+          error={bodyComp.error}
+          scansError={bodyComp.scansError}
+          onRetry={bodyComp.reload}
+        />
 
-        {/* Quick Add Weight (desktop card; the FAB on phones), then the log */}
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: { xs: 1.75, md: 2.25 },
-            gridColumn: { md: isSimple ? '1 / -1' : 'auto' },
-          }}
-        >
-          <QuickAddWeight
-            onAdd={addWeightLog}
-            existingLogs={weightLogs}
-            unit="lbs"
-            autoOpen={autoOpenAdd}
-            onAutoOpened={clearAddParam}
-          />
-          <WeightLogList
-            logs={weightLogs}
-            onDelete={handleDelete}
-            onUpdate={updateWeightLog}
-            unit="lbs"
-          />
-        </Box>
+        <WeightLogList
+          logs={weightLogs}
+          onDelete={handleDelete}
+          onUpdate={updateWeightLog}
+          unit="lbs"
+        />
       </Box>
     </Page>
   );

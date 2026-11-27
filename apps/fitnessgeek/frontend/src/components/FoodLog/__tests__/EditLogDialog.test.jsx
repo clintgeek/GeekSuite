@@ -13,7 +13,7 @@
  * exactly "Calories", so a future second caller isn't surprised.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import NutritionInputs from '../NutritionInputs.jsx';
 import EditLogDialog from '../EditLogDialog.jsx';
@@ -47,6 +47,10 @@ describe('EditLogDialog disambiguates the per-serving fields', () => {
         <EditLogDialog open onClose={vi.fn()} onSave={vi.fn()} log={LOG} />
       )
     );
+    // The entry's total comes first; the per-serving fields sit behind a disclosure.
+    expect(screen.getByLabelText('Calories')).toHaveValue('880');
+    expect(screen.queryByLabelText('Calories (per serving)')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Per serving and nutrition' }));
 
     // The per-serving input, explicitly qualified...
     expect(screen.getByLabelText('Calories (per serving)')).toBeInTheDocument();
@@ -63,8 +67,6 @@ describe('EditLogDialog disambiguates the per-serving fields', () => {
  * so the calories themselves are editable, and an entry can move to another
  * day. Only what changed goes out, as the gateway's per-serving overrides.
  */
-import { fireEvent } from '@testing-library/react';
-import { ExperienceContext } from '../../../contexts/ExperienceContext.jsx';
 
 describe('EditLogDialog: calories, macros and the day', () => {
   const SOUP = {
@@ -75,23 +77,24 @@ describe('EditLogDialog: calories, macros and the day', () => {
     nutrition: { calories_per_serving: 220, protein_grams: 10, carbs_grams: 20, fat_grams: 8, fiber_grams: 2 },
     food_item_id: { id: 'f1', name: 'Chicken soup' }
   };
-  const open = (log, { simple }) => {
+  const open = (log) => {
     const onSave = vi.fn();
     render(withTheme(
-      <ExperienceContext.Provider value={{ isSimple: simple }}>
-        <EditLogDialog open onClose={vi.fn()} onSave={onSave} log={log} />
-      </ExperienceContext.Provider>
+      <EditLogDialog open onClose={vi.fn()} onSave={onSave} log={log} />
     ));
     return onSave;
   };
+  // Everything the total hides sits behind one disclosure, closed.
+  const openDetail = () => fireEvent.click(screen.getByRole('button', { name: 'Per serving and nutrition' }));
   const save = () => fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
-  it('Simple: one Calories number for the whole entry, sent as the per-serving override', () => {
-    const onSave = open({ ...SOUP, servings: 2 }, { simple: true });
+  it('asks for one Calories number for the whole entry first, sent as the per-serving override', () => {
+    const onSave = open({ ...SOUP, servings: 2 });
     const calories = screen.getByLabelText('Calories');
     expect(calories).toHaveValue('440');
     expect(calories).toHaveAttribute('inputmode', 'decimal');
     expect(screen.queryByLabelText(/protein/i)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Per serving and nutrition' })).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.change(calories, { target: { value: '300' } });
     save();
@@ -102,14 +105,23 @@ describe('EditLogDialog: calories, macros and the day', () => {
     expect(patch).not.toHaveProperty('log_date');
   });
 
-  it('Simple: nothing changed sends no override', () => {
-    const onSave = open(SOUP, { simple: true });
+  it('nothing changed sends no override', () => {
+    const onSave = open(SOUP);
     save();
     expect(onSave.mock.calls[0][1]).not.toHaveProperty('calories');
   });
 
-  it('Full: a macro edit sends only that macro', () => {
-    const onSave = open(SOUP, { simple: false });
+  it('opening the disclosure and saving untouched sends no override either', () => {
+    const onSave = open(SOUP);
+    openDetail();
+    save();
+    const patch = onSave.mock.calls[0][1];
+    for (const key of ['calories', 'protein_grams', 'carbs_grams', 'fat_grams']) expect(patch).not.toHaveProperty(key);
+  });
+
+  it('a macro edit in the disclosure sends only that macro', () => {
+    const onSave = open(SOUP);
+    openDetail();
     fireEvent.change(screen.getByLabelText('Protein (per serving)'), { target: { value: '25' } });
     save();
     const patch = onSave.mock.calls[0][1];
@@ -118,8 +130,30 @@ describe('EditLogDialog: calories, macros and the day', () => {
     expect(patch).not.toHaveProperty('carbs_grams');
   });
 
+  it('per-serving calories in the disclosure go out as the per-serving override, and the total follows', () => {
+    const onSave = open({ ...SOUP, servings: 2 });
+    openDetail();
+    fireEvent.change(screen.getByLabelText('Calories (per serving)'), { target: { value: '250' } });
+    expect(screen.getByLabelText('Calories')).toHaveValue('500');
+    expect(screen.getByText('500 cal')).toBeInTheDocument();
+    save();
+    const patch = onSave.mock.calls[0][1];
+    expect(patch.calories).toBe(250);
+    expect(patch).not.toHaveProperty('protein_grams');
+  });
+
+  it('typing the total after the disclosure still sends the total as a per-serving number', () => {
+    const onSave = open({ ...SOUP, servings: 2 });
+    openDetail();
+    fireEvent.change(screen.getByLabelText('Calories (per serving)'), { target: { value: '250' } });
+    fireEvent.change(screen.getByLabelText('Calories'), { target: { value: '300' } });
+    expect(screen.getByLabelText('Calories (per serving)')).toHaveValue(150);
+    save();
+    expect(onSave.mock.calls[0][1].calories).toBe(150);
+  });
+
   it('moves the entry to another day', () => {
-    const onSave = open(SOUP, { simple: true });
+    const onSave = open(SOUP);
     const dayField = screen.getByLabelText('Day');
     expect(dayField).toHaveValue('2026-10-15');
     fireEvent.change(dayField, { target: { value: '2026-10-14' } });
@@ -128,7 +162,7 @@ describe('EditLogDialog: calories, macros and the day', () => {
   });
 
   it('will not save a calorie number past what the server allows', () => {
-    const onSave = open(SOUP, { simple: true });
+    const onSave = open(SOUP);
     fireEvent.change(screen.getByLabelText('Calories'), { target: { value: '25000' } });
     expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled();
     save();
@@ -136,7 +170,7 @@ describe('EditLogDialog: calories, macros and the day', () => {
   });
 
   it('the servings box brings up the decimal keypad and takes "0.5"', () => {
-    const onSave = open(SOUP, { simple: false });
+    const onSave = open(SOUP);
     const box = screen.getByRole('textbox', { name: 'Servings' });
     expect(box).toHaveAttribute('inputmode', 'decimal');
     fireEvent.change(box, { target: { value: '0.' } });
@@ -149,7 +183,7 @@ describe('EditLogDialog: calories, macros and the day', () => {
 
 /**
  * UX review L9 and L15: Save at the bottom on a phone, labelled "Save" (not
- * "Save Changes"); and "Remove" inside the dialog, since Simple's rows lost
+ * "Save Changes"); and "Remove" inside the dialog, since the rows lost
  * their trash icon.
  */
 describe('EditLogDialog: Save under the thumb, Remove inside', () => {
@@ -171,9 +205,7 @@ describe('EditLogDialog: Save under the thumb, Remove inside', () => {
       addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
     });
     render(withTheme(
-      <ExperienceContext.Provider value={{ isSimple: true }}>
-        <EditLogDialog open onClose={vi.fn()} onSave={vi.fn()} log={EGG} />
-      </ExperienceContext.Provider>
+      <EditLogDialog open onClose={vi.fn()} onSave={vi.fn()} log={EGG} />
     ));
     const bottom = screen.getByTestId('thumb-save');
     expect(within(bottom).getByRole('button', { name: /^save$/i, hidden: true })).toBeInTheDocument();
@@ -183,9 +215,7 @@ describe('EditLogDialog: Save under the thumb, Remove inside', () => {
   it('Remove hands the entry back to the page', () => {
     const onRemove = vi.fn();
     render(withTheme(
-      <ExperienceContext.Provider value={{ isSimple: true }}>
-        <EditLogDialog open onClose={vi.fn()} onSave={vi.fn()} onRemove={onRemove} log={EGG} />
-      </ExperienceContext.Provider>
+      <EditLogDialog open onClose={vi.fn()} onSave={vi.fn()} onRemove={onRemove} log={EGG} />
     ));
     fireEvent.click(screen.getByRole('button', { name: 'Remove Egg' }));
     expect(onRemove).toHaveBeenCalledWith('log-egg');

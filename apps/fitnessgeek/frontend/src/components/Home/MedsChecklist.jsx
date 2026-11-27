@@ -6,8 +6,8 @@ import { Check as CheckIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 
 /**
- * "Did you take your meds?" — Simple mode's meds check-in
- * (SIMPLE_AND_FULL_PLAN.md item 6). One big tick per dose, named plainly:
+ * "Did you take your meds?" — the meds check-in on Today, for anyone with
+ * medications (ONE_APP_PLAN.md §1.6). One big tick per dose, named plainly:
  * "Metformin · Morning". Tapping writes a dose log; tapping again takes it
  * back. Each row is a real checkbox to a screen reader.
  *

@@ -1,7 +1,7 @@
 // Shared scene helpers for FitnessGeek, so the scene files (scenes.mjs and
 // the scenes-*.mjs it gathers) build every scene the same way.
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { heatherOps, DESCRIBED_SOUP, SUGGEST_FAGE, DEEP_FAGE, SUGGEST_SOUP } from './fixtures.mjs';
+import { DESCRIBED_SOUP, SUGGEST_FAGE, DEEP_FAGE, SUGGEST_SOUP } from './fixtures.mjs';
 import { withHistoryBounds } from './history-ops.mjs';
 
 // The weight, dashboard and wizard scenes THROW when their anchor is missing instead of
@@ -46,8 +46,6 @@ export async function scrollToSection(page, h, selector, offset = 72) {
   return true;
 }
 
-export const HEATHER = { mode: 'simple', first_run_done: true, preferred_name: 'Heather' };
-
 // A recognizer the page can detect, so the microphone renders the same way
 // whether or not this Chromium build exposes the Web Speech API. The shot is
 // of the mic's idle state; nothing here listens.
@@ -61,25 +59,55 @@ export const SPEECH_STUB = () => {
   }
 };
 
-export const heatherScene = (name, experience, fn, extra = {}) => ({
-  name,
-  ...extra,
-  setup: (page, h) => withPageOps(page, heatherOps(experience), async () => {
-    await page.goto(h.base + (extra.path || '/dashboard'), { waitUntil: 'networkidle' });
-    await h.settle(1600);
-    await fn(page, h);
-  }),
-  teardown: async (page, h) => {
-    if (extra.dialog) await h.esc(400);
-    await page.unroute('**/graphql');
-  },
-});
+/**
+ * Open the "Macros and details" disclosure in Today's "what is left" card.
+ * It is closed by default and remembers its state per device (localStorage,
+ * one context per viewport), so a scene reads aria-expanded and clicks only
+ * when it has to, and the remembered choice is dropped again so no later
+ * scene inherits it. `open: false` closes it.
+ */
+export async function setDetails(page, h, open = true) {
+  const toggle = await must(page.locator('[data-testid="macros-details-toggle"]'), 'the "Macros and details" disclosure');
+  if ((await toggle.getAttribute('aria-expanded')) !== String(open)) {
+    await toggle.click();
+    await h.settle(500);
+  }
+  if ((await toggle.getAttribute('aria-expanded')) !== String(open)) throw new Error(`"Macros and details" did not ${open ? 'open' : 'close'}`);
+  // The page has read its choice already (on mount), so forgetting it here
+  // leaves this scene as it is and starts the next one from the default.
+  await page.evaluate(() => { try { localStorage.removeItem('fg.today.details.v1'); } catch { /* blocked */ } });
+  const body = page.locator('[data-testid="today-details"]');
+  if (open) await must(body, 'the details behind "Macros and details"');
+  else if (await body.count()) throw new Error('"Macros and details" is closed but its contents are still drawn');
+  return toggle;
+}
+
+/** Open a meal's "more" menu on Today; returns the menu. */
+export async function openMealMenu(page, h, meal) {
+  // A slow first paint is not a missing menu: wait for the meals, then insist.
+  await page.locator(`[data-testid="meal-more-${meal}"]`).waitFor({ timeout: 8000 }).catch(() => {});
+  const more = await must(page.locator(`[data-testid="meal-more-${meal}"]`), `the "more" button on ${meal}`);
+  await more.scrollIntoViewIfNeeded();
+  await more.click();
+  await h.settle(500);
+  return must(page.getByRole('menu'), `the ${meal} "more" menu`);
+}
+
+/** Tap a food row on Today (the whole row is the Edit button); returns the edit dialog. */
+export async function openEdit(page, h, name) {
+  await page.locator('[data-testid="food-log-row"]').first().waitFor({ timeout: 8000 }).catch(() => {});
+  const row = await must(page.locator('[data-testid="food-log-row"]').filter({ hasText: name }).first(), `the ${name} row`);
+  await row.scrollIntoViewIfNeeded();
+  await row.click();
+  await h.settle(800);
+  return must(page.getByRole('dialog'), 'the edit dialog');
+}
 
 // ── The food composer (REVIEW_2026-10 §4, Phase 3.16) ────────────────────
 // "The harness has no picture of the add box while typing, thinking, after a
 // result or after an error. The surface she complains about is unaudited."
-// Every state gets a scene here, Simple (Heather) and Full (Chef). The REST
-// stubs are page-scoped and dropped in teardown; each scene re-navigates.
+// Every state gets a scene here. The REST stubs are page-scoped and dropped
+// in teardown; each scene re-navigates.
 export const SUGGEST_RE = /\/api\/foods\/suggest/;
 export const DEEP_RE = /\/api\/foods\?/;
 export const DESCRIBE_RE = /\/api\/logs\/describe/;
@@ -119,22 +147,21 @@ export const fageSuggest = (q) => (/fag/i.test(q) ? SUGGEST_FAGE : []);
 export const fageDeep = (q) => (/fage/i.test(q) ? DEEP_FAGE : []);
 
 /**
- * Open the add sheet from a meal card and run `fn` inside it. `simple`
- * scenes are Heather's page-scoped GraphQL; Full is the context's Chef.
+ * Open the add sheet from a meal's "Add" on Today and run `fn` inside it.
+ * `sheet: false` leaves the opening to `fn`.
  */
-export const composerScene = (name, { simple = false, path = '/dashboard', meal = 'lunch', routes = {}, fn, viewports, offline = false, sheet = true }) => ({
+export const composerScene = (name, { path = '/dashboard', meal = 'lunch', routes = {}, fn, viewports, offline = false, sheet = true }) => ({
   name,
   ...(viewports ? { viewports } : {}),
   async setup(page, h) {
     await foodRoutes(page, routes);
     try {
-      if (simple) await graphqlRoute(page, withHistoryBounds(heatherOps(HEATHER)));
       await page.goto(h.base + path, { waitUntil: 'networkidle' });
       await h.settle(1400);
       let scope = page;
       if (sheet) {
         const addBtn = page.getByRole('button', { name: new RegExp(`^add to ${meal}$`, 'i') }).first();
-        // A cold first scene can still be loading Home: wait, then insist.
+        // A cold first scene can still be loading Today: wait, then insist.
         await addBtn.waitFor({ timeout: 8000 }).catch(() => {});
         const add = await must(addBtn, `Add to ${meal}`);
         await add.click();
@@ -149,7 +176,6 @@ export const composerScene = (name, { simple = false, path = '/dashboard', meal 
     } catch (err) {
       if (offline) await page.context().setOffline(false);
       await dropFoodRoutes(page);
-      if (simple) await page.unroute('**/graphql');
       throw err;
     }
   },
@@ -158,7 +184,6 @@ export const composerScene = (name, { simple = false, path = '/dashboard', meal 
     if (sheet) await h.esc(400);
     await h.esc(300);
     await dropFoodRoutes(page);
-    if (simple) await page.unroute('**/graphql');
   },
 });
 

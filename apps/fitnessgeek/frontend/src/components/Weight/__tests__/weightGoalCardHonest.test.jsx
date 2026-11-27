@@ -33,7 +33,7 @@ const renderCard = (props = {}) => render(
   </ThemeProvider>
 );
 
-describe('the weight goal card (Full)', () => {
+describe('the weight goal card', () => {
   beforeAll(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-17T12:00:00-05:00'));
@@ -88,25 +88,25 @@ describe('the weight goal card (Full)', () => {
   });
 });
 
-describe('Simple (L25)', () => {
+describe('the trend in words (L25)', () => {
   beforeAll(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-17T12:00:00-05:00'));
   });
   afterAll(() => vi.useRealTimers());
 
-  it('leads with the trend in words and keeps the goal maths out of her face', () => {
-    renderCard({ simple: true });
+  it('leads with the trend in words, with the goal maths below it', () => {
+    renderCard();
     expect(screen.getByTestId('weight-trend-words')).toHaveTextContent('Down 12.1 lb since June');
     expect(screen.getByText('From your 7-day average, 219.9 lb')).toBeInTheDocument();
-    expect(screen.queryByTestId('weight-status')).toBeNull();
-    expect(screen.queryByTestId('weight-pace')).toBeNull();
-    expect(screen.queryByTestId('weight-projection')).toBeNull();
-    expect(document.body.textContent).not.toMatch(/behind/i);
+    expect(screen.getAllByTestId('weight-basis')).toHaveLength(1);
+    expect(screen.getByTestId('weight-status')).toBeInTheDocument();
+    expect(screen.getByTestId('weight-pace')).toBeInTheDocument();
+    expect(screen.getByTestId('weight-projection')).toBeInTheDocument();
   });
 
   it('with no goal, still leads with the trend once there are two weeks of weigh-ins', () => {
-    renderCard({ simple: true, goal: null, currentWeight: null });
+    renderCard({ goal: null, currentWeight: null });
     expect(screen.getByTestId('weight-trend-words')).toHaveTextContent(/^Down \d+\.\d lb since June$/);
   });
 });

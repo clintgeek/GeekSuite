@@ -23,6 +23,7 @@ import {
 import { useToast, useGeekDialogFullScreen } from '@geeksuite/ui';
 import { thumbSaveProps } from '../components/BloodPressure/thumbSave.jsx';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
+import Shell from './embeddedShell.jsx';
 import EditMealDialog from '../components/Meals/EditMealDialog.jsx';
 import { useUndoToast } from '../components/FoodSearch/undoToast.jsx';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
@@ -47,7 +48,7 @@ const mealTypeForNow = (now = new Date()) => {
   return 'snack';
 };
 
-const MyMeals = () => {
+const MyMeals = ({ embedded = false }) => {
   const { notify } = useToast();
   // "Log it" sits at the bottom on a phone, like every save (UX review L9).
   const fullScreen = useGeekDialogFullScreen();
@@ -170,7 +171,7 @@ const MyMeals = () => {
   };
 
   return (
-    <Page>
+    <Shell embedded={embedded}>
       <Typography sx={{ color: 'text.secondary', fontSize: '1rem' }}>
         Save your favorite combinations and reuse them in a single tap.
       </Typography>
@@ -206,20 +207,27 @@ const MyMeals = () => {
                   sx={{
                     pl: 0,
                     py: 1.25,
-                    // Room for "Log this" and the two icons beside the name.
-                    pr: { xs: 26, sm: 28 },
+                    // From sm up the actions sit beside the name; on a phone
+                    // they take their own line under it, so nothing overlaps.
+                    pr: { xs: 0, sm: 56 },
+                    flexWrap: { xs: 'wrap', sm: 'nowrap' },
                     borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
                     '&:last-child': { borderBottom: 'none' },
-                    '& .MuiListItemSecondaryAction-root': { right: 0 },
+                    '& .MuiListItemSecondaryAction-root': {
+                      right: 0,
+                      position: { xs: 'static', sm: 'absolute' },
+                      transform: { xs: 'none', sm: 'translateY(-50%)' },
+                      width: { xs: '100%', sm: 'auto' },
+                    },
                   }}
                   secondaryAction={
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', ml: { xs: -2, sm: 0 } }}>
                       <Button
                         size="small"
                         startIcon={<LogIcon />}
                         onClick={() => startLog(m)}
                         aria-label={`Log ${m.name}`}
-                        sx={{ minHeight: 44, fontWeight: 700 }}
+                        sx={{ minHeight: 44, fontWeight: 700, mr: { xs: 'auto', sm: 0 } }}
                       >
                         Log this
                       </Button>
@@ -389,7 +397,7 @@ const MyMeals = () => {
           meals. This can’t be undone.
         </DialogContentText>
       </PremiumDialog>
-    </Page>
+    </Shell>
   );
 };
 

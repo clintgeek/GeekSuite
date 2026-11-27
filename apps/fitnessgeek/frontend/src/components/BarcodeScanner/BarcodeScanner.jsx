@@ -28,6 +28,17 @@ import { loadZXing } from '../../utils/zxingLoader.js';
 import { errorMessage } from '../../utils/errorMessage.js';
 import './BarcodeScanner.css';
 
+// The scan history is a per-device convenience. Private windows and blocked
+// site data throw on access, and that must not take the add sheet down.
+const readScanHistory = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem('barcodeScanHistory') || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
 const CAMERA_UNAVAILABLE = 'FitnessGeek can’t use the camera here. Type the barcode instead.';
 
 const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
@@ -88,7 +99,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
 
   // Load scan history on mount
   useEffect(() => {
-    const history = JSON.parse(localStorage.getItem('barcodeScanHistory') || '[]');
+    const history = readScanHistory();
     setScanHistory(history.slice(0, 5));
   }, []);
 
@@ -168,9 +179,13 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
   };
 
   const saveToHistory = (barcode) => {
-    const history = JSON.parse(localStorage.getItem('barcodeScanHistory') || '[]');
+    const history = readScanHistory();
     const newHistory = [barcode, ...history.filter(b => b !== barcode)].slice(0, 10);
-    localStorage.setItem('barcodeScanHistory', JSON.stringify(newHistory));
+    try {
+      localStorage.setItem('barcodeScanHistory', JSON.stringify(newHistory));
+    } catch {
+      // A convenience; the scan itself still works.
+    }
     setScanHistory(newHistory.slice(0, 5));
   };
 

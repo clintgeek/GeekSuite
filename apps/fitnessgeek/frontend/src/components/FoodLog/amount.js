@@ -25,4 +25,19 @@ export function amountLabel(log) {
   return `×${trim(servings)}`;
 }
 
+/** The entry's nutrition: its own stored snapshot when it has one, else the food's. */
+export const nutritionOf = (log) => {
+  const food = log?.food_item || log?.food_item_id;
+  return (log?.nutrition && Object.keys(log.nutrition).length > 0 ? log.nutrition : food?.nutrition) || {};
+};
+
+/** How many servings the entry is; 1 when it doesn't say. */
+export const servingsOf = (log) => {
+  const raw = log?.servings;
+  return typeof raw === 'string' ? parseFloat(raw) || 1 : (raw || 1);
+};
+
+/** What the entry comes to, in whole calories. */
+export const caloriesOf = (log) => Math.round((Number(nutritionOf(log).calories_per_serving) || 0) * servingsOf(log));
+
 export default amountLabel;

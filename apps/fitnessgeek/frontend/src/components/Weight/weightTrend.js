@@ -319,7 +319,7 @@ export function neededPacePerWeek(goal) {
 }
 
 /**
- * The trend in words for Simple (review L25): how far the 7-day average has
+ * The trend in words (review L25): how far the 7-day average has
  * moved since a start. With a goal the start is the goal's (its date and
  * weight, the same numbers as "12.1 of 37 lb lost"); without one, the first
  * weigh-in, once there are two weeks of them.

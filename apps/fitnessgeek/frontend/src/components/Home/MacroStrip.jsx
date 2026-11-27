@@ -6,12 +6,12 @@ import NetCarbMeter from '../Dashboard/NetCarbMeter.jsx';
 import { macroColors } from '../../theme/theme.jsx';
 
 /**
- * Full mode's budget rows: for each of calories, protein, carbs and fat, a
+ * The day's budget rows, behind Today's "Macros and details": for each of
+ * calories, protein, carbs and fat, a
  * line of words — **Protein** 113 g of 156 ……… 72% — over a thin bar in that
  * macro's own colour. Over target says so in words, in a tag ("Fat 99 g of 78
  * [21 over] 127%"), so no colour carries "over" alone (review D-14). Protein
- * / carbs / fat, or fat / protein / net carbs in keto. Simple mode does not
- * show this (plan: macros stay out of the way).
+ * / carbs / fat, or fat / protein / net carbs in keto.
  *
  * `calories` ({ current, goal }) adds the "Eaten 1,680 cal" row first, in the
  * app's blue. `head` adds the "% of daily target" column heading.

@@ -4,29 +4,26 @@ import { alpha } from '@mui/material/styles';
 import { ChevronRight as ChevronIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import { moreGroupsFor } from '../components/Layout/navConfig.jsx';
-import { useExperience } from '../contexts/ExperienceContext.jsx';
 import { LabelPanel, Page } from '../components/primitives';
 
 /**
- * More — everything that isn't Home, Log or Weight
- * (DOCS/SIMPLE_AND_FULL_PLAN.md item 6). Activity, Reports and Profile used
- * to hold bottom-bar slots; they live here now, with every other page, so
- * moving the check-ins into the bar removed nothing.
+ * More — everything the phone's tabs (Today, Weight, Trends) don't hold
+ * (DOCS/ONE_APP_PLAN.md §3): Blood pressure, Medications, Saved foods,
+ * Calorie plan, Import a scan, Settings. One list, the same for everybody.
  *
- * Big rows, one line of plain description each. Simple mode puts blood
- * pressure, meds and Settings first and the rest under "Everything else".
+ * Big rows, one line of plain description each.
  */
 
 export default function More() {
-  const { effectiveMode } = useExperience();
-  const groups = moreGroupsFor(effectiveMode);
+  const groups = moreGroupsFor();
 
   return (
     <Page narrow data-testid="more-page">
       {groups.map((group) => (
         <LabelPanel
           key={group.label}
-          title={group.label}
+          // The top bar already says "More"; one list needs no second title.
+          title={groups.length > 1 ? group.label : undefined}
           titleComponent="h2"
           component="section"
           aria-label={group.label}

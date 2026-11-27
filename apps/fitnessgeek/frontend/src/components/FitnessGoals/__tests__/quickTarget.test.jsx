@@ -1,8 +1,8 @@
 /**
- * Simple's quick target (IA-1, L8; Chef 2026-10-17). In Simple, or with
- * ?quick=1, "Set your daily target" is one screen — "How fast?" and one
- * sentence — worked out by the wizard's own code and saved as the same
- * nutrition_goal. Full without the flag keeps the four-step wizard. The plan
+ * The quick target (IA-1, L8; Chef 2026-10-17). With ?quick=1, "Set your
+ * daily target" is one screen — "How fast?" and one sentence — worked out by
+ * the wizard's own code and saved as the same nutrition_goal. Without the
+ * flag it is the four-step wizard (there is no mode any more). The plan
  * starts from the 7-day average weight, the weight card's basis (D-3).
  */
 import React from 'react';
@@ -38,7 +38,7 @@ const { default: CalorieGoalWizard } = await import('../AIGoalPlanner.jsx');
 
 const HEATHER = { age: 52, height: '5\'4"', gender: 'female' };
 
-function setup({ simple = true, goal = 'lose', profile = HEATHER, mean = 180.4, latest = 178.6, nutrition_goal = null, logs: givenLogs = null } = {}) {
+function setup({ quick = true, goal = 'lose', profile = HEATHER, mean = 180.4, latest = 178.6, nutrition_goal = null, logs: givenLogs = null } = {}) {
   settingsService.getSettings.mockResolvedValue({ data: { nutrition_goal } });
   userService.getProfile.mockResolvedValue({ profile });
   userService.getLatestWeight.mockResolvedValue(latest);
@@ -47,7 +47,8 @@ function setup({ simple = true, goal = 'lose', profile = HEATHER, mean = 180.4, 
     log_date: `2026-10-${String(10 + i).padStart(2, '0')}T00:00:00.000Z`, weight_value: mean,
   }));
   weightService.getWeightLogs.mockResolvedValue({ success: true, data: givenLogs || logs });
-  const value = { isSimple: simple, effectiveMode: simple ? 'simple' : 'full', goal };
+  window.history.replaceState(null, '', quick ? '/calorie-wizard?quick=1' : '/calorie-wizard');
+  const value = { goal };
   render(
     <ExperienceContext.Provider value={value}>
       <CalorieGoalWizard />
@@ -62,7 +63,7 @@ const expectedTarget = ({ weightLb = 180.4, heightIn = 64, age = 52, gender = 'f
   return Math.round(Math.max(Math.max(1200, Math.round(bmr * 0.8)), tdee - rate * 500));
 };
 
-describe('Quick target — Simple', () => {
+describe('Quick target (?quick=1)', () => {
   beforeEach(() => { vi.clearAllMocks(); });
   afterEach(() => { window.history.replaceState(null, '', '/'); });
 
@@ -199,18 +200,17 @@ describe('Quick target — Simple', () => {
   });
 });
 
-describe('Quick target — Full', () => {
+describe('Quick target — the wizard', () => {
   beforeEach(() => { vi.clearAllMocks(); });
   afterEach(() => { window.history.replaceState(null, '', '/'); });
 
-  it('?quick=1 opens the quick form in Full too (the Home link)', async () => {
-    window.history.replaceState(null, '', '/calorie-wizard?quick=1');
-    setup({ simple: false });
+  it('?quick=1 opens the quick form (the Today link)', async () => {
+    setup({ quick: true });
     expect(await screen.findByText('How fast?')).toBeInTheDocument();
   });
 
-  it('Full without the flag is the four-step wizard, unchanged', async () => {
-    setup({ simple: false });
+  it('without the flag it is the four-step wizard, unchanged', async () => {
+    setup({ quick: false });
     expect(await screen.findByText(/Choose your approach/i)).toBeInTheDocument();
     expect(screen.queryByText('How fast?')).toBeNull();
   });

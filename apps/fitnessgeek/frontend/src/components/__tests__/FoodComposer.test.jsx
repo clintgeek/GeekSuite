@@ -18,7 +18,6 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { GeekToastProvider } from '@geeksuite/ui';
-import { ExperienceContext } from '../../contexts/ExperienceContext.jsx';
 
 const suggest = vi.fn();
 const search = vi.fn();
@@ -51,16 +50,11 @@ const food = (name, overrides = {}) => ({
   ...overrides
 });
 
-const SIMPLE = { isSimple: true, effectiveMode: 'simple', loading: false, known: true };
-
-const renderBox = (props = {}, { simple = false } = {}) => {
-  const box = <FoodComposer onLogItems={vi.fn()} {...props} />;
-  return render(
-    <GeekToastProvider>
-      {simple ? <ExperienceContext.Provider value={SIMPLE}>{box}</ExperienceContext.Provider> : box}
-    </GeekToastProvider>
-  );
-};
+const renderBox = (props = {}) => render(
+  <GeekToastProvider>
+    <FoodComposer onLogItems={vi.fn()} {...props} />
+  </GeekToastProvider>
+);
 
 // A logged food's name is also the ribbon's first line; the result row comes
 // first in the page, so `[0]` is the row (findAllByText('Egg')[0]).
@@ -480,7 +474,7 @@ describe('describing a meal', () => {
     expect(await screen.findByText('Saltine crackers')).toBeInTheDocument();
   });
 
-  it('closes the sheet on a clean log in Full — Chef: "the one-tap ... should close"', async () => {
+  it('closes the sheet on a clean log by default — Chef: "the one-tap ... should close"', async () => {
     const onClose = vi.fn();
     renderDescribable({ onClose });
     type('pancakes');
@@ -492,7 +486,7 @@ describe('describing a meal', () => {
     expect(onClose).toHaveBeenCalledWith({ mealType: 'breakfast' });
   });
 
-  it('Full hands the entries to the "Just added" strip', async () => {
+  it('a clean describe hands the entries to the "Just added" strip', async () => {
     const onJustAdded = vi.fn();
     renderDescribable({ onJustAdded, date: TODAY });
     type('pancakes');
@@ -621,7 +615,7 @@ describe('offline: honest (Chef, 2026-10-16)', () => {
   });
 });
 
-describe('Simple stays open on what landed (Chef, 2026-10-16)', () => {
+describe('resultStyle="card" stays open on what landed (Chef, 2026-10-16)', () => {
   const twoThings = {
     ok: 2, fail: 0, logIds: ['soup', 'crk'],
     logged: [
@@ -634,7 +628,7 @@ describe('Simple stays open on what landed (Chef, 2026-10-16)', () => {
   it('a result card: "Added to lunch", each item with its calories and Fix, Undo all and Done', async () => {
     const onClose = vi.fn();
     const onDescribe = vi.fn().mockResolvedValue(twoThings);
-    renderBox({ onDescribe, onClose, mealType: 'lunch', onUndo: vi.fn() }, { simple: true });
+    renderBox({ onDescribe, onClose, mealType: 'lunch', onUndo: vi.fn(), resultStyle: 'card' });
     type('a bowl of chicken soup and some crackers');
     logIt();
 
@@ -653,7 +647,7 @@ describe('Simple stays open on what landed (Chef, 2026-10-16)', () => {
 
   it('Undo all takes both back and puts her words back in the box', async () => {
     const onUndo = vi.fn().mockResolvedValue({ deleted: ['soup', 'crk'], failed: [] });
-    renderBox({ onDescribe: vi.fn().mockResolvedValue(twoThings), onUndo, mealType: 'lunch' }, { simple: true });
+    renderBox({ onDescribe: vi.fn().mockResolvedValue(twoThings), onUndo, mealType: 'lunch', resultStyle: 'card' });
     type('a bowl of chicken soup and some crackers');
     logIt();
 
@@ -665,7 +659,7 @@ describe('Simple stays open on what landed (Chef, 2026-10-16)', () => {
 
   it('Fix → a calorie number goes out through the C3 override', async () => {
     const onSetCalories = vi.fn().mockResolvedValue({ calories_per_serving: 300 });
-    renderBox({ onDescribe: vi.fn().mockResolvedValue(twoThings), onSetCalories, mealType: 'lunch', date: TODAY }, { simple: true });
+    renderBox({ onDescribe: vi.fn().mockResolvedValue(twoThings), onSetCalories, mealType: 'lunch', date: TODAY, resultStyle: 'card' });
     type('a bowl of chicken soup and some crackers');
     logIt();
 
@@ -687,7 +681,7 @@ describe('Simple stays open on what landed (Chef, 2026-10-16)', () => {
       .mockResolvedValueOnce(twoThings)
       .mockResolvedValueOnce({ logged: [{ logId: 'tom', name: 'Tomato soup', calories: 180, loggedServings: 1, mealType: 'lunch', nutrition: { calories_per_serving: 180 } }], skipped: [], logIds: ['tom'] });
     const onUndo = vi.fn().mockResolvedValue({ deleted: ['soup'], failed: [] });
-    renderBox({ onDescribe, onUndo, onSetCalories: vi.fn(), mealType: 'lunch', date: '2026-10-13' }, { simple: true });
+    renderBox({ onDescribe, onUndo, onSetCalories: vi.fn(), mealType: 'lunch', date: '2026-10-13', resultStyle: 'card' });
     type('a bowl of chicken soup and some crackers');
     logIt();
 
@@ -705,7 +699,7 @@ describe('Simple stays open on what landed (Chef, 2026-10-16)', () => {
   });
 
   it('the result names the day when it isn\'t today', async () => {
-    renderBox({ onDescribe: vi.fn().mockResolvedValue(twoThings), mealType: 'lunch', date: '2026-10-13' }, { simple: true });
+    renderBox({ onDescribe: vi.fn().mockResolvedValue(twoThings), mealType: 'lunch', date: '2026-10-13', resultStyle: 'card' });
     type('soup');
     logIt();
     // L22: on a backfilled sheet, days are weekdays — the title says
@@ -1122,7 +1116,7 @@ describe('B8: undo says what happened', () => {
   });
 
   it('the undo toast stays up for ten seconds, not four', async () => {
-    // A toast that carries Undo: a describe in Full with no strip to show it
+    // A toast that carries Undo: a describe with no strip to show it
     // (a tap's toast no longer does — the ribbon has the Undo, A9/B7).
     const onDescribe = vi.fn().mockResolvedValue({
       ok: 1, fail: 0, logIds: ['l1'], skipped: [], questions: [], totalCalories: 200,
@@ -1449,7 +1443,7 @@ describe('L12: with a "Just added" strip, no toast sits on top of it', () => {
     logged: [{ logId: 'log-1', name: 'Chocolate chip pancakes', loggedServings: 1, mealType: 'breakfast', calories: 880, nutrition: { calories_per_serving: 880 } }],
   };
 
-  it('Full with a strip: the strip gets the entries, and there is no toast or Undo', async () => {
+  it('with a strip: the strip gets the entries, and there is no toast or Undo', async () => {
     const onJustAdded = vi.fn();
     renderBox({ onDescribe: vi.fn().mockResolvedValue(pancakes), onJustAdded, onUndo: vi.fn(), onClose: vi.fn() });
     type('pancakes');
@@ -1462,13 +1456,13 @@ describe('L12: with a "Just added" strip, no toast sits on top of it', () => {
     expect(document.querySelector('[data-geek-toast]')).toBeNull();
   });
 
-  // The sheet really closes in Full (it unmounts): the strip has the Undo,
+  // The sheet really closes by default (it unmounts): the strip has the Undo,
   // so closing the sitting raises no second one (harness 48c).
   const closeable = (props) => (open) => (
     <GeekToastProvider>{open ? <FoodComposer onLogItems={vi.fn()} {...props} /> : null}</GeekToastProvider>
   );
 
-  it('Full with a strip: the sheet closing after a describe raises no toast', async () => {
+  it('with a strip: the sheet closing after a describe raises no toast', async () => {
     const onJustAdded = vi.fn();
     const tree = closeable({ onDescribe: vi.fn().mockResolvedValue(pancakes), onJustAdded, onUndo: vi.fn(), onClose: vi.fn() });
     const { rerender } = render(tree(true));
@@ -1516,7 +1510,7 @@ describe('L4 + L6: the result card says amounts, and the meal per row when they 
       ok: 1, fail: 0, logIds: ['p'], skipped: [], questions: [], totalCalories: 400,
       logged: [{ logId: 'p', name: 'Pancakes', loggedServings: 2, mealType: 'breakfast', calories: 400, nutrition: { calories_per_serving: 200 } }],
     });
-    renderBox({ onDescribe, mealType: 'breakfast' }, { simple: true });
+    renderBox({ onDescribe, mealType: 'breakfast', resultStyle: 'card' });
     type('two pancakes');
     logIt();
     const card = await screen.findByTestId('result-card');
@@ -1531,7 +1525,7 @@ describe('L4 + L6: the result card says amounts, and the meal per row when they 
         { logId: 'f', name: 'Fries', loggedServings: 1, mealType: 'dinner', calories: 300, nutrition: { calories_per_serving: 300 } },
       ],
     });
-    renderBox({ onDescribe, mealType: 'lunch', date: TODAY }, { simple: true });
+    renderBox({ onDescribe, mealType: 'lunch', date: TODAY, resultStyle: 'card' });
     type('fried chicken, fries tonight');
     logIt();
     const card = await screen.findByTestId('result-card');
@@ -1544,7 +1538,7 @@ describe('L4 + L6: the result card says amounts, and the meal per row when they 
       ok: 1, fail: 0, logIds: ['s'], skipped: [], questions: [], totalCalories: 220,
       logged: [{ logId: 's', name: 'Soup', loggedServings: 1, mealType: 'lunch', calories: 220, nutrition: { calories_per_serving: 220 } }],
     });
-    renderBox({ onDescribe, mealType: 'lunch' }, { simple: true });
+    renderBox({ onDescribe, mealType: 'lunch', resultStyle: 'card' });
     type('a bowl of soup');
     logIt();
     const card = await screen.findByTestId('result-card');

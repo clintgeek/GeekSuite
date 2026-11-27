@@ -1002,3 +1002,46 @@ written spec, saved verbatim as `apps/fitnessgeek/DOCS/DASHBOARD_REDESIGN_SPEC.m
 - Verified: unit suite 1,050 / 1,050; contrast 664 / 664; PWA audit clean; harness on phone, desktop and
   tablet with a11y enforcing, 1,166 scenes, 0 violations, 0 a11y, 0 page errors. Not yet on a real device.
 
+
+## 2026-11-27: FitnessGeek is one app (Simple and Full are gone)
+
+Chef: "I think I've over-complicated this thing to the point that I'm not even sure how it works anymore. Let's
+clean this up. Make it easy to use. Logging is obviously the most common interaction so let's focus that and
+put the rest within reach but not demanding attention every time you open the app." Spec:
+`apps/fitnessgeek/DOCS/ONE_APP_PLAN.md`.
+
+- ONE commit so it can be reverted. Frontend only: no API, GraphQL or data change. The saved `experience.mode`
+  is left alone and only read, to decide who still needs the first run.
+- **No modes.** `useExperience()` lost `isSimple`, `effectiveMode`, `savedMode` and `setMode`; it has
+  `needsFirstRun`. The Simple / Full chooser is out of Settings. Larger text stays.
+- **Today** (`/dashboard`) is Home and Food log in one page: the day with previous / next, what is left (ring
+  and sentence), "What did you eat?", check-in pills, the meals with their foods, meds ticks, then your
+  numbers and the AI notes. Macros, the activity add-back and "change today's target" sit behind one
+  "Macros and details" disclosure, closed by default and remembered per device. From `md` up the composer is
+  inline in a second column. `/food-log` redirects and keeps its query string.
+- **A food row is one button** (name, amount, calories) that opens the edit dialog. Favourite, remove,
+  servings and nutrition are in the dialog; the row's star, pencil and trash are gone. Copy from another day
+  and Save as a meal are in each meal's "more" menu.
+- **Edit a food:** total calories first, "Per serving and nutrition" behind a disclosure, for everyone.
+- **Medications:** one "Add a medication" button and one dialog (name with live suggestions, when you take
+  it, "More details" for strength, type and what it is for). Ticks on Today and on the page, for everyone.
+- **Fewer places:** Trends (`/trends`, tabs Food / Activity / Health) and Saved foods (`/saved-foods`, tabs
+  Meals / Foods). `/reports`, `/activity`, `/health`, `/my-meals`, `/my-foods` redirect to the right tab.
+  Sidebar: Today, Weight, Blood pressure, Medications, Trends, Saved foods (13 rows became 6). Phone tabs:
+  Today, Weight, Trends, More. Calorie plan and Import a scan are reached from More, Settings and where they
+  are used; "look up a specific food" is in the add sheet.
+- Deleted: `DashboardNew.jsx`, `FoodLog.jsx`, `MealSection`, `CalorieSummary`, `NutritionSummary`,
+  `DateNavigator`, `useFoodLog`.
+- Behaviour that changed on purpose: duplicate entries are no longer merged into "Egg ×2" (each entry is its
+  own row); per-row macros are only in the edit dialog; the target editor and the activity line show on today
+  only; after describing a meal the sheet closes and the meal shows a "Just added" strip with Fix and Undo.
+- Harness: scenes rewritten to the one-app structure (17 removed as duplicates of a mode, 13 added for Today
+  details, the meal menu, another day, remove-and-undo, Trends, Saved foods and the medication dialog);
+  162 scene ids.
+- Landmines: the 4px spacing unit again (`mb: 2` between form fields is 8px; the edit and medication dialogs
+  were cramped until rescaled); a scene that stubs page routes must drop them in teardown or they leak into
+  every later scene; MUI scrollable tabs keep the width of a disabled scroll button, which pushed the Health
+  pills 40px in.
+- Found, not fixed: "Change today's target" picks the weekday with `new Date('YYYY-MM-DD').getDay()` (UTC), so
+  it may write the day before's slot in US time zones (carried over from the old Food log; the plan doc has
+  the detail). A single `null` in the saved-foods list takes the page to the error boundary.

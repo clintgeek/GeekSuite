@@ -1,6 +1,6 @@
-// Wave A scenes (settings, quick target, medications, reports, blood pressure).
-// Prefix 6x: 60 Settings, 61 Settings in Full, 62 quick target, 63-65 medications,
-// 66 Reports, 67-68 blood pressure, 69 Home's AI card. See scenes.mjs.
+// Wave A scenes (settings, quick target, medications, Trends › Food, blood pressure).
+// Prefix 6x: 60-61 Settings, 62 quick target, 63-65 medications,
+// 66 Trends › Food, 67-68 blood pressure, 69 Today's AI card. See scenes.mjs.
 //
 // Every scene stubs for itself (page-scoped GraphQL ops, page.route for the
 // REST ones) and takes the stubs down again whether it passes or throws: one
@@ -8,8 +8,8 @@
 // that moved fails loudly instead of skipping.
 import { json, graphqlRoute } from '../../lib/net.mjs';
 import { withHistoryBounds } from './history-ops.mjs';
-import { OPS, SETTINGS, USER, MEDS, experienceOf, heatherOps } from './fixtures.mjs';
-import { scrollToSection, HEATHER, isoLocal } from './helpers.mjs';
+import { OPS, SETTINGS, USER, MEDS, experienceOf, opsWithPlan } from './fixtures.mjs';
+import { scrollToSection, isoLocal } from './helpers.mjs';
 
 // must(), but it waits: the lazy chart islands and the quick target's loader
 // take a beat, and a slow machine is not a regression. Still THROWS when the
@@ -61,17 +61,12 @@ const stubbed = (name, { ops, profile, rest = {}, path, wait = 1500, fn, viewpor
 };
 
 // ── Who is signed in ────────────────────────────────────────────────────
-// Heather: Simple, 52, 5'4", female. Chef is the context's own USER (44, 6'1").
-const HEATHER_ME = { email: 'heather@example.com', profile: { age: 52, height: '5\'4"', gender: 'female' } };
-const HEATHER_NO_AGE = { email: 'heather@example.com', profile: { height: '5\'4"', gender: 'female' } };
-
-const heatherSettings = heatherOps(HEATHER).GetFitnessUserSettings.fitnessUserSettings;
-const withGoal = (patch) => ({
-  ...heatherOps(HEATHER),
-  GetFitnessUserSettings: {
-    fitnessUserSettings: { ...heatherSettings, nutrition_goal: { ...heatherSettings.nutrition_goal, ...patch } },
-  },
-});
+// Chef, the context's own USER (44, 6'1", male). A scene that needs a
+// different profile answer patches /api/me for itself.
+const NO_AGE = { profile: { height: USER.profile.height, gender: USER.profile.gender } };
+const absent = async (locator, what) => {
+  if (await locator.count()) throw new Error(`still on the page: ${what}`);
+};
 
 // Ten daily weigh-ins, newest lowest: the quick target's weight is the 7-day
 // average the client works out (currentAverage) from these, not a stat.
@@ -85,74 +80,69 @@ const DAILY_WEIGHTS = Array.from({ length: 10 }, (_, i) => ({
   formatted_date: daysAgoIso(9 - i),
 }));
 
-// Chef in Full with Garmin on and a login saved, household joined (SETTINGS).
-const FULL_EXPERIENCE = experienceOf({ mode: 'full', first_run_done: true, preferred_name: 'Chef' });
-const fullSettings = {
-  fitnessUserSettings: { ...SETTINGS, garmin: { ...SETTINGS.garmin, enabled: true, username: 'chef@example.com' } },
+// Chef with a name he chose, Garmin on with a login saved, household joined (SETTINGS).
+const CHEF = {
+  ...OPS,
+  GetFitnessExperience: experienceOf({ first_run_done: true, preferred_name: 'Chef' }),
+  GetFitnessUserSettings: {
+    fitnessUserSettings: { ...SETTINGS, garmin: { ...SETTINGS.garmin, enabled: true, username: 'chef@example.com' } },
+  },
 };
-const FULL = { ...OPS, GetFitnessExperience: FULL_EXPERIENCE, GetFitnessUserSettings: fullSettings };
 
-// ── Settings, Simple ────────────────────────────────────────────────────
-const SIMPLE_SETTINGS = heatherOps(HEATHER);
-
-const settingsSimple = [
-  // Simple Settings: How it looks, About you, and "More settings" still folded away.
-  stubbed('60-settings-simple', {
-    ops: SIMPLE_SETTINGS, profile: HEATHER_ME, path: '/settings',
+// ── Settings: one page, nothing folded; one section in view per scene ───
+const SETTINGS_PAGE = { ops: CHEF, profile: { email: 'chef@example.com' }, path: '/settings' };
+const settingsScenes = [
+  // Settings from the top: How it looks, About you, Plans and imports, then
+  // everything else — no "More settings" fold, and no Simple / Full chooser.
+  stubbed('61-settings', {
+    ...SETTINGS_PAGE,
     async fn(page) {
       await must(page.locator('[data-testid="experience-settings"]'), 'How it looks');
       await must(page.locator('[data-testid="about-you"]'), 'About you');
-      const more = await must(page.getByRole('button', { name: /^more settings$/i }), 'More settings');
-      if ((await more.getAttribute('aria-expanded')) !== 'false') throw new Error('More settings should start closed');
-      if (await page.locator('#garmin').count()) throw new Error('Garmin showing before More settings was opened');
-      await must(page.getByLabel('What should I call you?'), 'name field');
+      const plans = await must(page.locator('[data-testid="settings-plans"]'), 'Plans and imports');
+      await must(plans.getByRole('link', { name: 'Calorie plan' }), 'the way to the calorie plan');
+      await must(plans.getByRole('link', { name: 'Import a scan' }), 'the way to Import a scan');
+      await absent(page.getByRole('button', { name: /^more settings$/i }), 'the "More settings" fold');
+      await absent(page.locator('#more-settings'), 'the "More settings" fold');
+      for (const gone of ['mode-simple', 'mode-full', 'simple-view-line']) await absent(page.locator(`[data-testid="${gone}"]`), gone);
+      // What the fold used to hide is simply on the page.
+      for (const id of ['household', 'garmin', 'health-alerts', 'account']) await must(page.locator(`#${id}`), `#${id}, with nothing to open first`);
+      const order = await page.evaluate(() => ['looks', 'you', 'plans', 'household', 'garmin', 'health-alerts', 'account']
+        .map((id) => [id, document.getElementById(id)?.getBoundingClientRect().top ?? null]));
+      const tops = order.map(([, y]) => y);
+      if (tops.some((y) => y === null) || tops.some((y, i) => i && y <= tops[i - 1])) throw new Error(`Settings sections are out of order: ${JSON.stringify(order)}`);
       const name = await page.getByLabel('What should I call you?').inputValue();
-      if (name !== 'Heather') throw new Error(`name field says "${name}", wanted Heather`);
+      if (name !== 'Chef') throw new Error(`name field says "${name}", wanted Chef`);
     },
   }),
-  // The same page scrolled to About you: the name, the goal and her age, height and sex, filled from /api/me.
-  stubbed('60a-settings-simple-you', {
-    ops: SIMPLE_SETTINGS, profile: HEATHER_ME, path: '/settings',
+  // The same page scrolled to About you: the name, the goal and age, height and sex, filled from /api/me.
+  stubbed('60a-settings-you', {
+    ...SETTINGS_PAGE,
     async fn(page, h) {
       await must(page.getByLabel('Age'), 'Age field');
-      if ((await page.getByLabel('Age').inputValue()) !== '52') throw new Error('Age did not fill from the profile');
+      if ((await page.getByLabel('Age').inputValue()) !== '44') throw new Error('Age did not fill from the profile');
       await scrollToSection(page, h, '[data-testid="about-you"] >> text=Used to work out your calorie target.', 160);
     },
   }),
-  // More settings opened in Simple: Household, Garmin (off), Health alerts, Account.
-  stubbed('60b-settings-simple-more', {
-    ops: SIMPLE_SETTINGS, profile: HEATHER_ME, path: '/settings',
+  // Plans and imports: the two pages with no row in the navigation.
+  stubbed('61f-settings-plans', {
+    ...SETTINGS_PAGE,
     async fn(page, h) {
-      await (await must(page.getByRole('button', { name: /^more settings$/i }), 'More settings')).click();
-      await h.settle(700);
-      await must(page.locator('#household'), 'Household');
-      await must(page.locator('#garmin'), 'Garmin');
-      await must(page.locator('#account'), 'Account');
-      await scrollToSection(page, h, '#more-settings', 120);
-    },
-  }),
-];
-
-// ── Settings, Full: one section in view per scene ───────────────────────
-const FULL_SETTINGS = { ops: FULL, profile: { email: 'chef@example.com' }, path: '/settings' };
-const settingsFull = [
-  // Merged Settings in Full: How it looks and About you on top, no "More settings" fold.
-  stubbed('61-settings-full', {
-    ...FULL_SETTINGS,
-    async fn(page) {
-      await must(page.locator('[data-testid="experience-settings"]'), 'How it looks');
-      await must(page.locator('[data-testid="about-you"]'), 'About you');
-      if (await page.getByRole('button', { name: /^more settings$/i }).count()) throw new Error('Full should not fold anything');
+      const plans = await must(page.locator('[data-testid="settings-plans"]'), 'Plans and imports');
+      await must(plans.getByRole('heading', { name: 'Plans and imports', level: 2 }), 'its heading');
+      if ((await plans.getByRole('link', { name: 'Calorie plan' }).getAttribute('href')) !== '/calorie-wizard') throw new Error('Calorie plan does not go to /calorie-wizard');
+      if ((await plans.getByRole('link', { name: 'Import a scan' }).getAttribute('href')) !== '/scan-import') throw new Error('Import a scan does not go to /scan-import');
+      await scrollToSection(page, h, '#plans', 96);
     },
   }),
   // Household, joined: the member list and what is shared.
   stubbed('61a-settings-household', {
-    ...FULL_SETTINGS,
+    ...SETTINGS_PAGE,
     async fn(page, h) { await must(page.locator('#household'), '#household'); await scrollToSection(page, h, '#household', 80); },
   }),
   // Garmin on with a login saved: the button offers to update it, never "Connect".
   stubbed('61b-settings-garmin', {
-    ...FULL_SETTINGS,
+    ...SETTINGS_PAGE,
     async fn(page, h) {
       await must(page.getByRole('button', { name: 'Update Garmin login', exact: true }), '"Update Garmin login" (it said "Save", d-fixes)');
       if (await page.getByRole('button', { name: /^connect garmin$/i }).count()) throw new Error('"Connect Garmin" showing for a saved login');
@@ -162,12 +152,12 @@ const settingsFull = [
   }),
   // Health alerts: the sleep apnea suggestion switch and its caveat.
   stubbed('61c-settings-alerts', {
-    ...FULL_SETTINGS,
+    ...SETTINGS_PAGE,
     async fn(page, h) { await scrollToSection(page, h, '#health-alerts', 80); },
   }),
   // Account at the bottom: who is signed in, and Sign out.
   stubbed('61d-settings-account', {
-    ...FULL_SETTINGS,
+    ...SETTINGS_PAGE,
     async fn(page, h) {
       const email = await must(page.locator('[data-testid="account-email"]'), 'account email');
       if (!/chef@example\.com/.test(await email.innerText())) throw new Error('account email did not come from /api/me');
@@ -176,7 +166,7 @@ const settingsFull = [
   }),
   // /profile redirects to /settings#you, and About you is the section in view.
   stubbed('61e-profile-lands-on-you', {
-    ops: FULL, profile: { email: 'chef@example.com' }, path: '/profile',
+    ops: CHEF, profile: { email: 'chef@example.com' }, path: '/profile',
     async fn(page, h) {
       const hash = new URL(page.url()).hash;
       if (hash !== '#you') throw new Error(`/profile landed on "${hash}", wanted #you`);
@@ -191,16 +181,23 @@ const settingsFull = [
 ];
 
 // ── Quick target ────────────────────────────────────────────────────────
+// The one-screen target, reached with ?quick=1 (Today's "Set your daily
+// target" links there); /calorie-wizard without the flag is the four-step
+// wizard for everybody (scenes 16 and 17).
+const QUICK = '/calorie-wizard?quick=1';
+const SAVED_TARGET = { ...opsWithPlan({ enabled: true, daily_calorie_target: 1950, weekly_schedule: Array(7).fill(1950), bmr: 1500, tdee: 2300 }), GetFitnessWeights: { fitnessWeights: DAILY_WEIGHTS } };
+const NO_TARGET = { ...opsWithPlan({ enabled: false, daily_calorie_target: null, bmr: null, tdee: null }), GetFitnessWeights: { fitnessWeights: DAILY_WEIGHTS } };
+
 const quickTarget = [
-  // Quick target in Simple, with a target already saved: it knows everything, so it says one sentence.
+  // Quick target with a target already saved: it knows everything, so it says one sentence.
   stubbed('62-quick-target', {
-    ops: { ...withGoal({ enabled: true, daily_calorie_target: 1950, bmr: 1500, tdee: 2300 }), GetFitnessWeights: { fitnessWeights: DAILY_WEIGHTS } },
-    profile: HEATHER_ME, path: '/calorie-wizard',
+    ops: SAVED_TARGET, path: QUICK,
     async fn(page) {
       await must(page.locator('[data-testid="quick-target"]'), 'quick target');
+      if (await page.getByText('Approach', { exact: true }).count()) throw new Error('the four-step stepper showed with ?quick=1');
       const known = await must(page.locator('[data-testid="quick-known"]'), 'the "Using ..." line');
       const text = await known.innerText();
-      if (!/7-day average/.test(text) || !/age 52/.test(text)) throw new Error(`quick-known says "${text}"`);
+      if (!/7-day average/.test(text) || !/age 44/.test(text)) throw new Error(`quick-known says "${text}"`);
       const current = await must(page.locator('[data-testid="quick-current-target"]'), 'current target line');
       if (!/1,950/.test(await current.innerText())) throw new Error('current target is not 1,950');
       const result = await must(page.locator('[data-testid="quick-result"]'), 'the one sentence');
@@ -210,8 +207,7 @@ const quickTarget = [
   }),
   // The same, with "How this was worked out" open: the BMR and TDEE card.
   stubbed('62a-quick-target-working', {
-    ops: { ...withGoal({ enabled: true, daily_calorie_target: 1950, bmr: 1500, tdee: 2300 }), GetFitnessWeights: { fitnessWeights: DAILY_WEIGHTS } },
-    profile: HEATHER_ME, path: '/calorie-wizard',
+    ops: SAVED_TARGET, path: QUICK,
     async fn(page, h) {
       const how = await must(page.getByRole('button', { name: /how this was worked out/i }), 'How this was worked out');
       await how.click();
@@ -223,8 +219,7 @@ const quickTarget = [
   }),
   // No age on the profile: it asks for the age and nothing else it can work out.
   stubbed('62b-quick-target-asks-age', {
-    ops: { ...withGoal({ enabled: true, daily_calorie_target: 1950, bmr: 1500, tdee: 2300 }), GetFitnessWeights: { fitnessWeights: DAILY_WEIGHTS } },
-    profile: HEATHER_NO_AGE, path: '/calorie-wizard',
+    ops: SAVED_TARGET, profile: NO_AGE, path: QUICK,
     async fn(page) {
       await must(page.getByLabel('Your age'), 'the age question');
       for (const asked of ['Your weight now (lb)', 'Your height']) {
@@ -233,10 +228,9 @@ const quickTarget = [
       if (await page.locator('[data-testid="quick-result"]').count()) throw new Error('an answer before the age was given');
     },
   }),
-  // First visit from Simple (no target yet): "Set your daily target", the speeds, then the answer.
+  // First visit (no target yet): "Set your daily target", the speeds, then the answer.
   stubbed('62c-quick-target-first', {
-    ops: { ...heatherOps(HEATHER), GetFitnessWeights: { fitnessWeights: DAILY_WEIGHTS } },
-    profile: HEATHER_ME, path: '/calorie-wizard',
+    ops: NO_TARGET, path: QUICK,
     async fn(page) {
       await must(page.getByRole('heading', { name: /set your daily target/i }), 'heading');
       await must(page.locator('[data-testid="quick-speed-1"]'), 'Steady speed');
@@ -244,58 +238,93 @@ const quickTarget = [
       await must(page.locator('[data-testid="quick-result"]'), 'the answer');
     },
   }),
-  // Full reaches the same screen with ?quick=1; without the flag it is the four-step wizard.
-  stubbed('62d-quick-target-full', {
-    ops: { ...FULL, GetFitnessWeights: { fitnessWeights: DAILY_WEIGHTS } }, path: '/calorie-wizard?quick=1',
-    async fn(page) {
-      await must(page.locator('[data-testid="quick-target"]'), 'quick target in Full');
-      if (await page.getByText('Approach', { exact: true }).count()) throw new Error('the four-step stepper showed with ?quick=1');
-      await must(page.locator('[data-testid="quick-result"]'), 'the answer');
-    },
-  }),
 ];
 
 // ── Medications ─────────────────────────────────────────────────────────
+// One page: today's ticks, one "Add a medication" button, one dialog (the
+// name with live suggestions, when it is taken, and "More details" holding
+// Strength, Type and what it is for). The inline "Find a medication" search
+// and the inline editor are gone.
 const M1 = { ...MEDS[0], id: 'm1', display_name: 'Lisinopril', times_of_day: ['morning'] };
 const M2 = { ...MEDS[1], id: 'm2', display_name: 'Vitamin D', med_type: 'supplement', times_of_day: [] };
 const LISIN = [{ rxcui: '29046', name: 'Lisinopril' }, { rxcui: '314076', name: 'Lisinopril 10 MG Oral Tablet' }];
 const noLogs = (r) => json(r, { success: true, data: [] });
 const searchOf = (rows) => (r) => json(r, { success: true, data: rows });
 const DETAILS = (r) => json(r, { success: true, data: { strengths: [{ rxcui: '314076', name: '10 MG' }], suggested: ['hypertension'] } });
-const medsOps = (base, meds) => ({ ...base, GetFitnessMedications: { fitnessMedications: meds } });
+const medsOps = (meds) => ({ ...OPS, GetFitnessMedications: { fitnessMedications: meds } });
 const MEDS_REST = (rows = []) => ({ '**/api/meds/logs/by-date*': noLogs, '**/api/meds/search*': searchOf(rows), '**/api/meds/rxcui/*': DETAILS });
 
+const openAdd = async (page, h) => {
+  const add = page.getByRole('button', { name: /^add a medication$/i });
+  await must(add, 'Add a medication');
+  if ((await add.count()) !== 1) throw new Error(`${await add.count()} "Add a medication" buttons; there is one`);
+  await add.click();
+  await h.settle(700);
+  const dialog = await must(page.getByRole('dialog'), 'the add dialog');
+  await must(dialog.getByRole('heading', { name: 'Add a medication' }), 'the dialog title');
+  return dialog;
+};
+const moreDetails = (dialog) => dialog.locator('button[aria-controls="med-more-details"]');
+const noInlineForms = async (page) => {
+  await absent(page.getByLabel('Medication name (brand or generic)'), 'the inline "Find a medication" search box');
+  await absent(page.getByRole('button', { name: /^search$/i }), 'the inline Search button');
+  await absent(page.locator('main').getByLabel('Display name'), 'the inline medication editor');
+};
+
 const medications = [
-  // Medications, empty, in Simple: one sentence and one big Add.
-  stubbed('63-meds-empty-simple', {
-    ops: medsOps(heatherOps(HEATHER), []), rest: MEDS_REST(), path: '/medications',
+  // Medications, empty: one sentence and one big Add.
+  stubbed('63-meds-empty', {
+    ops: medsOps([]), rest: MEDS_REST(), path: '/medications',
     async fn(page) {
       await must(page.getByText('No medications yet'), 'empty title');
-      await must(page.getByRole('button', { name: /^add a medication$/i }), 'Add a medication');
+      const add = page.getByRole('button', { name: /^add a medication$/i });
+      await must(add, 'Add a medication');
+      if ((await add.count()) !== 1) throw new Error(`${await add.count()} "Add a medication" buttons; there is one`);
+      await noInlineForms(page);
+      // Nothing to export yet.
+      await absent(page.getByRole('button', { name: 'Download PDF' }), 'export buttons with no list');
     },
   }),
-  // Simple add, typing "lisin": the RxNorm suggestions appear under the name after the 300ms pause.
-  stubbed('63a-meds-suggest-simple', {
-    ops: medsOps(heatherOps(HEATHER), []), rest: MEDS_REST(LISIN), path: '/medications', dialog: true,
+  // With medications: today's doses to tick, the one Add, the list by time of
+  // day, and the export buttons for everybody.
+  stubbed('63d-meds-list', {
+    ops: medsOps([M1, M2]), rest: MEDS_REST(), path: '/medications',
+    async fn(page) {
+      await must(page.getByText('Today’s doses'), 'today’s doses');
+      await must(page.locator('[data-testid="meds-checklist"]'), 'the dose ticks');
+      const add = page.getByRole('button', { name: /^add a medication$/i });
+      if ((await add.count()) !== 1) throw new Error(`${await add.count()} "Add a medication" buttons; there is one`);
+      await must(page.getByRole('heading', { name: 'Your medications, by time of day' }), 'the list');
+      for (const name of ['Copy text', 'Download .txt', 'Download PDF']) await must(page.getByRole('button', { name, exact: true }), `export: ${name}`);
+      await must(page.getByRole('button', { name: 'Edit Lisinopril' }), 'Edit on a row');
+      await noInlineForms(page);
+    },
+  }),
+  // The add dialog, typing "lisin": the RxNorm suggestions appear under the name after the 300ms pause.
+  stubbed('63a-meds-suggest', {
+    ops: medsOps([]), rest: MEDS_REST(LISIN), path: '/medications', dialog: true,
     async fn(page, h) {
-      await (await must(page.getByRole('button', { name: /^add a medication$/i }).first(), 'Add a medication')).click();
-      await h.settle(700);
-      const box = await must(page.locator('#simple-med-name'), 'name box');
+      const dialog = await openAdd(page, h);
+      const box = await must(dialog.locator('#simple-med-name'), 'name box');
       await box.pressSequentially('lisin', { delay: 40 });
       await h.settle(800);
-      await must(page.getByRole('list', { name: 'Suggestions' }), 'suggestion list');
-      await must(page.getByText('Lisinopril 10 MG Oral Tablet'), 'second suggestion');
+      await must(dialog.getByRole('list', { name: 'Suggestions' }), 'suggestion list');
+      await must(dialog.getByText('Lisinopril 10 MG Oral Tablet'), 'second suggestion');
+      const more = await must(moreDetails(dialog), '"More details"');
+      if ((await more.getAttribute('aria-expanded')) !== 'false') throw new Error('"More details" should start closed');
+      await absent(dialog.locator('#med-more-details'), 'Strength / Type / what it’s for, before "More details" is opened');
     },
   }),
-  // Simple add, "Vitamin D" typed (RxNorm knows nothing), Morning and Bedtime picked, Save in the footer.
-  stubbed('63b-meds-add-simple-filled', {
-    ops: medsOps(heatherOps(HEATHER), []), rest: MEDS_REST([]), path: '/medications', dialog: true,
+  // "Vitamin D" typed (RxNorm knows nothing, and that is fine: a typed name
+  // saves), Morning and Bedtime picked, Save in the footer.
+  stubbed('63b-meds-add-filled', {
+    ops: medsOps([]), rest: MEDS_REST([]), path: '/medications', dialog: true,
     async fn(page, h) {
-      await (await must(page.getByRole('button', { name: /^add a medication$/i }).first(), 'Add a medication')).click();
-      await h.settle(700);
-      const dialog = await must(page.getByRole('dialog'), 'add dialog');
+      const dialog = await openAdd(page, h);
       await dialog.locator('#simple-med-name').fill('Vitamin D');
       await h.settle(700);
+      await absent(dialog.getByRole('list', { name: 'Suggestions' }), 'suggestions for a name RxNorm does not know');
+      await absent(dialog.getByText(/nothing found/i), 'a "Nothing found" dead end');
       for (const slot of ['Morning', 'Bedtime']) {
         const t = dialog.getByRole('button', { name: slot, exact: true });
         await (await must(t, `${slot} toggle`)).click();
@@ -303,6 +332,7 @@ const medications = [
       }
       const save = dialog.getByRole('button', { name: /^save$/i });
       await must(save, 'Save');
+      if (await save.isDisabled()) throw new Error('Save is off for a typed name');
       // Full-screen (under 600px wide) Save lives in the thumb-zone footer
       // (thumb-save). At 600px and up the dialog is a window, so there is no
       // thumb-save: Save is the window's primary action and must sit inside
@@ -317,57 +347,71 @@ const medications = [
       await save.scrollIntoViewIfNeeded();
     },
   }),
-  // Simple Home with no medications: the quiet "Track your meds" way in.
+  // Today with no medications: the quiet "Track your meds" way in.
   stubbed('63c-home-track-meds', {
-    ops: medsOps(heatherOps(HEATHER), []), rest: MEDS_REST(), path: '/dashboard',
+    ops: medsOps([]), rest: MEDS_REST(), path: '/dashboard',
     async fn(page, h) {
       await must(page.locator('[data-testid="track-meds"]'), 'Track your meds');
+      await absent(page.locator('[data-testid="meds-checklist"]'), 'a meds checklist with no medications');
       await scrollToSection(page, h, '[data-testid="track-meds"]', 360);
     },
   }),
-  // Full add form after a search: pick "Lisinopril 10 MG Oral Tablet", get Strength and the suggested "hypertension".
-  stubbed('64-meds-add-full', {
-    ops: medsOps(FULL, [M1, M2]), rest: MEDS_REST(LISIN), path: '/medications',
+  // The add dialog with "More details" open, after picking "Lisinopril 10 MG
+  // Oral Tablet": Strength, Type, and the suggested "hypertension".
+  stubbed('64-meds-add-details', {
+    ops: medsOps([M1, M2]), rest: MEDS_REST(LISIN), path: '/medications', dialog: true,
     async fn(page, h) {
-      await (await must(page.getByLabel('Medication name (brand or generic)'), 'search box')).fill('lisinopril');
-      await (await must(page.getByRole('button', { name: /^search$/i }), 'Search')).click();
-      await h.settle(700);
-      await (await must(page.getByText('Lisinopril 10 MG Oral Tablet'), 'search result')).click();
+      const dialog = await openAdd(page, h);
+      await dialog.locator('#simple-med-name').pressSequentially('lisin', { delay: 40 });
+      await h.settle(800);
+      await (await must(dialog.getByRole('list', { name: 'Suggestions' }).getByText('Lisinopril 10 MG Oral Tablet'), 'the suggestion')).click();
       await h.settle(900);
-      await must(page.getByLabel('Display name'), 'the add form');
-      await must(page.locator('#strength-label'), 'Strength');
-      await must(page.getByRole('button', { name: 'hypertension' }).first(), 'suggested "hypertension"');
-      await scrollToSection(page, h, 'text=Display name', 140);
+      const name = await dialog.locator('#simple-med-name').inputValue();
+      if (!/lisinopril/i.test(name)) throw new Error(`picking a suggestion left the name as "${name}"`);
+      const more = await must(moreDetails(dialog), '"More details"');
+      // A pick that comes with strengths or a suggested use opens the details
+      // itself, so the strength is not saved unseen.
+      if ((await more.getAttribute('aria-expanded')) !== 'true') throw new Error('"More details" did not open for a pick that has strengths');
+      const details = await must(dialog.locator('#med-more-details'), 'the details');
+      await must(details.locator('#strength-label'), 'Strength');
+      await must(details.locator('#type-label'), 'Type');
+      await must(details.getByRole('button', { name: 'hypertension' }).first(), 'suggested "hypertension"');
+      await must(details.getByLabel('Add what it’s for'), 'what it’s for');
+      await more.scrollIntoViewIfNeeded();
+      await h.settle(300);
     },
   }),
-  // Full search with nothing found: "Nothing found" and the filled "Add ... as typed" button.
-  stubbed('64a-meds-nothing-found', {
-    ops: medsOps(FULL, [M1, M2]), rest: MEDS_REST([]), path: '/medications',
+  // The name lookup is down: the dialog says so in a sentence, and a typed
+  // name still saves. (This is what "Nothing found … Add as typed" became.)
+  stubbed('64a-meds-lookup-down', {
+    ops: medsOps([M1, M2]), path: '/medications', dialog: true,
+    rest: { ...MEDS_REST(), '**/api/meds/search*': (r) => json(r, { success: false, error: { message: 'RxNorm is not answering' } }, 502) },
     async fn(page, h) {
-      await (await must(page.getByLabel('Medication name (brand or generic)'), 'search box')).fill('Vitamin D');
-      await (await must(page.getByRole('button', { name: /^search$/i }), 'Search')).click();
-      await h.settle(700);
-      await must(page.getByText(/Nothing found for/), 'nothing found');
-      await must(page.getByRole('button', { name: /add .?vitamin d.? as typed/i }), 'Add as typed');
+      const dialog = await openAdd(page, h);
+      await dialog.locator('#simple-med-name').pressSequentially('Vitamin D', { delay: 40 });
+      await h.settle(1200);
+      await must(dialog.getByText(/I can’t look names up right now\. Type it and save, that’s fine\./), 'the lookup-down line');
+      if (await dialog.getByRole('button', { name: /^save$/i }).isDisabled()) throw new Error('Save is off while the lookup is down');
     },
   }),
-  // "Add as typed" taken: the form opens with the typed name, no strength, no suggestions.
-  stubbed('64b-meds-add-as-typed', {
-    ops: medsOps(FULL, [M1, M2]), rest: MEDS_REST([]), path: '/medications',
+  // Edit goes through the same dialog: "Edit medication", the name and its
+  // times filled in, the same "More details".
+  stubbed('64c-meds-edit', {
+    ops: medsOps([M1, M2]), rest: MEDS_REST(), path: '/medications', dialog: true,
     async fn(page, h) {
-      await (await must(page.getByLabel('Medication name (brand or generic)'), 'search box')).fill('Vitamin D');
-      await (await must(page.getByRole('button', { name: /^search$/i }), 'Search')).click();
-      await h.settle(700);
-      await (await must(page.getByRole('button', { name: /add .?vitamin d.? as typed/i }), 'Add as typed')).click();
-      await h.settle(900);
-      const name = await must(page.getByLabel('Display name'), 'the add form');
-      if ((await name.inputValue()) !== 'Vitamin D') throw new Error('typed name did not carry over');
-      await scrollToSection(page, h, 'text=Display name', 140);
+      await (await must(page.getByRole('button', { name: 'Edit Lisinopril' }), 'Edit on the Lisinopril row')).click();
+      await h.settle(800);
+      const dialog = await must(page.getByRole('dialog'), 'the edit dialog');
+      await must(dialog.getByRole('heading', { name: 'Edit medication' }), 'the dialog title');
+      if ((await dialog.locator('#simple-med-name').inputValue()) !== 'Lisinopril') throw new Error('the name did not carry into the dialog');
+      if ((await dialog.getByRole('button', { name: 'Morning', exact: true }).getAttribute('aria-pressed')) !== 'true') throw new Error('Morning is not selected for a morning medication');
+      await must(moreDetails(dialog), '"More details"');
+      await absent(page.locator('main').getByLabel('Display name'), 'the inline medication editor');
     },
   }),
   // Yesterday's checklist: tap Yesterday, see "Yesterday's doses" with the one dose already ticked.
   stubbed('65-meds-yesterday', {
-    ops: medsOps(heatherOps(HEATHER), [M1, M2]), path: '/medications',
+    ops: medsOps([M1, M2]), path: '/medications',
     rest: {
       '**/api/meds/logs/by-date*': (r) => {
         const date = new URL(r.request().url()).searchParams.get('date');
@@ -391,7 +435,7 @@ const medications = [
   }),
 ];
 
-// ── Reports ─────────────────────────────────────────────────────────────
+// ── Trends › Food (was Reports) ─────────────────────────────────────────────────────────────
 const WHEN = at(0, 9, 40);
 const WEEKLY = {
   fitnessInsightsWeeklyReport: {
@@ -415,9 +459,9 @@ const EMPTY_OPS = {
 };
 
 const reports = [
-  // Reports from the top: Food is the first section, and the range toggle lives in its header.
+  // Trends › Food from the top: Food is the first section, and the range toggle lives in its header.
   stubbed('66-reports-food', {
-    ops: REPORT_OPS, path: '/reports',
+    ops: REPORT_OPS, path: '/trends?tab=food',
     async fn(page) {
       const food = await must(page.locator('[data-testid="reports-food"]'), 'Food section');
       const first = await food.boundingBox();
@@ -429,7 +473,7 @@ const reports = [
   }),
   // The day ribbon: first card whole, status words, and the plum edge on the two over days.
   stubbed('66a-reports-ribbon', {
-    ops: REPORT_OPS, path: '/reports',
+    ops: REPORT_OPS, path: '/trends?tab=food',
     async fn(page, h) {
       const cards = page.locator('[data-testid="day-card"]');
       if ((await cards.count()) < 5) throw new Error(`expected 5 day cards, got ${await cards.count()}`);
@@ -449,7 +493,7 @@ const reports = [
   }),
   // Notes from the AI: Summary and Trends with content, each ending in its "Written by AI ... can be wrong" footer.
   stubbed('66b-reports-ai-notes', {
-    ops: REPORT_OPS, path: '/reports',
+    ops: REPORT_OPS, path: '/trends?tab=food',
     async fn(page, h) {
       await must(page.locator('[data-testid="weekly-ai"]'), 'Summary panel');
       await must(page.locator('[data-testid="trend-ai"]'), 'Trends panel');
@@ -462,7 +506,7 @@ const reports = [
   }),
   // Nothing logged: the Summary and Trends say so in their own words, not the model's.
   stubbed('66c-reports-empty', {
-    ops: EMPTY_OPS, path: '/reports',
+    ops: EMPTY_OPS, path: '/trends?tab=food',
     async fn(page, h) {
       const summary = await must(page.locator('[data-testid="weekly-ai-empty"]'), 'Summary empty line');
       if (!/Log a few days and I.ll write a summary here\./.test(await summary.innerText())) throw new Error('wrong summary empty text');
@@ -473,7 +517,7 @@ const reports = [
   }),
   // Body and recovery with Garmin on: the header's window line, then the cards (07s-07u shoot the groups).
   stubbed('66d-reports-garmin-header', {
-    ops: REPORT_OPS, path: '/reports', wait: 2000,
+    ops: REPORT_OPS, path: '/trends?tab=food', wait: 2000,
     async fn(page, h) {
       await must(page.locator('[data-testid="trend-restingHR"]'), 'resting HR card');
       // The header names the week the cards compare with. It said "Sep 11–17"
@@ -495,7 +539,7 @@ const reports = [
       await scrollToSection(page, h, '#body-recovery', 88);
     },
   }),
-  // Home (Full) AI card opened on Advice: the content and its footer line.
+  // Today's AI card opened on Advice: the content and its footer line.
   stubbed('69-home-ai-advice', {
     ops: {
       ...OPS,
@@ -644,8 +688,7 @@ const bloodPressure = [
 ];
 
 export const scenes = [
-  ...settingsSimple,
-  ...settingsFull,
+  ...settingsScenes,
   ...quickTarget,
   ...medications,
   ...reports,

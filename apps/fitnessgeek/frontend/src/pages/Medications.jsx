@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Typography, TextField, Button, ButtonBase, Chip, Stack, IconButton, ToggleButton, ToggleButtonGroup, FormControl, InputLabel, Select, MenuItem, Alert } from '@mui/material';
+import { Box, Typography, TextField, Button, ButtonBase, Chip, Stack, IconButton, ToggleButton, ToggleButtonGroup, FormControl, InputLabel, Select, MenuItem, Alert, Collapse } from '@mui/material';
 import { useToast, useGeekDialogFullScreen } from '@geeksuite/ui';
-import SearchIcon from '@mui/icons-material/Search';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import EditIcon from '@mui/icons-material/EditOutlined';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
@@ -10,10 +10,9 @@ import AddIcon from '@mui/icons-material/Add';
 import medsService from '../services/medsService.js';
 import { localDateString, localDateStringDaysAgo } from '@geeksuite/utils';
 import { Surface, LabelPanel, ListRow, Page, EmptyState } from '../components/primitives';
-import { createFitnessTheme } from '../theme/theme.jsx';
+import { createFitnessTheme, tonalColors } from '../theme/theme.jsx';
 import PremiumDialog from '../components/primitives/PremiumDialog.jsx';
 import { thumbSaveProps } from '../components/BloodPressure/thumbSave.jsx';
-import { useExperience } from '../contexts/ExperienceContext.jsx';
 import MedsChecklist from '../components/Home/MedsChecklist.jsx';
 import { useMedsToday, announceMedsChanged } from '../hooks/useMedsToday.js';
 import { useToday } from '../hooks/useToday.js';
@@ -59,7 +58,7 @@ const MED_GROUPS = [
   ...TIME_OPTIONS.map((slot) => ({ key: slot, label: slot, match: (m) => (m.times_of_day || []).includes(slot) })),
 ];
 
-// Simple's "When do you take it?" (UX review L16), mapped onto the stored
+// "When do you take it?" (UX review L16), mapped onto the stored
 // `times_of_day` slots (MED_TIME_OF_DAY in @geeksuite/schemas):
 //   Morning → 'morning', Midday → 'afternoon', Evening → 'evening',
 //   Bedtime → 'bedtime'. Any of the four can be picked together.
@@ -67,14 +66,13 @@ const MED_GROUPS = [
 //   dose" means everywhere: medsChecklist (utils/checkIns.js) gives it one
 //   tick with no time label, and the list shows it under "Daily". So
 //   picking Once a day clears the times, and picking a time clears Once a day.
-const SIMPLE_TIMES = [
+const TIME_CHOICES = [
   { value: 'morning', label: 'Morning' },
   { value: 'afternoon', label: 'Midday' },
   { value: 'evening', label: 'Evening' },
   { value: 'bedtime', label: 'Bedtime' },
 ];
-// The list's group names, in the same words as the form — Simple and Full
-// alike ("Midday", never the stored key "afternoon").
+// The list's group names, in the same words as the form — ("Midday", never the stored key "afternoon").
 const SLOT_WORD = { daily: 'Once a day', morning: 'Morning', afternoon: 'Midday', evening: 'Evening', bedtime: 'Bedtime' };
 
 const TYPE_ORDER = { rx: 0, otc: 1, supplement: 2 };
@@ -129,21 +127,15 @@ export default function Medications() {
   const yesterday = localDateStringDaysAgo(1, new Date(`${today}T12:00:00`));
   const doses = useMedsToday(day === 'yesterday' ? yesterday : today);
   const { notify } = useToast();
-  const { isSimple } = useExperience();
   const fullScreen = useGeekDialogFullScreen();
-  // Simple's add/edit is a dialog with two questions (L16).
+  // Add and edit are one dialog: a name and when, with the rest under More details (L16).
   const [adding, setAdding] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [lookupDown, setLookupDown] = useState(false);
   // The name a suggestion filled in: no point searching for it again.
   const pickedRef = useRef('');
-  const [q, setQ] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState([]);
-  // The query the last finished search ran, and whether it failed — so
-  // "nothing found" and "search is down" can both offer "add it as typed".
-  const [searchedFor, setSearchedFor] = useState('');
-  const [searchError, setSearchError] = useState(null);
+  // "More details" in the dialog: strength, type, what it is for.
+  const [moreOpen, setMoreOpen] = useState(false);
   const [listLoading, setListLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   // One write at a time: 'save' | 'update' | the id being removed.
@@ -161,21 +153,7 @@ export default function Medications() {
   const [newTag, setNewTag] = useState('');
   const [medType, setMedType] = useState('rx');
 
-  const editorRef = useRef(null);
   const nameInputRef = useRef(null);
-
-  const scrollToEditorFocus = () => {
-    setTimeout(() => {
-      if (editorRef.current) {
-        // Optional-called: jsdom (and some embedded browsers) have no
-        // scrollIntoView, and a throw here escaped as an unhandled error.
-        editorRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-      }
-      if (nameInputRef.current) {
-        try { nameInputRef.current.focus(); } catch (_) {}
-      }
-    }, 0);
-  };
 
   // Refill tracking (days supply, days left, run-out, the low-supply border)
   // was removed on 2026-09-27. Chef: "just too complicated to keep updated and
@@ -360,39 +338,6 @@ export default function Medications() {
   // The list changed: this page's checklist and Home's both reload.
   const changed = () => announceMedsChanged();
 
-  const handleSearch = async () => {
-    const query = q.trim();
-    if (!query || searching) return;
-    setSearching(true);
-    setSearchError(null);
-    try {
-      const r = await medsService.search(query);
-      // Same rule: `search()` resolves to the candidate array.
-      setResults(Array.isArray(r) ? r : []);
-    } catch (err) {
-      setResults([]);
-      setSearchError(errorMessage(err, 'Couldn’t search just now. Try again, or add it as typed.'));
-    } finally {
-      setSearchedFor(query);
-      setSearching(false);
-    }
-  };
-
-  // RxNorm doesn't know most supplements, and it can be down. Neither should
-  // stop her adding "Vitamin D" (REVIEW B16).
-  const addAsTyped = () => {
-    const name = searchedFor;
-    if (!name) return;
-    setSelected({ name, typed: true });
-    setDisplayName(name);
-    setDetails({ strengths: [], suggested: [] });
-    setUserTags([]);
-    setSelectedStrength(null);
-    setEditingMed(null);
-    setFormError(null);
-    scrollToEditorFocus();
-  };
-
   const selectCandidate = async (c) => {
     setFormError(null);
     setSelected(c);
@@ -402,16 +347,16 @@ export default function Medications() {
       // `getDetails()` resolves to { ingredient, strengths, atcClasses, epcClasses, suggested }.
       setDetails(d || { strengths: [], suggested: [] });
       setUserTags(d?.suggested || []);
+      if ((d?.strengths || []).length || (d?.suggested || []).length) setMoreOpen(true);
     } catch (_) {
       setDetails({ strengths: [], suggested: [] });
     }
     setSelectedStrength(null);
     setEditingMed(null);
-    scrollToEditorFocus();
   };
 
   const buildPayload = () => ({
-    display_name: displayName || selected?.name || q,
+    display_name: displayName || selected?.name || '',
     is_supplement: false,
     med_type: medType,
     rxcui: (selected?.rxcui || editingMed?.rxcui) || null,
@@ -477,21 +422,21 @@ export default function Medications() {
     setDetails(null);
     setMedType('rx');
     setAdding(false);
+    setMoreOpen(false);
     setSuggestions([]);
     setLookupDown(false);
     pickedRef.current = '';
   };
 
-  const startSimpleAdd = () => {
+  const startAdd = () => {
     cancelEdit();
     setAdding(true);
-    scrollToEditorFocus();
   };
 
-  // Live suggestions while she types a name in Simple. RxNorm is a hint, not
+  // Live suggestions while she types a name. RxNorm is a hint, not
   // a gate: whatever she typed can be saved, picked or not, found or not.
   useEffect(() => {
-    if (!isSimple || !adding || editingMed) return undefined;
+    if (!adding || editingMed) return undefined;
     const query = displayName.trim();
     if (query.length < 2 || query === pickedRef.current) {
       setSuggestions([]);
@@ -511,7 +456,7 @@ export default function Medications() {
       }
     }, 300);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [displayName, isSimple, adding, editingMed]);
+  }, [displayName, adding, editingMed]);
 
   const pickSuggestion = (c) => {
     pickedRef.current = c?.name || '';
@@ -520,8 +465,8 @@ export default function Medications() {
     selectCandidate(c);
   };
 
-  // Once a day is no times at all; see SIMPLE_TIMES.
-  const toggleSimpleTime = (slot) => {
+  // Once a day is no times at all; see TIME_CHOICES.
+  const toggleTime = (slot) => {
     setTimesOfDay((prev) => (prev.includes(slot) ? prev.filter((t) => t !== slot) : [...prev, slot]));
   };
 
@@ -534,6 +479,8 @@ export default function Medications() {
     setUserTags(m.user_indications || []);
     setMedType(m.med_type || 'rx');
     setSelectedStrength(null);
+    // Open the details when there is something in them to see.
+    setMoreOpen((m.user_indications || []).length > 0 || (m.med_type || 'rx') !== 'rx');
     if (m.rxcui) {
       try {
         const d = await medsService.getDetails(m.rxcui);
@@ -546,7 +493,6 @@ export default function Medications() {
     } else {
       setDetails({ strengths: [], suggested: [] });
     }
-    scrollToEditorFocus();
   };
 
   // Undo re-creates the removed medicine from the row's own fields — the same
@@ -600,12 +546,19 @@ export default function Medications() {
     }
   };
 
+  const dialogOpen = Boolean(adding || editingMed);
+  const strengths = Array.isArray(details?.strengths) ? details.strengths : [];
+
+  const commitTag = () => {
+    const t = newTag.trim();
+    if (t && !userTags.includes(t)) setUserTags([...userTags, t]);
+    setNewTag('');
+  };
+
   return (
     <Page>
       <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-        {isSimple
-          ? 'Tick off your doses each day, and keep your list of medications here.'
-          : <>Tick off today&rsquo;s doses, keep your list of medications, and export it for your doctor.</>}
+        Tick off today&rsquo;s doses, keep your list of medications, and export it for your doctor.
       </Typography>
 
       {doses.total > 0 && (
@@ -651,180 +604,18 @@ export default function Medications() {
         </Surface>
       )}
 
-      {/* Simple: one big Add, then a two-question dialog (L16). The page's
-          one filled button: full width on a phone, its own width from md. */}
-      {isSimple && myMeds.length > 0 && (
+      {/* One big Add, then one dialog (L16). The page's one filled button:
+          full width on a phone, its own width from md. */}
+      {myMeds.length > 0 && (
         <Button
           variant="contained"
           size="large"
           startIcon={<AddIcon />}
-          onClick={startSimpleAdd}
+          onClick={startAdd}
           sx={{ minHeight: 56, fontSize: '1.0625rem', width: { xs: '100%', md: 'auto' }, alignSelf: { md: 'flex-start' } }}
         >
           Add a medication
         </Button>
-      )}
-
-      {/* Search Surface */}
-      {!isSimple && (
-      <LabelPanel title="Find a medication" titleComponent="h3">
-        <Stack sx={{ mt: 1.5 }} direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
-          <TextField
-            fullWidth
-            size="small"
-            label="Medication name (brand or generic)"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          />
-          <Button
-            variant="contained"
-            startIcon={<SearchIcon />}
-            onClick={handleSearch}
-            disabled={searching || !q.trim()}
-            sx={{ minWidth: 120, flexShrink: 0 }}
-          >
-            {searching ? 'Searching…' : 'Search'}
-          </Button>
-        </Stack>
-        {searchError && (
-          <Alert severity="warning" sx={{ mt: 2 }}>{searchError}</Alert>
-        )}
-        {!searching && searchedFor && !searchError && results.length === 0 && (
-          <Typography sx={{ mt: 2, color: 'text.secondary' }}>
-            Nothing found for &ldquo;{searchedFor}&rdquo;.
-          </Typography>
-        )}
-        {results.length > 0 && (
-          <Stack sx={{ mt: 2, maxHeight: 220, overflowY: 'auto' }}>
-            {results.map((r, idx) => (
-              <PickRow
-                key={`${r.rxcui}-${idx}`}
-                onClick={() => selectCandidate(r)}
-              >
-                <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>{r.name}</Typography>
-                <Typography
-                  sx={{
-                    fontFamily: "inherit",
-                    fontSize: '0.75rem',
-                    color: 'text.secondary',
-                    mt: 0.25,
-                  }}
-                >
-                  RxCUI {r.rxcui}
-                </Typography>
-              </PickRow>
-            ))}
-          </Stack>
-        )}
-        {!searching && searchedFor && (
-          <Button
-            variant={results.length === 0 ? 'contained' : 'text'}
-            onClick={addAsTyped}
-            sx={{ mt: 2, minHeight: 44 }}
-          >
-            Add &ldquo;{searchedFor}&rdquo; as typed
-          </Button>
-        )}
-      </LabelPanel>
-      )}
-
-      {!isSimple && (selected || editingMed) && (
-        <Box ref={editorRef}>
-        <LabelPanel title={editingMed ? 'Edit medication' : 'Add a medication'} titleComponent="h3">
-          <Stack spacing={2} sx={{ mt: 1.5 }}>
-            <TextField inputRef={nameInputRef} label="Display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-            {Array.isArray(details?.strengths) && details.strengths.length > 0 && (
-              <FormControl fullWidth>
-                <InputLabel id="strength-label">Strength</InputLabel>
-                <Select
-                  labelId="strength-label"
-                  label="Strength"
-                  value={selectedStrength ? selectedStrength.rxcui : ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const found = (details.strengths || []).find(s => s.rxcui === val);
-                    setSelectedStrength(found || null);
-                  }}
-                >
-                  {details.strengths.map(s => (
-                    <MenuItem key={s.rxcui} value={s.rxcui}>{s.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-            <FormControl fullWidth>
-              <InputLabel id="type-label">Type</InputLabel>
-              <Select labelId="type-label" label="Type" value={medType} onChange={(e) => setMedType(e.target.value)}>
-                <MenuItem value="rx">Prescription</MenuItem>
-                <MenuItem value="otc">Over the counter</MenuItem>
-                <MenuItem value="supplement">Supplement</MenuItem>
-              </Select>
-            </FormControl>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Time of day</Typography>
-              <ToggleButtonGroup
-                value={timesOfDay}
-                onChange={(e, v) => setTimesOfDay(v)}
-                aria-label="Time of day"
-              >
-                {TIME_OPTIONS.map(t => (
-                  <ToggleButton key={t} value={t} aria-label={SLOT_WORD[t]}>{SLOT_WORD[t]}</ToggleButton>
-                ))}
-              </ToggleButtonGroup>
-            </Box>
-
-            {((details?.suggested?.length || 0) > 0) && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">Suggestions for what it&rsquo;s for (tap to keep or drop)</Typography>
-                <SuggestionChips suggestions={details.suggested} userTags={userTags} onChange={setUserTags} />
-              </Box>
-            )}
-
-            <Box>
-              <Typography variant="caption" color="text.secondary">What it&rsquo;s for</Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
-                {(userTags || []).map(tag => (
-                  <Chip
-                    key={tag}
-                    label={tag}
-                    onDelete={() => setUserTags((prev) => prev.filter(t => t !== tag))}
-                    sx={{ height: 44 }}
-                  />
-                ))}
-              </Stack>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
-                <TextField size="small" label="Add what it’s for" value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const t = newTag.trim();
-                    if (t && !userTags.includes(t)) setUserTags([...userTags, t]);
-                    setNewTag('');
-                  }
-                }} />
-                <Button variant="outlined" onClick={() => {
-                  const t = newTag.trim();
-                  if (t && !userTags.includes(t)) setUserTags([...userTags, t]);
-                  setNewTag('');
-                }}>Add</Button>
-              </Stack>
-            </Box>
-
-            {formError && <Alert severity="error">{formError}</Alert>}
-            <Stack direction="row" spacing={1}>
-              {editingMed ? (
-                <Button variant="contained" startIcon={<SaveIcon />} onClick={updateMedication} disabled={Boolean(busy) || !displayName.trim()}>
-                  {busy === 'update' ? 'Saving…' : 'Save'}
-                </Button>
-              ) : (
-                <Button variant="contained" startIcon={<SaveIcon />} onClick={saveMedication} disabled={Boolean(busy) || !displayName.trim()}>
-                  {busy === 'save' ? 'Saving…' : 'Save'}
-                </Button>
-              )}
-              <Button variant="outlined" onClick={cancelEdit} disabled={Boolean(busy)}>Cancel</Button>
-            </Stack>
-          </Stack>
-        </LabelPanel>
-        </Box>
       )}
 
       {/* Medications List */}
@@ -837,30 +628,22 @@ export default function Medications() {
         </Alert>
       ) : listLoading && myMeds.length === 0 ? null : myMeds.length === 0 ? (
         <Box>
-          {isSimple ? (
-            <EmptyState
-              icon={MedicationIcon}
-              title="No medications yet"
-              copy="Add the ones you take, and you can tick them off each day."
-              action={(
-                <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={startSimpleAdd} sx={{ minHeight: 56, width: { xs: '100%', md: 'auto' } }}>
-                  Add a medication
-                </Button>
-              )}
-            />
-          ) : (
-            <EmptyState
-              icon={MedicationIcon}
-              title="No medications yet"
-              copy="Find a medication above to add it to your list. You can group them by time of day and export the list for your doctor."
-            />
-          )}
+          <EmptyState
+            icon={MedicationIcon}
+            title="No medications yet"
+            copy="Add the ones you take, and you can tick them off each day."
+            action={(
+              <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={startAdd} sx={{ minHeight: 56, width: { xs: '100%', md: 'auto' } }}>
+                Add a medication
+              </Button>
+            )}
+          />
         </Box>
       ) : (
       <LabelPanel title="Your medications, by time of day" titleComponent="h3">
         <Stack spacing={2} sx={{ pt: 1 }}>
-          {/* Simple names the groups in the form's words and skips empty ones. */}
-          {MED_GROUPS.filter(g => (g.key !== 'daily' && !isSimple) || myMeds.some(g.match)).map(({ key: slot, label, match }) => (
+          {/* Groups are named in the form's words; empty ones are skipped. */}
+          {MED_GROUPS.filter(g => myMeds.some(g.match)).map(({ key: slot, label, match }) => (
             <Box key={slot}>
               <Typography component="h4" sx={{ fontWeight: 700, fontSize: '1.0625rem', lineHeight: 1.2, pb: 0.5, borderBottom: (t) => `1px solid ${t.palette.divider}` }}>
                 {SLOT_WORD[slot] || label}
@@ -891,11 +674,10 @@ export default function Medications() {
                             </Typography>
                           )}
 
-                          {!isSimple && (
-                            <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: 'text.primary', mt: 0.25 }}>
-                              {typeInfo.label}
-                            </Typography>
-                          )}
+                          {/* The type stays, as a small quiet line. */}
+                          <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.25 }}>
+                            {typeInfo.label}
+                          </Typography>
                         </Box>
 
                         <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
@@ -912,20 +694,16 @@ export default function Medications() {
                     );
                   })}
               </Box>
-              {myMeds.filter(match).length === 0 && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', pt: 0.75 }}>Nothing for {(SLOT_WORD[slot] || slot).toLowerCase()} yet.</Typography>
-              )}
             </Box>
           ))}
         </Stack>
       </LabelPanel>
       )}
 
-      {/* Export Buttons: under the list, and only once there is a list
-          (L16). Simple doesn't show them. */}
-      {/* `size="small"` renders these under the 44px tap floor the mobile
-          harness enforces. minHeight only — the compact look is unchanged. */}
-      {!isSimple && myMeds.length > 0 && (
+      {/* Export: under the list, and only once there is a list (L16).
+          `size="small"` renders under the 44px tap floor the mobile harness
+          enforces, so minHeight only — the compact look is unchanged. */}
+      {myMeds.length > 0 && (
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', '& .MuiButton-root': { minHeight: 44, minWidth: 44 } }}>
         <Button size="small" variant="outlined" onClick={handleCopyExport}>Copy text</Button>
         <Button size="small" variant="outlined" onClick={handleDownloadExport}>Download .txt</Button>
@@ -933,127 +711,203 @@ export default function Medications() {
       </Box>
       )}
 
-
-      {isSimple && (
-        <PremiumDialog
-          open={Boolean(adding || editingMed)}
-          onClose={() => { if (!busy) cancelEdit(); }}
-          title={editingMed ? 'Edit medication' : 'Add a medication'}
-          icon={MedicationIcon}
-          maxWidth="sm"
-          {...thumbSaveProps({
-            fullScreen,
-            save: (
-              <Button
-                variant="contained"
-                startIcon={<SaveIcon />}
-                onClick={editingMed ? updateMedication : saveMedication}
-                disabled={Boolean(busy) || !displayName.trim()}
-              >
-                {busy ? 'Saving…' : 'Save'}
-              </Button>
-            ),
-            cancel: <Button onClick={cancelEdit} disabled={Boolean(busy)}>Cancel</Button>,
-          })}
-        >
-          <Stack spacing={3} sx={{ mt: 1 }}>
-            <Box>
-              <Typography component="label" htmlFor="simple-med-name" sx={{ display: 'block', fontSize: '1.125rem', fontWeight: 700, mb: 1 }}>
-                What&rsquo;s it called?
+      <PremiumDialog
+        open={dialogOpen}
+        onClose={() => { if (!busy) cancelEdit(); }}
+        title={editingMed ? 'Edit medication' : 'Add a medication'}
+        icon={MedicationIcon}
+        maxWidth="sm"
+        {...thumbSaveProps({
+          fullScreen,
+          save: (
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={editingMed ? updateMedication : saveMedication}
+              disabled={Boolean(busy) || !displayName.trim()}
+            >
+              {busy ? 'Saving…' : 'Save'}
+            </Button>
+          ),
+          cancel: <Button onClick={cancelEdit} disabled={Boolean(busy)}>Cancel</Button>,
+        })}
+      >
+        <Stack spacing={3} sx={{ mt: 1 }}>
+          <Box>
+            <Typography component="label" htmlFor="simple-med-name" sx={{ display: 'block', fontSize: '1.125rem', fontWeight: 700, mb: 1 }}>
+              What&rsquo;s it called?
+            </Typography>
+            <TextField
+              id="simple-med-name"
+              inputRef={nameInputRef}
+              fullWidth
+              autoComplete="off"
+              placeholder="For example, Vitamin D"
+              value={displayName}
+              onChange={(e) => {
+                setDisplayName(e.target.value);
+                if (!e.target.value.trim()) { setSelected(null); pickedRef.current = ''; }
+              }}
+            />
+            {suggestions.length > 0 && (
+              <Box sx={{ mt: 1.5 }}>
+                <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', mb: 1 }}>
+                  Tap one to use it, or just keep typing.
+                </Typography>
+                <Stack role="list" aria-label="Suggestions">
+                  {suggestions.map((c, idx) => (
+                    <PickRow
+                      key={`${c.rxcui}-${idx}`}
+                      role="listitem"
+                      onClick={() => pickSuggestion(c)}
+                    >
+                      <Typography sx={{ fontWeight: 600, fontSize: '1rem' }}>{c.name}</Typography>
+                    </PickRow>
+                  ))}
+                </Stack>
+              </Box>
+            )}
+            {lookupDown && suggestions.length === 0 && (
+              <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', mt: 1 }}>
+                I can&rsquo;t look names up right now. Type it and save, that&rsquo;s fine.
               </Typography>
-              <TextField
-                id="simple-med-name"
-                inputRef={nameInputRef}
-                fullWidth
-                autoComplete="off"
-                placeholder="For example, Vitamin D"
-                value={displayName}
-                onChange={(e) => {
-                  setDisplayName(e.target.value);
-                  if (!e.target.value.trim()) { setSelected(null); pickedRef.current = ''; }
-                }}
-              />
-              {suggestions.length > 0 && (
-                <Box sx={{ mt: 1.5 }}>
-                  <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', mb: 1 }}>
-                    Tap one to use it, or just keep typing.
-                  </Typography>
-                  <Stack role="list" aria-label="Suggestions">
-                    {suggestions.map((c, idx) => (
-                      <PickRow
-                        key={`${c.rxcui}-${idx}`}
-                        role="listitem"
-                        onClick={() => pickSuggestion(c)}
-                      >
-                        <Typography sx={{ fontWeight: 600, fontSize: '1rem' }}>{c.name}</Typography>
-                      </PickRow>
+            )}
+          </Box>
+
+          <Box>
+            <Typography id="simple-med-when" sx={{ fontSize: '1.125rem', fontWeight: 700, mb: 1 }}>
+              When do you take it?
+            </Typography>
+            <Box
+              role="group"
+              aria-labelledby="simple-med-when"
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 2,
+                '& .MuiToggleButton-root': {
+                  minHeight: 56,
+                  textTransform: 'none',
+                  fontSize: '1.0625rem',
+                  fontWeight: 700,
+                  // Rounded, hairline edge; chosen = the soft blue wash with a
+                  // blue edge, so only Save is a filled button in this dialog.
+                  borderRadius: '12px',
+                  border: (t) => `1px solid ${t.palette.divider}`,
+                  '&.Mui-selected, &.Mui-selected:hover': {
+                    bgcolor: (t) => tonalColors(t).bg,
+                    color: (t) => tonalColors(t).ink,
+                    borderColor: 'primary.main',
+                  },
+                },
+              }}
+            >
+              {TIME_CHOICES.map(({ value, label }) => (
+                <ToggleButton
+                  key={value}
+                  value={value}
+                  selected={timesOfDay.includes(value)}
+                  onChange={() => toggleTime(value)}
+                  color="primary"
+                >
+                  {label}
+                </ToggleButton>
+              ))}
+              <ToggleButton
+                value="once"
+                selected={timesOfDay.length === 0}
+                onChange={() => setTimesOfDay([])}
+                color="primary"
+                sx={{ gridColumn: '1 / -1' }}
+              >
+                Once a day
+              </ToggleButton>
+            </Box>
+          </Box>
+
+          {/* Everything the old full editor held, off the way until wanted. */}
+          <Box>
+            <Button
+              onClick={() => setMoreOpen((o) => !o)}
+              aria-expanded={moreOpen}
+              aria-controls="med-more-details"
+              endIcon={<ExpandMoreIcon sx={{ transform: moreOpen ? 'rotate(180deg)' : 'none' }} />}
+              sx={{ minHeight: 44, px: 0, fontWeight: 700, textTransform: 'none', fontSize: '1rem' }}
+            >
+              More details
+            </Button>
+            <Collapse in={moreOpen} unmountOnExit>
+              <Stack id="med-more-details" spacing={4} sx={{ mt: 2 }}>
+                {strengths.length > 0 && (
+                  <FormControl fullWidth>
+                    <InputLabel id="strength-label">Strength</InputLabel>
+                    <Select
+                      labelId="strength-label"
+                      label="Strength"
+                      value={selectedStrength ? selectedStrength.rxcui : ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedStrength(strengths.find(s => s.rxcui === val) || null);
+                      }}
+                    >
+                      {strengths.map(s => (
+                        <MenuItem key={s.rxcui} value={s.rxcui}>{s.name}</MenuItem>
+                      ))}
+                    </Select>
+                    {editingMed?.strength && !selectedStrength && (
+                      <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', mt: 0.5 }}>
+                        Now saved as {editingMed.strength}. Pick one to change it.
+                      </Typography>
+                    )}
+                  </FormControl>
+                )}
+                <FormControl fullWidth>
+                  <InputLabel id="type-label">Type</InputLabel>
+                  <Select labelId="type-label" label="Type" value={medType} onChange={(e) => setMedType(e.target.value)}>
+                    <MenuItem value="rx">Prescription</MenuItem>
+                    <MenuItem value="otc">Over the counter</MenuItem>
+                    <MenuItem value="supplement">Supplement</MenuItem>
+                  </Select>
+                </FormControl>
+
+                {((details?.suggested?.length || 0) > 0) && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Suggestions for what it&rsquo;s for (tap to keep or drop)</Typography>
+                    <SuggestionChips suggestions={details.suggested} userTags={userTags} onChange={setUserTags} />
+                  </Box>
+                )}
+
+                <Box>
+                  <Typography variant="caption" color="text.secondary">What it&rsquo;s for</Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                    {(userTags || []).map(tag => (
+                      <Chip
+                        key={tag}
+                        label={tag}
+                        onDelete={() => setUserTags((prev) => prev.filter(t => t !== tag))}
+                        sx={{ height: 44 }}
+                      />
                     ))}
                   </Stack>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      label="Add what it’s for"
+                      value={newTag}
+                      onChange={(e) => setNewTag(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitTag(); } }}
+                    />
+                    <Button variant="outlined" onClick={commitTag} sx={{ minHeight: 44 }}>Add</Button>
+                  </Stack>
                 </Box>
-              )}
-              {lookupDown && suggestions.length === 0 && (
-                <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', mt: 1 }}>
-                  I can&rsquo;t look names up right now. Type it and save, that&rsquo;s fine.
-                </Typography>
-              )}
-            </Box>
+              </Stack>
+            </Collapse>
+          </Box>
 
-            <Box>
-              <Typography id="simple-med-when" sx={{ fontSize: '1.125rem', fontWeight: 700, mb: 1 }}>
-                When do you take it?
-              </Typography>
-              <Box
-                role="group"
-                aria-labelledby="simple-med-when"
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: 1,
-                  '& .MuiToggleButton-root': {
-                    minHeight: 56,
-                    textTransform: 'none',
-                    fontSize: '1.0625rem',
-                    fontWeight: 700,
-                    // Rounded, hairline edge; chosen = the blue fill.
-                    borderRadius: '12px',
-                    border: (t) => `1px solid ${t.palette.divider}`,
-                    '&.Mui-selected, &.Mui-selected:hover': {
-                      bgcolor: 'primary.main',
-                      color: 'primary.contrastText',
-                      borderColor: 'primary.main',
-                    },
-                  },
-                }}
-              >
-                {SIMPLE_TIMES.map(({ value, label }) => (
-                  <ToggleButton
-                    key={value}
-                    value={value}
-                    selected={timesOfDay.includes(value)}
-                    onChange={() => toggleSimpleTime(value)}
-                    color="primary"
-                  >
-                    {label}
-                  </ToggleButton>
-                ))}
-                <ToggleButton
-                  value="once"
-                  selected={timesOfDay.length === 0}
-                  onChange={() => setTimesOfDay([])}
-                  color="primary"
-                  sx={{ gridColumn: '1 / -1' }}
-                >
-                  Once a day
-                </ToggleButton>
-              </Box>
-            </Box>
-
-            {formError && <Alert severity="error">{formError}</Alert>}
-          </Stack>
-        </PremiumDialog>
-      )}
+          {formError && <Alert severity="error">{formError}</Alert>}
+        </Stack>
+      </PremiumDialog>
     </Page>
   );
 }
-
-

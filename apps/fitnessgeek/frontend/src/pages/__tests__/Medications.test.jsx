@@ -18,7 +18,9 @@
  * below pin that it stays gone.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { GeekToastProvider } from '@geeksuite/ui';
 
 process.env.TZ = 'America/Chicago';
 
@@ -39,6 +41,14 @@ vi.mock('../../services/medsService.js', () => {
 
 const { default: medsService } = await import('../../services/medsService.js');
 const { default: Medications } = await import('../Medications.jsx');
+
+const render = () => rtlRender(
+  <MemoryRouter>
+    <GeekToastProvider>
+      <Medications />
+    </GeekToastProvider>
+  </MemoryRouter>
+);
 
 const MED = {
   id: 'm1',
@@ -61,7 +71,7 @@ describe('the medication list', () => {
 
     render(<Medications />);
 
-    // Once in the list, once as today's dose to tick (SIMPLE_AND_FULL_PLAN.md item 6).
+    // Once in the list, once as today's dose to tick (ONE_APP_PLAN.md).
     expect(await screen.findAllByText('Lisinopril')).toHaveLength(2);
     expect(screen.getByRole('checkbox', { name: 'Lisinopril, morning' })).toBeInTheDocument();
     expect(screen.queryByText('No medications yet')).toBeNull();
@@ -76,17 +86,24 @@ describe('the medication list', () => {
   });
 });
 
-describe('the medication search', () => {
-  it('renders the candidates medsService.search() resolves to', async () => {
-    render(<Medications />);
-    await screen.findByText('No medications yet');
-
+describe('the medication search, inside the Add dialog', () => {
+  it('renders the candidates medsService.search() resolves to, as she types', async () => {
+    render();
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a medication' }));
     medsService.search.mockResolvedValue([{ rxcui: '29046', name: 'Lisinopril', score: 100 }]);
 
-    fireEvent.change(screen.getByLabelText(/Medication name/i), { target: { value: 'lisin' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Search$/i }));
+    fireEvent.change(await screen.findByRole('textbox', { name: /What.s it called\?/ }), { target: { value: 'lisin' } });
 
-    expect(await screen.findByText('Lisinopril')).toBeInTheDocument();
+    const list = await screen.findByRole('list', { name: 'Suggestions' }, { timeout: 2000 });
+    expect(list).toHaveTextContent('Lisinopril');
+    expect(medsService.search).toHaveBeenCalledWith('lisin');
+  });
+
+  it('there is no separate inline search panel any more', async () => {
+    render();
+    await screen.findByText('No medications yet');
+    expect(screen.queryByLabelText(/Medication name/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Search$/i })).toBeNull();
   });
 });
 
@@ -108,7 +125,10 @@ describe('refill tracking is gone (Chef, 2026-09-27)', () => {
     render(<Medications />);
     await screen.findAllByText('Lisinopril');
     fireEvent.click(screen.getByRole('button', { name: 'Edit Lisinopril' }));
-    await waitFor(() => expect(screen.queryByLabelText(/days supply/i)).toBeNull());
+    await screen.findByRole('textbox', { name: /What.s it called\?/ });
+    fireEvent.click(screen.getByRole('button', { name: 'More details' }));
+    await screen.findByLabelText('Type');
+    expect(screen.queryByLabelText(/days supply/i)).toBeNull();
     fireEvent.click(await screen.findByRole('button', { name: /^(update|save)/i }));
     await waitFor(() => expect(medsService.update).toHaveBeenCalled());
     const payload = medsService.update.mock.calls[0][1];
