@@ -13,6 +13,15 @@
 import axios from 'axios';
 import logger from '../config/logger.js';
 import cacheService from './cacheService.js';
+import { createBreaker } from '../lib/breakers.js';
+
+// One breaker for every FatSecret call (the token and the API share it), the
+// same way USDA and OpenFoodFacts are handled in foodApiService: 6s per call
+// instead of axios's 10s, and once FatSecret is plainly down the calls fail
+// at once for 30s instead of each search waiting it out. A call the breaker
+// refuses is one more rejection to `searchFoods` / `getFoodById`, which
+// already answer `[]` / `null`.
+const fatSecretBreaker = createBreaker('fatsecret', (task) => task());
 
 class FatSecretService {
   constructor() {
@@ -45,7 +54,7 @@ class FatSecretService {
     }
 
     try {
-      const response = await axios.post(
+      const response = await fatSecretBreaker.fire(() => axios.post(
         this.tokenUrl,
         'grant_type=client_credentials&scope=basic',
         {
@@ -58,7 +67,7 @@ class FatSecretService {
           },
           timeout: 10000,
         }
-      );
+      ));
 
       this.accessToken = response.data.access_token;
       // Token typically expires in 24 hours, but we'll respect the actual expiry
@@ -91,7 +100,7 @@ class FatSecretService {
     };
 
     try {
-      const response = await axios.post(
+      const response = await fatSecretBreaker.fire(() => axios.post(
         this.apiUrl,
         new URLSearchParams(requestParams).toString(),
         {
@@ -101,7 +110,7 @@ class FatSecretService {
           },
           timeout: 10000,
         }
-      );
+      ));
 
       return response.data;
     } catch (error) {

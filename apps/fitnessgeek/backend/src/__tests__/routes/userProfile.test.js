@@ -169,3 +169,17 @@ describe('PATCH /api/user/settings — healthBaselines', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('the basegeek round-trip has a time limit', () => {
+  test('PUT /profile sends its basegeek call with a timeout', async () => {
+    basegeekAnswers({ age: 41 });
+    await request(buildApp())
+      .put('/api/user/profile')
+      .set('x-test-user', OWNER)
+      .send({ profile: { age: 41 } });
+    expect(axios.put).toHaveBeenCalledTimes(1);
+    const config = axios.put.mock.calls[0][2];
+    expect(config.timeout).toBeGreaterThan(0);
+    expect(config.timeout).toBeLessThanOrEqual(10000);
+  });
+});

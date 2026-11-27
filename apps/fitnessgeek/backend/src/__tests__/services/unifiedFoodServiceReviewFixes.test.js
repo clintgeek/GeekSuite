@@ -175,7 +175,9 @@ describe('a tapped AI result (C5)', () => {
 
 describe('the barcode lookup', () => {
   test('is scoped to global rows plus the caller\'s own', async () => {
-    await service.getByBarcode('0123456789', 'u1');
+    // Only the catalog filter is under test; with no local row the lookup
+    // goes on to OpenFoodFacts, which this hermetic suite cannot reach.
+    await service.getByBarcode('0123456789', 'u1').catch(() => null);
     const [filter] = foodFindOne.mock.calls[0];
     expect(filter.barcode).toBe('0123456789');
     expect(admits(filter, 'u1')).toBe(true);

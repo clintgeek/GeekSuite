@@ -303,6 +303,9 @@ router.post('/describe', async (req, res) => {
   }
 });
 
+/** The longest description worth reading. */
+const DESCRIBE_MAX_CHARS = 2000;
+
 /** The describe itself, as `{status, body}` so a retry can be answered from memory. */
 async function describeOnce(req) {
   const userId = req.user.id;
@@ -310,23 +313,30 @@ async function describeOnce(req) {
   // knows which meal this is, and the hour is only a guess at it.
   const { text, date, hour, mealType } = req.body || {};
 
-  if (!text || !String(text).trim()) {
-    return {
-      status: 400,
-      body: { success: false, error: { message: 'Tell me what you ate', code: 'VALIDATION_ERROR' } }
-    };
-  }
-  if (!date) {
-    return {
-      status: 400,
-      body: { success: false, error: { message: 'A date is required', code: 'VALIDATION_ERROR' } }
-    };
-  }
+  const invalid = (message) => ({
+    status: 400,
+    body: { success: false, error: { message, code: 'VALIDATION_ERROR' } }
+  });
+
+  // Text only: an object or array here used to be stringified and sent on
+  // ("[object Object]").
+  if (typeof text !== 'string' || !text.trim()) return invalid('Tell me what you ate');
+  // A meal is a sentence or two. Anything far past that is a paste gone
+  // wrong, and it would all be sent to the model.
+  if (text.length > DESCRIBE_MAX_CHARS) return invalid('That is too long to log in one go. Try one meal at a time.');
+  if (!date) return invalid('A date is required');
+  // An unreadable date used to reach Mongo as Invalid Date and come back as
+  // a 500 "Could not log that. Try again.", which no retry could ever fix.
+  const logDate = toUtcMidnight(date);
+  // …and "2026-13-45" is not a day either: it rolls over into February 2027.
+  const rolledOver = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+    && !Number.isNaN(logDate.getTime()) && logDate.toISOString().slice(0, 10) !== date;
+  if (Number.isNaN(logDate.getTime()) || rolledOver) return invalid('That date is not one I can read');
 
   const started = Date.now();
   const result = await describeAndLogService.logDescription(text, {
     userId,
-    date: toUtcMidnight(date),
+    date: logDate,
     hour: Number.isFinite(Number(hour)) ? Number(hour) : undefined,
     mealType: typeof mealType === 'string' ? mealType : undefined
   });

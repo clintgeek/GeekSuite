@@ -29,6 +29,7 @@ import foodApiService from './foodApiService.js';
 import aiClassificationCacheService from './aiClassificationCacheService.js';
 import unitConversion from './unitConversion.js';
 import cacheService from './cacheService.js';
+import { createBreaker } from '../lib/breakers.js';
 import { foodCatalogVisibilityFilter } from '@geeksuite/schemas/fitnessgeek/foodItem';
 import { parseFoodQuery, parseFragment, itemIsGroundedInQuery, normalizeQuery } from './foodQueryParser.js';
 import { rankFoodResults, isConfidentMatch } from './foodRanker.js';
@@ -56,6 +57,25 @@ const MIN_DEEP_QUERY_LETTERS = 3;
 
 /** How many saved meals suggest may put above the foods. */
 const SUGGEST_MEAL_LIMIT = 3;
+
+// The same 'openfoodfacts' breaker foodApiService uses (the registry is
+// shared by name), so the barcode lookup fails fast with the search when
+// OpenFoodFacts is down.
+const openFoodFactsBreaker = createBreaker('openfoodfacts', (task) => task());
+
+/**
+ * "We could not look" is not "there is no such product". A barcode lookup
+ * that failed (Mongo unreachable, OpenFoodFacts down or slow) used to answer
+ * `null`, which the route sent as an empty result and the scanner read as
+ * "that barcode isn't in the food databases". It is thrown instead, marked so
+ * the route can say so in words.
+ */
+function barcodeLookupFailed(cause) {
+  const err = new Error('Barcode lookup failed');
+  err.code = 'BARCODE_LOOKUP_FAILED';
+  err.cause = cause;
+  return err;
+}
 
 /** The caption a log row written from a saved meal carries (see describeAndLogService). */
 const MEAL_NOTE_PREFIX = 'Added from meal: ';
@@ -87,13 +107,11 @@ const PERSONAL_INDEX_LIMIT = Number.parseInt(process.env.PERSONAL_INDEX_LIMIT ||
  *     (`planSummary: "IXSCAN {_fts:'text', _ftsx:1}"`, mongod's own slow-query
  *     log) — the index is not the problem, and this constant is not a
  *     substitute for one being missing.
- *   - `fatSecretService` has no circuit breaker (only usda/openfoodfacts
- *     do, see `lib/breakers.js`) and its own axios timeout is
- *     10s — a slow FatSecret response is a full 10s today with nothing here
- *     to stop it.
- *   - `foodApiService` is behind opossum breakers
- *     with a 6s timeout each (`lib/breakers.js`), which already caps them
- *     below this deadline in the closed/half-open state.
+ *   - `fatSecretService` and `foodApiService` are behind opossum breakers
+ *     with a 6s timeout each (`lib/breakers.js`; FatSecret's was added
+ *     2026-11-27, before that it was a bare 10s axios timeout). 6s is still
+ *     above this deadline, so a slow upstream can outlast it until its
+ *     breaker opens.
  *
  * So this is a CEILING on the fan-out, not a fix for any one leg: whichever
  * leg hasn't answered by the deadline is treated exactly like a leg that
@@ -550,7 +568,7 @@ class UnifiedFoodService {
     //
     // Each leg is additionally raced against FETCH_LEG_DEADLINE_MS (see its
     // comment above) so that ONE stuck leg — a Mongo server-selection stall,
-    // FatSecret's un-breakered 10s axios timeout — can no longer force every
+    // an upstream taking its breaker's full 6s — can no longer force every
     // search to wait for the worst case. `Promise.allSettled` still runs
     // underneath: a leg that misses its deadline just contributes `[]` here,
     // exactly as a leg that outright failed already did before this change.
@@ -601,31 +619,27 @@ class UnifiedFoodService {
   async getByBarcode(barcode, userId = null) {
     if (!barcode) return null;
 
+    // Step 1: Check local database — global rows and the caller's own,
+    // never another person's private food that happens to carry the code.
+    let localFood;
     try {
-      // Step 1: Check local database — global rows and the caller's own,
-      // never another person's private food that happens to carry the code.
-      const localFood = await FoodItem.findOne({
+      localFood = await FoodItem.findOne({
         barcode,
         is_deleted: false,
         ...foodCatalogVisibilityFilter(userId)
       });
-
-      if (localFood) {
-        return this.transformToStandardFormat(localFood, 'local');
-      }
-
-      // Step 2: Try OpenFoodFacts (best for barcodes)
-      const offResult = await this.getOpenFoodFactsByBarcode(barcode);
-      if (offResult) {
-        return offResult;
-      }
-
-      return null;
-
     } catch (error) {
       logger.error({ barcode, err: error }, 'Barcode lookup failed');
-      return null;
+      throw barcodeLookupFailed(error);
     }
+
+    if (localFood) {
+      return this.transformToStandardFormat(localFood, 'local');
+    }
+
+    // Step 2: Try OpenFoodFacts (best for barcodes). It answers null for a
+    // product it does not have, and throws when it could not be asked.
+    return (await this.getOpenFoodFactsByBarcode(barcode)) || null;
   }
 
   // ============================================
@@ -823,22 +837,25 @@ class UnifiedFoodService {
    * Get food by barcode from OpenFoodFacts
    */
   async getOpenFoodFactsByBarcode(barcode) {
+    let response;
     try {
-      const response = await axios.get(
-        `${this.openFoodFactsBaseUrl}/api/v0/product/${barcode}.json`,
+      response = await openFoodFactsBreaker.fire(() => axios.get(
+        `${this.openFoodFactsBaseUrl}/api/v0/product/${encodeURIComponent(barcode)}.json`,
         { timeout: 8000 }
-      );
-
-      if (!response.data || response.data.status === 0) {
-        return null;
-      }
-
-      return this.transformOpenFoodFacts(response.data.product);
-
+      ));
     } catch (error) {
+      // OpenFoodFacts says "no such product" either way: a 404, or a 200
+      // with `status: 0` below.
+      if (error?.response?.status === 404) return null;
       logger.warn({ barcode, err: error }, 'OpenFoodFacts barcode lookup failed');
+      throw barcodeLookupFailed(error);
+    }
+
+    if (!response?.data || response.data.status === 0 || !response.data.product) {
       return null;
     }
+
+    return this.transformOpenFoodFacts(response.data.product);
   }
 
   // ============================================

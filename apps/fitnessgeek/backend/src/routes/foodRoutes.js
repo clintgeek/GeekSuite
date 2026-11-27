@@ -81,6 +81,17 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
+    // The lookup could not be made (database or OpenFoodFacts unreachable).
+    // An empty answer here would read as "no such product".
+    if (error?.code === 'BARCODE_LOOKUP_FAILED') {
+      return res.status(500).json({
+        success: false,
+        error: {
+          message: 'Couldn’t look that barcode up right now. Try again, or type the food.',
+          code: 'BARCODE_LOOKUP_FAILED'
+        }
+      });
+    }
     logger.error({ err: error }, 'Error getting food items:');
     res.status(500).json({
       success: false,

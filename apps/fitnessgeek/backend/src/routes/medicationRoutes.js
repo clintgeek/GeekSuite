@@ -15,6 +15,12 @@ import { MED_TYPES } from '@geeksuite/schemas/fitnessgeek/medication';
 import { toUtcMidnight, utcDayRange } from '@geeksuite/utils';
 import { reqLogger } from '../utils/reqLogger.js';
 
+// A malformed `:id` ("undefined", a stale client id) makes Mongoose throw a
+// CastError, which every `/:id` route used to answer as a 500 carrying
+// "Cast to ObjectId failed…". It is simply a medication that does not exist.
+const badId = (error) => error?.name === 'CastError';
+const notFound = (res) => res.status(404).json({ success: false, error: { message: 'Medication not found' } });
+
 // Search medications (RxNav approximate search)
 router.get('/search', authenticateToken, async (req, res) => {
   try {
@@ -174,6 +180,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
     res.json({ success: true, data: med });
   } catch (error) {
+    if (badId(error)) return notFound(res);
     reqLogger(req).error({ err: error }, '[GET /meds/:id] Error');
     res.status(500).json({ success: false, error: { message: error.message } });
   }
@@ -218,8 +225,10 @@ router.put('/:id', authenticateToken, validate({ body: updateMedicationSchema })
     const saved = await med.save();
     res.json({ success: true, data: saved });
   } catch (error) {
+    if (badId(error)) return notFound(res);
     reqLogger(req).error({ err: error }, '[PUT /meds/:id] Error');
-    res.status(500).json({ success: false, error: { message: error.message, stack: error.stack } });
+    // The stack goes to the log, never to the browser.
+    res.status(500).json({ success: false, error: { message: error.message } });
   }
 });
 
@@ -252,6 +261,7 @@ router.post('/:id/logs', authenticateToken, validate({ body: createMedicationLog
     });
     res.json({ success: true, data: log });
   } catch (error) {
+    if (badId(error)) return notFound(res);
     reqLogger(req).error({ err: error }, '[POST /meds/:id/logs] Error');
     res.status(500).json({ success: false, error: { message: error.message } });
   }
@@ -267,6 +277,10 @@ router.get('/logs/by-date', authenticateToken, async (req, res) => {
     // instant is not — `toUtcMidnight` folds both onto the calendar day the
     // logs were written under (see @geeksuite/utils).
     const { start, end } = utcDayRange(date);
+    // An unreadable date used to reach Mongo as Invalid Date and come back a 500.
+    if (Number.isNaN(start?.getTime?.()) || Number.isNaN(end?.getTime?.())) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid date. Use YYYY-MM-DD' } });
+    }
     const logs = await MedicationLog.find({ user_id: userId, log_date: { $gte: start, $lte: end } })
       .populate('medication_id')
       .sort({ created_at: -1 });
@@ -289,6 +303,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     await med.deleteOne();
     res.json({ success: true });
   } catch (error) {
+    if (badId(error)) return notFound(res);
     res.status(500).json({ success: false, error: { message: error.message } });
   }
 });

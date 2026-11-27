@@ -1,4 +1,6 @@
 import express from 'express';
+const BASEGEEK_TIMEOUT_MS = 8000;
+
 const router = express.Router();
 import { authenticateToken } from '../middleware/auth.js';
 import logger from '../config/logger.js';
@@ -21,7 +23,10 @@ router.get('/profile', async (req, res) => {
     const response = await axios.get(`${BASEGEEK_URL}/api/users/me`, {
       headers: {
         Authorization: req.headers.authorization
-      }
+      },
+      // axios has no default timeout: a basegeek that stopped answering left
+      // "Save" on the profile spinning. Same 8s as authRoutes' basegeek calls.
+      timeout: BASEGEEK_TIMEOUT_MS
     });
 
     const user = response.data?.user;
@@ -135,7 +140,10 @@ router.put('/profile', async (req, res) => {
     const response = await axios.put(`${BASEGEEK_URL}/api/users/profile`, payload, {
       headers: {
         Authorization: req.headers.authorization
-      }
+      },
+      // axios has no default timeout: a basegeek that stopped answering left
+      // "Save" on the profile spinning. Same 8s as authRoutes' basegeek calls.
+      timeout: BASEGEEK_TIMEOUT_MS
     });
 
     const user = response.data?.user;

@@ -96,3 +96,22 @@ describe('GET /api/foods/suggest', () => {
     expect(suggest.mock.calls[1][1].includeMeals).toBe(true);
   });
 });
+
+describe('GET /api/foods?barcode= when the lookup could not be made', () => {
+  test('answers an error in words, not an empty result', async () => {
+    getByBarcode.mockImplementationOnce(async () => {
+      throw Object.assign(new Error('Barcode lookup failed'), { code: 'BARCODE_LOOKUP_FAILED' });
+    });
+    const res = await request(buildApp()).get('/api/foods?barcode=737628064502');
+    expect(res.status).toBe(500);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('BARCODE_LOOKUP_FAILED');
+    expect(res.body.error.message).toMatch(/look that barcode up/);
+  });
+
+  test('a product that is simply unknown is still an empty 200', async () => {
+    const res = await request(buildApp()).get('/api/foods?barcode=0000000000000');
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual([]);
+  });
+});
