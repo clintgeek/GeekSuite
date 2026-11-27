@@ -50,32 +50,43 @@ function DecimalField({ value, onValue, fallback = 0, ...props }) {
  * "Can't find it? Create …" row lands here with the name prefilled, which is
  * the escape hatch the old search never had: it dead-ended at "Nothing found".
  */
-const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }) => {
+const FoodEditDialog = ({ open, food, form: givenForm, onChange, onClose, onSave, loading }) => {
   // Save/Create at the bottom on a phone (UX review L9).
   const fullScreen = useGeekDialogFullScreen();
+  const form = givenForm || {};
+  // A food with no name can't be found again; Save waits for one instead of
+  // doing nothing when tapped.
+  const hasName = String(form.name || '').trim().length > 0;
+  // Not while a save is in flight: a failed save keeps the form as typed.
+  const handleClose = () => { if (!loading) onClose?.(); };
+  const handleSave = () => { if (!loading && hasName) onSave?.(); };
+  // 4px theme unit: 16px between fields, so no label touches the row above.
+  const row = { display: 'grid', gap: 4, mb: 4 };
   return (
     <PremiumDialog
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title={food ? `Edit ${food.name ?? 'food'}` : 'Create a food'}
       maxWidth="sm"
       {...thumbSaveProps({
         fullScreen,
         save: (
-          <Button onClick={onSave} variant="contained" disabled={loading}>
-            {loading ? <CircularProgress size={20} /> : (food ? 'Save' : 'Save food')}
+          <Button onClick={handleSave} variant="contained" disabled={loading || !hasName}>
+            {loading ? <CircularProgress size={20} color="inherit" aria-label="Saving" /> : (food ? 'Save' : 'Save food')}
           </Button>
         ),
-        cancel: <Button onClick={onClose}>Cancel</Button>,
+        cancel: <Button onClick={handleClose} disabled={loading}>Cancel</Button>,
       })}
     >
-      <Box sx={{ pt: 1 }}>
+      <Box sx={{ pt: 2 }}>
           <TextField
             fullWidth
+            required
+            autoFocus={!food}
             label="Name"
             value={form.name || ''}
             onChange={(e) => onChange({ ...form, name: e.target.value })}
-            sx={{ mb: 2 }}
+            sx={{ mb: 4 }}
           />
 
           <TextField
@@ -83,13 +94,13 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
             label="Brand"
             value={form.brand || ''}
             onChange={(e) => onChange({ ...form, brand: e.target.value })}
-            sx={{ mb: 2 }}
+            sx={{ mb: 4 }}
           />
 
-          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+          <Box sx={{ ...row }}>
             <DecimalField
               fullWidth
-              label="Calories"
+              label="Calories per serving"
               value={form.calories_per_serving}
               onValue={(n) => onChange({ ...form, calories_per_serving: n })}
               InputProps={{
@@ -98,7 +109,7 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
             />
           </Box>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 2, mb: 2 }}>
+          <Box sx={{ ...row, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', columnGap: 3 }}>
             <DecimalField
               fullWidth
               label="Protein"
@@ -128,7 +139,7 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
             />
           </Box>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 2, mb: 2 }}>
+          <Box sx={{ ...row, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', columnGap: 3 }}>
             <DecimalField
               fullWidth
               label="Fiber"
@@ -158,7 +169,7 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
             />
           </Box>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 2 }}>
+          <Box sx={{ ...row, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: 3, mb: 0 }}>
             <DecimalField
               fullWidth
               label="Serving size"

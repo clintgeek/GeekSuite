@@ -11,7 +11,7 @@ import { localDateString, utcDateString } from '@geeksuite/utils';
 import { newestReadingFirst, readingWhen } from './bpTimeUtils.js';
 import { categorizeBP } from '../../utils/bpUtils.js';
 import { bpStageWords } from '../../utils/plainWords.js';
-import { LabelPanel, FactHeadline, FactRow, Rule, Tag } from '../primitives';
+import { LabelPanel, FactRow, Rule, Tag } from '../primitives';
 
 /**
  * "Is my blood pressure OK?" — answered with the week, not one reading
@@ -37,7 +37,8 @@ const BPInsights = ({ bpLogs = [] }) => {
     // Newest by the instant it was taken, not by `log_date`: every reading on
     // one day shares a `log_date`, so the morning reading could stay
     // "latest" after the evening one was saved.
-    const sortedLogs = [...bpLogs].sort(newestReadingFirst);
+    const sortedLogs = bpLogs.filter((l) => l && Number.isFinite(Number(l.systolic)) && Number.isFinite(Number(l.diastolic))).sort(newestReadingFirst);
+    if (sortedLogs.length === 0) return null;
     const latestReading = sortedLogs[0];
     // "This week" / "30 days" are CALENDAR days: today and the 6 (29) before
     // it, on the device's calendar. `log_date` is a calendar day stored at
@@ -172,23 +173,23 @@ const BPInsights = ({ bpLogs = [] }) => {
     : `${last.systolic}/${last.diastolic}`;
 
   return (
-    <LabelPanel
-      level={1}
-      title="Your blood pressure"
-      meta={insights.weekCategory ? 'Last 7 days' : 'Last reading'}
-      metaRight={<>{insights.totalReadings} {insights.totalReadings === 1 ? 'reading' : 'readings'}</>}
-    >
-      <FactHeadline
-        caption={insights.weekCategory ? 'Average this week' : 'Your last reading'}
-        name="Pressure"
-        value={headValue}
-      />
-
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pt: 1, pb: 0.5, flexWrap: 'wrap' }}>
-        <HeartIcon data-testid="bp-heart" data-tone={headTone} aria-hidden sx={{ fontSize: 22, color: headColor }} />
-        <Tag fill={headColor} sx={{ fontSize: '0.8125rem' }}>{headWords.label}</Tag>
+    <LabelPanel level={1} title="Your blood pressure">
+      {/* The number first, big, with its status beside it in words; then one
+          sentence that says what the number is. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', columnGap: 3, rowGap: 2 }}>
+        <Typography
+          component="p"
+          data-testid="bp-now"
+          sx={{ m: 0, fontWeight: 700, fontSize: { xs: '2.5rem', sm: '2.75rem' }, lineHeight: 1.05, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
+        >
+          {headValue}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <HeartIcon data-testid="bp-heart" data-tone={headTone} aria-hidden sx={{ fontSize: 22, color: headColor }} />
+          <Tag fill={headColor} sx={{ fontSize: '0.8125rem' }}>{headWords.label}</Tag>
+        </Box>
       </Box>
-      <Typography component="h3" data-testid="bp-headline" sx={{ fontWeight: 600, fontSize: '1rem', lineHeight: 1.4, pb: 0.75 }}>
+      <Typography component="h3" data-testid="bp-headline" sx={{ m: 0, mt: 2, mb: 4, color: 'text.secondary', fontWeight: 400, fontSize: '0.9375rem', lineHeight: 1.5 }}>
         {headline}
       </Typography>
 

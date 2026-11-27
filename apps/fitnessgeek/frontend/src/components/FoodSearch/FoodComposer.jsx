@@ -882,7 +882,7 @@ const FoodComposer = ({
   // Four pill chips; the chosen one gets a soft blue wash and a blue edge
   // so "selected" reads without a filled block.
   const mealPicker = onMealTypeChange ? (
-    <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }} role="group" aria-label="Which meal">
+    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }} role="group" aria-label="Which meal">
       {['breakfast', 'lunch', 'dinner', 'snack'].map((m) => (
         <Chip
           key={m}
@@ -922,7 +922,7 @@ const FoodComposer = ({
       : sheetMealOnDay(mealWord(result.mealType), result.date, today, day);
     return (
       <Box className={className} data-testid="result-card" sx={{ pb: 1 }}>
-        <Box sx={{ borderTop: `1px solid ${theme.palette.divider}`, pt: 1.5 }}>
+        <Box sx={{ borderTop: `1px solid ${theme.palette.divider}`, pt: 3 }}>
           <Typography component="h3" role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.375rem', fontWeight: 700, color: 'text.primary', mb: 0.5 }}>
             <AddedIcon sx={{ color: theme.palette.primary.main, fontSize: 28 }} aria-hidden />
             Added to {where}
@@ -937,11 +937,11 @@ const FoodComposer = ({
           <PortionQuestion question={question} busy={busy} onAnswer={answerQuestion} onDismiss={() => setQuestion(null)} />
 
           {result.skipped.length > 0 && (
-            <Box sx={{ mt: 1.5 }} data-testid="partial">
+            <Box sx={{ mt: 3 }} data-testid="partial">
               <Typography sx={{ fontSize: '1rem', color: 'text.primary', fontWeight: 600 }}>
                 Added {result.what}. I couldn’t work out {quoted(result.skipped)}.
               </Typography>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 2 }}>
                 {result.skipped.map((name) => (
                   <Button key={name} variant="outlined" disabled={busy} onClick={() => pickFragment(name)} sx={{ ...pillButton, borderWidth: 2, '&:hover': { borderWidth: 2 } }}>
                     Pick {name.toLowerCase()}
@@ -952,7 +952,7 @@ const FoodComposer = ({
           )}
 
           {result.dayMove && (
-            <Box sx={{ mt: 1.5 }} data-testid="day-move">
+            <Box sx={{ mt: 3 }} data-testid="day-move">
               <Typography sx={{ fontSize: '1rem', color: 'text.primary', fontWeight: 600 }}>
                 {result.dayMove.words ? <>You said &ldquo;{result.dayMove.words}&rdquo;. </> : null}
                 This is in {dayWords(result.date)}’s log.
@@ -963,7 +963,7 @@ const FoodComposer = ({
             </Box>
           )}
 
-          <Box sx={{ display: 'flex', gap: 1, mt: 2, alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', gap: 2, mt: 4, alignItems: 'center' }}>
             <Button startIcon={<UndoIcon />} onClick={undoResult} disabled={busy || !onUndo} sx={{ ...pillButton, color: 'text.primary', px: 1.5 }}>
               Undo all
             </Button>
@@ -1067,15 +1067,15 @@ const FoodComposer = ({
           aria-labelledby="composer-day-question"
           data-testid="day-confirm"
           sx={{
-            mb: 2,
-            py: 1.5,
+            mb: 3,
+            py: 3,
             borderTop: `1px solid ${theme.palette.divider}`,
           }}
         >
-          <Typography id="composer-day-question" sx={{ fontSize: '1.0625rem', fontWeight: 700, color: 'text.primary', mb: 1 }}>
+          <Typography id="composer-day-question" sx={{ fontSize: '1.0625rem', fontWeight: 700, color: 'text.primary', mb: 2 }}>
             Log this to {dayWords(dayAsk.target)}?
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <Button variant="contained" onClick={() => runDescribe(dayAsk.text, dayAsk.target, { spoken: dayAsk.spoken, askedDay: true })} sx={{ ...pillButton, minWidth: 96 }}>
               Yes
             </Button>
@@ -1088,7 +1088,7 @@ const FoodComposer = ({
 
       {/* "Pick crackers" when nothing at all could be logged. */}
       {failure?.picks?.length > 0 && (
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 3 }}>
           {failure.picks.map((name) => (
             <Button key={name} variant="outlined" disabled={busy} onClick={() => pickFragment(name)} sx={{ ...pillButton, borderWidth: 2, '&:hover': { borderWidth: 2 } }}>
               Pick {name.toLowerCase()}

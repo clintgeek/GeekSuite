@@ -9,7 +9,7 @@ with its query string.
 |---|---|
 | `AddFoodDialog.jsx` | The add sheet: the `FoodComposer` in a dialog, on the meal that was tapped, plus the barcode scanner. |
 | `FoodLogItem.jsx` | One logged food as a row: name, amount, calories. The whole row opens Edit. |
-| `EditLogDialog.jsx` | Edit one entry: servings, meal, day, calories and nutrition, and Remove. |
+| `EditLogDialog.jsx` | Edit one entry: favorite and Remove under the name, then calories, servings, day, meal, notes; per-serving nutrition behind a disclosure. |
 | `SaveMealDialog.jsx` | Save a meal's entries as a meal (from the meal's "more" menu). |
 | `CopyMealDialog.jsx` | Copy a meal or a whole day from another day, or from someone in the household. |
 | `HouseholdLogView.jsx` | What the household ate on the day on screen. |

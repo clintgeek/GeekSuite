@@ -106,6 +106,11 @@ Android. Android can take a sideloaded wrapper; iOS has to stay a PWA. Nothing h
 - Garmin today is an unofficial library with a stored password. Works; fragile.
 
 **Barcode scanning on iOS (first: Heather is on an iPhone, and Chef calls it "a trying experience")**
+*Built 2026-11-27, not yet tried on a phone.* One camera stream that we own; native detector on Android,
+bundled WebAssembly zxing-cpp elsewhere (no CDN, precached); only the guide box is decoded; a read must have
+a valid check digit and repeat once; codes fold to 12-digit UPC-A; "Take a photo instead" on both tabs; the
+chosen camera is remembered. Still open: "photograph the label" on a miss. The diagnosis below is what it
+replaced.
 Read from `components/BarcodeScanner/BarcodeScanner.jsx`, not yet confirmed on a device:
 - iOS has no native detector, so it takes the fallback path, and that path opens the camera twice. We open
   a 1080p stream on a chosen camera; then ZXing's `decodeFromVideoDevice(null, ...)` opens its own stream

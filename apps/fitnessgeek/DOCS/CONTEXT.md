@@ -279,6 +279,9 @@ wrong and what is now true.*
 - **`FoodLog.nutrition.*` has no `min`** where `FoodItem.nutrition.*` and
   `DailySummary.totals.*` both floor at 0 — a schema-shape change on a shared
   module both apps consume. §12 follow-up #13.
+- **SUPERSEDED 2026-11-27:** the scanner no longer loads anything from a CDN. It uses the native
+  `BarcodeDetector` where there is one and otherwise `zxing-wasm` (3.1.6), bundled, lazy and precached;
+  see `components/BarcodeScanner/` and ONE_APP_PLAN.md. Every ZXing/unpkg note below is history.
 - **`BarcodeScanner` loads ZXing from unpkg at scan time** (`<script
   src="https://unpkg.com/@zxing/library@0.19.1/…">`). A runtime CDN dependency
   on the food-logging path, and the one third-party origin the service worker's

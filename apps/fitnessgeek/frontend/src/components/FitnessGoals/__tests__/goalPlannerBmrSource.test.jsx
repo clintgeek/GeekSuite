@@ -70,17 +70,21 @@ function setup({ nutrition_goal = null, summary = SCAN_SUMMARY } = {}) {
   render(<CalorieGoalWizard />);
 }
 
-/** Step 0 → 1 → 2 → Calculate. Profile fields arrive prefilled from the mocks. */
-async function runToPlan({ targetWeight = '250' } = {}) {
-  fireEvent.click(await screen.findByRole('button', { name: /Continue/i }));
-  await screen.findByLabelText(/^Age$/i);
-  const next = screen.getByRole('button', { name: /Next: set goal/i });
-  await waitFor(() => expect(next).not.toBeDisabled());
-  fireEvent.click(next);
-  await screen.findByText('Set your weight goal');
-  fireEvent.change(screen.getByLabelText(/Goal weight/i), { target: { value: targetWeight } });
-  fireEvent.click(screen.getByRole('button', { name: /Work out my plan/i }));
-  await screen.findByText('Your calorie plan');
+/** Weight → goal → speed → activity → the answer, with the working open.
+ * The profile and the weight arrive prefilled from the mocks. */
+async function runToPlan({ targetWeight = '250', activity = null } = {}) {
+  await screen.findByRole('heading', { name: 'What do you weigh now?' });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  fireEvent.change(await screen.findByLabelText(/Goal weight/i), { target: { value: targetWeight } });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await screen.findByRole('heading', { name: 'How fast?' });
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await screen.findByRole('heading', { name: 'How active are you?' });
+  if (activity) fireEvent.click(screen.getByTestId(`plan-activity-${activity}`));
+  fireEvent.click(screen.getByRole('button', { name: 'See my target' }));
+  await screen.findByTestId('plan-result');
+  fireEvent.click(screen.getByTestId('plan-working-toggle'));
+  await screen.findByTestId('metabolism-card');
 }
 
 describe('CalorieGoalWizard — BMR source (plan D1)', () => {
@@ -103,7 +107,8 @@ describe('CalorieGoalWizard — BMR source (plan D1)', () => {
     expect(screen.getByText(`${mifflinStJeorBMR(PROFILE).toLocaleString("en-US")} cal a day`)).toBeInTheDocument();
     const note = screen.getByTestId('bmr-source');
     expect(note).toHaveAttribute('data-source', 'mifflin');
-    expect(note.textContent).toMatch(/Estimated from weight, height, age and sex \(Mifflin-St Jeor\)/);
+    expect(note.textContent).toMatch(/Estimated from your weight, height, age and sex\./);
+    expect(note.textContent).not.toMatch(/Mifflin|Katch/);
     expect(note.textContent).not.toMatch(/couldn’t be loaded/);
   });
 
@@ -181,7 +186,7 @@ describe('CalorieGoalWizard — old vs new (plan D2)', () => {
     const newBmr = katchMcArdleBMR({ leanMassLb: 177 });
     expect(cmp.textContent).toContain(`3,314 → ${newBmr.toLocaleString('en-US')} cal`);
     expect(cmp.textContent).toMatch(/Daily target2,977 → /);
-    expect(cmp.textContent).toMatch(/formula error fixed on Sep 20/);
+    expect(cmp.textContent).toMatch(/worked out before a mistake in the maths was fixed/);
     expect(cmp.textContent).toMatch(/Nothing changes until you save/);
     // Nothing was written by re-running.
     expect(settingsService.updateSettings).not.toHaveBeenCalled();
@@ -208,7 +213,7 @@ describe('CalorieGoalWizard — a plan pinned at the safety floor (2026-09-23)',
 
   it('says why every day is the same, and what rate would make room for weekends', async () => {
     setup({ nutrition_goal: CHEF_FLOORED_PLAN });
-    await screen.findByText('Your calorie plan');
+    await screen.findByTestId('plan-summary');
     expect(screen.getByTestId('plan-floor-note').textContent).toBe(
       'Your target is at the safety floor (1,691 cal, 80% of your calories at rest), so this plan loses about 1.7 lb a week, not 2. The timeline uses 1.7.',
     );
@@ -224,7 +229,7 @@ describe('CalorieGoalWizard — a plan pinned at the safety floor (2026-09-23)',
         weekly_schedule: [1915, 1915, 1915, 1915, 2343, 2343, 1915],
       },
     });
-    await screen.findByText('Your calorie plan');
+    await screen.findByTestId('plan-summary');
     expect(screen.queryByTestId('plan-floor-note')).toBeNull();
     expect(screen.queryByTestId('plan-weekender-note')).toBeNull();
   });
@@ -236,18 +241,19 @@ describe('CalorieGoalWizard — measured activity (TRENDS_PLAN D4)', () => {
   it('offers Garmin\'s measured activity, builds TDEE as BMR + that mean, and saves it', async () => {
     influxService.getTrends.mockResolvedValue({ available: true, days: [], activeKcal30: { mean: 480, days: 28 } });
     setup();
-    fireEvent.click(await screen.findByRole('button', { name: /Continue/i }));
-    await screen.findByLabelText(/^Age$/i);
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Activity Level/i }));
-    fireEvent.click(await screen.findByRole('option', { name: /Measured by Garmin \(\+480 cal a day, last 28 days\)/ }));
-    expect(screen.getByTestId('measured-activity-note')).toHaveTextContent(/errs low/);
-    const next = screen.getByRole('button', { name: /Next: set goal/i });
-    await waitFor(() => expect(next).not.toBeDisabled());
-    fireEvent.click(next);
-    await screen.findByText('Set your weight goal');
-    fireEvent.change(screen.getByLabelText(/Goal weight/i), { target: { value: '250' } });
-    fireEvent.click(screen.getByRole('button', { name: /Work out my plan/i }));
-    await screen.findByText('Your calorie plan');
+    await screen.findByRole('heading', { name: 'What do you weigh now?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.change(await screen.findByLabelText(/Goal weight/i), { target: { value: '250' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByRole('heading', { name: 'How fast?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    const measured = await screen.findByTestId('plan-activity-measured');
+    expect(measured).toHaveTextContent('About 480 calories of activity a day, over the last 28 days');
+    fireEvent.click(measured);
+    expect(screen.getByTestId('measured-activity-note')).toHaveTextContent(/comes out a little low/);
+    fireEvent.click(screen.getByRole('button', { name: 'See my target' }));
+    await screen.findByTestId('plan-result');
+    fireEvent.click(screen.getByTestId('plan-working-toggle'));
 
     const bmr = katchMcArdleBMR({ leanMassLb: 177 });
     expect(screen.getByText(`${(bmr + 480).toLocaleString("en-US")} cal a day`)).toBeInTheDocument();
@@ -261,11 +267,14 @@ describe('CalorieGoalWizard — measured activity (TRENDS_PLAN D4)', () => {
   it('not offered with too few days of Garmin data', async () => {
     influxService.getTrends.mockResolvedValue({ available: true, days: [], activeKcal30: { mean: 480, days: 9 } });
     setup();
-    fireEvent.click(await screen.findByRole('button', { name: /Continue/i }));
-    await screen.findByLabelText(/^Age$/i);
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Activity Level/i }));
-    await screen.findByRole('option', { name: /Sedentary/ });
-    expect(screen.queryByRole('option', { name: /Measured by Garmin/ })).toBeNull();
+    await screen.findByRole('heading', { name: 'What do you weigh now?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.change(await screen.findByLabelText(/Goal weight/i), { target: { value: '250' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByRole('heading', { name: 'How fast?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByTestId('plan-activity-sedentary');
+    expect(screen.queryByTestId('plan-activity-measured')).toBeNull();
   });
 });
 
@@ -273,10 +282,10 @@ describe('CalorieGoalWizard — measured activity (TRENDS_PLAN D4)', () => {
 describe('CalorieGoalWizard — result numbers (D-12)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('"Your daily target: 2,600 calories", one unit with commas, and the deficit in plain ink', async () => {
+  it('"Your daily target is 2,600 calories", one unit with commas, and the deficit in plain ink', async () => {
     setup({ summary: STALE_SCAN_SUMMARY });
     await runToPlan();
-    const heading = screen.getByText(/^Your daily target: [\d,]+ calories$/);
+    const heading = screen.getByText(/^Your daily target is [\d,]+ calories$/);
     expect(heading.textContent).toMatch(/\d,\d{3} calories$/);
     expect(screen.queryByText(/Daily Target:/)).toBeNull();
     expect(document.body.textContent).not.toMatch(/kcal|calories\/day/);

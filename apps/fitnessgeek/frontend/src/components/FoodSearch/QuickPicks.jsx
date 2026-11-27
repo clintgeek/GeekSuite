@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Box, Button, Chip, CircularProgress, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { RestaurantMenu as MealIcon, Check as CheckIcon } from '@mui/icons-material';
+import { RestaurantMenu as MealIcon, Check as CheckIcon, Star as StarIcon } from '@mui/icons-material';
 import { useRecentLogs } from '../../hooks/useRecentLogs.js';
 import { rankAgainChips, yesterdaysMeal } from '../../utils/againChips.js';
 import { daysBefore } from '../../utils/experience.js';
@@ -10,6 +10,7 @@ import { useToday } from '../../hooks/useToday.js';
 import { sheetMealOnDay } from './composerText.js';
 import { withAmount } from './entries.js';
 import { useHouseholdMeals } from './useHouseholdMeals.js';
+import { useFavoriteFoods } from './useFavoriteFoods.js';
 
 /**
  * One-tap logging (SIMPLE_AND_FULL_PLAN.md item 2), shown in the add box
@@ -34,7 +35,13 @@ import { useHouseholdMeals } from './useHouseholdMeals.js';
  * "Egg · Added" with a check (then "2 added"), and "Make it 2" sits beside it;
  * `added[key]` is what the box has written for it this sitting. A chip that
  * re-logs more than one serving says so: "Toast ×2".
+ *
+ * FAVORITES ARE HERE TOO. The star is set in Edit entry, and a starred food
+ * that hadn't been eaten twice in four weeks was nowhere on this sheet. An
+ * Again chip that is a favorite carries a small star; the favorites that are
+ * not already Again chips get their own row under it, one serving a tap.
  */
+const FAVORITES_LIMIT = 8;
 const YESTERDAY_KEY = 'quick:yesterday';
 const householdKey = (userId) => `quick:household:${userId}`;
 
@@ -59,6 +66,7 @@ export default function QuickPicks({
   const today = useToday();
   const { logs, meals, loading } = useRecentLogs(date);
   const household = useHouseholdMeals(date, mealType);
+  const favorites = useFavoriteFoods();
 
   const chips = useMemo(() => rankAgainChips({ logs, savedMeals: meals, mealType }), [logs, meals, mealType]);
   const yesterday = useMemo(
@@ -66,7 +74,17 @@ export default function QuickPicks({
     [logs, mealType, date]
   );
 
-  if (loading || (chips.length === 0 && yesterday.length === 0 && household.length === 0)) return null;
+  const favoriteIds = useMemo(() => new Set(favorites.map((f) => String(f.id || f._id))), [favorites]);
+  // Favorites that are not already an Again chip, as chips of the same shape.
+  const favoriteChips = useMemo(() => {
+    const shown = new Set(chips.map((c) => c.key));
+    return favorites
+      .map((food) => ({ kind: 'food', key: `id:${food.id || food._id}`, label: food.name, item: { ...food, servings: 1 } }))
+      .filter((chip) => !shown.has(chip.key))
+      .slice(0, FAVORITES_LIMIT);
+  }, [favorites, chips]);
+
+  if (loading || (chips.length === 0 && yesterday.length === 0 && household.length === 0 && favoriteChips.length === 0)) return null;
   const meal = mealWord(mealType);
   const previous = daysBefore(date, 1);
   const sameAs = `Same as ${sheetMealOnDay(meal, previous, today, date)}`;
@@ -96,10 +114,68 @@ export default function QuickPicks({
   };
   const listOf = (names) => `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`;
 
+  const rowHeading = { fontSize: '0.8125rem', fontWeight: 600, color: 'text.secondary', mb: 1.5 };
+  const renderChip = (chip, row) => {
+    const key = `quick:${chip.key}`;
+    const isMeal = chip.kind === 'meal';
+    const starred = !isMeal && favoriteIds.has(chip.key.replace(/^id:/, ''));
+    const name = isMeal ? chip.label : withAmount(chip.label, chip.item?.servings);
+    const done = !isMeal ? added?.[key] : null;
+    const count = Math.round((Number(done?.servings) || 1) * 100) / 100;
+    const doneWords = count > 1 ? `${count} added` : 'Added';
+    const next = Math.round(count + 1);
+    return (
+      <Box key={chip.key} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, maxWidth: '100%' }}>
+        <Chip
+          icon={pendingKey === key
+            ? <CircularProgress size={16} color="inherit" aria-hidden />
+            : isMeal ? <MealIcon /> : starred ? <StarIcon data-testid="chip-star" /> : undefined}
+          label={pendingKey === key ? 'Adding…' : done ? (
+            <>
+              {`${chip.label} · ${doneWords}`}
+              <CheckIcon aria-hidden sx={{ fontSize: 18, ml: 0.25, verticalAlign: '-0.2em', color: 'primary.main' }} />
+            </>
+          ) : name}
+          disabled={busy}
+          onClick={() => onPick?.([chip.item], key)}
+          aria-label={done ? `Add another ${chip.label} to ${meal}` : row === 'favorite' ? `Add ${name} to ${meal}` : `Add ${name} to ${meal} again`}
+          // An action pill: the theme's warm outline, not the
+          // 1.26:1 divider (visual review B5).
+          variant="outlined"
+          sx={{
+            height: 44,
+            borderRadius: 999,
+            fontSize: '0.875rem',
+            bgcolor: theme.palette.background.paper,
+            borderWidth: 1.5,
+            borderColor: (t) => t.palette.outline || t.palette.divider,
+            color: 'text.primary',
+            maxWidth: '100%',
+            '& .MuiChip-label': { px: 1.25, fontSize: '0.875rem', fontWeight: 700 },
+            '& .MuiChip-icon': { color: 'text.primary' },
+            ...(starred ? { '& .MuiChip-icon': { color: 'warning.main', fontSize: 18 } } : {}),
+            '@media (hover: hover)': { '&:hover': { bgcolor: theme.palette.action.hover } },
+          }}
+        />
+        {done && onMore && (
+          <Button
+            variant="outlined"
+            disabled={busy}
+            onClick={() => onMore(key, next, chip.item)}
+            aria-label={`Make it ${next} ${chip.label}`}
+            sx={{ minHeight: 44, borderWidth: 2, fontWeight: 700, fontSize: '0.875rem', px: 1.5, whiteSpace: 'nowrap', flexShrink: 0, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
+          >
+            Make it {next}
+          </Button>
+        )}
+      </Box>
+    );
+  };
+
   return (
-    <Box data-testid="quick-picks" sx={{ mb: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+    <Box data-testid="quick-picks" sx={{ mb: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
       {heading && (
-        <Typography component="h3" sx={{ fontSize: '0.9375rem', fontWeight: 700, color: 'text.secondary', mt: 0.5 }}>
+        <Typography component="h3" sx={{ fontSize: '0.9375rem', fontWeight: 700, color: 'text.secondary', mt: 1 }}>
           {heading}
         </Typography>
       )}
@@ -165,64 +241,22 @@ export default function QuickPicks({
 
       {chips.length > 0 && (
         <Box>
-          <Typography component="h3" sx={{ fontSize: '0.8125rem', fontWeight: 600, color: 'text.secondary', mb: 1 }}>
+          <Typography component="h3" sx={rowHeading}>
             Again
           </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }} data-testid="again-chips">
-            {chips.map((chip) => {
-              const key = `quick:${chip.key}`;
-              const isMeal = chip.kind === 'meal';
-              const name = isMeal ? chip.label : withAmount(chip.label, chip.item?.servings);
-              const done = !isMeal ? added?.[key] : null;
-              const count = Math.round((Number(done?.servings) || 1) * 100) / 100;
-              const doneWords = count > 1 ? `${count} added` : 'Added';
-              const next = Math.round(count + 1);
-              return (
-                <Box key={chip.key} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, maxWidth: '100%' }}>
-                  <Chip
-                    icon={pendingKey === key
-                      ? <CircularProgress size={16} color="inherit" aria-hidden />
-                      : isMeal ? <MealIcon /> : undefined}
-                    label={pendingKey === key ? 'Adding…' : done ? (
-                      <>
-                        {`${chip.label} · ${doneWords}`}
-                        <CheckIcon aria-hidden sx={{ fontSize: 18, ml: 0.25, verticalAlign: '-0.2em', color: 'primary.main' }} />
-                      </>
-                    ) : name}
-                    disabled={busy}
-                    onClick={() => onPick?.([chip.item], key)}
-                    aria-label={done ? `Add another ${chip.label} to ${meal}` : `Add ${name} to ${meal} again`}
-                    // An action pill: the theme's warm outline, not the
-                    // 1.26:1 divider (visual review B5).
-                    variant="outlined"
-                    sx={{
-                      height: 44,
-                      borderRadius: 999,
-                      fontSize: '0.875rem',
-                      bgcolor: theme.palette.background.paper,
-                      borderWidth: 1.5,
-                      borderColor: (t) => t.palette.outline || t.palette.divider,
-                      color: 'text.primary',
-                      maxWidth: '100%',
-                      '& .MuiChip-label': { px: 1.25, fontSize: '0.875rem', fontWeight: 700 },
-                      '& .MuiChip-icon': { color: 'text.primary' },
-                      '@media (hover: hover)': { '&:hover': { bgcolor: theme.palette.action.hover } },
-                    }}
-                  />
-                  {done && onMore && (
-                    <Button
-                      variant="outlined"
-                      disabled={busy}
-                      onClick={() => onMore(key, next, chip.item)}
-                      aria-label={`Make it ${next} ${chip.label}`}
-                      sx={{ minHeight: 44, borderWidth: 2, fontWeight: 700, fontSize: '0.875rem', px: 1.5, whiteSpace: 'nowrap', flexShrink: 0, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
-                    >
-                      Make it {next}
-                    </Button>
-                  )}
-                </Box>
-              );
-            })}
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }} data-testid="again-chips">
+            {chips.map((chip) => renderChip(chip, 'again'))}
+          </Box>
+        </Box>
+      )}
+
+      {favoriteChips.length > 0 && (
+        <Box>
+          <Typography component="h3" sx={rowHeading}>
+            Favorites
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }} data-testid="favorite-chips">
+            {favoriteChips.map((chip) => renderChip(chip, 'favorite'))}
           </Box>
         </Box>
       )}

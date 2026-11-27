@@ -172,7 +172,7 @@ describe('Body & recovery', () => {
     influx.getTrends.mockResolvedValue({ available: false, reason: 'not_enabled', days: [], fitnessAge: null, activeKcal30: null });
     renderSection();
     const notice = await screen.findByTestId('garmin-not-connected');
-    expect(notice).toHaveTextContent('Heart rate, sleep and activity trends show here once Garmin is connected.');
+    expect(notice).toHaveTextContent('Connect a Garmin watch to see heart rate, sleep and activity trends here.');
     expect(within(notice).getByRole('link', { name: 'Connect Garmin' })).toHaveAttribute('href', '/settings#garmin');
     expect(screen.queryByText(/aren't available right now/)).toBeNull();
   });
@@ -180,7 +180,7 @@ describe('Body & recovery', () => {
   it('without Influx (403): the body cards stay, and one quiet line replaces the Garmin cards', async () => {
     influx.getTrends.mockRejectedValue(Object.assign(new Error('Forbidden'), { response: { status: 403 } }));
     renderSection();
-    expect(await screen.findByTestId('garmin-not-connected')).toHaveTextContent(/once Garmin is connected/);
+    expect(await screen.findByTestId('garmin-not-connected')).toHaveTextContent(/Connect a Garmin watch to see/);
     expect(screen.queryByTestId('trend-restingHR')).toBeNull();
     expect(screen.getByTestId('trend-weight')).toBeInTheDocument();
     expect(screen.getByTestId('trend-bp')).toBeInTheDocument();

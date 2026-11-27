@@ -118,3 +118,38 @@ describe('Reports — every window is the local calendar', () => {
     expect(notify).toHaveBeenCalledWith('Couldn’t download the report. Try again.', { tone: 'error' });
   });
 });
+
+describe('Reports — a failed read is never an empty week', () => {
+  it('the overview failing alone is the report failing: no "nothing logged", no "no meals"', async () => {
+    // Only BOTH halves failing used to count. With the overview down and the
+    // highlights up, the page drew an empty day ribbon and "No meals logged
+    // in this range" over a week that had plenty.
+    reportsService.getOverview.mockRejectedValue(new Error('Request failed with status code 502'));
+    renderReports();
+    expect(await screen.findByText('Couldn’t load your reports')).toBeInTheDocument();
+    expect(screen.queryByText(/No meals logged|Nothing logged in these days|No food logs/)).toBeNull();
+    expect(screen.queryByTestId('meal-breakdown')).toBeNull();
+    expect(screen.queryByText(/status code/)).toBeNull();
+    // And the retry brings it back.
+    reportsService.getOverview.mockResolvedValue({ success: true, data: overview });
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect((await screen.findAllByText('a day')).length).toBeGreaterThan(0);
+  });
+
+  it('the highlights failing alone says so in their panel, not "Nothing stands out yet"', async () => {
+    reportsService.getTrends.mockRejectedValue(new Error('boom'));
+    renderReports();
+    expect(await screen.findByTestId('highlights-failed')).toBeInTheDocument();
+    expect(screen.getAllByText('a day').length).toBeGreaterThan(0);
+  });
+});
+
+describe('Reports — under the Trends tabs', () => {
+  it('does not repeat "Food" under the tab that already says it, nor the intro line', async () => {
+    render(<MemoryRouter><Reports embedded /></MemoryRouter>);
+    expect((await screen.findAllByText('a day')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Food')).toBeNull();
+    expect(screen.queryByText(/How your eating went/)).toBeNull();
+    expect(screen.getByRole('heading', { name: 'This week', level: 2 })).toBeInTheDocument();
+  });
+});

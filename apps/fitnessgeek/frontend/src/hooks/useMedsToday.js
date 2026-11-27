@@ -89,8 +89,16 @@ export function useMedsToday(dateArg) {
 
   const checklist = useMemo(() => medsChecklist(meds, logs), [meds, logs]);
 
+  // Doses with a write on its way. A second tap on the same dose before the
+  // first has answered is ignored: it used to send the opposite answer at
+  // once, and whichever of the two reached the server last became the truth,
+  // which need not be the one on screen.
+  const inFlight = useRef(new Set());
+
   const toggle = useCallback(async (item) => {
     if (!item) return false;
+    if (inFlight.current.has(item.key)) return false;
+    inFlight.current.add(item.key);
     const taken = !item.taken;
     const optimistic = {
       medication_id: item.medId,
@@ -112,7 +120,9 @@ export function useMedsToday(dateArg) {
       setError(errorMessage(err, `Couldn’t save ${item.name}. Try again.`));
       return false;
     } finally {
-      setSaving(null);
+      inFlight.current.delete(item.key);
+      // Another dose may still be saving; only clear this one's mark.
+      setSaving((current) => (current === item.key ? null : current));
     }
   }, [date]);
 

@@ -1,6 +1,7 @@
-import React, { lazy, useCallback, useEffect } from 'react';
-import { Box, Button, Typography, CircularProgress } from '@mui/material';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Box, Button } from '@mui/material';
+import { CloudOff as CloudOffIcon } from '@mui/icons-material';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 import { utcDateString } from '@geeksuite/utils';
 import { shortDay } from '../utils/dates.js';
@@ -18,12 +19,12 @@ import WeightProgress from '../components/Weight/WeightProgress.jsx';
 import QuickAddWeight from '../components/Weight/QuickAddWeight.jsx';
 import WeightLogList from '../components/Weight/WeightLogList.jsx';
 import BodyCompositionSection from '../components/BodyComposition/BodyCompositionSection.jsx';
-import { Page, SuspenseSurface } from '../components/primitives';
+import { EmptyState, Page, SurfaceSkeleton, SuspenseSurface } from '../components/primitives';
 import { useExperience } from '../contexts/ExperienceContext.jsx';
 
 // The timeline is the only thing on this page that needs Nivo (~530 kB raw
 // with @react-spring and the d3 scales behind it). Deferring it lets the
-// progress ring, quick-add and log list paint first; the boundary reserves the
+// quick-add, the number and the log list paint first; the boundary reserves the
 // chart's height so nothing below it moves when the chart arrives.
 const WeightTimeline = lazy(() => import('../components/Weight/WeightTimeline.jsx'));
 
@@ -53,13 +54,24 @@ const Weight = () => {
     updateWeightLog,
     deleteWeightLog,
     restoreWeightLog,
+    loadWeightData,
     clearSuccessMessage,
-    clearErrorMessage
+    clearErrorMessage,
+    goalLoadFailed
   } = useWeight();
   // Body composition is its own hook with its own error state: a failed
   // body-comp query ends in an error card in that section, never here.
   const bodyComp = useBodyComp();
   const { notify } = useToast();
+
+  // "See it on your Weight page" (Import a scan) lands on
+  // `/weight#body-composition`: once both halves have drawn, bring the
+  // section into view. On a phone it sits below the trend chart.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash !== '#body-composition' || loading || bodyComp.loading) return;
+    document.getElementById('body-composition')?.scrollIntoView?.({ block: 'start' });
+  }, [hash, loading, bodyComp.loading]);
 
   // Success/error come from useWeight's own auto-clearing state; forward each
   // to the shared toast stack in place of the local Snackbar pair, then clear
@@ -82,7 +94,8 @@ const Weight = () => {
     const log = weightLogs.find((l) => l.id === logId);
     const removed = await deleteWeightLog(logId);
     if (!removed) return; // the hook has already said why
-    const what = log ? `${parseFloat(log.weight_value).toFixed(1)} lb` : 'that weight';
+    const n = parseFloat(log?.weight_value);
+    const what = Number.isFinite(n) ? `${n.toFixed(1)} lb` : 'that weight';
     const when = log?.log_date
       ? ` from ${shortDay(utcDateString(log.log_date))}`
       : '';
@@ -97,85 +110,147 @@ const Weight = () => {
     });
   };
 
+  // A FAILED READ IS NOT AN EMPTY LOG. `useWeight` reports a failed load only
+  // as a 3-second message, and leaves `weightLogs` empty, so the page used to
+  // draw a brand-new account ("No weigh-ins yet", "No weight goal yet") for
+  // someone with a year of weigh-ins on a bad signal. Only a load flips
+  // `loading`, so an error that arrives while it is true (or on the render
+  // that clears it) is the load's; a failed save, delete or undo never is.
+  const [loadProblem, setLoadProblem] = useState(false);
+  const wasLoading = useRef(loading);
+  useEffect(() => {
+    if (error && (loading || wasLoading.current)) setLoadProblem(true);
+    wasLoading.current = loading;
+  }, [error, loading]);
+  // Any row on screen means there is something true to show.
+  const failedToLoad = loadProblem && weightLogs.length === 0;
+  const [retrying, setRetrying] = useState(false);
+  const retry = async () => {
+    if (retrying) return;
+    setRetrying(true);
+    setLoadProblem(false);
+    try {
+      await loadWeightData();
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const gap = { xs: 4, md: 5 };
+
   if (loading) {
+    // The shape of the page that is coming, not a spinner in a void.
     return (
-      <Box sx={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '60vh'
-      }}>
-        <CircularProgress color="primary" />
-      </Box>
+      <Page aria-busy="true" data-testid="weight-loading">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '400px minmax(0, 1fr)' }, gap, alignItems: 'start' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap }}>
+            <SurfaceSkeleton rows={0} />
+            <SurfaceSkeleton rows={4} />
+          </Box>
+          <SurfaceSkeleton rows={4} height={320} />
+        </Box>
+      </Page>
     );
   }
 
-  return (
-    // `fab`: Page leaves the clearance the thumb-zone "Log weight" button
-    // needs under the last panel on a phone and a portrait tablet.
-    <Page fab>
-      {/* The top bar says "Weight"; one plain line says what's here. */}
-      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-        Your weight over time, averaged so one heavy day doesn’t move the needle.
-      </Typography>
+  if (failedToLoad) {
+    return (
+      <Page>
+        <EmptyState
+          role="alert"
+          icon={CloudOffIcon}
+          title="Your weights didn’t load"
+          copy="Nothing is lost. Check your connection and try again."
+          action={(
+            <Button variant="contained" onClick={retry} disabled={retrying} sx={{ minHeight: 48 }}>
+              {retrying ? 'Trying…' : 'Try again'}
+            </Button>
+          )}
+        />
+      </Page>
+    );
+  }
 
-      {/* Phone: one column, in order: the number (the weigh-in is the thumb-zone
-          button), the trend chart, body composition, the log. From md: the
-          weigh-in card and the summary (about 400px) left with the Trend chart
-          wide on the right, then body composition and the log in two columns
-          below. */}
+  const hasLogs = weightLogs.length > 0;
+  // Phone: one column, in the order a person needs it: the weigh-in, the
+  // number, the trend, body composition, the log. From md: two columns that
+  // pack independently (weigh-in, number and log on the left at about 400px;
+  // the trend and body composition wide on the right). On a phone the two
+  // column wrappers dissolve (`display: contents`) and `order` puts the
+  // charts between the number and the log.
+  const column = { display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap, minWidth: 0 };
+
+  return (
+    <Page>
       <Box
         sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '400px minmax(0, 1fr)' },
-          gap: { xs: 1.75, md: 2.25 },
-          alignItems: 'start',
+          display: { xs: 'flex', md: 'grid' },
+          flexDirection: 'column',
+          gridTemplateColumns: '400px minmax(0, 1fr)',
+          gap,
+          alignItems: { md: 'start' },
         }}
       >
-        {/* The quick weigh-in (a card from md; the FAB on phones) and the
-            current number, together. */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.75, md: 2.25 } }}>
-          <QuickAddWeight
-            onAdd={addWeightLog}
-            existingLogs={weightLogs}
-            unit="lbs"
-            autoOpen={autoOpenAdd}
-            onAutoOpened={clearAddParam}
-          />
-          <WeightProgress
-            weightLogs={weightLogs}
-            goal={weightGoal}
-            currentWeight={currentWeight}
-            unit="lbs"
-            firstRunGoal={firstRunGoal}
-            onEditGoal={() => navigate('/calorie-wizard')}
-          />
+        <Box sx={column}>
+          <Box sx={{ order: 1 }}>
+            <QuickAddWeight
+              onAdd={addWeightLog}
+              existingLogs={weightLogs}
+              unit="lbs"
+              autoOpen={autoOpenAdd}
+              onAutoOpened={clearAddParam}
+            />
+          </Box>
+          <Box sx={{ order: 2 }}>
+            <WeightProgress
+              weightLogs={weightLogs}
+              goal={weightGoal}
+              currentWeight={currentWeight}
+              unit="lbs"
+              firstRunGoal={firstRunGoal}
+              goalUnknown={Boolean(goalLoadFailed) && !weightGoal}
+              onRetryGoal={loadWeightData}
+              onEditGoal={() => navigate('/calorie-wizard')}
+            />
+          </Box>
+          <Box sx={{ order: 5 }}>
+            <WeightLogList
+              logs={weightLogs}
+              onDelete={handleDelete}
+              onUpdate={updateWeightLog}
+              unit="lbs"
+            />
+          </Box>
         </Box>
 
-        <SuspenseSurface rows={4} height={320}>
-          <WeightTimeline
-            weightLogs={weightLogs}
-            goal={weightGoal}
-            unit="lbs"
-          />
-        </SuspenseSurface>
+        <Box sx={column}>
+          {/* No weigh-ins, no chart: the log's own empty state says what to
+              do, once. */}
+          {hasLogs && (
+            <Box sx={{ order: 3, minWidth: 0 }}>
+              <SuspenseSurface rows={4} height={320}>
+                <WeightTimeline
+                  weightLogs={weightLogs}
+                  goal={weightGoal}
+                  unit="lbs"
+                />
+              </SuspenseSurface>
+            </Box>
+          )}
 
-        {/* Body composition — summary, change, fat/lean trend. */}
-        <BodyCompositionSection
-          summary={bodyComp.summary}
-          scans={bodyComp.scans}
-          loading={bodyComp.loading}
-          error={bodyComp.error}
-          scansError={bodyComp.scansError}
-          onRetry={bodyComp.reload}
-        />
-
-        <WeightLogList
-          logs={weightLogs}
-          onDelete={handleDelete}
-          onUpdate={updateWeightLog}
-          unit="lbs"
-        />
+          {/* Body composition: the summary, change and fat/lean trend for a
+              person with scans; one quiet line for everyone else. */}
+          <Box sx={{ order: 4, minWidth: 0, '&:empty': { display: 'none' } }}>
+            <BodyCompositionSection
+              summary={bodyComp.summary}
+              scans={bodyComp.scans}
+              loading={bodyComp.loading}
+              error={bodyComp.error}
+              scansError={bodyComp.scansError}
+              onRetry={bodyComp.reload}
+            />
+          </Box>
+        </Box>
       </Box>
     </Page>
   );

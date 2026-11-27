@@ -57,7 +57,7 @@ export default function YourNumbers({ stats, checkIns, today, titleSx }) {
           value={bp.systolic ? `${bp.systolic}/${bp.diastolic}` : '—'}
           unit="mmHg"
           status={bpStatus}
-          caption={bp.systolic ? [bpWhen, 'systolic / diastolic'].filter(Boolean).join(' · ') : 'No readings yet'}
+          caption={bp.systolic ? (bpWhen || '') : 'No readings yet'}
           spark={bpSpark}
           to="/blood-pressure"
         />

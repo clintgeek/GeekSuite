@@ -31,9 +31,9 @@ export function bmrSourceText({ source, leanMassLb, scans }) {
   if (source === 'scan') {
     const lean = fmtLb(leanMassLb);
     const over = Number(scans) > 1 ? `, averaged over ${scans} scans` : Number(scans) === 1 ? ', from 1 scan' : '';
-    return `Measured — from your body scans: ${lean ?? '?'} lb lean mass${over} (Katch-McArdle).`;
+    return `Measured — from your body scans: ${lean ?? '?'} lb lean mass${over}.`;
   }
-  return 'Estimated from weight, height, age and sex (Mifflin-St Jeor). A body scan gives a measured figure.';
+  return 'Estimated from your weight, height, age and sex. A body scan gives a measured figure.';
 }
 
 export function BmrSourceNote({ source, leanMassLb, scans, scanLoadFailed = false }) {
@@ -85,10 +85,7 @@ export function PlanComparison({ saved, next }) {
   if (!saved || !next || !(Number(saved.dailyCalories) > 0)) return null;
   const showAverage = !isUniform(saved.schedule) || !isUniform(next.schedule);
   return (
-    <Box
-      data-testid="plan-comparison"
-      sx={{ mb: 3 }}
-    >
+    <Box data-testid="plan-comparison">
       <Rule weight="medium" />
       <Typography component="h3" sx={{ fontWeight: 700, fontSize: '1.0625rem', py: 0.75, color: 'text.primary' }}>
         Your saved plan → this plan
@@ -97,10 +94,10 @@ export function PlanComparison({ saved, next }) {
       {showAverage && (
         <Row label="Weekly average per day" before={weeklyAverage(saved.schedule)} after={weeklyAverage(next.schedule)} />
       )}
-      <Row label="Calories at rest (BMR)" before={saved.bmr} after={next.bmr} />
+      <Row label="Calories at rest" before={saved.bmr} after={next.bmr} />
       <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
         {saved.stale
-          ? 'Your saved plan was calculated with a formula error fixed on Sep 20. Nothing changes until you save.'
+          ? 'Your saved plan was worked out before a mistake in the maths was fixed. Nothing changes until you save.'
           : 'Nothing changes until you save.'}
       </Typography>
     </Box>
@@ -129,7 +126,7 @@ export function ProteinBasisNote({ rules }) {
 }
 
 /**
- * "Your Metabolism": the BMR and TDEE a plan was built on. The full wizard's
+ * "What you burn": the calories at rest and in a day a plan was built on. The full wizard's
  * result shows it beside the deficit; the quick target keeps it behind "How
  * this was worked out".
  */
@@ -142,7 +139,7 @@ export function MetabolismCard({ plan, scanLoadFailed = false }) {
         What you burn
       </Typography>
       <Box sx={{ pb: 1.5 }}>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Calories at rest (BMR)</Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Calories at rest</Typography>
         <Typography sx={{ fontWeight: 700 }}>{Number(plan.bmr).toLocaleString('en-US')} cal a day</Typography>
         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
           What your body burns doing nothing at all
@@ -150,7 +147,7 @@ export function MetabolismCard({ plan, scanLoadFailed = false }) {
         <BmrSourceNote source={plan.bmrSource} leanMassLb={plan.leanMassLb} scans={plan.bmrScans} scanLoadFailed={scanLoadFailed} />
       </Box>
       <Box sx={{ borderTop: (t) => `1px solid ${t.palette.divider}`, pt: 1 }}>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Calories you burn in a day (TDEE)</Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Calories you burn in a day</Typography>
         <Typography sx={{ fontWeight: 700 }}>{Number(plan.tdee).toLocaleString('en-US')} cal a day</Typography>
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {plan.activityLevel === MEASURED_ACTIVITY

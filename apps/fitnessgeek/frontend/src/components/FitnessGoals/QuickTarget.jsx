@@ -42,17 +42,17 @@ const plausibleAge = (v) => Number(v) >= 13 && Number(v) <= 110;
 const plausibleWeight = (v) => Number(v) >= 60 && Number(v) <= 700;
 
 /** Back where she came from after a save; Home when there is nowhere. */
-function DoneButton() {
+export function DoneButton({ variant = 'outlined', sx }) {
   const navigate = useNavigate();
   const canGoBack = typeof window !== 'undefined' && Number(window.history.state?.idx) > 0;
   return (
-    <Button variant="outlined" size="large" fullWidth sx={{ minHeight: 48 }} onClick={() => (canGoBack ? navigate(-1) : navigate('/dashboard'))}>
+    <Button variant={variant} size="large" fullWidth sx={{ minHeight: 48, ...sx }} onClick={() => (canGoBack ? navigate(-1) : navigate('/dashboard'))}>
       Done
     </Button>
   );
 }
 
-function BigChoice({ selected, onClick, title, body, testId }) {
+export function BigChoice({ selected, onClick, title, body, testId }) {
   const theme = useTheme();
   return (
     <ButtonBase
@@ -63,9 +63,10 @@ function BigChoice({ selected, onClick, title, body, testId }) {
       sx={{
         justifyContent: 'flex-start',
         textAlign: 'left',
-        gap: 1.5,
+        gap: 3,
         // 1px more padding when unselected so the 2px chosen edge doesn't shift layout.
-        p: selected ? 2 : 'calc(8px + 1px)',
+        px: selected ? 3 : 'calc(12px + 1px)',
+        py: selected ? 2 : 'calc(8px + 1px)',
         minHeight: 64,
         width: '100%',
         borderRadius: '12px',
@@ -78,17 +79,17 @@ function BigChoice({ selected, onClick, title, body, testId }) {
       <Box
         aria-hidden
         sx={{
-          width: 28, height: 28, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
+          width: 24, height: 24, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
           bgcolor: selected ? 'primary.main' : 'transparent',
           color: 'primary.contrastText',
           border: selected ? 'none' : `2px solid ${theme.palette.text.secondary}`,
         }}
       >
-        {selected && <CheckIcon sx={{ fontSize: 20 }} />}
+        {selected && <CheckIcon sx={{ fontSize: 18 }} />}
       </Box>
       <Box>
-        <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, color: 'text.primary' }}>{title}</Typography>
-        {body && <Typography sx={{ fontSize: '1rem', color: 'text.secondary' }}>{body}</Typography>}
+        <Typography sx={{ fontSize: '1.0625rem', fontWeight: 600, lineHeight: 1.3, color: 'text.primary' }}>{title}</Typography>
+        {body && <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary' }}>{body}</Typography>}
       </Box>
     </ButtonBase>
   );
@@ -236,7 +237,7 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
   return (
     <Page narrow data-testid="quick-target">
       <LabelPanel level={1} title="Set your daily target" titleComponent="h1">
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1.5 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       <Box>
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
           {maintain ? 'I’ll work out how much to eat to stay about where you are.' : 'Pick a speed and I’ll work out how much to eat each day.'}
@@ -261,7 +262,7 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
       )}
 
       {(ask('weight') || ask('height') || ask('age') || ask('gender')) && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {!allKnown && !editing && (
             <Typography sx={{ fontSize: '1rem', color: 'text.secondary' }}>
               A few things first. They’re used to work out your calorie target.
@@ -291,8 +292,8 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
           )}
           {ask('gender') && (
             <Box>
-              <Typography id="quick-sex-label" sx={{ fontWeight: 700, fontSize: '1rem', mb: 1 }}>Sex</Typography>
-              <Box role="radiogroup" aria-labelledby="quick-sex-label" sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.25 }}>
+              <Typography id="quick-sex-label" sx={{ fontWeight: 600, fontSize: '1rem', mb: 2 }}>Sex</Typography>
+              <Box role="radiogroup" aria-labelledby="quick-sex-label" sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2.5 }}>
                 <BigChoice selected={gender === 'female'} onClick={() => touch(setGender)('female')} title="Female" testId="quick-sex-female" />
                 <BigChoice selected={gender === 'male'} onClick={() => touch(setGender)('male')} title="Male" testId="quick-sex-male" />
               </Box>
@@ -317,8 +318,8 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
 
       {!maintain && (
         <Box>
-          <Typography id="quick-speed-label" component="h2" sx={{ fontWeight: 700, fontSize: '1.25rem', mb: 1.25 }}>How fast?</Typography>
-          <Box role="radiogroup" aria-labelledby="quick-speed-label" sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+          <Typography id="quick-speed-label" component="h2" sx={{ fontWeight: 600, fontSize: '1.0625rem', mb: 2 }}>How fast?</Typography>
+          <Box role="radiogroup" aria-labelledby="quick-speed-label" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
             {SPEEDS.map((s) => (
               <BigChoice
                 key={s.rate}
@@ -337,8 +338,8 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
           aria-live="polite"
           data-testid="quick-result"
         >
-          <Rule weight="medium" sx={{ mb: 1.5 }} />
-          <Typography sx={{ fontSize: '1.375rem', fontWeight: 700, color: 'text.primary', lineHeight: 1.3 }}>
+          <Rule weight="medium" sx={{ mb: 4 }} />
+          <Typography sx={{ fontSize: '1.375rem', fontWeight: 700, color: 'text.primary', lineHeight: 1.3, fontVariantNumeric: 'tabular-nums' }}>
             {`Your daily target: ${cal(plan.dailyCalories)} calories.`}
           </Typography>
           <Typography sx={{ fontSize: '1.0625rem', color: 'text.primary', mt: 0.5 }}>{outcome}</Typography>
@@ -368,14 +369,14 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
         </Box>
       )}
 
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, pb: 'calc(16px + var(--safe-area-inset-bottom, 0px))' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {saved ? (
           <>
             {/* The check is an icon, like Log it's, not a text glyph (C11). */}
             <Typography role="status" sx={{ fontWeight: 700, fontSize: '1.0625rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
               Saved <CheckIcon aria-hidden sx={{ fontSize: 18, color: 'primary.main' }} />
             </Typography>
-            {inRouter && <DoneButton />}
+            {inRouter && <DoneButton variant="contained" />}
           </>
         ) : (
           <Button

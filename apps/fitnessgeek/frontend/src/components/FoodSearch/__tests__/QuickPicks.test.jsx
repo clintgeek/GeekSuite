@@ -21,6 +21,8 @@ add('almonds', 'Almonds', 'snack', '2026-09-23');
 vi.mock('../../../hooks/useRecentLogs.js', () => ({ useRecentLogs: () => ({ logs, meals: [], loading: false }) }));
 let household = [];
 const householdCalls = [];
+// Favorites have their own test (QuickPicksFavorites.test.jsx).
+vi.mock('../useFavoriteFoods.js', () => ({ useFavoriteFoods: () => [] }));
 vi.mock('../useHouseholdMeals.js', () => ({ useHouseholdMeals: (...a) => { householdCalls.push(a); return household; } }));
 // "Yesterday" is named relative to the real today, so pin it.
 let today = '2026-09-27';

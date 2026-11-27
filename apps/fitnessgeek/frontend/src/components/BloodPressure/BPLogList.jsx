@@ -1,5 +1,5 @@
-import React from 'react';
-import { Typography, Box, IconButton } from '@mui/material';
+import React, { useState } from 'react';
+import { Typography, Box, Button, IconButton } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { localDateString, utcDateString } from '@geeksuite/utils';
 import { categorizeBP } from '../../utils/bpUtils.js';
@@ -9,8 +9,14 @@ import { formatLocalTime } from './bpTimeUtils.js';
 import { DeleteOutline as DeleteIcon, EditOutlined as EditIcon } from '@mui/icons-material';
 import { LabelPanel, ListRow, Tag } from '../primitives';
 
-const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
+/** Rows shown before "Show all": the list is a record, not the page. */
+export const INITIAL_ROWS = 10;
+
+const BPLogList = ({ logs: rawLogs, onDelete, onEdit, unit = "mmHg" }) => {
   const theme = useTheme();
+  const [showAll, setShowAll] = useState(false);
+  // A null row or one missing a number (a partial record) is skipped, not a crash.
+  const logs = (Array.isArray(rawLogs) ? rawLogs : []).filter((l) => l && l.systolic != null && l.diastolic != null);
   // The stage colour is the theme's one small set (bpUtils: success / warning
   // / error), the fill of a Tag that always carries the plain words.
   // Remove is quiet at rest and only turns red under the thumb (B7).
@@ -30,7 +36,7 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
 
   if (logs.length === 0) {
     return (
-      <LabelPanel title="Reading log">
+      <LabelPanel title="Your readings">
         <Typography variant="body2" sx={{ color: 'text.secondary', pt: 1.5 }}>
           No readings yet
         </Typography>
@@ -51,9 +57,11 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
     return new Date(b.measured_at || b.log_date) - new Date(a.measured_at || a.log_date);
   });
 
+  const visible = showAll ? sortedLogs : sortedLogs.slice(0, INITIAL_ROWS);
+
   return (
     <LabelPanel
-      title="Reading log"
+      title="Your readings"
       action={
         <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
           {sortedLogs.length} {sortedLogs.length === 1 ? 'reading' : 'readings'}
@@ -61,7 +69,7 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
       }
     >
       <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
-        {sortedLogs.map((log, index) => {
+        {visible.map((log, index) => {
           const bpStatus = categorizeBP(log.systolic, log.diastolic, theme.palette.mode);
           const readingLabel = `${log.systolic}/${log.diastolic} ${unit} reading from ${formatDate(log.log_date)}`;
           const deleteLabel = `Remove the ${readingLabel}`;
@@ -72,17 +80,17 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
           const timeLabel = formatLocalTime(log.measured_at);
 
           return (
-            <ListRow component="li" key={log.id || log._id} first={index === 0} sx={{ gap: 1, py: 0.5 }}>
+            <ListRow component="li" key={log.id || log._id} first={index === 0} data-testid="bp-log-row" sx={{ gap: 1, py: 1.5 }}>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                  <Typography component="span" sx={{ fontWeight: 700, fontSize: '1.125rem' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', columnGap: 2, rowGap: 0.5, flexWrap: 'wrap' }}>
+                  <Typography component="span" sx={{ fontWeight: 700, fontSize: '1.0625rem', fontVariantNumeric: 'tabular-nums' }}>
                     {log.systolic}/{log.diastolic}
-                    <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 700 }}> {unit}</Box>
+                    <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 500, color: 'text.secondary' }}> {unit}</Box>
                   </Typography>
                   <Tag fill={bpStatus.color}>{bpStageWords(bpStatus.stage).label}</Tag>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', columnGap: 1.5, flexWrap: 'wrap', mt: 0.25 }}>
-                  {log.pulse && (
+                <Box sx={{ display: 'flex', alignItems: 'center', columnGap: 2, flexWrap: 'wrap', mt: 0.5 }}>
+                  {Number(log.pulse) > 0 && (
                     <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
                       ♥ {log.pulse} bpm
                     </Typography>
@@ -113,6 +121,14 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
           );
         })}
       </Box>
+
+      {sortedLogs.length > INITIAL_ROWS && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+          <Button onClick={() => setShowAll((v) => !v)} sx={{ minHeight: 44 }}>
+            {showAll ? 'Show fewer' : `Show all ${sortedLogs.length}`}
+          </Button>
+        </Box>
+      )}
     </LabelPanel>
   );
 };

@@ -11,7 +11,7 @@
 // mistake that let this survive.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import HouseholdSettings from '../HouseholdSettings';
 
 // NAMED export, and `useToast` comes from @geeksuite/ui — matching how the
@@ -24,6 +24,7 @@ vi.mock('../../../services/settingsService', () => ({
     joinHousehold: vi.fn(),
     leaveHousehold: vi.fn(),
     updateHouseholdSharing: vi.fn(),
+    updateHouseholdSettings: vi.fn(),
   },
 }));
 
@@ -77,5 +78,39 @@ describe('HouseholdSettings — a member sees the household, not Create/Join', (
     render(<HouseholdSettings />);
 
     await waitFor(() => expect(screen.queryByText(/hh-123/i)).not.toBeInTheDocument());
+  });
+});
+
+// 2026-11-27: a failed read was drawn as "you are in no household", offering
+// Create and Join to a person who is in one; and a rename that failed threw
+// away what was typed.
+describe('HouseholdSettings — failures are said, not drawn as empty', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('a failed load shows an error with a retry, never Create/Join', async () => {
+    settingsService.getHouseholdSettings.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(HOUSEHOLD);
+    render(<HouseholdSettings />);
+    expect(await screen.findByText('Couldn’t load your household')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /create a household/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /join a household/i })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /try again|retry/i }));
+    expect(await screen.findByText(/hh-123/i)).toBeInTheDocument();
+  });
+
+  it('a rename that fails stays in the box, with the failure said under it', async () => {
+    settingsService.getHouseholdSettings.mockResolvedValue({ ...HOUSEHOLD, name: 'Crocker' });
+    settingsService.updateHouseholdSettings.mockRejectedValueOnce(new Error('boom'));
+    render(<HouseholdSettings />);
+    const name = await screen.findByLabelText('Household name');
+    fireEvent.change(name, { target: { value: 'The Crockers' } });
+    fireEvent.blur(name);
+    expect(await screen.findByText('Couldn’t save that. Try again.')).toBeInTheDocument();
+    expect(name).toHaveValue('The Crockers');
+  });
+
+  it('a member list with a hole in it still draws', async () => {
+    settingsService.getHouseholdSettings.mockResolvedValue({ ...HOUSEHOLD, members: [null, { display_name: 'Heather' }] });
+    render(<HouseholdSettings />);
+    expect(await screen.findByText('Heather')).toBeInTheDocument();
   });
 });

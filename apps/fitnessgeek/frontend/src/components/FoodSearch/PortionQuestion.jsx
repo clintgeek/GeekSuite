@@ -47,10 +47,10 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
   return (
     <Box
       sx={{
-        mt: 1,
-        mb: 1.5,
+        mt: 2,
+        mb: 3,
         px: 1.5,
-        py: 1.25,
+        py: 3,
         borderTop: `1px solid ${theme.palette.divider}`,
         borderBottom: `1px solid ${theme.palette.divider}`
       }}
@@ -58,10 +58,10 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
       <Typography sx={{ fontSize: '1rem', color: theme.palette.text.primary, fontWeight: 700 }}>
         How big was the {name.toLowerCase()}?
       </Typography>
-      <Typography sx={{ fontSize: '0.9375rem', color: muted, mb: 1 }}>
+      <Typography sx={{ fontSize: '0.9375rem', color: muted, mb: 2 }}>
         Logged at {cal(logged)}. It could reasonably be {fmt(low)}–{fmt(high)}.
       </Typography>
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
         {options.map((option) => (
           <Button
             key={option.label}

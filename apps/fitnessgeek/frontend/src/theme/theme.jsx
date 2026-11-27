@@ -293,6 +293,35 @@ function buildFitnessOverrides(mode) {
           },
         },
       },
+      // A group of toggles is one segmented control: a soft track with the
+      // chosen segment lifted onto paper. Used for ranges (7 days / 30 days),
+      // Today / Yesterday, units. A lone ToggleButton keeps its own look.
+      MuiToggleButtonGroup: {
+        styleOverrides: {
+          root: {
+            backgroundColor: track,
+            borderRadius: 12,
+            padding: 3,
+            gap: 2,
+            maxWidth: '100%',
+          },
+          grouped: {
+            border: 0,
+            borderRadius: '9px !important',
+            margin: '0 !important',
+            paddingLeft: 14,
+            paddingRight: 14,
+            textTransform: 'none',
+            fontWeight: 600,
+            color: isDark ? '#B9BFCA' : '#4A5160',
+            '&.Mui-selected, &.Mui-selected:hover': {
+              backgroundColor: isDark ? '#3A404B' : '#FFFFFF',
+              color: isDark ? '#ECEEF2' : '#1B1F27',
+              boxShadow: isDark ? 'none' : '0 1px 2px rgba(16,24,40,.12)',
+            },
+          },
+        },
+      },
       // Every track, every bar (review A2).
       MuiLinearProgress: {
         styleOverrides: {

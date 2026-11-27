@@ -68,6 +68,9 @@ describe('HouseholdSettings — join', () => {
     await fillAndJoin();
 
     await waitFor(() => expect(notify).toHaveBeenCalledWith('Household not found', { tone: 'error' }));
+    // Said inside the dialog too, where she is looking, with her code still there.
+    expect(await screen.findByRole('alert')).toHaveTextContent('Household not found');
+    expect(screen.getByLabelText(/household code/i)).toHaveValue('7D9169DE1A8F');
   });
 });
 

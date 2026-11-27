@@ -263,8 +263,10 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
         ),
       })}
     >
-        <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Box component="form" onSubmit={handleSubmit} sx={{ pt: 1 }}>
+          {/* 16px between fields: the suite's spacing unit is 4px, so the old
+              `gap: 2` was 8px and the fields touched. */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <TextField
               fullWidth
               label="Top number (systolic)"
@@ -316,11 +318,12 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
                 the pair wrap onto two lines on a narrow phone keeps this
                 dialog inside the "no horizontal scroll" rule for every width,
                 not just the ones tested. */}
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               <DateField
                 value={date}
                 onChange={(v) => { setDate(v); setWhenTouched(true); }}
                 size="medium"
+                max={localDateString()}
                 sx={{ flex: '1 1 160px', minWidth: 0 }}
               />
               <TextField
@@ -337,7 +340,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
 
             {/* BP Status indicator */}
             {bpStatus && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Typography variant="body2">
                   This reading is
                 </Typography>

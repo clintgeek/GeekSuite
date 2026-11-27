@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiService } from '../services/apiService';
 import { influxService } from '../services/influxService';
 import {
@@ -6,85 +6,81 @@ import {
   Typography,
   Switch,
   FormControlLabel,
-  Alert,
-  AlertTitle,
   Stack,
-  Divider,
   Button,
   CircularProgress,
   TextField,
-  InputAdornment
+  InputAdornment,
 } from '@mui/material';
-import { LabelPanel, FactRow } from './primitives';
-import {
-  Storage as StorageIcon,
-  CloudSync as SyncIcon,
-  Check as CheckIcon,
-  Warning as WarningIcon,
-  Info as InfoIcon
-} from '@mui/icons-material';
-import { useToast } from '@geeksuite/ui';
+import { GeekErrorState, useToast } from '@geeksuite/ui';
+import { LabelPanel, Tag } from './primitives';
+import { EXPLAIN } from './Reports/watchWords.js';
 import { errorMessage } from '../utils/errorMessage.js';
 import { shortDay } from '../utils/dates.js';
 
 const UNREACHABLE = 'FitnessGeek couldn’t reach the home data server. Try again in a moment.';
 
+const EMPTY_BASELINES = { weeklyHRV: null, restingHR: null, lastUpdated: null };
+
+/** A typed number, or null for an empty or unreadable box. */
+const numberOrNull = (text) => {
+  const n = parseFloat(text);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 /**
- * InfluxDB Settings Component
- * Allows users to toggle between legacy Garmin API and InfluxDB data sources
+ * Watch settings: the advanced switch that reads detailed Garmin data from
+ * the home data server, and the "usual numbers" recovery notes compare with.
+ *
+ * This is the ONE place the app says "InfluxDB", and it says it under an
+ * "Advanced" tag: it is the name the person who runs the server will look
+ * for, and nobody else needs to read it.
+ *
+ * `step` prefixes the panel title ("2. ") when this sits in the numbered
+ * setup behind Health's "connect a watch" card.
  */
-export default function InfluxDBSettings({ onSettingsChange }) {
+export default function InfluxDBSettings({ onSettingsChange, step = '' }) {
   const { notify } = useToast();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [toggleError, setToggleError] = useState(null);
+  const [baselineError, setBaselineError] = useState(null);
   const [testingConnection, setTestingConnection] = useState(false);
-  const [settings, setSettings] = useState({
-    influxEnabled: false,
-    healthBaselines: {
-      weeklyHRV: null,
-      restingHR: null,
-      lastUpdated: null
-    }
-  });
+  const [settings, setSettings] = useState({ influxEnabled: false, healthBaselines: EMPTY_BASELINES });
   const [connectionStatus, setConnectionStatus] = useState(null);
-
-  // Temporary state for baseline inputs
   const [hrvInput, setHrvInput] = useState('');
   const [hrInput, setHrInput] = useState('');
+  const alive = useRef(true);
 
   useEffect(() => {
+    alive.current = true;
     fetchSettings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; fetchSettings now closes over `notify` from useToast(), which the linter can't prove is stable.
+    return () => { alive.current = false; };
   }, []);
-
-  useEffect(() => {
-    if (settings.healthBaselines.weeklyHRV) {
-      setHrvInput(settings.healthBaselines.weeklyHRV.toString());
-    }
-    if (settings.healthBaselines.restingHR) {
-      setHrInput(settings.healthBaselines.restingHR.toString());
-    }
-  }, [settings]);
 
   async function fetchSettings() {
     setLoading(true);
+    setLoadError(null);
 
     try {
       const response = await apiService.get('/user/settings');
+      if (!alive.current) return;
       const s = response?.data || response || {};
-      setSettings({
-        influxEnabled: s.influxEnabled || false,
-        healthBaselines: s.healthBaselines || {
-          weeklyHRV: null,
-          restingHR: null,
-          lastUpdated: null
-        }
-      });
+      const baselines = { ...EMPTY_BASELINES, ...(s.healthBaselines || {}) };
+      setSettings({ influxEnabled: !!s.influxEnabled, healthBaselines: baselines });
+      // The boxes are filled once, from what was loaded. They used to be
+      // re-filled on every settings change, so flipping the switch wiped a
+      // number that had been typed and not yet saved.
+      setHrvInput(baselines.weeklyHRV ? String(baselines.weeklyHRV) : '');
+      setHrInput(baselines.restingHR ? String(baselines.restingHR) : '');
     } catch (err) {
+      if (!alive.current) return;
       console.error('Error fetching settings:', err);
-      notify(errorMessage(err, 'Couldn’t load these settings. Try again.'), { tone: 'error' });
+      // A failed read is not "off": the switch is not drawn at all.
+      setLoadError(errorMessage(err, 'Couldn’t load these settings. Try again.'));
     } finally {
-      setLoading(false);
+      if (alive.current) setLoading(false);
     }
   }
 
@@ -94,247 +90,189 @@ export default function InfluxDBSettings({ onSettingsChange }) {
 
     try {
       // GET /api/influx/status answers { userEnabled, serverConnected, error }.
-      // This used to read `response.connected`, which the route has never sent,
-      // so a working InfluxDB still reported "Connection Failed".
-      const response = await influxService.getStatus();
       // The route's `error` is the driver's own text ("connect ECONNREFUSED…");
       // it is not shown — a person gets one plain sentence instead.
-      setConnectionStatus({ success: !!response?.serverConnected });
+      const response = await influxService.getStatus();
+      if (alive.current) setConnectionStatus({ success: !!response?.serverConnected });
     } catch (err) {
       console.error('Error testing connection:', err);
-      setConnectionStatus({
-        success: false,
-        error: errorMessage(err, UNREACHABLE)
-      });
+      if (alive.current) setConnectionStatus({ success: false, error: errorMessage(err, UNREACHABLE) });
     } finally {
-      setTestingConnection(false);
+      if (alive.current) setTestingConnection(false);
     }
   }
 
   async function handleToggleInflux(event) {
     const newValue = event.target.checked;
     setSaving(true);
+    setToggleError(null);
 
     try {
-      await apiService.patch('/user/settings', {
-        influxEnabled: newValue
-      });
+      await apiService.patch('/user/settings', { influxEnabled: newValue });
+      if (!alive.current) return;
 
-      setSettings(prev => ({ ...prev, influxEnabled: newValue }));
-      notify(
-        newValue
-          ? 'Home data server on. Your Garmin data now comes from it'
-          : 'Home data server off. Your Garmin data comes straight from Garmin again',
-        { tone: 'success' }
-      );
-
-      // Notify parent component of the change
-      if (onSettingsChange) {
-        onSettingsChange({ influxEnabled: newValue });
-      }
-
-      // Auto-test connection when enabling
-      if (newValue) {
-        setTimeout(() => testInfluxConnection(), 500);
-      }
+      setSettings((prev) => ({ ...prev, influxEnabled: newValue }));
+      setConnectionStatus(null);
+      notify(newValue ? 'Detailed watch data is on' : 'Detailed watch data is off', { tone: 'success' });
+      if (onSettingsChange) onSettingsChange({ influxEnabled: newValue });
+      // The parent may have swapped this view out; only check if still here.
+      if (newValue && alive.current) testInfluxConnection();
     } catch (err) {
       console.error('Error updating settings:', err);
-      notify(errorMessage(err, 'Couldn’t save that setting. Try again.'), { tone: 'error' });
+      if (!alive.current) return;
+      const message = errorMessage(err, 'Couldn’t save that setting. Try again.');
+      setToggleError(message);
+      notify(message, { tone: 'error' });
     } finally {
-      setSaving(false);
+      if (alive.current) setSaving(false);
     }
   }
 
   async function handleUpdateBaselines() {
+    if (saving) return;
     setSaving(true);
+    setBaselineError(null);
 
     try {
       const newBaselines = {
-        weeklyHRV: hrvInput ? parseFloat(hrvInput) : null,
-        restingHR: hrInput ? parseFloat(hrInput) : null,
-        lastUpdated: new Date().toISOString()
+        weeklyHRV: numberOrNull(hrvInput),
+        restingHR: numberOrNull(hrInput),
+        lastUpdated: new Date().toISOString(),
       };
 
-      await apiService.patch('/user/settings', {
-        healthBaselines: newBaselines
-      });
+      await apiService.patch('/user/settings', { healthBaselines: newBaselines });
+      if (!alive.current) return;
 
-      setSettings(prev => ({ ...prev, healthBaselines: newBaselines }));
+      setSettings((prev) => ({ ...prev, healthBaselines: newBaselines }));
       notify('Your usual numbers are saved', { tone: 'success' });
     } catch (err) {
       console.error('Error updating baselines:', err);
-      notify(errorMessage(err, 'Couldn’t save your usual numbers. Try again.'), { tone: 'error' });
+      if (!alive.current) return;
+      // Said under the boxes, which keep what was typed.
+      const message = errorMessage(err, 'Couldn’t save your usual numbers. Try again.');
+      setBaselineError(message);
+      notify(message, { tone: 'error' });
     } finally {
-      setSaving(false);
+      if (alive.current) setSaving(false);
     }
   }
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-        <CircularProgress />
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
+        <CircularProgress aria-label="Loading watch settings" />
       </Box>
     );
   }
 
+  if (loadError) {
+    return <GeekErrorState compact title="Couldn’t load watch settings" error={loadError} onRetry={fetchSettings} />;
+  }
+
+  const quiet = { color: 'text.secondary', fontSize: '0.9375rem', lineHeight: 1.5 };
+
   return (
-    <Box>
-      <Stack spacing={2.25}>
-        {/* Header */}
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          <StorageIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-          Where your Garmin data comes from
+    <Stack spacing={{ xs: 3, md: 4 }} data-testid="watch-settings-panels">
+      <LabelPanel title={`${step}Detailed watch data`} action={<Tag>Advanced</Tag>}>
+        <Typography sx={quiet}>
+          Heart rate, stress and energy through the day, the closer look at your sleep and the recovery
+          notes are read from a data server at home that your Garmin sync fills. Turn this on only if
+          one has been set up for you.
         </Typography>
 
-        {/* Main Toggle Card */}
-        <LabelPanel title="Home data server" level={1}>
-            <Stack spacing={2} sx={{ pt: 1.5 }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Box>
-                  <Typography variant="h6" id="influx-toggle-title">Use the home data server (InfluxDB)</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Read your Garmin data from the home data server instead of straight from Garmin.
-                  </Typography>
-                </Box>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings.influxEnabled}
-                      onChange={handleToggleInflux}
-                      disabled={saving}
-                      inputProps={{ 'aria-labelledby': 'influx-toggle-title' }}
-                    />
-                  }
-                  label=""
-                />
-              </Stack>
-
-              <Divider />
-
-              <Alert severity="info" icon={<InfoIcon />}>
-                <AlertTitle>What the home data server adds</AlertTitle>
-                When it’s on, FitnessGeek reads your Garmin data from the home data server,
-                which your Garmin sync fills. That adds:
-                <ul style={{ marginTop: 8, marginBottom: 0 }}>
-                  <li>Heart rate, stress and Body Battery through the day</li>
-                  <li>A closer look at your sleep: heart-rate variability (HRV), recovery and breathing</li>
-                  <li>Recovery notes written by AI from all of it</li>
-                  <li>How your heart rate answered each meal</li>
-                </ul>
-              </Alert>
-
-              {settings.influxEnabled && (
-                <Stack spacing={2}>
-                  <Button
-                    variant="outlined"
-                    onClick={testInfluxConnection}
-                    disabled={testingConnection}
-                    startIcon={testingConnection ? <CircularProgress size={20} /> : <SyncIcon />}
-                  >
-                    Check the connection
-                  </Button>
-
-                  {connectionStatus && (
-                    <Alert
-                      severity={connectionStatus.success ? 'success' : 'error'}
-                      icon={connectionStatus.success ? <CheckIcon /> : <WarningIcon />}
-                    >
-                      {connectionStatus.success ? (
-                        <>
-                          <AlertTitle>Connected</AlertTitle>
-                          FitnessGeek can reach the home data server.
-                        </>
-                      ) : (
-                        <>
-                          <AlertTitle>Not connected</AlertTitle>
-                          {connectionStatus.error || UNREACHABLE}
-                        </>
-                      )}
-                    </Alert>
-                  )}
-                </Stack>
-              )}
-            </Stack>
-        </LabelPanel>
-
-        {/* Health Baselines Card */}
-        {settings.influxEnabled && (
-          <LabelPanel title="Your usual numbers">
-              <Stack spacing={2} sx={{ pt: 1.5 }}>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    What’s normal for you, so recovery notes can tell a good day from a tired one.
-                  </Typography>
-                </Box>
-
-                <Alert severity="info" icon={<InfoIcon />}>
-                  The AI compares each day with these. Leave a box empty if you don’t know it yet.
-                </Alert>
-
-                <TextField
-                  label="Usual heart-rate variability (HRV)"
-                  value={hrvInput}
-                  onChange={(e) => setHrvInput(e.target.value)}
-                  type="number"
-                  InputProps={{
-                    endAdornment: <InputAdornment position="end">ms</InputAdornment>
-                  }}
-                  helperText="Your average over a week, such as 60"
-                  fullWidth
-                />
-
-                <TextField
-                  label="Usual resting heart rate"
-                  value={hrInput}
-                  onChange={(e) => setHrInput(e.target.value)}
-                  type="number"
-                  InputProps={{
-                    endAdornment: <InputAdornment position="end">bpm</InputAdornment>
-                  }}
-                  helperText="Such as 55"
-                  fullWidth
-                />
-
-                {settings.healthBaselines.lastUpdated && (
-                  <Typography variant="caption" color="text.secondary">
-                    {`Last saved ${shortDay(settings.healthBaselines.lastUpdated)}`}
-                  </Typography>
-                )}
-
-                <Button
-                  variant="contained"
-                  onClick={handleUpdateBaselines}
-                  disabled={saving}
-                  startIcon={saving ? <CircularProgress size={20} /> : <CheckIcon />}
-                >
-                  {saving ? 'Saving…' : 'Save'}
-                </Button>
-              </Stack>
-          </LabelPanel>
+        <FormControlLabel
+          labelPlacement="start"
+          control={(
+            <Switch
+              checked={settings.influxEnabled}
+              onChange={handleToggleInflux}
+              disabled={saving}
+            />
+          )}
+          label={<Box component="span" sx={{ fontWeight: 600 }}>Use the home data server (InfluxDB)</Box>}
+          sx={{ display: 'flex', justifyContent: 'space-between', gap: 3, ml: 0, mr: 0, mt: 3, minHeight: 44 }}
+        />
+        {toggleError && (
+          <Typography role="alert" data-testid="toggle-error" sx={{ color: 'error.main', fontSize: '0.875rem', mt: 1 }}>
+            {toggleError}
+          </Typography>
         )}
 
-        {/* Feature Availability: label rows, a status word each */}
-        <LabelPanel title="What’s on">
-          {[
-            ['Sleep analysis', settings.influxEnabled],
-            ['Through the day', settings.influxEnabled],
-            ['Recovery coach', settings.influxEnabled],
-            ['Meal impact', settings.influxEnabled],
-            ['Steps, sleep and heart rate', true],
-          ].map(([name, on], i) => (
-            <FactRow
-              key={name}
-              first={i === 0}
-              name={name}
-              trailing={(
-                <Box component="span" sx={{ color: 'text.secondary' }}>
-                  {name === 'Steps, sleep and heart rate' ? 'Always on' : on ? 'On' : 'Needs the home data server'}
-                </Box>
-              )}
+        {settings.influxEnabled && (
+          <Box sx={{ mt: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 3 }}>
+            <Button
+              variant="tonal"
+              onClick={testInfluxConnection}
+              disabled={testingConnection}
+              startIcon={testingConnection ? <CircularProgress size={18} color="inherit" /> : undefined}
+              sx={{ minHeight: 44 }}
+            >
+              Check the connection
+            </Button>
+            {connectionStatus && (
+              <Box role="status" sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, flex: '1 1 220px', minWidth: 0 }}>
+                <Tag tone={connectionStatus.success ? 'success' : 'error'}>
+                  {connectionStatus.success ? 'Connected' : 'Not connected'}
+                </Tag>
+                <Typography sx={{ ...quiet, fontSize: '0.875rem' }}>
+                  {connectionStatus.success
+                    ? 'FitnessGeek can reach the home data server.'
+                    : (connectionStatus.error || UNREACHABLE)}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        )}
+      </LabelPanel>
+
+      {settings.influxEnabled && (
+        <LabelPanel title="Your usual numbers">
+          <Typography sx={quiet}>
+            What’s normal for you, so recovery notes can tell a good day from a tired one. Leave a box
+            empty if you don’t know it yet.
+          </Typography>
+          {/* 16px between fields: the suite's spacing unit is 4px. */}
+          <Stack spacing={4} sx={{ mt: 4 }}>
+            <TextField
+              label="Usual heart-rate variability (HRV)"
+              value={hrvInput}
+              onChange={(e) => setHrvInput(e.target.value)}
+              type="number"
+              inputProps={{ inputMode: 'decimal', min: 0 }}
+              InputProps={{ endAdornment: <InputAdornment position="end">ms</InputAdornment> }}
+              helperText={`Your average over a week, such as 60. ${EXPLAIN.hrv}`}
+              fullWidth
             />
-          ))}
+            <TextField
+              label="Usual resting heart rate"
+              value={hrInput}
+              onChange={(e) => setHrInput(e.target.value)}
+              type="number"
+              inputProps={{ inputMode: 'decimal', min: 0 }}
+              InputProps={{ endAdornment: <InputAdornment position="end">bpm</InputAdornment> }}
+              helperText="Such as 55"
+              fullWidth
+            />
+          </Stack>
+
+          {baselineError && (
+            <Typography role="alert" data-testid="baseline-error" sx={{ color: 'error.main', fontSize: '0.875rem', mt: 3 }}>
+              {baselineError}
+            </Typography>
+          )}
+
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 3, mt: 4 }}>
+            <Button variant="contained" onClick={handleUpdateBaselines} disabled={saving} sx={{ minHeight: 44 }}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+            {settings.healthBaselines.lastUpdated && (
+              <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
+                {`Last saved ${shortDay(settings.healthBaselines.lastUpdated)}`}
+              </Typography>
+            )}
+          </Box>
         </LabelPanel>
-      </Stack>
-    </Box>
+      )}
+    </Stack>
   );
 }

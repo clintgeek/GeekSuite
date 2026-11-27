@@ -9,7 +9,7 @@
  * were really one-a-minute samples.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 
 const getSleepAnalysis = vi.fn();
 vi.mock('../../services/influxService', () => ({
@@ -91,7 +91,7 @@ describe('figures that could not be right are gone', () => {
     getSleepAnalysis.mockResolvedValue(analysis());
     render(<SleepAnalysis date="2026-09-22" />);
     await screen.findByText('82/100');
-    expect(screen.getByText('SpO2 dips')).toBeInTheDocument();
+    expect(screen.getByText('Blood oxygen dips')).toBeInTheDocument();
     expect(screen.queryByText(/apnea events/i)).toBeNull();
   });
 });
@@ -133,5 +133,49 @@ describe('HRV against a real baseline', () => {
     await screen.findByText('82/100');
     const up = screen.getByTestId('TrendingUpIcon');
     expect(up.getAttribute('class')).toMatch(/colorSuccess/);
+  });
+});
+
+describe('loading, empty and failed are three different things', () => {
+  it('a failed read says so with a retry, and is never "No sleep for this night"', async () => {
+    getSleepAnalysis.mockRejectedValueOnce(new Error('Request failed with status code 502'));
+    getSleepAnalysis.mockResolvedValue(analysis());
+    render(<SleepAnalysis date="2026-09-22" />);
+    expect(await screen.findByText('Couldn’t load your sleep')).toBeInTheDocument();
+    expect(screen.queryByText('No sleep for this night')).toBeNull();
+    expect(screen.queryByText(/status code/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('82/100')).toBeInTheDocument();
+  });
+
+  it('the data server being down is a failure, and its own message is not shown', async () => {
+    getSleepAnalysis.mockResolvedValue({ available: false, reason: 'influx_unavailable', message: 'InfluxDB is unavailable' });
+    render(<SleepAnalysis date="2026-09-22" />);
+    expect(await screen.findByText('Couldn’t load your sleep')).toBeInTheDocument();
+    expect(screen.queryByText('No sleep for this night')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/InfluxDB/);
+  });
+
+  it('a night the watch sent nothing for says so, in the app\'s words, not the server\'s', async () => {
+    getSleepAnalysis.mockResolvedValue({ available: false, message: 'No sleep data available for this date' });
+    render(<SleepAnalysis date="2026-09-22" />);
+    expect(await screen.findByText('No sleep for this night')).toBeInTheDocument();
+    expect(screen.queryByText(/No sleep data available/)).toBeNull();
+  });
+
+  it('a partial record draws dashes instead of crashing', async () => {
+    getSleepAnalysis.mockResolvedValue({ available: true, qualityScore: 70, qualityLabel: 'FAIR', metrics: { architecture: { asleepMinutes: 400 } } });
+    const { container } = render(<SleepAnalysis date="2026-09-22" />);
+    expect(await screen.findByText('70/100')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/NaN|undefined|null/);
+  });
+});
+
+describe('plain words', () => {
+  it('HRV is explained on the screen, not in a hover', async () => {
+    getSleepAnalysis.mockResolvedValue(analysis());
+    render(<SleepAnalysis date="2026-09-22" />);
+    await screen.findByText('82/100');
+    expect(screen.getByText(/^Heart-rate variability\. The tiny changes in time between heartbeats\./)).toBeInTheDocument();
   });
 });

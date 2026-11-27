@@ -88,7 +88,9 @@ const AddFoodDialog = ({
         // title and an icon saying "Log · Add Food" above a meal picker.
         title={sheetTitle(mealWord(mealType), day, today)}
         icon={FoodIcon}
-        contentSx={{ px: { xs: 1.5, sm: 2.5 } }}
+        // 4px theme unit: 12px a side on a phone (the same edge as every
+        // other dialog; it was 6px, with the box almost touching the glass).
+        contentSx={{ px: { xs: 3, sm: 4 } }}
         // Top-anchored, fixed height on a desktop; see the note above.
         sx={{ '& .MuiDialog-container': { alignItems: { sm: 'flex-start' } } }}
         PaperProps={{

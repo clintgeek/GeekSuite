@@ -1,11 +1,13 @@
 import React from 'react';
-import { Grid, TextField, InputAdornment } from '@mui/material';
+import { Box, TextField, InputAdornment } from '@mui/material';
 
 const NutritionInputs = ({
   values = {},
   onChange,
   showAdvanced = false,
-  spacing = 1.5,
+  // In theme units, and the suite's unit is 4px: 4 is the 16px a row of
+  // outlined fields needs so one row's floating label clears the row above.
+  spacing = 4,
   // Appended to every field label. Plain "Calories" is ambiguous wherever a
   // caller might show it next to a *total* for N servings elsewhere on the
   // same screen (see EditLogDialog.jsx) — someone who remembers "that was
@@ -35,22 +37,26 @@ const NutritionInputs = ({
   const fields = showAdvanced ? [...baseFields, ...advancedFields] : baseFields;
 
   return (
-    <Grid container spacing={spacing}>
+    // Two to a row at every width: four across cut "Calories (per serving)"
+    // short in the 600px dialog.
+    <Box
+      data-testid="nutrition-inputs"
+      sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: 3, rowGap: spacing }}
+    >
       {fields.map((f) => (
-        <Grid item xs={6} sm={3} key={f.key}>
-          <TextField
-            label={f.label}
-            type="number"
-            size="small"
-            value={values?.[f.key] ?? ''}
-            onChange={handleChange(f.key)}
-            fullWidth
-            inputProps={{ inputMode: 'decimal' }}
-            InputProps={{ endAdornment: <InputAdornment position="end">{f.adorn}</InputAdornment> }}
-          />
-        </Grid>
+        <TextField
+          key={f.key}
+          label={f.label}
+          type="number"
+          size="small"
+          value={values?.[f.key] ?? ''}
+          onChange={handleChange(f.key)}
+          fullWidth
+          inputProps={{ inputMode: 'decimal', min: 0, step: 'any' }}
+          InputProps={{ endAdornment: <InputAdornment position="end">{f.adorn}</InputAdornment> }}
+        />
       ))}
-    </Grid>
+    </Box>
   );
 };
 

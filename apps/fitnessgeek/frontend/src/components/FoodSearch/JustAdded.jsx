@@ -16,13 +16,14 @@ export default function JustAddedStrip({ items, heard, onUndo, onDone, onFix, bu
       sx={{
         position: 'relative',
         zIndex: 1,
-        px: 1.5,
-        py: 1,
+        // 4px theme unit: 12px a side, 10px top and bottom.
+        px: 3,
+        py: 2.5,
         border: `1px solid ${theme.palette.divider}`,
         borderRadius: '12px',
       }}
     >
-      <Typography sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontSize: '1rem', fontWeight: 700, color: 'text.primary', mb: 0.5 }}>
+      <Typography sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontSize: '1rem', fontWeight: 700, color: 'text.primary', mb: 1 }}>
         <AddedIcon sx={{ color: primary, fontSize: 20 }} aria-hidden /> Just added
       </Typography>
       {heard && (
@@ -31,7 +32,7 @@ export default function JustAddedStrip({ items, heard, onUndo, onDone, onFix, bu
         </Typography>
       )}
       <EntryList items={items} onFix={onFix} busy={busy} />
-      <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+      <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
         <Button onClick={onUndo} disabled={busy} sx={{ minHeight: 44, fontWeight: 700, color: 'text.primary' }}>
           {/* One label per scope (A9): "Undo all" when it takes back several. */}
           {busy ? 'Undoing…' : items?.length > 1 ? 'Undo all' : 'Undo'}

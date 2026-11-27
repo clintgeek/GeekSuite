@@ -5,22 +5,12 @@ import { FoodComposer } from '../components/FoodSearch';
 import { useUndoToast } from '../components/FoodSearch/undoToast.jsx';
 import BarcodeScanner from '../components/BarcodeScanner/BarcodeScanner.jsx';
 import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
+import { EMPTY_FOOD_FORM, foodPayloadFromForm } from '../components/MyFoods/foodForm.js';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
 import { useToday } from '../hooks/useToday.js';
 import { Page, Surface } from '../components/primitives';
 import { addedMessage } from '../utils/plainWords.js';
 import { errorMessage } from '../utils/errorMessage.js';
-
-const EMPTY_FOOD_FORM = {
-  name: '',
-  brand: '',
-  calories_per_serving: '',
-  protein_grams: '',
-  carbs_grams: '',
-  fat_grams: '',
-  serving_size: 1,
-  serving_unit: 'oz'
-};
 
 /**
  * The meal a log at this hour most likely belongs to (mirrors FoodLog.jsx's
@@ -64,34 +54,36 @@ const FoodSearchPage = () => {
   const { offerUndo } = useUndoToast(undoLogs);
 
   const handleCreate = useCallback(async () => {
-    if (!createForm?.name) return;
+    if (creating || !createForm?.name?.trim()) return;
     setCreating(true);
+    let created = null;
     try {
-      const created = await createFood({
-        name: createForm.name.trim(),
-        brand: createForm.brand?.trim() || undefined,
-        nutrition: {
-          calories_per_serving: Number(createForm.calories_per_serving) || 0,
-          protein_grams: Number(createForm.protein_grams) || 0,
-          carbs_grams: Number(createForm.carbs_grams) || 0,
-          fat_grams: Number(createForm.fat_grams) || 0
-        },
-        serving: {
-          size: Number(createForm.serving_size) || 1,
-          unit: createForm.serving_unit || 'oz'
-        }
-      });
-      setCreateForm(null);
+      created = await createFood(foodPayloadFromForm(createForm));
+    } catch (error) {
+      // Not saved: the form stays open with what was typed.
+      notify(errorMessage(error, 'Couldn’t create that food. Try again.'), { tone: 'error' });
+      setCreating(false);
+      return;
+    }
+    // The food exists now, so the form's job is done whatever the log does.
+    setCreateForm(null);
+    try {
       if (created) {
-        await logItems([{ ...created, servings: 1 }], mealType);
-        notify(addedMessage(mealType, created.name), { tone: 'success' });
+        // Say "Added" only when the log was written. It used to say so
+        // whatever came back, so a failed log read as a success.
+        const result = await logItems([{ ...created, servings: 1 }], mealType);
+        if ((result?.ok ?? 0) > 0) {
+          offerUndo(addedMessage(mealType, created.name), result?.logIds || []);
+        } else {
+          notify(`Saved ${created.name} to your foods, but couldn’t add it to today. Search for it to try again.`, { tone: 'error' });
+        }
       }
     } catch (error) {
-      notify(errorMessage(error, 'Couldn’t create that food. Try again.'), { tone: 'error' });
+      notify(errorMessage(error, 'Saved the food, but couldn’t add it to today. Search for it to try again.'), { tone: 'error' });
     } finally {
       setCreating(false);
     }
-  }, [createForm, createFood, logItems, mealType, notify]);
+  }, [creating, createForm, createFood, logItems, mealType, notify, offerUndo]);
 
   return (
     <Page narrow>
@@ -99,7 +91,8 @@ const FoodSearchPage = () => {
         Say what you ate, or type a food’s name to pick it from the list.
       </Typography>
 
-      <Surface sx={{ p: { xs: 1.5, sm: 2 } }}>
+      {/* 4px theme unit: 12px on a phone, 20px from sm. */}
+      <Surface sx={{ p: { xs: 3, sm: 5 } }}>
       <FoodComposer
         mode="page"
         autoFocus
@@ -143,7 +136,7 @@ const FoodSearchPage = () => {
         food={null}
         form={createForm || EMPTY_FOOD_FORM}
         onChange={setCreateForm}
-        onClose={() => setCreateForm(null)}
+        onClose={() => { if (!creating) setCreateForm(null); }}
         onSave={handleCreate}
         loading={creating}
       />

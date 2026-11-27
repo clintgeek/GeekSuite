@@ -99,7 +99,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
 
       {/* ── A. Net Carb Limit ──────────────────────────────────────────────── */}
       <Box>
@@ -146,7 +146,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
         <Typography sx={labelSx}>Fat, protein and carbs</Typography>
 
         {/* Preset chips */}
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 4 }}>
           {Object.keys(KETO_PRESETS).map((key) => {
             const isSelected = preset === key;
             return (
@@ -158,8 +158,9 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
                 // Chosen = the blue fill with its own paper-coloured text:
                 // the Label's one selected look, no tint.
                 sx={{
-                  borderRadius: 1,
-                  borderWidth: 2,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  minHeight: 36,
                   ...(isSelected && {
                     bgcolor: theme.palette.primary.main,
                     borderColor: theme.palette.primary.main,
@@ -264,9 +265,10 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
             value="net"
             sx={{
               fontFamily: 'inherit',
-              fontSize: '0.8125rem',
+              fontSize: '0.875rem',
               textTransform: 'none',
-              px: 2,
+              px: 3,
+              minHeight: 44,
             }}
           >
             Net carbs (carbs minus fiber)
@@ -275,9 +277,10 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
             value="total"
             sx={{
               fontFamily: 'inherit',
-              fontSize: '0.8125rem',
+              fontSize: '0.875rem',
               textTransform: 'none',
-              px: 2,
+              px: 3,
+              minHeight: 44,
             }}
           >
             Total carbs

@@ -1,16 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
-  Button,
   CircularProgress,
-  Tooltip,
-  useTheme
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
+import { WatchOutlined as WatchIcon } from '@mui/icons-material';
+import { GeekErrorState } from '@geeksuite/ui';
 import { influxService } from '../services/influxService';
 import { ResponsiveLine } from '@nivo/line';
-import { LabelPanel, FactHeadline } from './primitives';
+import { LabelPanel, StatNumber, EmptyState } from './primitives';
 import { buildChartTheme } from './primitives/chartTheme.js';
+import { EXPLAIN, WATCH_DOWN_TEXT, watchOutcome } from './Reports/watchWords.js';
+import { errorMessage } from '../utils/errorMessage.js';
 import {
   toTimeSeries,
   formatClockTime,
@@ -18,179 +21,57 @@ import {
   EMPTY_INTRADAY,
 } from './intradaySeries.js';
 
-/**
- * Sparkline chart component
- *
- * Q52a: ported from chart.js/react-chartjs-2 to @nivo/line, the one chart
- * library this app now ships. Same shape — a filled, smoothed 2px line with
- * no axes and a hover readout of "HH:MM / value".
- *
- * One colour system. The measured line is the app's blue; the
- * fill under it is a 10% tint of the same blue; nothing else is coloured.
- */
-function SparklineChart({ data, color, height = 60, showGradient = true }) {
-  const theme = useTheme();
-  const chartTheme = React.useMemo(() => buildChartTheme(theme), [theme]);
-  const series = React.useMemo(() => toTimeSeries(data, 'value', color), [data, color]);
+/** "6 AM", "12 PM": short enough that four of them fit a phone-wide card. */
+const hourTick = (date) => {
+  const h = date.getHours();
+  return `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`;
+};
 
-  if (series.length === 0) {
-    return (
-      <Box sx={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Typography variant="caption" color="text.secondary">No readings</Typography>
-      </Box>
-    );
-  }
+/**
+ * One measure through the day: a 2px line in the app's blue over a faint
+ * fill of the same blue, with a time axis and a value axis a phone can read
+ * (12px labels, four or five ticks each way, no rotated legends). Touching
+ * the line reads out the time and the value.
+ *
+ * There used to be two charts per measure: a sparkline with no axes on the
+ * card, and this one behind a "Show the charts" button. The sparkline could
+ * not be read (no scale, no times), so it was decoration; this is the chart,
+ * and it is always on the card.
+ */
+function DayChart({ data, label, unit, color, range, height = 168 }) {
+  const theme = useTheme();
+  const narrow = useMediaQuery(theme.breakpoints.down('sm'));
+  const chartTheme = React.useMemo(() => buildChartTheme(theme), [theme]);
+  const series = React.useMemo(() => toTimeSeries(data, label, color), [data, label, color]);
+
+  if (series.length === 0) return null;
 
   return (
-    <Box sx={{ height }}>
+    <Box sx={{ height, mx: -1 }}>
       <ResponsiveLine
         data={series}
         theme={chartTheme}
         role="img"
-        ariaLabel={`Trend sparkline, ${series[0].data.length} readings`}
-        margin={{ top: 4, right: 2, bottom: 4, left: 2 }}
+        ariaLabel={`${label} through the day${unit ? `, in ${unit}` : ''}, ${series[0].data.length} readings`}
+        margin={{ top: 8, right: 12, bottom: 28, left: 36 }}
         xScale={{ type: 'time', format: 'native', useUTC: false }}
-        yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
-        axisTop={null}
-        axisRight={null}
-        axisBottom={null}
-        axisLeft={null}
+        yScale={{ type: 'linear', min: range ? range[0] : 'auto', max: range ? range[1] : 'auto' }}
+        axisBottom={{
+          format: hourTick,
+          tickSize: 0,
+          tickPadding: 8,
+          tickValues: narrow ? 'every 6 hours' : 'every 4 hours',
+        }}
+        axisLeft={{ tickSize: 0, tickPadding: 8, tickValues: 4 }}
+        gridYValues={4}
         enableGridX={false}
-        enableGridY={false}
         colors={(line) => line.color}
         curve="monotoneX"
         lineWidth={2}
         enablePoints={false}
-        enableArea={showGradient}
-        areaOpacity={0.1}
-        useMesh
-        tooltip={({ point }) => (
-          <Box sx={{
-            backgroundColor: theme.palette.background.paper,
-            border: `1px solid ${theme.palette.divider}`,
-            borderRadius: '10px',
-            boxShadow: '0 8px 24px rgba(16, 24, 40, 0.12)',
-            px: 1.25,
-            py: 0.75,
-          }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-              {formatClockTime(point.data.x)}
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              {point.data.y}
-            </Typography>
-          </Box>
-        )}
-      />
-    </Box>
-  );
-}
-
-/**
- * Metric card with current value and sparkline
- */
-function MetricCardWithChart({
-  label,
-  currentValue,
-  unit,
-  data,
-  color,
-  target = null,
-  tooltipText = ''
-}) {
-  /*
-   * A "trend" chip lived here. It compared the last ten data points with the
-   * ten before them — on an INTRADAY series, so it measured the last few
-   * minutes against the few before, and showed the difference as a bare
-   * number with an arrow beside a card that reads as the day's figure. It was
-   * coloured red for any rise, which is backwards for body battery. It is
-   * gone rather than fixed: a like-for-like day-over-day comparison needs a
-   * second day's data, and a number with no stated window is worse than none.
-   */
-  const latest = data && data.length > 0 ? data[data.length - 1] : null;
-  const asOf = latest ? formatClockTime(latest.time) : '';
-
-  return (
-    <Tooltip title={tooltipText} arrow>
-      <Box sx={{ height: '100%' }}>
-        <LabelPanel title={label} sx={{ height: '100%' }}>
-          {/* Latest reading, and when it was taken. On a past date that is
-              the last reading of that day, so the time is not decoration —
-              without it the number reads as "now". */}
-          <FactHeadline
-            name=""
-            value={currentValue == null ? '—' : currentValue}
-            unit={currentValue != null ? unit : undefined}
-          />
-          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.5 }}>
-            {currentValue == null ? 'No readings for this day' : `Latest reading, ${asOf}`}
-          </Typography>
-
-          {/* Target indicator */}
-          {target && (
-            <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
-              {`Aim for ${target}`}
-            </Typography>
-          )}
-
-          {/* Sparkline */}
-          <Box sx={{ mt: 1 }}>
-            <SparklineChart data={data} color={color} height={50} />
-          </Box>
-        </LabelPanel>
-      </Box>
-    </Tooltip>
-  );
-}
-
-/**
- * Full chart with time axis
- */
-function DetailedChart({ data, label, color, yAxisLabel, height = 200 }) {
-  const theme = useTheme();
-  const chartTheme = React.useMemo(() => buildChartTheme(theme), [theme]);
-  const series = React.useMemo(() => toTimeSeries(data, label, color), [data, label, color]);
-
-  if (series.length === 0) {
-    return (
-      <Box sx={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Typography variant="body2" color="text.secondary">No readings for this day</Typography>
-      </Box>
-    );
-  }
-
-  return (
-    <Box sx={{ height }}>
-      <ResponsiveLine
-        data={series}
-        theme={chartTheme}
-        role="img"
-        ariaLabel={`${label} through the day${yAxisLabel ? `, in ${yAxisLabel}` : ''}`}
-        margin={{ top: 12, right: 16, bottom: 40, left: 56 }}
-        xScale={{ type: 'time', format: 'native', useUTC: false }}
-        yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
-        axisBottom={{
-          format: '%-I:%M %p',
-          tickSize: 0,
-          tickPadding: 10,
-          tickValues: 5,
-        }}
-        axisLeft={{
-          tickSize: 0,
-          tickPadding: 8,
-          tickValues: 5,
-          format: (v) => (yAxisLabel ? `${v} ${yAxisLabel}` : `${v}`),
-        }}
-        enableGridX={false}
-        colors={(line) => line.color}
-        curve="monotoneX"
-        lineWidth={2}
-        pointSize={3}
-        pointColor={theme.palette.background.paper}
-        pointBorderWidth={1}
-        pointBorderColor={{ from: 'serieColor' }}
         enableArea
         areaOpacity={0.1}
+        areaBaselineValue={range ? range[0] : undefined}
         useMesh
         enableSlices="x"
         sliceTooltip={({ slice }) => (
@@ -199,14 +80,14 @@ function DetailedChart({ data, label, color, yAxisLabel, height = 200 }) {
             border: `1px solid ${theme.palette.divider}`,
             borderRadius: '10px',
             boxShadow: '0 8px 24px rgba(16, 24, 40, 0.12)',
-            px: 1.5,
-            py: 1,
+            px: 3,
+            py: 2,
           }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-              {formatClockTime(slice.points[0].data.x, { withDate: true })}
+              {formatClockTime(slice.points[0].data.x)}
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              {label}: {slice.points[0].data.y}{yAxisLabel ? ` ${yAxisLabel}` : ''}
+            <Typography variant="body2" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+              {slice.points[0].data.y}{unit ? ` ${unit}` : ''}
             </Typography>
           </Box>
         )}
@@ -216,61 +97,104 @@ function DetailedChart({ data, label, color, yAxisLabel, height = 200 }) {
 }
 
 /**
- * Main IntradayDashboard component
+ * One measure: its name, one plain sentence saying what it is, the latest
+ * reading and when it was taken, and the day's chart.
  */
-export default function IntradayDashboard({
-  date,
-  onDateChange
-}) {
+function MeasureCard({ label, explain, value, unit, data, color, range, aim }) {
+  /*
+   * A "trend" chip lived here. It compared the last ten data points with the
+   * ten before them — on an INTRADAY series, so it measured the last few
+   * minutes against the few before, and coloured any rise red (backwards for
+   * Body Battery). It is gone rather than fixed: a number with no stated
+   * window is worse than none.
+   */
+  const latest = data && data.length > 0 ? data[data.length - 1] : null;
+  const asOf = latest ? formatClockTime(latest.time) : '';
+
+  return (
+    <LabelPanel title={label} sx={{ height: '100%', minWidth: 0 }}>
+      {explain && (
+        <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', lineHeight: 1.45, mt: -1.5, mb: 3 }}>
+          {explain}
+        </Typography>
+      )}
+      {/* Latest reading, and when it was taken. On a past date that is the
+          last reading of that day, so the time is not decoration — without
+          it the number reads as "now". */}
+      <StatNumber value={value == null ? '—' : value} unit={value != null ? unit : undefined} size="display" />
+      <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1, mb: 2 }}>
+        {value == null
+          ? 'No readings for this day'
+          : `Latest reading, ${asOf}${aim ? ` · aim for ${aim}` : ''}`}
+      </Typography>
+      <DayChart data={data} label={label} unit={unit} color={color} range={range} />
+    </LabelPanel>
+  );
+}
+
+/**
+ * Health › Overview: heart rate, stress and Body Battery through one day.
+ */
+export default function IntradayDashboard({ date }) {
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState({
-    heartRate: [],
-    stress: [],
-    bodyBattery: [],
-    breathing: []
-  });
-  const [viewMode, setViewMode] = useState('summary'); // 'summary' or 'detailed'
+  const [error, setError] = useState(null);
+  const [data, setData] = useState(EMPTY_INTRADAY);
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   useEffect(() => {
-    if (!date) return;
+    if (!date) return undefined;
+    // A slow answer for a day you have already left must not overwrite the
+    // day you are looking at.
+    let current = true;
 
     async function fetchData() {
       setLoading(true);
+      setError(null);
 
       try {
         const response = await influxService.getIntraday(date, date);
-
-        // Backend returns { available: false, reason, message } when InfluxDB is
-        // unavailable or has no data for this date — treat as empty, not an error.
-        if (!response || response.available === false) {
+        if (!current) return;
+        const outcome = watchOutcome(response);
+        if (outcome === 'down') {
+          // The data server is unreachable. That is a failed read, and it is
+          // said as one: it used to draw as a day with no readings.
+          setData(EMPTY_INTRADAY);
+          setError(WATCH_DOWN_TEXT);
+        } else if (outcome === 'empty') {
           setData(EMPTY_INTRADAY);
         } else {
-          // The measurement-column → `value` rename now lives in
+          // The measurement-column → `value` rename lives in
           // `intradaySeries.js`, shared with MealImpactVisualization.
           setData(normalizeIntraday(response));
         }
       } catch (err) {
-        // Defensive: backend should no longer 500, but handle it quietly.
-        console.warn('Intraday health data unavailable:', err.message);
+        if (!current) return;
+        console.warn('Intraday health data unavailable:', err?.message);
         setData(EMPTY_INTRADAY);
+        setError(errorMessage(err, WATCH_DOWN_TEXT));
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     }
 
     fetchData();
-  }, [date]);
+    return () => { current = false; };
+  }, [date, attempt]);
 
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
-        <CircularProgress />
+        <CircularProgress aria-label="Loading the day’s readings" />
       </Box>
     );
   }
 
-  // Calculate current values (most recent data point)
+  if (error) {
+    return <GeekErrorState title="Couldn’t load this day" error={error} onRetry={retry} data-testid="intraday-error" />;
+  }
+
   // The latest reading of each series, or null. These defaulted to 0, which
   // put "0 bpm" on screen for any day the watch recorded nothing.
   const latestOf = (series) => (series.length > 0 ? series[series.length - 1].value : null);
@@ -278,82 +202,49 @@ export default function IntradayDashboard({
   const currentStress = latestOf(data.stress);
   const currentBattery = latestOf(data.bodyBattery);
 
+  // Nothing at all for the day: one sentence, not three empty cards.
+  if (currentHR == null && currentStress == null && currentBattery == null) {
+    return (
+      <EmptyState
+        icon={WatchIcon}
+        title="No readings for this day"
+        copy="Heart rate, stress and energy show here after your watch syncs. Try another day, or check back later."
+        data-testid="intraday-empty"
+      />
+    );
+  }
+
   const blue = theme.palette.primary.main;
 
   return (
-    <Box>
-      {/* Summary Cards: three cards; one across from md up */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr))' }, gap: { xs: 1.75, md: 2.25 }, mb: 2.25 }}>
-        <MetricCardWithChart
-          label="Heart rate"
-          currentValue={currentHR}
-          unit="bpm"
-          data={data.heartRate}
-          color={blue}
-          tooltipText="Heart rate from your Garmin device — the latest reading for the day shown"
-        />
-        <MetricCardWithChart
-          label="Stress"
-          currentValue={currentStress}
-          unit="/100"
-          data={data.stress}
-          color={blue}
-          target="under 40"
-          tooltipText="Garmin’s stress score from heart-rate variability (HRV), 0–100. Lower is calmer."
-        />
-        <MetricCardWithChart
-          label="Body Battery"
-          currentValue={currentBattery}
-          unit="/100"
-          data={data.bodyBattery}
-          color={blue}
-          tooltipText="Garmin’s 0–100 energy estimate: it charges while you rest and drains with activity and stress."
-        />
-      </Box>
-
-      {/* Detailed Charts */}
-      {viewMode === 'detailed' && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 1.75, md: 2.25 } }}>
-          <LabelPanel title="Heart rate through the day" sx={{ gridColumn: { md: '1 / -1' } }}>
-            <DetailedChart
-              data={data.heartRate}
-              label="Heart rate"
-              color={blue}
-              yAxisLabel="bpm"
-              height={250}
-            />
-          </LabelPanel>
-          <LabelPanel title="Stress through the day">
-            <DetailedChart
-              data={data.stress}
-              label="Stress"
-              color={blue}
-              yAxisLabel=""
-              height={200}
-            />
-          </LabelPanel>
-          <LabelPanel title="Body Battery">
-            <DetailedChart
-              data={data.bodyBattery}
-              label="Energy"
-              color={blue}
-              yAxisLabel=""
-              height={200}
-            />
-          </LabelPanel>
-        </Box>
-      )}
-
-      {/* Toggle View Button: a text link in blue, not a filled chip */}
-      <Box sx={{ mt: 2, textAlign: 'center' }}>
-        <Button
-          variant="text"
-          onClick={() => setViewMode(viewMode === 'summary' ? 'detailed' : 'summary')}
-          sx={{ fontWeight: 700, minHeight: 44 }}
-        >
-          {viewMode === 'summary' ? 'Show the charts' : 'Hide the charts'}
-        </Button>
-      </Box>
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr))' }, gap: { xs: 3, md: 4 } }}>
+      <MeasureCard
+        label="Heart rate"
+        explain="Beats a minute, as your watch read them through the day."
+        value={currentHR}
+        unit="bpm"
+        data={data.heartRate}
+        color={blue}
+      />
+      <MeasureCard
+        label="Stress"
+        explain={EXPLAIN.stress}
+        value={currentStress}
+        unit="/ 100"
+        data={data.stress}
+        color={blue}
+        range={[0, 100]}
+        aim="under 40"
+      />
+      <MeasureCard
+        label="Body Battery"
+        explain={EXPLAIN.bodyBattery}
+        value={currentBattery}
+        unit="/ 100"
+        data={data.bodyBattery}
+        color={blue}
+        range={[0, 100]}
+      />
     </Box>
   );
 }

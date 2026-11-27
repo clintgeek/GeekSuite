@@ -19,6 +19,18 @@ describe('More', () => {
     expect(screen.getByRole('link', { name: /Saved foods/ })).toHaveTextContent('Meals and foods you saved');
   });
 
+  it('every row has one short line under its name (short enough not to wrap at 390px)', () => {
+    render(<MemoryRouter><More /></MemoryRouter>);
+    expect(screen.getByRole('link', { name: /Import a scan/ })).toHaveTextContent('Body scans from a smart scale');
+    expect(screen.getByRole('link', { name: /Settings/ })).toHaveTextContent('Text size, theme and your details');
+    for (const link of screen.getAllByRole('link')) {
+      const line = link.querySelectorAll('p')[1]?.textContent || '';
+      expect(line.length).toBeGreaterThan(0);
+      // ~34 characters of 15px Figtree fit beside the icon and chevron at 390px.
+      expect(line.length).toBeLessThanOrEqual(34);
+    }
+  });
+
   it('has no row for the pages that folded away, and no mode wording', () => {
     render(<MemoryRouter><More /></MemoryRouter>);
     for (const gone of [/look up a specific food/i, /^Reports/, /^Activity/, /Health dashboard/, /My meals/, /My foods/, /Food log/]) {

@@ -77,6 +77,8 @@ const UnifiedFoodSearch = ({
   const [deepResults, setDeepResults] = useState([]);
   const [loadingDeep, setLoadingDeep] = useState(false);
   const [error, setError] = useState(null);
+  // The read of your own foods failed: that is not "no match".
+  const [localFailed, setLocalFailed] = useState(false);
   // Folded lists, closed on arrival every time and deliberately not
   // remembered: the fold is about what the screen is for, not a preference.
   const [idleListOpen, setIdleListOpen] = useState(false);
@@ -103,11 +105,16 @@ const UnifiedFoodSearch = ({
       localAbort.current = controller;
       try {
         const foods = await foodService.suggest(text, { limit: 15, signal: controller.signal, meals: true });
-        if (!controller.signal.aborted) setSuggestions(Array.isArray(foods) ? foods.map(asRow) : []);
+        if (!controller.signal.aborted) {
+          // A null in the answer is not a row.
+          setSuggestions(Array.isArray(foods) ? foods.filter((f) => f && typeof f === 'object').map(asRow) : []);
+          setLocalFailed(false);
+        }
       } catch (err) {
         if (err?.name !== 'CanceledError' && err?.name !== 'AbortError') {
           // A failed suggest is not a failed search — wave two may still answer.
           setSuggestions([]);
+          setLocalFailed(true);
         }
       }
     }, DEBOUNCE_LOCAL_MS);
@@ -128,7 +135,7 @@ const UnifiedFoodSearch = ({
       // A late answer for a query that is no longer in the box is dropped,
       // aborted or not — it used to land after the box was cleared.
       if (!controller.signal.aborted && deepFor.current === term) {
-        setDeepResults(Array.isArray(foods) ? foods : []);
+        setDeepResults(Array.isArray(foods) ? foods.filter((f) => f && typeof f === 'object') : []);
       }
     } catch (err) {
       if (err?.name !== 'CanceledError' && err?.name !== 'AbortError' && deepFor.current === term) {
@@ -375,14 +382,17 @@ const UnifiedFoodSearch = ({
             ))}
           </Box>
         ) : (
-          <Box sx={{ textAlign: 'center', py: 3, px: 2 }} data-testid="no-match">
+          // A failed read says so; only a real answer says "no match".
+          <Box sx={{ textAlign: 'center', py: 6, px: 4 }} data-testid={localFailed ? 'search-failed' : 'no-match'} role="status">
             <Typography sx={{ fontSize: '1.0625rem', fontWeight: 700, color: ink }}>
-              No match in your foods yet
+              {localFailed ? 'Couldn’t search your foods just now' : 'No match in your foods yet'}
             </Typography>
-            <Typography sx={{ color: muted, fontSize: '0.9375rem', mt: 0.5, maxWidth: 380, mx: 'auto' }}>
-              {describeAvailable
-                ? 'Tap Log it and I’ll work it out.'
-                : onCreateFood ? 'You can create it below.' : 'Try another name.'}
+            <Typography sx={{ color: muted, fontSize: '0.9375rem', mt: 1, maxWidth: 380, mx: 'auto' }}>
+              {localFailed
+                ? (describeAvailable ? 'Check your connection. You can still tap Log it and I’ll work it out.' : 'Check your connection and try again.')
+                : describeAvailable
+                  ? 'Tap Log it and I’ll work it out.'
+                  : onCreateFood ? 'You can create it below.' : 'Try another name.'}
             </Typography>
           </Box>
         )

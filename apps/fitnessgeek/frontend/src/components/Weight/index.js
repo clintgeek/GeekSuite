@@ -1,5 +1,4 @@
 // New modern components
-export { default as WeightGoalWizard } from './WeightGoalWizard.jsx';
 export { default as WeightTimeline } from './WeightTimeline.jsx';
 export { default as WeightProgress } from './WeightProgress.jsx';
 export { default as QuickAddWeight } from './QuickAddWeight.jsx';

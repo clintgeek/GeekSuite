@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Alert,
   Box,
   Typography,
   TextField,
@@ -14,7 +15,6 @@ import {
   ListItemAvatar,
   Avatar,
   IconButton,
-  InputAdornment
 } from '@mui/material';
 import {
   PersonAdd as JoinIcon,
@@ -25,7 +25,7 @@ import {
   Restaurant as FoodIcon,
   MenuBook as MealsIcon
 } from '@mui/icons-material';
-import { useToast } from '@geeksuite/ui';
+import { GeekErrorState, useToast } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { LabelPanel, Tag } from '../primitives';
 import { settingsService } from '../../services/settingsService';
@@ -35,7 +35,13 @@ import { SWITCH_ROW } from './switchRow.js';
 const HouseholdSettings = () => {
   const { notify } = useToast();
   const [loading, setLoading] = useState(true);
+  // A failed read is its own state: drawn as "no household" it offered
+  // Create and Join to a person who is already in one.
+  const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Said inside the open dialog, where she is looking (the toast is behind it).
+  const [dialogError, setDialogError] = useState(null);
+  const [nameError, setNameError] = useState(false);
 
   // Household data
   const [householdData, setHouseholdData] = useState(null);
@@ -59,6 +65,7 @@ const HouseholdSettings = () => {
   const loadHouseholdSettings = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       // `settingsService.getHouseholdSettings()` already returns the household
       // itself, not an envelope: `apiService.get` unwraps a single-key GraphQL
       // response (`{ fitnessHousehold: {...} }` -> `{...}`) and the service
@@ -73,7 +80,7 @@ const HouseholdSettings = () => {
       setDisplayName(household?.display_name || '');
       setHouseholdName(household?.name || '');
     } catch (err) {
-      notify(errorMessage(err, 'Couldn’t load your household. Try again.'), { tone: 'error' });
+      setLoadError(errorMessage(err, 'Couldn’t load your household. Try again.'));
     } finally {
       setLoading(false);
     }
@@ -87,6 +94,7 @@ const HouseholdSettings = () => {
 
     try {
       setSaving(true);
+      setDialogError(null);
       // The service resolves to the bare `{ household_id }` — there is no
       // `.data.message`. Reading one threw AFTER the household was created,
       // so a success landed in the catch and said "Failed to create".
@@ -95,7 +103,9 @@ const HouseholdSettings = () => {
       setShowCreateDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      notify(errorMessage(err, 'Couldn’t create the household. Try again.'), { tone: 'error' });
+      const message = errorMessage(err, 'Couldn’t create the household. Try again.');
+      setDialogError(message);
+      notify(message, { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -113,12 +123,15 @@ const HouseholdSettings = () => {
 
     try {
       setSaving(true);
+      setDialogError(null);
       await settingsService.joinHousehold(joinCode.trim(), displayName);
       notify('Joined the household', { tone: 'success' });
       setShowJoinDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      notify(errorMessage(err, 'Couldn’t join the household. Try again.'), { tone: 'error' });
+      const message = errorMessage(err, 'Couldn’t join the household. Try again.');
+      setDialogError(message);
+      notify(message, { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -127,12 +140,15 @@ const HouseholdSettings = () => {
   const handleLeaveHousehold = async () => {
     try {
       setSaving(true);
+      setDialogError(null);
       await settingsService.leaveHousehold();
       notify('You left the household', { tone: 'success' });
       setShowLeaveDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      notify(errorMessage(err, 'Couldn’t leave the household. Try again.'), { tone: 'error' });
+      const message = errorMessage(err, 'Couldn’t leave the household. Try again.');
+      setDialogError(message);
+      notify(message, { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -148,25 +164,47 @@ const HouseholdSettings = () => {
       notify('Saved', { tone: 'success', duration: 2000 });
     } catch (err) {
       notify(errorMessage(err, 'Couldn’t save that. Try again.'), { tone: 'error' });
-      if (field === 'name') setHouseholdName(householdData?.name || '');
+      // The typed name stays in the box, with the failure said under it;
+      // leaving the box again retries (it used to snap back to the old name).
+      if (field === 'name') setNameError(true);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCopyCode = () => {
-    if (householdData?.household_id) {
-      navigator.clipboard.writeText(householdData.household_id);
+  // The clipboard is missing outside a secure context and can refuse: the
+  // tick only shows for a copy that happened.
+  const handleCopyCode = async () => {
+    if (!householdData?.household_id) return;
+    try {
+      await navigator.clipboard.writeText(householdData.household_id);
       setCodeCopied(true);
       setTimeout(() => setCodeCopied(false), 2000);
+    } catch {
+      notify('Couldn’t copy the code. Press and hold it to copy.', { tone: 'error' });
     }
+  };
+
+  const openDialog = (show) => {
+    setDialogError(null);
+    show(true);
   };
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <LabelPanel title="Household sharing" titleComponent="h2">
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress aria-label="Loading your household" />
+        </Box>
+      </LabelPanel>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <LabelPanel title="Household sharing" titleComponent="h2">
+        <GeekErrorState title="Couldn’t load your household" description={loadError} onRetry={loadHouseholdSettings} />
+      </LabelPanel>
     );
   }
 
@@ -175,24 +213,26 @@ const HouseholdSettings = () => {
   return (
     <LabelPanel title="Household sharing" titleComponent="h2">
       <Box>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, mb: 3 }}>
+        <Typography color="text.secondary" sx={{ mb: 4 }}>
           Share food logs and meals with your family. See what they ate, and copy a meal in a tap.
         </Typography>
 
         {!isInHousehold ? (
           // Not in a household - show create/join options
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
             <Button
               variant="contained"
               startIcon={<CreateIcon />}
-              onClick={() => setShowCreateDialog(true)}
+              onClick={() => openDialog(setShowCreateDialog)}
+              sx={{ minHeight: 44 }}
             >
               Create a household
             </Button>
             <Button
-              variant="outlined"
+              variant="tonal"
               startIcon={<JoinIcon />}
-              onClick={() => setShowJoinDialog(true)}
+              onClick={() => openDialog(setShowJoinDialog)}
+              sx={{ minHeight: 44 }}
             >
               Join a household
             </Button>
@@ -203,27 +243,27 @@ const HouseholdSettings = () => {
             {/* Household name — the household's, so a rename shows for everyone */}
             {/* Saved when she leaves the box (or presses Enter), like every
                 other setting on the page — no Save button of its own. */}
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 4 }}>
               <TextField
                 fullWidth
-                size="small"
                 label="Household name"
                 value={householdName}
-                onChange={(e) => setHouseholdName(e.target.value)}
+                onChange={(e) => { setHouseholdName(e.target.value); setNameError(false); }}
                 onBlur={() => {
                   const next = householdName.trim();
-                  if (next !== (householdData.name || '')) handleUpdateSharing('name', next);
+                  if (next !== (householdData.name || '')) { setNameError(false); handleUpdateSharing('name', next); }
                 }}
                 onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
                 placeholder="Like Crocker"
                 inputProps={{ maxLength: 40 }}
-                helperText="Everyone in the household sees this name."
+                error={nameError}
+                helperText={nameError ? 'Couldn’t save that. Try again.' : 'Everyone in the household sees this name.'}
               />
             </Box>
 
             {/* Household Code */}
             {/* A rule and a row, not a box inside the panel. */}
-            <Box sx={{ mb: 3, py: 1.5, borderTop: (t) => `1px solid ${t.palette.divider}`, borderBottom: (t) => `1px solid ${t.palette.divider}` }}>
+            <Box sx={{ py: 3, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 Household code
               </Typography>
@@ -245,8 +285,8 @@ const HouseholdSettings = () => {
                   * household could actually get to.
                   */}
                 <IconButton
-                  size="small"
                   onClick={handleCopyCode}
+                  sx={{ width: 44, height: 44 }}
                   aria-label={codeCopied ? 'Household code copied' : 'Copy household code'}
                 >
                   {codeCopied ? <CheckIcon color="success" /> : <CopyIcon />}
@@ -257,10 +297,10 @@ const HouseholdSettings = () => {
               </Typography>
             </Box>
 
-            <Divider sx={{ my: 2 }} />
+            <Divider sx={{ mb: 3 }} />
 
             {/* Your Sharing Settings */}
-            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 700 }}>
+            <Typography sx={{ fontWeight: 600, mb: 1 }}>
               What you share
             </Typography>
             <Box sx={{ mb: 3 }}>
@@ -300,16 +340,16 @@ const HouseholdSettings = () => {
               />
             </Box>
 
-            <Divider sx={{ my: 2 }} />
+            <Divider sx={{ mb: 3 }} />
 
             {/* Household Members */}
-            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 700 }}>
+            <Typography sx={{ fontWeight: 600, mb: 1 }}>
               Who’s in it
             </Typography>
             {householdData.members?.length > 0 ? (
-              <List dense>
-                {householdData.members.map((member) => (
-                  <ListItem key={member.user_id}>
+              <List dense disablePadding>
+                {householdData.members.filter(Boolean).map((member, i) => (
+                  <ListItem key={member.user_id || i} disableGutters>
                     <ListItemAvatar>
                       <Avatar sx={{ bgcolor: 'primary.main' }}>
                         {member.display_name?.charAt(0)?.toUpperCase() || '?'}
@@ -332,19 +372,19 @@ const HouseholdSettings = () => {
                 ))}
               </List>
             ) : (
-              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+              <Typography variant="body2" color="text.secondary">
                 No one else yet. Share the code above to invite your family.
               </Typography>
             )}
 
-            <Divider sx={{ my: 2 }} />
+            <Divider sx={{ mt: 3, mb: 2 }} />
 
             {/* Leave Household */}
             <Button
               color="error"
               startIcon={<LeaveIcon />}
-              onClick={() => setShowLeaveDialog(true)}
-              size="small"
+              onClick={() => openDialog(setShowLeaveDialog)}
+              sx={{ minHeight: 44 }}
             >
               Leave household
             </Button>
@@ -370,7 +410,7 @@ const HouseholdSettings = () => {
         }
         secondaryAction={<Button onClick={() => setShowCreateDialog(false)}>Cancel</Button>}
       >
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
             Create a household to share food logs and meals with your family.
           </Typography>
           <TextField
@@ -380,7 +420,7 @@ const HouseholdSettings = () => {
             onChange={(e) => setHouseholdName(e.target.value)}
             placeholder="Like Crocker"
             inputProps={{ maxLength: 40 }}
-            sx={{ mb: 2 }}
+            sx={{ mb: 4 }}
           />
           <TextField
             fullWidth
@@ -390,6 +430,7 @@ const HouseholdSettings = () => {
             placeholder="Like Clint"
             helperText="The name your family sees."
           />
+          {dialogError && <Alert severity="error" sx={{ mt: 4 }}>{dialogError}</Alert>}
       </PremiumDialog>
 
       {/* Join Household Dialog */}
@@ -410,7 +451,7 @@ const HouseholdSettings = () => {
         }
         secondaryAction={<Button onClick={() => setShowJoinDialog(false)}>Cancel</Button>}
       >
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
             Enter the code from your family member’s phone. It’s in their Settings, under Household sharing.
           </Typography>
           <TextField
@@ -419,7 +460,7 @@ const HouseholdSettings = () => {
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
             placeholder="Like 7D9169DE1A8F"
-            sx={{ mb: 2 }}
+            sx={{ mb: 4 }}
             inputProps={{ style: { fontWeight: 700, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' } }}
           />
           <TextField
@@ -430,6 +471,7 @@ const HouseholdSettings = () => {
             placeholder="Like Sarah"
             helperText="The name your family sees."
           />
+          {dialogError && <Alert severity="error" sx={{ mt: 4 }}>{dialogError}</Alert>}
       </PremiumDialog>
 
       {/* Leave Household Dialog */}
@@ -453,6 +495,7 @@ const HouseholdSettings = () => {
         <Typography>
           You won’t see your family’s food logs or meals any more. You can join again with the code.
         </Typography>
+        {dialogError && <Alert severity="error" sx={{ mt: 4 }}>{dialogError}</Alert>}
       </PremiumDialog>
     </LabelPanel>
   );

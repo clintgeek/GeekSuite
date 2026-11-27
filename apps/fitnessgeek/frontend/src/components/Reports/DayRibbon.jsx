@@ -67,16 +67,21 @@ const DayCard = ({ day, calorieTarget }) => {
       sx={{
         listStyle: 'none',
         position: 'relative',
-        flexShrink: 0,
-        width: { xs: 140, sm: 152 },
+        // Wide enough that "P 165 · C 141 · F 70 g" stays on one line (it
+        // wrapped, leaving "70 g" alone on a second), and stretching to fill
+        // the row when there are only a few days, so a desktop has no empty
+        // third of a card row.
+        flex: { xs: '0 0 172px', sm: '1 0 176px' },
+        maxWidth: { sm: 240 },
         borderRadius: '12px',
         backgroundColor: theme.palette.background.paper,
         border: `1px solid ${theme.palette.divider}`,
-        p: { xs: 1.5, sm: 1.75 },
+        // 12px: the suite's spacing unit is 4px.
+        p: 3,
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75, mb: 1 }}>
-        <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, color: ink, lineHeight: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 2 }}>
+        <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: ink, lineHeight: 1 }}>
           {dayOfWeek}
         </Typography>
         <Typography sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.75rem', fontWeight: 600, color: muted }}>
@@ -84,10 +89,10 @@ const DayCard = ({ day, calorieTarget }) => {
         </Typography>
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, mb: 0.75 }}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 2 }}>
         <Typography
           component="span"
-          sx={{ fontVariantNumeric: 'tabular-nums', fontSize: { xs: '1.75rem', sm: '2rem' }, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em', color: ink }}
+          sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '1.75rem', fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em', color: ink }}
         >
           {commas(calories)}
         </Typography>
@@ -96,12 +101,12 @@ const DayCard = ({ day, calorieTarget }) => {
         </Typography>
       </Box>
 
-      <Typography data-testid="day-macros" sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.8125rem', color: ink, lineHeight: 1.4 }}>
+      <Typography data-testid="day-macros" sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.8125rem', color: muted, lineHeight: 1.4, whiteSpace: 'nowrap' }}>
         {macroLine(day)}
       </Typography>
 
       {status && (
-        <Box component="span" data-testid="day-status" sx={{ display: 'block', mt: 0.75 }}>
+        <Box component="span" data-testid="day-status" sx={{ display: 'block', mt: 2 }}>
           <Tag tone={status.over ? 'warning' : undefined}>
             {status.label}
           </Tag>
@@ -117,8 +122,8 @@ const DayRibbon = ({ daily = [], calorieTarget, rangeLabel }) => {
   if (!daily || daily.length === 0) {
     return (
       <LabelPanel title="Each day">
-        <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', py: 2, textAlign: 'center' }}>
-          No food logs in this range.
+        <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
+          Nothing logged in these days yet. Log a meal on Today and it shows here.
         </Typography>
       </LabelPanel>
     );
@@ -129,7 +134,17 @@ const DayRibbon = ({ daily = [], calorieTarget, rangeLabel }) => {
   return (
     <LabelPanel
       title={`Each day (${daily.length} logged)`}
-      metaRight={rangeLabel ? <span data-testid="day-ribbon-range">{rangeLabel}</span> : undefined}
+      // The dates sit on the title's own row. As a line of their own under
+      // it they were orphaned at the far right of a desktop card.
+      action={rangeLabel ? (
+        <Typography
+          component="span"
+          data-testid="day-ribbon-range"
+          sx={{ color: 'text.secondary', fontSize: '0.875rem', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
+        >
+          {rangeLabel}
+        </Typography>
+      ) : undefined}
     >
       <Box
         component="ul"
@@ -141,9 +156,10 @@ const DayRibbon = ({ daily = [], calorieTarget, rangeLabel }) => {
         sx={{
           '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
           display: 'flex',
-          gap: 1.25,
+          gap: 3,
           m: 0,
-          py: 1.5,
+          pt: 0,
+          pb: 2,
           px: 0,
           overflowX: 'auto',
           overflowY: 'hidden',

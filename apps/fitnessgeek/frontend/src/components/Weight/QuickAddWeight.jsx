@@ -12,7 +12,6 @@ import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
-import ThumbFab from '../primitives/ThumbFab.jsx';
 import Surface from '../primitives/Surface.jsx';
 
 const SAVE_FAILED = "Couldn’t save that weight. Check your connection and try again.";
@@ -76,7 +75,8 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
   const handleSubmit = async ({ fromCard = false } = {}) => {
     if (loading) return;
     const day = fromCard ? localDateString() : date;
-    if (!value || !day) return;
+    const amount = parseFloat(value);
+    if (!day || !Number.isFinite(amount) || amount <= 0 || amount >= 1000) return;
 
     setLoading(true);
     setError('');
@@ -89,7 +89,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
       // `handleUpdateLog`, which checks the boolean and is the pattern this
       // should have followed.
       const saved = await onAdd({
-        value: parseFloat(value),
+        value: amount,
         date: day
       });
 
@@ -117,106 +117,56 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
     return had === null ? null : `You already have ${had.toFixed(1)} for ${dayWords(ymd, todayYmd)}. Saving replaces it.`;
   };
   const dialogNote = replaceNote(date);
-  // The desktop card always means today; it says so once a weight is typed.
+  // The card always means today; it says so once a weight is typed.
   const cardNote = value ? replaceNote(todayYmd) : null;
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
+  // A typo guard, the same one the edit dialog has: "0", "-3" and "21999"
+  // used to go to the server and come back as a failed save.
+  const parsed = parseFloat(value);
+  const valid = Number.isFinite(parsed) && parsed > 0 && parsed < 1000;
+  const invalidNote = value !== '' && !valid ? 'Enter a weight between 0 and 1,000.' : null;
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && valid) {
       handleSubmit();
     }
   };
-  const handleCardKeyPress = (e) => {
-    if (e.key === 'Enter') {
+  const handleCardKeyDown = (e) => {
+    if (e.key === 'Enter' && valid) {
       handleSubmit({ fromCard: true });
     }
   };
 
+  const closeDialog = () => { setError(''); setOpen(false); };
+
   return (
     <>
-      {/* Quick Add Card for desktop */}
-      <Surface sx={{
-        width: '100%',
-        display: { xs: 'none', md: 'block' }
-      }}>
-        <Box>
-          {/* The card submits WITHOUT opening the dialog, so it needs its own
-              error surface — the dialog's Alert is not mounted on this path,
-              and a failure here would otherwise be as silent as the bug this
-              fixes. */}
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <TextField
-              label="Weight"
-              type="number"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyPress={handleCardKeyPress}
-              size="small"
-              sx={{ flexGrow: 1 }}
-              inputProps={{
-                inputMode: 'decimal',
-                step: "0.1",
-                min: "0",
-                max: "1000"
-              }}
-              InputProps={{
-                endAdornment: unitWord
-              }}
-              helperText={cardNote || undefined}
-              FormHelperTextProps={{ 'data-testid': 'weight-replace-note-card' }}
-            />
-            <Button
-              variant="contained"
-              onClick={() => handleSubmit({ fromCard: true })}
-              disabled={!value || loading}
-            >
-              {cardNote ? 'Replace' : 'Log'}
-            </Button>
-          </Box>
-        </Box>
-      </Surface>
-
-      {/* Phones: the thumb-zone "Log weight" button opens the dialog. */}
-      <ThumbFab label="Log weight" testId="log-weight-fab" onClick={openDialog} />
-
-      {/* Add Dialog */}
-      <PremiumDialog
-        open={open}
-        onClose={() => { setError(''); setOpen(false); }}
-        title="Log weight"
-        icon={WeightIcon}
-        maxWidth="sm"
-        {...thumbSaveProps({
-          fullScreen,
-          save: (
-            <Button
-              onClick={() => handleSubmit()}
-              variant="contained"
-              disabled={!value || loading}
-            >
-              {loading ? 'Saving…' : dialogNote ? 'Replace' : 'Save'}
-            </Button>
-          ),
-          cancel: <Button onClick={() => { setError(''); setOpen(false); }}>Cancel</Button>,
-        })}
+      {/* The weigh-in, first on the page at every width: one number and Log.
+          It used to be a floating button on phones, which sat on top of the
+          page's own text; a card in the flow covers nothing. */}
+      <Surface
+        component="section"
+        aria-label="Weigh in"
+        data-testid="weight-quick-add"
+        sx={{ width: '100%' }}
       >
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
+        {/* The card submits WITHOUT opening the dialog, so it needs its own
+            error surface — the dialog's Alert is not mounted on this path,
+            and a failure here would otherwise be as silent as the bug this
+            fixes. While the dialog is open the error shows there instead. */}
+        {error && !open && (
+          <Alert severity="error" role="alert" sx={{ mb: 4 }}>
+            {error}
+          </Alert>
+        )}
+        <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
           <TextField
-            fullWidth
-            label="Weight"
+            label="Today’s weight"
             type="number"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-            sx={{ mb: 2, mt: 1 }}
+            onKeyDown={handleCardKeyDown}
+            sx={{ flex: 1, minWidth: 0 }}
             inputProps={{
               inputMode: 'decimal',
               step: "0.1",
@@ -226,11 +176,83 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
             InputProps={{
               endAdornment: unitWord
             }}
-            helperText={dialogNote || 'For example, 150.4'}
-            FormHelperTextProps={dialogNote ? { 'data-testid': 'weight-replace-note' } : undefined}
+            error={Boolean(invalidNote) && !open}
+            helperText={open ? undefined : (invalidNote || cardNote || undefined)}
+            FormHelperTextProps={{ 'data-testid': 'weight-replace-note-card' }}
+          />
+          <Button
+            variant="contained"
+            onClick={() => handleSubmit({ fromCard: true })}
+            disabled={!valid || loading}
+            sx={{ minHeight: 56, minWidth: 96, flexShrink: 0 }}
+          >
+            {loading && !open ? 'Saving…' : cardNote ? 'Replace' : 'Log'}
+          </Button>
+        </Box>
+        {/* Backfilling a missed day is the rare case: one quiet line. The test
+            id is the old floating button's, kept for the scenes and tests
+            that open the dialog with it. */}
+        <Button
+          variant="text"
+          onClick={openDialog}
+          data-testid="log-weight-fab"
+          sx={{ minHeight: 44, px: 0, mt: 1, mb: -2, fontWeight: 600, justifyContent: 'flex-start', '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }}
+        >
+          Log weight for another day
+        </Button>
+      </Surface>
+
+      {/* Add Dialog */}
+      <PremiumDialog
+        open={open}
+        onClose={closeDialog}
+        title="Log weight"
+        icon={WeightIcon}
+        maxWidth="sm"
+        {...thumbSaveProps({
+          fullScreen,
+          save: (
+            <Button
+              onClick={() => handleSubmit()}
+              variant="contained"
+              disabled={!valid || !date || loading}
+            >
+              {loading ? 'Saving…' : dialogNote ? 'Replace' : 'Save'}
+            </Button>
+          ),
+          cancel: <Button onClick={closeDialog}>Cancel</Button>,
+        })}
+      >
+        {/* 16px between fields: the suite's spacing unit is 4px. */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4, pt: 1 }}>
+          {error && (
+            <Alert severity="error" role="alert">
+              {error}
+            </Alert>
+          )}
+          <TextField
+            fullWidth
+            label="Weight"
+            type="number"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            inputProps={{
+              inputMode: 'decimal',
+              step: "0.1",
+              min: "0",
+              max: "1000"
+            }}
+            InputProps={{
+              endAdornment: unitWord
+            }}
+            error={Boolean(invalidNote)}
+            helperText={invalidNote || dialogNote || 'For example, 150.4'}
+            FormHelperTextProps={dialogNote && !invalidNote ? { 'data-testid': 'weight-replace-note' } : undefined}
             autoFocus
           />
-          <DateField fullWidth value={date} onChange={setDate} />
+          <DateField fullWidth value={date} onChange={setDate} max={todayYmd} />
+        </Box>
       </PremiumDialog>
     </>
   );

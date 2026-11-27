@@ -125,7 +125,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
     try {
       // Resolves to the household itself, not `{ data }` — see HouseholdLogView.
       const household = await fitnessGeekService.getHouseholdMembers();
-      if (household?.members) {
+      if (Array.isArray(household?.members)) {
         setHouseholdMembers(household.members);
       }
     } catch (error) {
@@ -150,7 +150,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
           : await fitnessGeekService.getLogsForDate(fromDate);
         if (cancelled || !Array.isArray(rows)) return;
         const onDay = rows.filter((r) => { const d = rowDay(r); return !d || d === fromDate; });
-        const inMeal = fromMealType === WHOLE_DAY ? onDay : onDay.filter((r) => r.meal_type === fromMealType);
+        const inMeal = fromMealType === WHOLE_DAY ? onDay : onDay.filter((r) => r?.meal_type === fromMealType);
         setSourceCount(inMeal.length);
       } catch {
         if (!cancelled) setSourceCount(null);
@@ -159,8 +159,8 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
     return () => { cancelled = true; };
   }, [open, fromDate, fromMealType, fromUserId]);
 
-  const sharingMembers = householdMembers.filter((m) => m.shares_food_logs);
-  const whose = fromUserId ? (householdMembers.find((m) => m.user_id === fromUserId)?.display_name || 'their') : null;
+  const sharingMembers = (Array.isArray(householdMembers) ? householdMembers : []).filter((m) => m?.user_id && m.shares_food_logs);
+  const whose = fromUserId ? (householdMembers.find((m) => m?.user_id === fromUserId)?.display_name || 'their') : null;
   const ownerWord = whose ? `${whose}’s` : 'your';
   const fromMealWords = fromMealType === WHOLE_DAY ? 'whole day' : mealWord(fromMealType);
   const sameSpot = !fromUserId && fromDate === toDate
@@ -239,10 +239,15 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
     summary = copySummary({ whose, fromDate, fromMeal: fromMealType, toDate, toMeal: toMealType, count: sourceCount, today });
   }
 
+  const groupHeading = { m: 0, mb: 3, fontSize: '0.9375rem', fontWeight: 700, color: 'text.secondary' };
+  // Two fields to a row; the fields fill their column so edges line up.
+  const fieldGrid = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: 3, rowGap: 4 };
+
   return (
     <PremiumDialog
       open={open}
-      onClose={onClose}
+      // Not while a copy is in flight: closing then loses its result and its Undo.
+      onClose={() => { if (!copying) onClose(); }}
       title="Copy a meal"
       icon={CopyIcon}
       maxWidth="sm"
@@ -259,14 +264,14 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
           </Button>
         ),
         cancel: (
-          <Button onClick={onClose} disabled={copying}>
+          <Button onClick={() => { if (!copying) onClose(); }} disabled={copying}>
             Cancel
           </Button>
         ),
       })}
     >
         {/* Presets that fill the form in */}
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 6 }}>
           {presets.map((preset) => (
             <Chip
               key={preset.key}
@@ -280,13 +285,15 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
         </Box>
 
         {/* Source */}
-        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+        {/* 4px theme unit: 12px under a group's heading, 16px between rows
+            of fields, 24px between the two groups. */}
+        <Typography component="h3" sx={groupHeading}>
           Copy from
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+        <Box sx={{ ...fieldGrid, mb: 6 }}>
           {/* Whose log — only when someone in the household shares theirs. */}
           {sharingMembers.length > 0 && (
-            <FormControl size="small" sx={{ minWidth: 150 }}>
+            <FormControl size="small" fullWidth>
               <InputLabel id="copy-meal-from-user-label" shrink>Whose log</InputLabel>
               <Select
                 labelId="copy-meal-from-user-label"
@@ -299,14 +306,14 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
                 <MenuItem value="">Mine</MenuItem>
                 {sharingMembers.map(member => (
                   <MenuItem key={member.user_id} value={member.user_id}>
-                    {member.display_name}
+                    {member.display_name || 'Household member'}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           )}
-          <DateField label="Day" value={fromDate} onChange={setFromDate} sx={{ minWidth: 150 }} />
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+          <DateField label="Day" value={fromDate} onChange={setFromDate} fullWidth />
+          <FormControl size="small" fullWidth>
             <InputLabel id="copy-meal-from-label" shrink>Which meal</InputLabel>
             <Select
               labelId="copy-meal-from-label"
@@ -328,17 +335,17 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
         </Box>
 
         {/* Destination */}
-        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+        <Typography component="h3" sx={groupHeading}>
           Copy into
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-          <DateField label="Day" value={toDate} onChange={setToDate} sx={{ minWidth: 150 }} />
+        <Box sx={{ ...fieldGrid, alignItems: 'center' }}>
+          <DateField label="Day" value={toDate} onChange={setToDate} fullWidth />
           {fromMealType === WHOLE_DAY ? (
             <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem' }}>
               Each meal goes into the same meal.
             </Typography>
           ) : (
-            <FormControl size="small" sx={{ minWidth: 150 }}>
+            <FormControl size="small" fullWidth>
               <InputLabel id="copy-meal-to-label" shrink>Into which meal</InputLabel>
               <Select
                 labelId="copy-meal-to-label"
@@ -360,7 +367,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
         </Box>
 
         {/* What will happen, in words */}
-        <Box sx={{ mt: 3, pt: 1.5, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
+        <Box sx={{ mt: 6, pt: 4, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
           <Typography
             data-testid="copy-summary"
             role="status"
@@ -377,7 +384,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
         </Box>
 
         {error && (
-          <Alert severity="error" sx={{ mt: 2 }}>
+          <Alert severity="error" sx={{ mt: 4 }}>
             {error}
           </Alert>
         )}

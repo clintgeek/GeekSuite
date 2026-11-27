@@ -62,7 +62,7 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
   useEffect(() => {
     if (!open) return;
     setName(food?.name || '');
-    setRows((food?.recipe?.ingredients || []).map(ingredientFromSaved));
+    setRows((Array.isArray(food?.recipe?.ingredients) ? food.recipe.ingredients : []).filter((i) => i && typeof i === 'object').map(ingredientFromSaved));
     setYieldText(food?.recipe?.yield_servings != null ? String(food.recipe.yield_servings) : '');
     setPickerFor(null);
     setPasteOpen(false);
@@ -91,7 +91,7 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
     setParsing(true);
     try {
       const parsed = await foodService.parseRecipe(pasteText);
-      setRows((rs) => [...rs, ...parsed.map(ingredientFromParsed)]);
+      setRows((rs) => [...rs, ...(Array.isArray(parsed) ? parsed : []).filter(Boolean).map(ingredientFromParsed)]);
       setPasteText('');
       setPasteOpen(false);
     } catch (err) {
@@ -101,8 +101,11 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
     }
   };
 
+  // Not while a save is in flight: a failed save keeps the recipe as typed.
+  const handleClose = () => { if (!saving) onClose(); };
+
   const handleSave = async () => {
-    if (!summary.canSave) return;
+    if (!summary.canSave || saving) return;
     setSaving(true);
     try {
       // FitnessFoodInput still requires serving + nutrition; the server
@@ -133,7 +136,7 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
     <>
       <PremiumDialog
         open={open}
-        onClose={onClose}
+        onClose={handleClose}
         title={food ? `Edit ${food.name ?? 'recipe'}` : 'New recipe'}
         maxWidth="sm"
         // On a phone Save goes in the footer under the thumb, not the header
@@ -145,10 +148,12 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
               {saving ? <CircularProgress size={20} aria-label="Saving" /> : 'Save recipe'}
             </Button>
           ),
-          cancel: <Button onClick={onClose}>Cancel</Button>,
+          cancel: <Button onClick={handleClose} disabled={saving}>Cancel</Button>,
         })}
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* 4px theme unit: 20px between the sections, 8px to clear the
+            first label under the header. */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 5, pt: 2 }}>
           <TextField
             fullWidth
             required
@@ -165,8 +170,8 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
                   component="li"
                   key={row.key}
                   sx={{
-                    py: 1.5,
-                    borderBottom: (t) => `1px dashed ${t.palette.divider}`,
+                    py: 3,
+                    borderBottom: (t) => `1px solid ${t.palette.divider}`,
                   }}
                 >
                   {row.unresolved ? (
@@ -203,7 +208,7 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
                           <RemoveIcon fontSize="small" />
                         </IconButton>
                       </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 3 }}>
                         <TextField
                           size="small"
                           type="number"
@@ -247,11 +252,11 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
               ))}
             </Box>
             {rows.length === 0 && (
-              <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', py: 1 }}>
+              <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', py: 2 }}>
                 No ingredients yet. Add them one at a time, or paste a list.
               </Typography>
             )}
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5 }}>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 3 }}>
               <Button variant="tonal" startIcon={<AddIcon />} onClick={() => setPickerFor('new')}>
                 Add ingredient
               </Button>
@@ -262,7 +267,7 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
           </Box>
 
           {pasteOpen && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <TextField
                 multiline
                 minRows={4}
@@ -296,7 +301,7 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
             aria-live="polite"
             sx={{
               borderTop: (t) => `1px solid ${t.palette.divider}`,
-              pt: 1.5,
+              pt: 4,
             }}
           >
             {per ? (

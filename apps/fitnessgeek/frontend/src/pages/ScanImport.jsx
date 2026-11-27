@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Typography, Button, CircularProgress } from '@mui/material';
+import { Alert, Box, Typography, Button, CircularProgress } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 import { errorMessage as friendlyError } from '../utils/errorMessage.js';
-import { LabelPanel, Page, Tag } from '../components/primitives';
+import { Page, Surface, Tag } from '../components/primitives';
 
 import {
   fetchStagedShareFile,
@@ -91,19 +91,19 @@ function ValidationCheckRow({ check, first }) {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 0.25,
-        py: 1,
+        gap: 1,
+        py: 3,
         borderTop: first ? 0 : (t) => `1px solid ${t.palette.divider}`,
       }}
     >
       <Typography sx={{ fontSize: '0.875rem', fontWeight: 700 }}>{check.label}</Typography>
       <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
-        Computed {formatCheckValue(check.key, check.computed)} · Printed {formatCheckValue(check.key, check.printed)}
+        Worked out {formatCheckValue(check.key, check.computed)} · On the report {formatCheckValue(check.key, check.printed)}
         {' · '}
         {/* A flagged row says so in words, in a status-coloured tag — never
             a tinted row. */}
         {check.ok ? (
-          <Box component="span" sx={{ color: 'success.main', fontWeight: 700 }}>match</Box>
+          <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>match</Box>
         ) : (
           <Tag tone="error">{`off by ${Math.abs(check.delta).toFixed(2)}`}</Tag>
         )}
@@ -153,12 +153,12 @@ const labelForPrimary = (key) => PRIMARY_LABELS[key] || key;
 function MismatchGuidance({ classification, accepting, onAccept }) {
   if (classification.safeToAccept) {
     return (
-      <Box sx={{ mt: 1.5, textAlign: 'left' }}>
-        <Typography sx={{ fontSize: '0.8125rem', color: 'success.main', fontWeight: 700, mb: 1 }}>
+      <Box sx={{ mt: 4, textAlign: 'left' }}>
+        <Typography sx={{ fontSize: '0.875rem', color: 'text.primary', fontWeight: 600, lineHeight: 1.5, mb: 3 }}>
           The measurements check out — only a printed figure on the report didn’t match what I worked out from it.
         </Typography>
         <Button
-          variant="outlined"
+          variant="tonal"
           onClick={onAccept}
           disabled={accepting}
           sx={{ minHeight: 44, minWidth: 44 }}
@@ -170,8 +170,8 @@ function MismatchGuidance({ classification, accepting, onAccept }) {
   }
 
   return (
-    <Box sx={{ mt: 1.5, textAlign: 'left' }}>
-      <Typography sx={{ fontSize: '0.8125rem', color: 'error.main', fontWeight: 600, mb: 0.5 }}>
+    <Box sx={{ mt: 4, textAlign: 'left' }}>
+      <Typography sx={{ fontSize: '0.875rem', color: 'text.primary', fontWeight: 600, mb: 1 }}>
         {classification.suspectPrimaries.length > 0
           ? `Double-check: ${classification.suspectPrimaries.map(labelForPrimary).join(', ')}`
           : 'A measurement couldn’t be confirmed.'}
@@ -189,7 +189,7 @@ function ValidationDetail({ validation }) {
   const ordered = [...runChecks].sort((a, b) => Number(a.ok) - Number(b.ok));
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', textAlign: 'left', mt: 1, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', textAlign: 'left', mt: 4, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
       {ordered.map((check, i) => (
         <ValidationCheckRow key={check.key} check={check} first={i === 0} />
       ))}
@@ -322,9 +322,8 @@ function ScanImport() {
       setStatus(STATUS.SUCCESS);
     } catch (error) {
       setStatus(STATUS.ERROR);
-      const message = friendlyError(error, "That didn’t upload. Try again.");
-      setErrorMessage(message);
-      notify(message, { tone: 'error' });
+      // Said once, in the card where the person is looking (no second toast).
+      setErrorMessage(friendlyError(error, "That didn’t upload. Try again."));
     }
   }, [notify]);
 
@@ -401,51 +400,62 @@ function ScanImport() {
     || status === STATUS.EXTRACTING || status === STATUS.IMPORTING;
   const summary = status === STATUS.SUCCESS && extraction ? extractionSummary(extraction) : null;
 
+  const saved = extraction?.status === 'saved' || extraction?.status === 'duplicate'
+    || (extraction?.kind === 'xlsxImport' && summary?.tone === 'success');
+
   return (
     <Page narrow>
-      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-        Share a body-composition report from your scale’s app, or choose a file below.
+      {/* The top bar says "Import a scan"; the card does not say it again.
+          Written for a person who has never seen this page: what a scan is,
+          what to bring, where it ends up. */}
+      <Typography sx={{ color: 'text.secondary', fontSize: '1rem', lineHeight: 1.5 }}>
+        If your scale measures body fat, add its report here. Your Weight page then shows how much of your weight is fat and how much is muscle.
       </Typography>
 
-      <LabelPanel level={1} title="Import a scan" sx={{ textAlign: 'left' }}>
-        {status === STATUS.IDLE && (
-          <>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.5 }}>
-              <InsertDriveFileIcon sx={{ fontSize: 32, color: 'text.secondary', flexShrink: 0 }} />
-              <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary' }}>
-              A scan report (PDF or image), or your full history as a spreadsheet export — up to 10MB.
+      <Surface sx={{ textAlign: 'left' }}>
+        {(status === STATUS.IDLE || status === STATUS.ERROR) && (
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 3, mb: 4 }}>
+            <InsertDriveFileIcon aria-hidden sx={{ fontSize: 28, color: 'text.secondary', flexShrink: 0, mt: 0.5 }} />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography component="h2" sx={{ m: 0, fontSize: '1.0625rem', fontWeight: 700, lineHeight: 1.3 }}>
+                Choose the report from your scale’s app
+              </Typography>
+              <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', lineHeight: 1.5, mt: 1 }}>
+                A PDF or a photo of one scan, or the spreadsheet export of your whole history. Up to 10 MB.
               </Typography>
             </Box>
-          </>
+          </Box>
         )}
 
         {busy && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 2 }}>
-            <CircularProgress size={32} />
-            <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+          <Box role="status" aria-live="polite" sx={{ display: 'flex', alignItems: 'center', gap: 3, py: 2 }}>
+            <CircularProgress size={28} />
+            <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary' }}>
               {status === STATUS.CLAIMING && 'Getting the shared file…'}
               {status === STATUS.UPLOADING && 'Uploading…'}
-              {status === STATUS.EXTRACTING && 'Reading your scan…'}
+              {status === STATUS.EXTRACTING && 'Reading your scan. This can take a minute…'}
               {status === STATUS.IMPORTING && 'Importing your scan history…'}
             </Typography>
           </Box>
         )}
 
         {status === STATUS.SUCCESS && summary && (
-          <Box sx={{ py: 1 }}>
-            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mb: 1 }}>
-              {fileMeta?.name}
-              {uploadResult && ` · ${Math.max(1, Math.round((uploadResult.size || 0) / 1024))} KB`}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+          <Box role="status" aria-live="polite">
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
               {summary.tone === 'success'
-                ? <CheckCircleIcon sx={{ color: 'success.main', fontSize: 22 }} />
-                : <ErrorOutlineIcon sx={{ color: 'error.main', fontSize: 22 }} />}
-              <Typography sx={{ fontSize: '1.125rem', fontWeight: 700 }}>{summary.title}</Typography>
+                ? <CheckCircleIcon aria-hidden sx={{ color: 'success.main', fontSize: 22 }} />
+                : <ErrorOutlineIcon aria-hidden sx={{ color: 'error.main', fontSize: 22 }} />}
+              <Typography component="h2" sx={{ m: 0, fontSize: '1.125rem', fontWeight: 700 }}>{summary.title}</Typography>
             </Box>
-            <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mb: 1.5 }}>
+            <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', lineHeight: 1.5 }}>
               {summary.detail}
             </Typography>
+            {fileMeta?.name && (
+              <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1, overflowWrap: 'anywhere' }}>
+                {fileMeta.name}
+                {uploadResult && ` · ${Math.max(1, Math.round((uploadResult.size || 0) / 1024))} KB`}
+              </Typography>
+            )}
 
             {/* The mismatch/verification detail — every check the gate actually
                 ran (§6), worst first, so it's clear WHICH numbers disagreed
@@ -469,28 +479,42 @@ function ScanImport() {
         )}
 
         {status === STATUS.ERROR && (
-          <Typography sx={{ fontSize: '0.9375rem', color: 'error.main', fontWeight: 600, mb: 2 }}>
+          <Alert severity="error" role="alert" sx={{ mb: 4 }}>
             {errorMessage}
-          </Typography>
+          </Alert>
         )}
 
-        <Button
-          variant="contained"
-          component="label"
-          startIcon={<UploadFileIcon />}
-          disabled={busy || accepting}
-          sx={{ minHeight: 52, width: { xs: '100%', md: 'auto' }, mt: status === STATUS.IDLE ? 0 : 2 }}
-        >
-          Choose file
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={`application/pdf,image/*,.xlsx,${XLSX_MIME_TYPE}`}
-            hidden
-            onChange={handleFilePicked}
-          />
-        </Button>
-      </LabelPanel>
+        {/* One filled button. After a save it is "See it on your Weight page"
+            and choosing another file steps back to second rank. */}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mt: status === STATUS.SUCCESS || busy ? 4 : 0 }}>
+          {saved && (
+            <Button
+              component={RouterLink}
+              to="/weight#body-composition"
+              variant="contained"
+              sx={{ minHeight: 52, width: { xs: '100%', sm: 'auto' } }}
+            >
+              See it on your Weight page
+            </Button>
+          )}
+          <Button
+            variant={saved ? 'tonal' : 'contained'}
+            component="label"
+            startIcon={<UploadFileIcon />}
+            disabled={busy || accepting}
+            sx={{ minHeight: 52, width: { xs: '100%', sm: 'auto' } }}
+          >
+            {status === STATUS.IDLE ? 'Choose file' : status === STATUS.ERROR ? 'Choose a file again' : 'Choose another file'}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={`application/pdf,image/*,.xlsx,${XLSX_MIME_TYPE}`}
+              hidden
+              onChange={handleFilePicked}
+            />
+          </Button>
+        </Box>
+      </Surface>
     </Page>
   );
 }

@@ -20,8 +20,8 @@ import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 import { rowDay } from '../../utils/experience.js';
 import { fmt, mealLabel } from '../../utils/plainWords.js';
 import { foodService } from '../../services/foodService.js';
+import { forgetFavorites } from '../FoodSearch/useFavoriteFoods.js';
 import {
-  Restaurant as FoodIcon,
   DeleteOutline as RemoveIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon,
@@ -112,6 +112,8 @@ const EditLogDialog = ({
     try {
       if (next) await foodService.addFavorite(favoriteFoodId);
       else await foodService.removeFavorite(favoriteFoodId);
+      // The add sheet's Favorites chips are cached; they are wrong now.
+      forgetFavorites();
     } catch {
       setFavorite(!next);
       setFavoriteError(true);
@@ -260,23 +262,63 @@ const EditLogDialog = ({
         ),
       })}
     >
-        <Box sx={{ mb: 3 }}>
-          {/* Food Item Info */}
-          {food_item && (
-            <Box sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-              mb: 3,
-              pb: 2,
-              borderBottom: (t) => `1px solid ${t.palette.divider}`
-            }}>
-              <FoodIcon sx={{ fontSize: 32, color: 'primary.main' }} />
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="h6">
+        <Box>
+          {/* What this is, and the two things you do to an entry rather than
+              change about it: keep it as a favorite, or take it out. They sit
+              up here, under the name, because at the bottom of the form they
+              were below the fold on a phone and nobody found the star. Undo
+              for a removal is in the toast. */}
+          {log && (food_item?.name || favoriteFoodId || onRemove) && (
+            <Box sx={{ mb: 5, pb: 2, borderBottom: (t) => `1px solid ${t.palette.divider}` }}>
+              {food_item?.name && (
+                <Typography component="h3" sx={{ m: 0, fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' }}>
                   {food_item.name}
                 </Typography>
-              </Box>
+              )}
+              {food_item?.brand && (
+                <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', overflowWrap: 'anywhere' }}>
+                  {food_item.brand}
+                </Typography>
+              )}
+              {(favoriteFoodId || onRemove) && (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 2, mt: 1, mx: -2 }}>
+                  {favoriteFoodId ? (
+                    <Button
+                      color="inherit"
+                      data-testid="edit-log-favorite"
+                      startIcon={favorite ? <StarIcon sx={{ color: 'warning.main' }} /> : <StarBorderIcon />}
+                      onClick={toggleFavorite}
+                      disabled={loading || favoriteBusy || favorite === null}
+                      aria-pressed={Boolean(favorite)}
+                      sx={{ minHeight: 44, px: 2, fontWeight: 600 }}
+                    >
+                      {favorite ? 'In your favorites' : 'Add to favorites'}
+                    </Button>
+                  ) : <span />}
+                  {onRemove && (
+                    <Button
+                      color="error"
+                      startIcon={<RemoveIcon />}
+                      onClick={() => onRemove(log._id || log.id)}
+                      disabled={loading}
+                      aria-label={food_item?.name ? `Remove ${food_item.name}` : 'Remove'}
+                      sx={{ minHeight: 44, px: 2, fontWeight: 600 }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </Box>
+              )}
+              {favorite && !favoriteError && (
+                <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
+                  Favorites are one tap away when you add food.
+                </Typography>
+              )}
+              {favoriteError && (
+                <Typography role="alert" sx={{ mt: 1, fontSize: '0.9375rem', color: 'error.main' }}>
+                  Couldn’t change that just now. Try again.
+                </Typography>
+              )}
             </Box>
           )}
 
@@ -355,7 +397,8 @@ const EditLogDialog = ({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             multiline
-            rows={2}
+            minRows={1}
+            maxRows={4}
             placeholder="Anything to remember about this food…"
           />
 
@@ -382,7 +425,7 @@ const EditLogDialog = ({
                 qualifier=" (per serving)"
               />
               <Box sx={{ mt: 4 }}>
-                <Typography variant="body2" fontWeight={600} gutterBottom>
+                <Typography variant="body2" fontWeight={600} sx={{ mb: 2 }}>
                   Nutrition for {servings} serving{parseFloat(servings) !== 1 ? 's' : ''}:
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
@@ -392,17 +435,17 @@ const EditLogDialog = ({
                     variant="tag"
                   />
                   <Chip
-                    label={`Protein ${fmt(nutrition.protein_grams * parseFloat(servings))}g`}
+                    label={`Protein ${fmt((Number(nutrition.protein_grams) || 0) * (servingsOk ? servingsCount : 0))}g`}
                     size="small"
                     variant="tag"
                   />
                   <Chip
-                    label={`Carbs ${fmt(nutrition.carbs_grams * parseFloat(servings))}g`}
+                    label={`Carbs ${fmt((Number(nutrition.carbs_grams) || 0) * (servingsOk ? servingsCount : 0))}g`}
                     size="small"
                     variant="tag"
                   />
                   <Chip
-                    label={`Fat ${fmt(nutrition.fat_grams * parseFloat(servings))}g`}
+                    label={`Fat ${fmt((Number(nutrition.fat_grams) || 0) * (servingsOk ? servingsCount : 0))}g`}
                     size="small"
                     variant="tag"
                   />
@@ -410,45 +453,6 @@ const EditLogDialog = ({
               </Box>
             </Box>
           </Collapse>
-
-          {/* Favorite and Remove — the row's star and trash icons, moved in
-              here. Undo for a removal is in the toast. */}
-          {log && (favoriteFoodId || onRemove) && (
-            <Box sx={{ mt: 4, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 2 }}>
-                {favoriteFoodId && (
-                  <Button
-                    color="inherit"
-                    data-testid="edit-log-favorite"
-                    startIcon={favorite ? <StarIcon sx={{ color: 'warning.main' }} /> : <StarBorderIcon />}
-                    onClick={toggleFavorite}
-                    disabled={loading || favoriteBusy || favorite === null}
-                    aria-pressed={Boolean(favorite)}
-                    sx={{ minHeight: 48 }}
-                  >
-                    {favorite ? 'In your favorites' : 'Add to favorites'}
-                  </Button>
-                )}
-                {onRemove && (
-                  <Button
-                    color="error"
-                    startIcon={<RemoveIcon />}
-                    onClick={() => onRemove(log._id || log.id)}
-                    disabled={loading}
-                    aria-label={food_item?.name ? `Remove ${food_item.name}` : 'Remove'}
-                    sx={{ minHeight: 48 }}
-                  >
-                    Remove
-                  </Button>
-                )}
-              </Box>
-              {favoriteError && (
-                <Typography role="alert" sx={{ mt: 1, fontSize: '0.9375rem', color: 'error.main' }}>
-                  Couldn’t change that just now. Try again.
-                </Typography>
-              )}
-            </Box>
-          )}
         </Box>
     </PremiumDialog>
   );

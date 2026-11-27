@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { userService } from '../../services/userService.js';
 import {
+  Alert,
   Box,
   Typography,
   Grid,
@@ -59,6 +60,11 @@ export function patientDetails(profile) {
 
 const BPReport = ({ bpLogs, onClose }) => {
   const [me, setMe] = useState(null);
+  // Making the PDF takes seconds on a phone and can fail (the two libraries
+  // behind it are fetched on the tap). It used to do both without a word: a
+  // second tap made a second PDF, and a failure was only a console line.
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState('');
   useEffect(() => {
     let live = true;
     userService.getProfile()
@@ -163,8 +169,10 @@ const BPReport = ({ bpLogs, onClose }) => {
   const madeOn = shortDay(localDateString(), undefined, { withYear: true });
 
   const exportToPDF = async () => {
-    if (!reportRef.current) return;
+    if (!reportRef.current || pdfBusy) return;
 
+    setPdfBusy(true);
+    setPdfError('');
     try {
       // jspdf + html2canvas are ~590 kB minified between them and are only
       // reachable from this one button. Importing them at module scope put
@@ -203,6 +211,9 @@ const BPReport = ({ bpLogs, onClose }) => {
       pdf.save(`blood-pressure-report-${localDateString()}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
+      setPdfError('Couldn’t make the PDF. Check your connection and try again.');
+    } finally {
+      setPdfBusy(false);
     }
   };
 
@@ -302,29 +313,35 @@ const BPReport = ({ bpLogs, onClose }) => {
           onClick={exportToPDF}
           variant="contained"
           startIcon={<PdfIcon />}
+          disabled={pdfBusy}
         >
-          PDF
+          {pdfBusy ? 'Making the PDF…' : 'Save as PDF'}
         </Button>
       }
       secondaryAction={<Button onClick={onClose}>Close</Button>}
     >
         {/* Export row — outside `reportRef`, so it never lands in the capture. */}
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+        {pdfError && (
+          <Alert severity="error" role="alert" sx={{ mb: 4 }}>
+            {pdfError}
+          </Alert>
+        )}
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 4 }}>
           <Button
             onClick={exportToCSV}
-            variant="outlined"
+            variant="tonal"
             startIcon={<CsvIcon />}
-            sx={{ borderColor: 'primary.main', color: 'primary.main' }}
+            sx={{ minHeight: 44 }}
           >
-            CSV
+            Save as a spreadsheet
           </Button>
           <Button
             onClick={exportToMarkdown}
-            variant="outlined"
+            variant="tonal"
             startIcon={<MarkdownIcon />}
-            sx={{ borderColor: 'primary.main', color: 'primary.main' }}
+            sx={{ minHeight: 44 }}
           >
-            Markdown
+            Save as text
           </Button>
         </Box>
         <ThemeProvider theme={lightReportTheme}>

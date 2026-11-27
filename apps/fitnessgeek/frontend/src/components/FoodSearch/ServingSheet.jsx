@@ -97,7 +97,7 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', editing = null, o
 
       <DialogContent>
         {units.length > 0 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, mt: 1 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, mt: 2 }}>
             <ToggleButtonGroup
               exclusive
               size="small"
@@ -117,7 +117,7 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', editing = null, o
             )}
           </Box>
         )}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, my: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, mt: 5, mb: 5 }}>
           <IconButton
             onClick={() => step(-stepBy)}
             disabled={!hasAmount || parsed <= stepBy}
@@ -158,7 +158,7 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', editing = null, o
           label="Meal"
           value={mealType}
           onChange={(e) => setMealType(e.target.value)}
-          sx={{ mb: 2 }}
+          sx={{ mb: 4 }}
         >
           {MEAL_TYPES.map((meal) => (
             <MenuItem key={meal} value={meal}>{mealLabel(meal)}</MenuItem>
@@ -169,23 +169,27 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', editing = null, o
           sx={{
             display: 'flex',
             justifyContent: 'space-between',
-            pt: 1,
+            alignItems: 'baseline',
+            flexWrap: 'wrap',
+            columnGap: 3,
+            pt: 3,
             borderTop: `1px solid ${theme.palette.divider}`,
             fontFamily: "inherit"
           }}
         >
-          <Typography sx={{ fontWeight: 700 }}>{cal(total('calories_per_serving'))}</Typography>
+          <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{cal(total('calories_per_serving'))}</Typography>
           <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
             {macroLine({ protein: total('protein_grams', 1), carbs: total('carbs_grams', 1), fat: total('fat_grams', 1) })}
           </Typography>
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} sx={{ color: 'text.secondary' }}>Cancel</Button>
+      <DialogActions sx={{ px: 6, pb: 4, gap: 1 }}>
+        <Button onClick={onClose} sx={{ color: 'text.secondary', minHeight: 44 }}>Cancel</Button>
         <Button
           variant="contained"
           disabled={!canLog}
+          sx={{ minHeight: 44, minWidth: 96 }}
           onClick={() => { if (canLog) onConfirm?.({ ...food, servings: round(servings, 3) }, mealType); }}
         >
           {editing ? 'Save' : 'Log it'}

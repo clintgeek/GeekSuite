@@ -5,6 +5,42 @@ import logger from '../utils/logger.js';
 
 const apolloClient = createApolloClient('fitnessgeek');
 
+// EVERY CALL ENDS. The shared client only times a request out when the call
+// asks it to (`context.timeoutMs`, see packages/api-client `timeoutLink`), and
+// nothing here asked: a request the network swallowed (a phone walking out of
+// wifi, a gateway mid-restart holding the socket) never settled, so Today sat
+// on its skeleton and a Save button stayed disabled until the app was killed.
+// Now each call carries a deadline, the link aborts the fetch when it passes,
+// and the caller gets a TimeoutError that `errorMessage()` already words as
+// "That took too long. Try again."
+//
+// The race around it is a backstop for the paths the link cannot see: the
+// link sits inside the client's auth handling, which on a second 401 parks
+// the operation on purpose while it signs the person out.
+export const REQUEST_TIMEOUT_MS = 30000;
+// The AI reads (insights, coaching, chat) wait on a model.
+export const SLOW_REQUEST_TIMEOUT_MS = 90000;
+const BACKSTOP_GRACE_MS = 5000;
+
+const timeoutFor = (url) => (String(url || '').startsWith('/insights') ? SLOW_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+
+function timeoutError(ms) {
+  const err = new Error(`The request timed out after ${Math.round(ms / 1000)} s`);
+  err.name = 'TimeoutError';
+  err.timeout = true;
+  return err;
+}
+
+/** Run one Apollo call with a deadline. `run` receives the context to send. */
+function withDeadline(run, ms) {
+  let timer;
+  const backstop = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(timeoutError(ms)), ms + BACKSTOP_GRACE_MS);
+  });
+  return Promise.race([Promise.resolve().then(() => run({ timeoutMs: ms })), backstop])
+    .finally(() => clearTimeout(timer));
+}
+
 // Convert old REST patterns into Apollo Client operations.
 
 // -------------------------------------------------------------
@@ -832,12 +868,13 @@ export const apiService = {
     }
 
     const { _fallback, ...queryOp } = op;
+    const ms = timeoutFor(finalUrl);
     let res;
     try {
-      res = await apolloClient.query({ ...queryOp, fetchPolicy: 'no-cache' });
+      res = await withDeadline((context) => apolloClient.query({ ...queryOp, fetchPolicy: 'no-cache', context }), ms);
     } catch (err) {
       if (!_fallback || !isUnknownArgument(err)) throw err;
-      res = await apolloClient.query({ ..._fallback, fetchPolicy: 'no-cache' });
+      res = await withDeadline((context) => apolloClient.query({ ..._fallback, fetchPolicy: 'no-cache', context }), ms);
     }
     // Attempt to automatically extract the root field the caller expects
     const keys = Object.keys(res.data || {});
@@ -851,7 +888,7 @@ export const apiService = {
     if (!op) throw new Error(`Rest proxy gap: POST ${ url } not mapped.`);
     if (op._isMock) return { success: true, data: op.data };
     if (op._isMockInsight) return { success: true, data: { success: true } };
-    const res = await apolloClient.mutate(op);
+    const res = await withDeadline((context) => apolloClient.mutate({ ...op, context }), timeoutFor(url));
     const keys = Object.keys(res.data || {});
     if (keys.length === 1) return { success: true, data: res.data[keys[0]] };
     return { success: true, data: res.data };
@@ -861,7 +898,7 @@ export const apiService = {
     logger.debug('ApiService [Proxy] PUT', url);
     const op = routeRequest('PUT', url, data);
     if (!op) throw new Error(`Rest proxy gap: PUT ${ url } not mapped.`);
-    const res = await apolloClient.mutate(op);
+    const res = await withDeadline((context) => apolloClient.mutate({ ...op, context }), timeoutFor(url));
     const keys = Object.keys(res.data || {});
     if (keys.length === 1) return { success: true, data: res.data[keys[0]] };
     return { success: true, data: res.data };
@@ -875,7 +912,7 @@ export const apiService = {
     logger.debug('ApiService [Proxy] DELETE', url);
     const op = routeRequest('DELETE', url);
     if (!op) throw new Error(`Rest proxy gap: DELETE ${ url } not mapped.`);
-    const res = await apolloClient.mutate(op);
+    const res = await withDeadline((context) => apolloClient.mutate({ ...op, context }), timeoutFor(url));
     const keys = Object.keys(res.data || {});
     if (keys.length === 1) return { success: true, data: res.data[keys[0]] };
     return { success: true, data: res.data };

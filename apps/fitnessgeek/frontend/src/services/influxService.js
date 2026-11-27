@@ -11,6 +11,7 @@
  * existing consumer expectations.
  */
 
+import { localDateString } from '@geeksuite/utils';
 import { restClient as restApi } from './restClient.js';
 
 const unwrap = (response) => response?.data ?? response;
@@ -48,8 +49,10 @@ export const influxService = {
    * client-side through @geeksuite/utils bodyComp.js (the smoothing rule).
    */
   async getTrends({ days = 90, end } = {}) {
-    const qp = new URLSearchParams({ days: String(days) });
-    if (end) qp.set('end', end);
+    // The browser owns the calendar day. With no `end` the server falls back
+    // to ITS today, which is UTC: from 6 or 7pm Central that is tomorrow, and
+    // the window ends on a day that has not happened here yet.
+    const qp = new URLSearchParams({ days: String(days), end: end || localDateString() });
     return unwrap(await restApi.get(`/influx/trends?${qp}`));
   },
 

@@ -473,6 +473,14 @@ const libraryScenes = [
     await need(page.getByText('Usual breakfast').first(), 'a saved meal');
   }, { path: '/my-meals' }),
 
+  // Meals, when the read fails: a plain "couldn't load" with a way to retry,
+  // not the "No meals saved yet" an empty list would say.
+  pageScene('51d-my-meals-failed', () => ({ ops: OPS, fail: (op) => op === 'GetFitnessMeals' }), async (page, h) => {
+    const failed = await need(page.locator('[data-testid="my-meals-failed"]'), 'the "couldn’t load your meals" card');
+    await need(failed.getByRole('button', { name: 'Try again' }), 'its Try again button');
+    await absent(page.getByText('No meals saved yet'), '"No meals saved yet" after a failed read');
+  }, { path: '/saved-foods?tab=meals' }),
+
   // Meals, nothing saved yet.
   pageScene('51c-my-meals-empty', () => ({ ...OPS, GetFitnessMeals: { fitnessMeals: [] } }), async (page) => {
     await need(page.locator('main, #root').first(), 'the page');
@@ -699,7 +707,9 @@ const weightScenes = [
     if (!/^Down 1\d(\.\d)? lb since /.test(words)) throw new Error(`trend words say "${words}"`);
     await need(page.getByText(/You’re losing [\d.]+ lb a week/), 'the pace sentence');
     await need(page.getByText(/of 37 lb lost/), '"… of 37 lb lost"');
-    await need(page.getByText(/From your 7-day average, 21\d\.\d lb/), 'the basis line');
+    await need(page.locator('[data-testid="weight-basis"]').getByText('7-day average'), 'the basis line (7-day average)');
+    const now = (await (await need(page.locator('[data-testid="weight-now"]'), 'the big weight')).innerText()).replace(/\s+/g, ' ').trim();
+    if (!/^21\d\.\d lb$/.test(now)) throw new Error(`big weight says "${now}"`);
     await need(page.getByText('Behind plan', { exact: true }), 'the Behind plan chip');
     // One page for everybody: body composition is always on it, and from md
     // the weigh-in is a card in the left column (the thumb button below it).
@@ -839,15 +849,47 @@ const firstRunScenes = [
 
 // ── The ErrorBoundary ───────────────────────────────────────────────────────
 
-// Today no longer falls over on a logged entry with no nutrition (it reads
-// through amount.js now, which answers 0), so the boundary is reached the way
-// a bad deploy would reach it: a saved-foods answer with a hole in it, which a
-// list row reads `nutrition` off and throws mid-render. The boundary under the
-// router answers "Something went wrong." with a Reload button.
-const boundaryScene = pageScene('56-error-boundary', () => ({ ...OPS, GetFitnessFoods: { fitnessFoods: [null] } }), async (page) => {
-  await need(page.locator('[data-testid="error-boundary"]'), 'the ErrorBoundary screen');
-  await need(page.getByRole('button', { name: 'Reload' }), 'Reload');
-}, { path: '/saved-foods?tab=foods', wait: 1500 });
+// Every list is guarded now (a null in saved foods no longer throws), so no
+// fixture DATA makes a page throw. The boundary is reached the way a bad deploy
+// reaches it: the screen's code chunk fails to load. React.lazy rethrows the
+// import error during render, which the boundary around the page (inside the
+// layout, ModernLayout.jsx) catches. SYNTHETIC TRIGGER: the SavedFoods chunk
+// request is aborted. We arrive from /dashboard by the router, not by a full
+// load, so the layout (and its navigation) is already drawn when it fails.
+// Assertions: the screen, its buttons ("Go to Today" because we are not on
+// Today), and that the navigation STAYS on screen.
+const boundaryScene = {
+  name: '56-error-boundary',
+  async setup(page, h) {
+    await withOps(page, OPS, async () => {
+      await page.goto(h.base + '/dashboard', { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      await page.route(/\/assets\/SavedFoods-[^/]*\.js(\?.*)?$/, (r) => r.abort());
+      await page.evaluate(() => {
+        window.history.pushState({}, '', '/saved-foods?tab=foods');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      await h.settle(1500);
+      await need(page.locator('[data-testid="error-boundary"]'), 'the ErrorBoundary screen');
+      await need(page.getByRole('button', { name: 'Try again' }), 'Try again');
+      await need(page.getByRole('button', { name: 'Reload' }), 'Reload');
+      await need(page.getByRole('button', { name: 'Go to Today' }), 'Go to Today (not on Today)');
+      // The page failed, the app did not: the navigation is still on screen.
+      const vp = page.viewportSize();
+      const navs = await page.locator('nav').evaluateAll((els) => els.map((el) => {
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        return { shown: cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0, inView: r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight };
+      }));
+      if (!navs.some((n) => n.shown && n.inView)) throw new Error(`the navigation is gone with the page error (vp ${vp.width}x${vp.height}): ${JSON.stringify(navs)}`);
+      if (await page.locator('[data-testid="error-boundary"]').count() !== 1) throw new Error('more than one error screen: the outer boundary caught it, not the one inside the layout');
+    });
+  },
+  async teardown(page) {
+    await page.unroute(/\/assets\/SavedFoods-[^/]*\.js(\?.*)?$/);
+    await page.unroute('**/graphql');
+  },
+};
 
 // ── Trends: Activity and Health (Garmin) ─────────────────────────────
 
@@ -986,7 +1028,7 @@ async function assertTabsWhole(page, h) {
     return { label, clipped: el.scrollWidth > el.clientWidth + 1, x: r.x, right: r.right, h: r.height, selected: el.getAttribute('aria-selected') === 'true' };
   }));
   h.log(`tabs ${JSON.stringify(tabs.map((t) => [t.label, Math.round(t.x), Math.round(t.right)]))}`);
-  if (tabs.length !== 5) throw new Error(`expected 5 tabs, saw ${tabs.length}`);
+  if (tabs.length !== 4) throw new Error(`expected 4 tabs (Overview, Sleep, Meals, Recovery), saw ${tabs.length}`);
   const cut = tabs.filter((t) => t.clipped);
   if (cut.length) throw new Error(`tab labels cut: ${cut.map((t) => t.label).join(', ')}`);
   const sel = tabs.find((t) => t.selected);
@@ -1039,14 +1081,16 @@ const garminScenes = [
   pageScene('58a-activity-not-connected', () => activityOps({
     GetGarminStatus: { garminStatus: { __typename: 'GarminStatus', enabled: false, hasCredentials: false, hasTokens: false, lastConnectedAt: null } },
   }), async (page) => {
-    await need(page.getByText('Garmin isn’t connected'), 'the empty state');
+    await need(page.getByText('Connect a Garmin watch', { exact: true }), 'the empty state');
     await need(page.getByRole('link', { name: 'Connect Garmin' }), 'Connect Garmin');
   }, { path: '/trends?tab=activity', wait: 1500 }),
 
   // Health with the home data server off: what it needs, and the switch. The
   // old /health address opens the tab.
   healthScene('59-health-off', null, async (page) => {
-    await need(page.getByText('Turn on the home data server first'), 'the turn-on prompt');
+    const card = await need(page.locator('[data-testid="connect-watch"]'), 'the connect-a-watch card');
+    await need(card.getByText('Connect a Garmin watch', { exact: true }), 'its title');
+    await need(card.getByRole('button', { name: 'Set it up' }), 'the Set it up button');
   }, { influxOn: false, path: '/health' }),
 
   // Health, Overview: heart rate, stress and Body Battery through the day.
@@ -1055,14 +1099,14 @@ const garminScenes = [
     await assertTabsWhole(page, h);
     await need(page.locator('svg[role="img"]').first(), 'a chart');
   }),
-  // Sleep analysis: the score, the metric cards, and the accordions below.
-  healthScene('59b-health-sleep', 'Sleep analysis', async (page) => {
+  // Sleep: the score, the metric cards, and the accordions below.
+  healthScene('59b-health-sleep', 'Sleep', async (page) => {
     await need(page.getByText('Your sleep', { exact: true }), 'the sleep summary');
     await need(page.getByText('78/100'), 'the sleep score');
   }),
   // Meal impact: how her heart rate answered the day's meals.
-  healthScene('59c-health-meal-impact', 'Meal impact', async (page) => {
-    await need(healthTabs(page).getByRole('tab', { name: /meal impact/i, selected: true }), 'Meal impact selected');
+  healthScene('59c-health-meal-impact', 'Meals', async (page) => {
+    await need(healthTabs(page).getByRole('tab', { name: /meals/i, selected: true }), 'Meals selected');
     // Cards name the food and its calories. They read fields the rows don't
     // have, so every card said "Meal" and "0 cal" (d-fixes).
     await need(page.getByText('Greek yogurt', { exact: true }).first(), 'the Greek yogurt card');
@@ -1071,17 +1115,21 @@ const garminScenes = [
     if (await page.getByText('Meal', { exact: true }).count()) throw new Error('a card is called "Meal"');
   }),
   // Recovery coach: the readiness score and the two notes.
-  healthScene('59d-health-recovery', 'Recovery coach', async (page) => {
+  healthScene('59d-health-recovery', 'Recovery', async (page) => {
     await need(page.getByText('Ready-for-today score'), 'the readiness gauge');
     await need(page.getByText('Protect tonight’s sleep'), 'a recovery note');
   }),
-  // Settings tab: the data-server switch and the baselines.
-  healthScene('59e-health-settings', 'Settings', async (page, h) => {
-    await need(healthTabs(page).getByRole('tab', { name: /settings/i, selected: true }), 'Settings selected');
+  // Watch settings: not a tab any more. A button at the foot opens the
+  // data-server switch and the baselines.
+  healthScene('59e-health-settings', null, async (page, h) => {
     await assertTabsWhole(page, h);
+    await (await need(page.locator('[data-testid="watch-settings-toggle"]'), 'the "Watch settings" button')).click();
+    await h.settle(800);
+    await need(page.locator('[data-testid="watch-settings-panels"]'), 'the watch settings panels');
+    await need(page.getByRole('checkbox', { name: 'Use the home data server (InfluxDB)' }), 'the data-server switch');
   }),
   // The days the server has nothing for: sleep and recovery say so in a sentence.
-  healthScene('59f-health-sleep-none', 'Sleep analysis', async (page) => {
+  healthScene('59f-health-sleep-none', 'Sleep', async (page) => {
     await need(page.getByText('No sleep for this night'), 'the empty sleep state');
   }, { answers: { sleep: { available: false }, recovery: { available: false } } }),
 ];

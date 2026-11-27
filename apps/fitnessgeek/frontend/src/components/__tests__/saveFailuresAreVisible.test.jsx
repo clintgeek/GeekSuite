@@ -102,3 +102,39 @@ describe('QuickAddWeight keeps the dialog open when the save fails', () => {
     }
   });
 });
+
+// The weigh-in is a card in the page at every width now (2026-11-27), with
+// the dialog behind "Log weight for another day".
+describe('QuickAddWeight card — what can be saved', () => {
+  it('a weight that is a typo ("0", "2199") cannot be sent, and the card says why', async () => {
+    const user = userEvent.setup();
+    const onAdd = vi.fn().mockResolvedValue(true);
+    render(<QuickAddWeight onAdd={onAdd} unit="lbs" />);
+    const input = screen.getByLabelText(/today.s weight/i);
+    const log = screen.getByRole('button', { name: /^log$/i });
+
+    await user.type(input, '0');
+    expect(log).toBeDisabled();
+    expect(screen.getByText('Enter a weight between 0 and 1,000.')).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+
+    await user.clear(input);
+    await user.type(input, '2199');
+    expect(log).toBeDisabled();
+    await user.keyboard('{Enter}');
+    expect(onAdd).not.toHaveBeenCalled();
+
+    await user.clear(input);
+    await user.type(input, '219.9');
+    expect(screen.queryByText('Enter a weight between 0 and 1,000.')).toBeNull();
+    await user.click(log);
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(1));
+    expect(onAdd.mock.calls[0][0].value).toBe(219.9);
+  });
+
+  it('is in the page, not a floating button portalled outside it', () => {
+    const { container } = render(<QuickAddWeight onAdd={vi.fn()} unit="lbs" />);
+    expect(container).toContainElement(screen.getByTestId('weight-quick-add'));
+    expect(container).toContainElement(screen.getByRole('button', { name: 'Log weight for another day' }));
+  });
+});

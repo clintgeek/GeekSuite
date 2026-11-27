@@ -1,49 +1,41 @@
-import React, { lazy, useState, useEffect } from 'react';
+import React, { lazy, useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
-  Stack,
   Tab,
   Tabs,
-  Alert,
-  AlertTitle,
   CircularProgress,
   Button,
   IconButton,
-  useMediaQuery
+  Collapse,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
-import { useAuth } from '@geeksuite/auth';
+import { GeekErrorState } from '@geeksuite/ui';
 import { localDateString } from '@geeksuite/utils';
 import { apiService } from '../services/apiService';
 import Shell from './embeddedShell.jsx';
 import InfluxDBSettings from '../components/InfluxDBSettings';
-import { DateField, SuspenseSurface, Page } from '../components/primitives';
+import ConnectWatchCard from '../components/Reports/ConnectWatchCard.jsx';
+import { DisplayHeading, LabelPanel, SuspenseSurface } from '../components/primitives';
+import { tonalColors } from '../theme/theme.jsx';
+import { errorMessage } from '../utils/errorMessage.js';
 
-// The four analytics panels are lazy. Two of them (Intraday, Meal Impact) pull
-// the chart library, which used to sit in this route's chunk, so it was
-// downloaded even by users who have never enabled the InfluxDB integration and
-// only ever see the "integration required" screen above. InfluxDBSettings
-// stays eager: it renders on that screen, and it costs nothing (no chart
-// library). Q52a swapped chart.js for @nivo/line here — one library for the
-// whole app — so these two panels now share the `nivo` + `d3` vendor chunks
-// with /weight and /blood-pressure instead of pulling a third one of their own.
+// The four panels are lazy. Two of them (Overview, Meals) pull the chart
+// library, which a person who has never connected a watch should not download
+// just to see the "connect a watch" card. InfluxDBSettings stays eager: it is
+// the setup behind that card, and it costs nothing (no chart library).
 const IntradayDashboard = lazy(() => import('../components/IntradayDashboard'));
 const SleepAnalysis = lazy(() => import('../components/SleepAnalysis'));
 const MealImpactVisualization = lazy(() => import('../components/MealImpactVisualization'));
 const RecoveryCoach = lazy(() => import('../components/RecoveryCoach'));
 
-const TAB_TITLES = [
-  'Overview',
-  'Sleep analysis',
-  'Meal impact',
-  'Recovery coach',
-  'Settings',
-];
+// Short names, so all four fit a phone's width with nothing cut off and
+// nothing to swipe.
+const SECTIONS = ['Overview', 'Sleep', 'Meals', 'Recovery'];
 
 // Calendar-day arithmetic on YYYY-MM-DD strings, in local time (never UTC).
 const parseDay = (iso) => {
@@ -58,174 +50,227 @@ const shiftDay = (iso, by) => {
   return dayString(date);
 };
 
-/** The day, as a header on the grey ground: previous / next around a bold
- * "Today" (or the date in words) with the date as a small eyebrow, then
- * the Yesterday / Today shortcuts and the native picker for any other day. */
-function DayHeader({ selectedDate, onChange }) {
-  const today = localDateString();
-  const yesterday = shiftDay(today, -1);
+/** "Today" / "Yesterday" / "Wed, Nov 25", and the date beside the first two. */
+const dayWords = (selectedDate, today = localDateString()) => {
   const date = parseDay(selectedDate);
-  const title = selectedDate === today
-    ? 'Today'
-    : selectedDate === yesterday
-      ? 'Yesterday'
-      : date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  const eyebrow = selectedDate === today || selectedDate === yesterday
-    ? date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-    : null;
+  const short = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  if (selectedDate === today) return { title: 'Today', detail: short };
+  if (selectedDate === shiftDay(today, -1)) return { title: 'Yesterday', detail: short };
+  return { title: short, detail: null };
+};
+
+/**
+ * The day, as ONE compact control: previous, the day itself, next.
+ *
+ * It replaced a tall header (a big "Today", an eyebrow date, Yesterday and
+ * Today buttons and a date field) that put a third layer of navigation
+ * between the tabs and the data on a phone. Everything it did is still here:
+ * the arrows step a day, the day itself opens the phone's own date picker for
+ * any other day, and "Today" comes back when you have wandered off.
+ */
+function DayStepper({ selectedDate, onChange }) {
+  const today = localDateString();
+  const { title, detail } = dayWords(selectedDate, today);
+  const pickerRef = useRef(null);
+  const openPicker = () => {
+    // The transparent date input lies over the label, so a tap lands on it
+    // and phones open their picker by themselves. Desktop browsers only open
+    // one from the calendar glyph, hence showPicker() where it exists.
+    try {
+      pickerRef.current?.showPicker?.();
+    } catch {
+      /* not allowed here (an iframe, an old browser): the input still takes typing */
+    }
+  };
+  const arrowSx = { width: 44, height: 44, color: 'text.primary' };
   return (
-    <Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: '48px 1fr 48px', alignItems: 'center' }}>
-        <IconButton
-          onClick={() => onChange(shiftDay(selectedDate, -1))}
-          aria-label="Previous day"
-          sx={{ width: 48, height: 48, color: 'text.primary' }}
-        >
+    <Box data-testid="day-stepper" sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          minWidth: 0,
+          borderRadius: 999,
+          bgcolor: 'background.paper',
+          border: (t) => `1px solid ${t.palette.divider}`,
+        }}
+      >
+        <IconButton onClick={() => onChange(shiftDay(selectedDate, -1))} aria-label="Previous day" sx={arrowSx}>
           <ChevronLeftIcon />
         </IconButton>
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
-          <Typography component="h2" sx={{ m: 0, fontWeight: 700, lineHeight: 1.1, fontSize: { xs: '1.5rem', sm: '1.75rem' }, textAlign: 'center' }}>
-            {title}
+        <Box
+          sx={{
+            position: 'relative',
+            minWidth: 0,
+            minHeight: 44,
+            px: 1,
+            display: 'flex',
+            alignItems: 'center',
+            borderRadius: 2,
+            '&:focus-within': { outline: (t) => `2px solid ${t.palette.primary.main}`, outlineOffset: -2 },
+          }}
+        >
+          <Typography
+            data-testid="day-label"
+            aria-hidden
+            sx={{ fontSize: '0.9375rem', lineHeight: 1.2, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}
+          >
+            <Box component="span" sx={{ fontWeight: 700 }}>{title}</Box>
+            {detail && <Box component="span" sx={{ color: 'text.secondary' }}>{` · ${detail}`}</Box>}
           </Typography>
-          {eyebrow && (
-            <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}>
-              {eyebrow}
-            </Typography>
-          )}
+          <Box
+            component="input"
+            ref={pickerRef}
+            type="date"
+            aria-label={`Day shown: ${title}${detail ? `, ${detail}` : ''}. Choose another day`}
+            value={selectedDate}
+            max={today}
+            onClick={openPicker}
+            onChange={(e) => {
+              const next = e.target.value;
+              // Clearing the field (the picker's own "clear") is not a day.
+              if (/^\d{4}-\d{2}-\d{2}$/.test(next) && next <= today) onChange(next);
+            }}
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              opacity: 0,
+              cursor: 'pointer',
+              border: 0,
+              p: 0,
+              m: 0,
+              // The whole field is the tap target on WebKit, not only the glyph.
+              '&::-webkit-calendar-picker-indicator': { position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer' },
+            }}
+          />
         </Box>
         <IconButton
           onClick={() => onChange(shiftDay(selectedDate, 1))}
           disabled={selectedDate >= today}
           aria-label="Next day"
-          sx={{ width: 48, height: 48, color: 'text.primary' }}
+          sx={arrowSx}
         >
           <ChevronRightIcon />
         </IconButton>
       </Box>
-      <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 1 }}>
-        <Button variant="text" size="small" onClick={() => onChange(yesterday)}>
-          Yesterday
-        </Button>
-        <Button variant="text" size="small" onClick={() => onChange(today)}>
+      {selectedDate !== today && (
+        <Button variant="text" onClick={() => onChange(today)} sx={{ minHeight: 44, minWidth: 0, px: 2, fontWeight: 700 }}>
           Today
         </Button>
-        <DateField
-          label={false}
-          inputProps={{ 'aria-label': 'Date' }}
-          size="small"
-          value={selectedDate}
-          onChange={onChange}
-          max={today}
-          sx={{ minWidth: 150 }}
-        />
-      </Stack>
+      )}
     </Box>
   );
 }
 
-// Text tabs: a hairline under the row, a blue indicator on the selected one.
-const tabsSx = {
-  borderBottom: (t) => `1px solid ${t.palette.divider}`,
-  minHeight: 48,
-  '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0', bgcolor: 'primary.main' },
-  '& .MuiTab-root': {
-    minHeight: 48,
-    textTransform: 'none',
-    fontWeight: 700,
-    fontSize: '1rem',
-    color: 'text.secondary',
-    px: 2,
-    '&.Mui-selected': { color: 'text.primary' },
-  },
-};
-
-// Under Trends the outer tabs are the primary control, so these sections read
-// as a lighter row of small pills. Each tab keeps a 44px hit area; the pill is
-// drawn smaller inside it.
-const pillTabsSx = {
-  minHeight: 44,
-  '& .MuiTabs-indicator': { display: 'none' },
-  '& .MuiTabs-flexContainer': { gap: 1 },
-  '& .MuiTab-root': {
-    position: 'relative',
+// The sections, as a row of small pills under the Trends tabs. Each tab keeps
+// a 44px hit area; the pill is drawn smaller inside it. The selected pill is
+// the tonal wash, not the filled blue: the page's one filled blue is not
+// spent on saying where you are.
+const pillTabsSx = (theme) => {
+  const tonal = tonalColors(theme);
+  return {
     minHeight: 44,
     minWidth: 0,
-    textTransform: 'none',
-    fontWeight: 600,
-    fontSize: '0.875rem',
-    color: 'text.secondary',
-    px: 3,
-    zIndex: 0,
-    '&::before': {
-      content: '""',
-      position: 'absolute',
-      inset: '6px 0',
-      borderRadius: 999,
-      border: (t) => `1px solid ${t.palette.divider}`,
-      zIndex: -1,
+    '& .MuiTabs-indicator': { display: 'none' },
+    '& .MuiTabs-flexContainer': { gap: 1.5 },
+    '& .MuiTab-root': {
+      position: 'relative',
+      minHeight: 44,
+      minWidth: 0,
+      textTransform: 'none',
+      fontWeight: 600,
+      fontSize: '0.875rem',
+      color: 'text.secondary',
+      px: 3,
+      zIndex: 0,
+      '&::before': {
+        content: '""',
+        position: 'absolute',
+        inset: '6px 0',
+        borderRadius: 999,
+        border: `1px solid ${theme.palette.divider}`,
+        backgroundColor: theme.palette.background.paper,
+        zIndex: -1,
+      },
+      '&.Mui-selected': { color: tonal.ink, fontWeight: 700 },
+      '&.Mui-selected::before': { backgroundColor: tonal.bg, borderColor: tonal.bg },
     },
-    '&.Mui-selected': { color: 'primary.contrastText' },
-    '&.Mui-selected::before': { bgcolor: 'primary.main', borderColor: 'primary.main' },
-  },
+  };
 };
 
 /**
- * Comprehensive Health Dashboard
- * Displays InfluxDB-powered health analytics
+ * Trends › Health: what the watch recorded through one day.
+ *
+ * Three states before any data, each its own screen:
+ *   checking   a spinner
+ *   failed     the settings read failed; said so, with a retry. It is NOT
+ *              shown as "no watch", which would tell a connected person to
+ *              set up something they already have.
+ *   no watch   one friendly card; the setup sits behind its button.
  */
 export default function HealthDashboard({ embedded = false }) {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
-  // Five tabs don't fit a phone's width: "Settings" was cut off the end. On a
-  // phone they scroll sideways (with arrows); from md up they share the row.
-  const theme = useTheme();
-  const tabsFit = useMediaQuery(theme.breakpoints.up('md'));
+  // Local calendar day (YYYY-MM-DD), not UTC.
+  const [selectedDate, setSelectedDate] = useState(() => localDateString());
+  const [influxEnabled, setInfluxEnabled] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [checkError, setCheckError] = useState(null);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const alive = useRef(true);
 
-  // Reflect the current tab in document.title so browser history is readable
+  // Reflect the current section in document.title so browser history is readable
   useEffect(() => {
-    const tabName = TAB_TITLES[activeTab] || 'Health dashboard';
     const previousTitle = document.title;
-    document.title = `${tabName} · Health dashboard · FitnessGeek`;
+    document.title = `${SECTIONS[activeTab] || 'Health'} · Health · FitnessGeek`;
     return () => {
       document.title = previousTitle;
     };
   }, [activeTab]);
-  // Local calendar day (YYYY-MM-DD), not UTC.
-  const [selectedDate, setSelectedDate] = useState(() => localDateString());
-  const [influxEnabled, setInfluxEnabled] = useState(false);
-  const [checkingInflux, setCheckingInflux] = useState(true);
 
   useEffect(() => {
-    checkInfluxStatus();
+    alive.current = true;
+    checkStatus();
+    return () => { alive.current = false; };
   }, []);
 
-  async function checkInfluxStatus() {
-    setCheckingInflux(true);
+  async function checkStatus() {
+    setChecking(true);
+    setCheckError(null);
     try {
       const response = await apiService.get('/user/settings');
+      if (!alive.current) return;
       const settings = response?.data || response || {};
-      setInfluxEnabled(settings.influxEnabled || false);
+      setInfluxEnabled(!!settings.influxEnabled);
     } catch (err) {
-      console.warn('Could not load InfluxDB settings:', err.message);
+      if (!alive.current) return;
+      console.warn('Could not load the watch-data setting:', err?.message);
+      setCheckError(errorMessage(err, 'Couldn’t check your watch connection. Try again.'));
     } finally {
-      setCheckingInflux(false);
+      if (alive.current) setChecking(false);
     }
   }
 
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
-  };
+  const header = !embedded && <DisplayHeading size="page">Health</DisplayHeading>;
 
-  const handleDateChange = (newDate) => {
-    setSelectedDate(newDate);
-  };
-
-  if (checkingInflux) {
+  if (checking) {
     return (
       <Shell embedded={embedded}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-          <CircularProgress />
+        {header}
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+          <CircularProgress aria-label="Loading your health data" />
         </Box>
+      </Shell>
+    );
+  }
+
+  if (checkError) {
+    return (
+      <Shell embedded={embedded}>
+        {header}
+        <GeekErrorState title="Couldn’t load your health data" error={checkError} onRetry={checkStatus} />
       </Shell>
     );
   }
@@ -233,71 +278,85 @@ export default function HealthDashboard({ embedded = false }) {
   if (!influxEnabled) {
     return (
       <Shell embedded={embedded}>
-        <Alert severity="info">
-          <AlertTitle>Turn on the home data server first</AlertTitle>
-          This page reads your Garmin data from the home data server (InfluxDB).
-          Turn it on below to see:
-          <ul style={{ marginTop: 8, marginBottom: 0 }}>
-            <li>Heart rate, stress and Body Battery through the day</li>
-            <li>How you slept, with heart-rate variability (HRV) and recovery</li>
-            <li>How your heart rate answered each meal</li>
-            <li>Recovery notes written by AI</li>
-          </ul>
-        </Alert>
-
-        <InfluxDBSettings onSettingsChange={(newSettings) => {
-          if (newSettings.influxEnabled) {
-            setInfluxEnabled(true);
-          }
-        }} />
+        {header}
+        <ConnectWatchCard
+          action={setupOpen ? undefined : (
+            <Button variant="contained" onClick={() => setSetupOpen(true)} aria-expanded={false}>
+              Set it up
+            </Button>
+          )}
+        />
+        {setupOpen && (
+          <Box data-testid="watch-setup" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 3, md: 4 } }}>
+            <LabelPanel title="1. Connect your Garmin account">
+              <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', mb: 3 }}>
+                Sign in to Garmin in Settings. Steps, sleep and workouts then show under Activity.
+              </Typography>
+              <Button component={RouterLink} to="/settings#garmin" variant="tonal" sx={{ minHeight: 44 }}>
+                Open Settings
+              </Button>
+            </LabelPanel>
+            <InfluxDBSettings
+              step="2. "
+              onSettingsChange={(next) => {
+                if (next.influxEnabled) setInfluxEnabled(true);
+              }}
+            />
+          </Box>
+        )}
       </Shell>
     );
   }
 
   return (
     <Shell embedded={embedded}>
-      {/* Editorial header */}
-      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-        Your Garmin data through the day, from the home data server.
-      </Typography>
+      {header}
 
-      <DayHeader selectedDate={selectedDate} onChange={handleDateChange} />
+      {/* One band of controls: which part of the day's data, and which day.
+          Side by side from sm up; on a phone the day sits under the pills. */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 4, rowGap: 1 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(event, next) => setActiveTab(next)}
+          variant="scrollable"
+          scrollButtons={false}
+          data-testid="health-tabs"
+          aria-label="Health sections"
+          sx={pillTabsSx}
+        >
+          {SECTIONS.map((name) => <Tab key={name} label={name} />)}
+        </Tabs>
+        <DayStepper selectedDate={selectedDate} onChange={setSelectedDate} />
+      </Box>
 
-      {/* Tabs */}
-      <Tabs
-        value={activeTab}
-        onChange={handleTabChange}
-        variant={tabsFit && !embedded ? 'fullWidth' : 'scrollable'}
-        // The pills swipe sideways; a cut-off pill at the edge says there are more.
-        scrollButtons={embedded || tabsFit ? false : 'auto'}
-        allowScrollButtonsMobile
-        data-testid="health-tabs"
-        aria-label={embedded ? 'Health sections' : undefined}
-        sx={embedded ? pillTabsSx : tabsSx}
-      >
-        <Tab label="Overview" />
-        <Tab label="Sleep analysis" />
-        <Tab label="Meal impact" />
-        <Tab label="Recovery coach" />
-        <Tab label="Settings" />
-      </Tabs>
-
-      {/* Tab Panels — no redundant heading, tab label already names the section */}
       <Box>
         <SuspenseSurface rows={5} height={360}>
           {activeTab === 0 && <IntradayDashboard date={selectedDate} />}
           {activeTab === 1 && <SleepAnalysis date={selectedDate} />}
           {activeTab === 2 && <MealImpactVisualization date={selectedDate} />}
-          {activeTab === 3 && (
-            <RecoveryCoach date={selectedDate} />
-          )}
+          {activeTab === 3 && <RecoveryCoach date={selectedDate} />}
         </SuspenseSurface>
+      </Box>
 
-        {activeTab === 4 && (
-          <InfluxDBSettings onSettingsChange={(newSettings) => {
-            setInfluxEnabled(newSettings.influxEnabled);
-          }} />
-        )}
+      {/* Setup is not a section of your health: it sits at the foot, closed. */}
+      <Box>
+        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Button
+            variant="text"
+            onClick={() => setSettingsOpen((open) => !open)}
+            aria-expanded={settingsOpen}
+            aria-controls="watch-settings"
+            data-testid="watch-settings-toggle"
+            sx={{ minHeight: 44, fontWeight: 700 }}
+          >
+            {settingsOpen ? 'Hide watch settings' : 'Watch settings'}
+          </Button>
+        </Box>
+        <Collapse in={settingsOpen} unmountOnExit>
+          <Box id="watch-settings" sx={{ pt: 3 }}>
+            <InfluxDBSettings onSettingsChange={(next) => setInfluxEnabled(!!next.influxEnabled)} />
+          </Box>
+        </Collapse>
       </Box>
     </Shell>
   );

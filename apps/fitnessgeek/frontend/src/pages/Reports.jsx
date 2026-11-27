@@ -14,7 +14,7 @@ import DayRibbon from '../components/Reports/DayRibbon.jsx';
 import BodyRecoverySection from '../components/Reports/BodyRecoverySection.jsx';
 import { AINoteFooter, AI_NOTES_NAME, aiNotesTitle, lastDaysSource } from '../components/Reports/aiNotes.jsx';
 import { formatSpan } from '../components/BodyComposition/bodyCompFormat.js';
-import { SectionLabel, DisplayHeading, LabelPanel, LabelBar, Page } from '../components/primitives';
+import { SectionLabel, DisplayHeading, LabelPanel, LabelBar } from '../components/primitives';
 import {
   Download as DownloadIcon,
   TrendingUp as TrendingUpIcon,
@@ -92,7 +92,7 @@ const renderInsightContent = (text = '', theme) => {
   return blocks.map((block, idx) => {
     if (block.type === 'paragraph') {
       return (
-        <Typography key={`p-${idx}`} variant="body2" sx={{ color: theme.palette.text.primary, mb: 0.75 }}>
+        <Typography key={`p-${idx}`} variant="body2" sx={{ color: theme.palette.text.primary, lineHeight: 1.55, mb: 2 }}>
           {block.text}
         </Typography>
       );
@@ -103,13 +103,13 @@ const renderInsightContent = (text = '', theme) => {
           key={`list-${idx}`}
           component="ul"
           sx={{
-            pl: 3,
-            mb: 1.5,
+            pl: 5,
+            mb: 3,
             color: theme.palette.text.primary,
             '& li': {
               lineHeight: 1.6,
-              mb: 0.5,
-              fontSize: '0.9rem'
+              mb: 1,
+              fontSize: '0.875rem'
             }
           }}
         >
@@ -152,7 +152,7 @@ const AIPanel = ({ title, testId, loading, loadingLabel, error, data, empty, emp
   } else if (text) {
     body = (
       <>
-        <Box sx={{ color: theme.palette.text.primary, '& ul': { pl: 3 } }}>
+        <Box sx={{ color: theme.palette.text.primary }}>
           {renderInsightContent(text, theme)}
         </Box>
         <AINoteFooter source={source} generatedAt={data.generatedAt} />
@@ -176,7 +176,7 @@ const AIPanel = ({ title, testId, loading, loadingLabel, error, data, empty, emp
   }
   return (
     <LabelPanel title={title} titleComponent="h3" data-testid={testId} sx={{ height: '100%' }}>
-      <Box sx={{ pt: 1.25 }}>{body}</Box>
+      <Box>{body}</Box>
     </LabelPanel>
   );
 };
@@ -186,6 +186,9 @@ const Reports = ({ embedded = false }) => {
   const [range, setRange] = useState('7');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // The "what stands out" half failing on its own: said in its panel, never
+  // drawn as "nothing stands out".
+  const [trendsFailed, setTrendsFailed] = useState(false);
   const [overview, setOverview] = useState(null);
   const [trends, setTrends] = useState(null);
   const [weeklyCoach, setWeeklyCoach] = useState(null);
@@ -225,6 +228,7 @@ const Reports = ({ embedded = false }) => {
 
     setLoading(true);
     setError(null);
+    setTrendsFailed(false);
     setWeeklyLoading(true);
     setTrendLoading(true);
     setWeeklyError(null);
@@ -238,10 +242,15 @@ const Reports = ({ embedded = false }) => {
       if (!current()) return;
       setOverview(value(overviewData));
       setTrends(value(trendsData));
-      // Only both halves failing is a page error; one half renders alone.
-      if (overviewData.status === 'rejected' && trendsData.status === 'rejected') {
+      // The overview IS the food report: averages, days, meals, targets and
+      // top foods all come from it. Without it there is nothing true to draw,
+      // so its failure is the report's failure. (It used to take both halves
+      // failing; with only the overview down, the page drew "No food logs in
+      // this range" and "No meals logged" over a week that had plenty.)
+      if (overviewData.status === 'rejected') {
         setError(errorMessage(overviewData.reason, 'Couldn’t load your reports. Try again.'));
       }
+      setTrendsFailed(trendsData.status === 'rejected');
       setLoading(false);
     });
 
@@ -269,6 +278,7 @@ const Reports = ({ embedded = false }) => {
   };
 
   const handleExport = async () => {
+    if (exporting) return;
     try {
       setExporting(true);
       const blob = await reportsService.export({ days, start: localDateStringDaysAgo(days - 1) });
@@ -324,15 +334,22 @@ const Reports = ({ embedded = false }) => {
 
   const rangeTitle = aiNotesTitle(days);
 
-  const grid2 = { display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 1.75, md: 2.25 }, alignItems: 'start' };
+  // 12px between cards on a phone, 16px from md: the suite's spacing unit is 4px.
+  const gap = { xs: 3, md: 4 };
+  const grid2 = { display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap, alignItems: 'start' };
+  const rowSx = (i) => ({ py: 2.5, borderTop: i === 0 ? 0 : (t) => `1px solid ${t.palette.divider}` });
   const rule = (t) => `1px solid ${t.palette.divider}`;
   const averageEntries = Object.entries(overview?.averages || {});
 
   return (
     <Shell embedded={embedded}>
-      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-        How your eating went, and how your body is trending.
-      </Typography>
+      {/* Under Trends the Food tab already says what this is; the sentence
+          would only push the numbers down the screen. */}
+      {!embedded && (
+        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
+          How your eating went, and how your body is trending.
+        </Typography>
+      )}
 
       {/* Food — the range toggle lives in this section's own header, because
           it governs this section and the AI notes under it, and nothing
@@ -341,15 +358,16 @@ const Reports = ({ embedded = false }) => {
         component="section"
         aria-label="Food"
         data-testid="reports-food"
-        sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.75, md: 2.25 } }}
+        sx={{ display: 'flex', flexDirection: 'column', gap }}
       >
-        <LabelPanel title={rangeTitle} level={1} titleComponent="h2" meta="Food">
+        {/* No "Food" under the title: the tab above already says Food. */}
+        <LabelPanel title={rangeTitle} level={1} titleComponent="h2">
           {/* The range and Export on one row. `size="small"` renders under
               the 44px tap floor the mobile harness enforces (MOBILE_UI_PLAN
               6): the compact look is kept, only the hit area grows. The
               labels are words ("7 days"), not "7d". Export is a text button:
               the page's filled blue is not spent on a download. */}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', justifyContent: 'space-between', py: 1.25 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', justifyContent: 'space-between', pb: 3 }}>
             <ToggleButtonGroup
               size="small"
               value={range}
@@ -359,7 +377,7 @@ const Reports = ({ embedded = false }) => {
               sx={{ '& .MuiToggleButtonGroup-grouped': { minHeight: 44, minWidth: 44 } }}
             >
               {RANGE_OPTIONS.map((option) => (
-                <ToggleButton key={option} value={option} sx={{ px: 1.25, whiteSpace: 'nowrap' }}>
+                <ToggleButton key={option} value={option} sx={{ px: 3, whiteSpace: 'nowrap' }}>
                   {`${option} days`}
                 </ToggleButton>
               ))}
@@ -390,7 +408,7 @@ const Reports = ({ embedded = false }) => {
               {/* Averages divide by the days that have logs (an unlogged day is
                   unknown, not zero) — so when that isn't every day, say so. */}
               {overview && Number.isFinite(overview.days_logged) && overview.days_logged < rangeDays && (
-                <Typography data-testid="report-days-logged" variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
+                <Typography data-testid="report-days-logged" variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
                   {`Averages cover the ${overview.days_logged} of ${rangeDays} days you logged.`}
                 </Typography>
               )}
@@ -411,9 +429,9 @@ const Reports = ({ embedded = false }) => {
                     <Box
                       key={key}
                       data-testid={`average-${key}`}
-                      sx={{ borderTop: rule, borderLeft: rule, px: 1.5, py: 1.25, minWidth: 0 }}
+                      sx={{ borderTop: rule, borderLeft: rule, px: 3, py: 3, minWidth: 0 }}
                     >
-                      <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, lineHeight: 1.2, mb: 0.5 }}>
+                      <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1.2, mb: 1 }}>
                         {metricLabels[key] || key}
                       </Typography>
                       <Typography
@@ -428,7 +446,7 @@ const Reports = ({ embedded = false }) => {
                       >
                         {`${commas(value)}${metricUnits[key] || ''}`}
                       </Typography>
-                      <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.5 }}>
+                      <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1 }}>
                         a day
                       </Typography>
                     </Box>
@@ -457,8 +475,7 @@ const Reports = ({ embedded = false }) => {
                     sx={{
                       fontVariantNumeric: 'tabular-nums',
                       fontSize: '1rem',
-                      py: 1,
-                      borderTop: i === 0 ? 0 : (t) => `1px solid ${t.palette.divider}`,
+                      ...rowSx(i),
                     }}
                   >
                     <Box component="span" sx={{ fontWeight: 700 }}>{row.label}</Box>
@@ -468,7 +485,7 @@ const Reports = ({ embedded = false }) => {
                     )}
                   </Typography>
                 )) : (
-                  <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
                     No meals logged in this range.
                   </Typography>
                 )}
@@ -477,8 +494,8 @@ const Reports = ({ embedded = false }) => {
               {/* Days on target */}
               <LabelPanel title="Days on target" data-testid="days-on-target">
                 {goalComplianceEntries.length ? goalComplianceEntries.map(([metric, detail], i) => (
-                  <Box key={metric} sx={{ py: 1, borderTop: i === 0 ? 0 : (t) => `1px solid ${t.palette.divider}` }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5 }}>
+                  <Box key={metric} sx={rowSx(i)}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 3 }}>
                       <Typography sx={{ fontWeight: 700, fontSize: '1rem', textTransform: 'capitalize' }}>
                         {metricLabels[metric] || metric}
                       </Typography>
@@ -489,12 +506,12 @@ const Reports = ({ embedded = false }) => {
                     <LabelBar
                       value={detail.percentage}
                       label={`${metricLabels[metric] || metric}: ${detail.daysWithin} days on target`}
-                      height={10}
-                      sx={{ mb: 0.25 }}
+                      height={8}
+                      sx={{ mt: 2, mb: 0 }}
                     />
                   </Box>
                 )) : (
-                  <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
                     Set a daily target and I’ll count the days you hit it.
                   </Typography>
                 )}
@@ -506,7 +523,7 @@ const Reports = ({ embedded = false }) => {
                   <Box
                     key={food.name}
                     data-testid="top-food"
-                    sx={{ py: 1, minWidth: 0, borderTop: i === 0 ? 0 : (t) => `1px solid ${t.palette.divider}` }}
+                    sx={{ ...rowSx(i), minWidth: 0 }}
                   >
                     <Typography sx={{ fontWeight: 700, fontSize: '1rem', overflowWrap: 'anywhere' }}>
                       {food.name}
@@ -516,7 +533,7 @@ const Reports = ({ embedded = false }) => {
                     </Typography>
                   </Box>
                 )) : (
-                  <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
                     No repeated foods logged in this range.
                   </Typography>
                 )}
@@ -524,15 +541,19 @@ const Reports = ({ embedded = false }) => {
 
               {/* What stands out */}
               <LabelPanel title="What stands out">
-                {trends?.highlights?.length ? trends.highlights.map((item, idx) => (
-                  <Box key={idx} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, py: 1, borderTop: idx === 0 ? 0 : (t) => `1px solid ${t.palette.divider}` }}>
-                    <TrendingUpIcon fontSize="small" sx={{ color: 'text.primary', mt: 0.25 }} />
+                {trendsFailed ? (
+                  <Typography data-testid="highlights-failed" variant="body2" color="text.secondary">
+                    Couldn’t load this part. The rest of the report is up to date.
+                  </Typography>
+                ) : trends?.highlights?.length ? trends.highlights.map((item, idx) => (
+                  <Box key={idx} sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, ...rowSx(idx) }}>
+                    <TrendingUpIcon fontSize="small" sx={{ color: 'text.secondary', mt: 0.5 }} />
                     <Typography sx={{ fontSize: '1rem', lineHeight: 1.5 }}>
                       {item}
                     </Typography>
                   </Box>
                 )) : (
-                  <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
                     Nothing stands out yet.
                   </Typography>
                 )}
@@ -545,9 +566,9 @@ const Reports = ({ embedded = false }) => {
       {/* Notes from the AI, for the same range — outside the food report's
           loading and error states, so each panel shows up, loads and fails
           on its own. */}
-      <Box component="section" aria-labelledby="ai-notes-heading" data-testid="reports-ai-notes" sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 1.75, md: 2.25 } }}>
+      <Box component="section" aria-labelledby="ai-notes-heading" data-testid="reports-ai-notes" sx={{ display: 'flex', flexDirection: 'column', gap }}>
         <Box>
-          <SectionLabel sx={{ mb: 0.75 }}>{AI_NOTES_NAME}</SectionLabel>
+          <SectionLabel sx={{ mb: 1 }}>{AI_NOTES_NAME}</SectionLabel>
           <DisplayHeading size="card" id="ai-notes-heading">{rangeTitle}</DisplayHeading>
         </Box>
         <Box sx={grid2}>

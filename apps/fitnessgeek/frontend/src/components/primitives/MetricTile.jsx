@@ -35,11 +35,11 @@ function Sparkline({ points, color }) {
     (i / (nums.length - 1)) * (w - 4) + 2,
     h - 3 - ((n - min) / span) * (h - 6),
   ]);
-  const last = xy[xy.length - 1];
+  // Stretched to the tile's width under the value, so the number and its
+  // unit always share one line however narrow the tile is.
   return (
-    <svg aria-hidden width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', flexShrink: 0 }}>
-      <polyline points={xy.map((p) => p.map((v) => v.toFixed(1)).join(',')).join(' ')} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={last[0]} cy={last[1]} r="2.5" fill={color} />
+    <svg aria-hidden data-testid="metric-spark" width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+      <polyline points={xy.map((p) => p.map((v) => v.toFixed(1)).join(',')).join(' ')} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -78,18 +78,15 @@ export default function MetricTile({ label, value, unit, caption, status, spark,
         {to && <ChevronRight aria-hidden sx={{ fontSize: 18, color: 'text.secondary', mr: -1 }} />}
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, minWidth: 0, flexWrap: 'wrap' }}>
-          <Typography component="span" sx={{ fontSize: '1.5rem', fontWeight: 700, lineHeight: 1.15, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-            {typeof shown === 'number' ? shown.toLocaleString('en-US') : shown}
-          </Typography>
-          {unit && shown !== '—' && (
-            <Typography component="span" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>{unit}</Typography>
-          )}
-        </Box>
-        <Sparkline points={spark} color={theme.palette.primary.main} />
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, minWidth: 0, fontVariantNumeric: 'tabular-nums' }}>
+        <Typography component="span" sx={{ fontSize: '1.5rem', fontWeight: 700, lineHeight: 1.15, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+          {typeof shown === 'number' ? shown.toLocaleString('en-US') : shown}
+        </Typography>
+        {unit && shown !== '—' && (
+          <Typography component="span" sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>{unit}</Typography>
+        )}
       </Box>
-
+      <Sparkline points={spark} color={theme.palette.primary.main} />
       {progress != null && (
         <LabelBar value={progress} label={progressLabel || `${Math.round(progress)} percent`} height={6} sx={{ my: 1 }} />
       )}

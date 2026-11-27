@@ -68,7 +68,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
       // always undefined, so this view said nobody was sharing, for everyone.
       // Same double-unwrap HouseholdSettings had until 2026-09-19.
       const household = await fitnessGeekService.getHouseholdMembers();
-      const members = household?.members?.filter(m => m.shares_food_logs) || [];
+      const members = (Array.isArray(household?.members) ? household.members : []).filter((m) => m?.user_id && m.shares_food_logs);
       setHouseholdName(household?.name || '');
       setHouseholdMembers(members);
 
@@ -94,7 +94,8 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
       // Resolves to the log array itself; the member's name comes from the
       // member list, which the logs query never carried.
       const logs = await fitnessGeekService.getHouseholdMemberLogs(selectedMember, currentDate);
-      setMemberLogs(Array.isArray(logs) ? logs : []);
+      // A null row is not an entry.
+      setMemberLogs((Array.isArray(logs) ? logs : []).filter((log) => log && typeof log === 'object'));
       setMemberName(
         householdMembers.find(m => m.user_id === selectedMember)?.display_name || 'Household member'
       );
@@ -160,7 +161,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
         ) : (
           <>
             {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
+              <Alert severity="error" sx={{ mb: 4 }}>
                 {error}
               </Alert>
             )}
@@ -168,7 +169,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
             {householdMembers.length > 0 && (
               <>
                 {/* Member Selector */}
-                <Box sx={{ mb: 3 }}>
+                <Box sx={{ pt: 2, mb: 5 }}>
                   <FormControl fullWidth size="small">
                     <InputLabel id="household-whose-log">Whose log</InputLabel>
                     <Select
@@ -179,7 +180,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                     >
                       {householdMembers.map(member => (
                         <MenuItem key={member.user_id} value={member.user_id}>
-                          {member.display_name}
+                          {member.display_name || 'Household member'}
                         </MenuItem>
                       ))}
                     </Select>
@@ -189,7 +190,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                 {selectedMember && (
                   <>
                     {/* Date Info */}
-                    <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                    <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
                       <Typography variant="subtitle1">
                         What {memberName} ate {onDay}
                       </Typography>
@@ -223,7 +224,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                         const totalCals = calculateMealCalories(logs);
 
                         return (
-                          <Box key={mealType} sx={{ mb: 2, pt: 1, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
+                          <Box key={mealType} sx={{ mb: 3, pt: 2, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
                             <Box>
                               <Box sx={{
                                 display: 'flex',
@@ -231,13 +232,13 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                                 alignItems: 'center',
                                 mb: 1
                               }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                   <Box
                                     component="span"
                                     aria-hidden
                                     sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: (t) => (t.palette.produce?.[mealType] || mealColors(mealType, t.palette.mode)).fill }}
                                   />
-                                  <Typography variant="subtitle1" fontWeight={900}>
+                                  <Typography variant="subtitle1" fontWeight={700}>
                                     {mealLabel(mealType)}
                                   </Typography>
                                   <Chip
@@ -262,12 +263,12 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                                   const cals = (log.nutrition?.calories_per_serving || food.nutrition?.calories_per_serving || 0) * (log.servings || 1);
 
                                   return (
-                                    <ListItem key={log._id || idx} sx={{ px: 0 }}>
+                                    <ListItem key={log._id || log.id || idx} sx={{ px: 0 }}>
                                       <ListItemText
                                         primary={food.name || 'A food'}
                                         secondary={
                                           <Box component="span" sx={{ display: 'flex', gap: 1 }}>
-                                            <span>{log.servings} serving{log.servings !== 1 ? 's' : ''}</span>
+                                            <span>{log.servings || 1} serving{(log.servings || 1) !== 1 ? 's' : ''}</span>
                                             <span>•</span>
                                             <span>{fmt(cals)} cal</span>
                                           </Box>

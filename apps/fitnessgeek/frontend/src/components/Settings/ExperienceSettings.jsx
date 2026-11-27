@@ -28,8 +28,8 @@ export default function ExperienceSettings({ children, id }) {
         sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, minHeight: 56, cursor: 'pointer' }}
       >
         <Box>
-          <Typography sx={{ fontSize: '1.125rem', fontWeight: 700 }}>Larger text</Typography>
-          <Typography sx={{ fontSize: '1rem', color: 'text.secondary' }}>Makes every word in the app bigger.</Typography>
+          <Typography sx={{ fontWeight: 600 }}>Larger text</Typography>
+          <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary' }}>Makes every word in the app bigger.</Typography>
         </Box>
         <Switch
           checked={largerText}

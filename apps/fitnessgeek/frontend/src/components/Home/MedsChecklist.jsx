@@ -1,7 +1,6 @@
 import React from 'react';
 import { Box, Button, ButtonBase, Typography, Alert } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
-import { Rule } from '../primitives';
 import { Check as CheckIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -26,18 +25,17 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
 
   return (
     <Box component="section" aria-labelledby="meds-checklist-title" data-testid="meds-checklist">
-      {/* A level-2 label title: heavy words, the count right, a medium rule. */}
-      <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2 }}>
-        <Typography id="meds-checklist-title" component="h2" sx={{ fontSize: '1.375rem', fontWeight: 700, lineHeight: 1.1 }}>
+      {/* The card title, like every other card; the count at the right. */}
+      <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 3, mb: 2 }}>
+        <Typography id="meds-checklist-title" component="h2" sx={{ fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.3, letterSpacing: '-0.01em' }}>
           {title}
         </Typography>
         {total > 0 && !unknown && (
-          <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-            {taken} of {total}
+          <Typography sx={{ fontSize: '0.9375rem', fontWeight: 600, whiteSpace: 'nowrap', color: taken === total ? 'success.main' : 'text.secondary' }}>
+            {taken === total ? `All ${total} taken` : `${taken} of ${total}`}
           </Typography>
         )}
       </Box>
-      <Rule weight="medium" sx={{ mt: 0.75, mb: 0.5 }} />
 
       {unknown && total > 0 ? (
         <Alert
@@ -69,9 +67,9 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'flex-start',
-                gap: 2,
+                gap: 3.5,
                 minHeight: 64,
-                py: 1,
+                py: 2,
                 textAlign: 'left',
                 borderTop: i === 0 ? 0 : `1px solid ${theme.palette.divider}`,
                 '@media (hover: hover)': { '&:hover': { bgcolor: alpha(theme.palette.text.primary, 0.03) } },
@@ -81,9 +79,9 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
               <Box
                 aria-hidden
                 sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: '10px',
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
                   flexShrink: 0,
                   display: 'grid',
                   placeItems: 'center',
@@ -92,14 +90,14 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
                   border: item.taken ? `2px solid ${blue}` : `2px solid ${theme.palette.text.secondary}`,
                 }}
               >
-                {item.taken && <CheckIcon sx={{ fontSize: 28 }} />}
+                {item.taken && <CheckIcon sx={{ fontSize: 22 }} />}
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, color: 'text.primary', lineHeight: 1.25 }}>
+                <Typography sx={{ fontSize: '1.0625rem', fontWeight: 600, color: item.taken ? 'text.secondary' : 'text.primary', lineHeight: 1.25 }}>
                   {item.name}
                 </Typography>
                 {item.slotLabel && (
-                  <Typography sx={{ fontSize: '1rem', color: 'text.secondary' }}>{item.slotLabel}</Typography>
+                  <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary' }}>{item.slotLabel}</Typography>
                 )}
               </Box>
             </ButtonBase>

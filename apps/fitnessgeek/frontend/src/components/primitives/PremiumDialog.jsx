@@ -151,7 +151,7 @@ const PremiumDialog = ({
         ...headerSx,
       }}
       bodySx={{
-        px: { xs: 3, sm: 3.5 },
+        px: { xs: 4, sm: 5 },
         py: { xs: 2.5, sm: 3 },
         ...contentSx,
       }}
@@ -166,7 +166,7 @@ const PremiumDialog = ({
         '& [data-geek-dialog="title"]': { overflow: 'visible' },
         '& .MuiDialogTitle-root[data-geek-dialog="title"]': {
           alignItems: 'flex-start',
-          px: { xs: 3, sm: 3.5 },
+          px: { xs: 4, sm: 5 },
           pt: { xs: 3, sm: 3.5 },
           pb: { xs: 2, sm: 2.5 },
           borderBottom: mediumRule,
@@ -185,7 +185,7 @@ const PremiumDialog = ({
           gap: 1,
         },
         '& [data-geek-dialog="actions"]': {
-          px: { xs: 3, sm: 3.5 },
+          px: { xs: 4, sm: 5 },
           py: { xs: 2, sm: 2.5 },
           borderTop: thinRule,
           gap: 1,

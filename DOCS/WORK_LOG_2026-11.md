@@ -1094,3 +1094,58 @@ then "Give it your best shot. Do whatever you think will fix this app before I g
   telling newest first; "All coverage →" at the end of a story's "Also in" list. Gateway first, then the UI.
 - **Verified:** gateway NewsGeek suites 267, frontend 372, harness 220 scenes with a11y enforcing, 0 violations.
 
+
+## 2026-11-27/28: FitnessGeek overnight pass ("sexy, easy to use, reliable")
+
+Chef, heading to bed: "Just make it sexy, easy to use, and reliable. Review the entire fitnessgeek app... You
+have full permission to make decisions on my behalf." Then: "keep iterating until it would satisfy the largest
+number of consumers, especially my wife." Six agents by area, each owning disjoint files, integrated and gated
+centrally. Decisions here are Sage's.
+
+**Barcode scanner, rebuilt (its own commit).** Chef: scanning on iOS is "a trying experience".
+- One camera stream that we own (the old fallback opened a second, default one and threw ours away, so
+  resolution, camera choice and torch applied to nothing).
+- Native `BarcodeDetector` on Android; elsewhere `zxing-wasm` 3.1.6 (zxing-cpp), bundled, lazy, precached.
+  No CDN. `html5-qrcode` (unused) and the unpkg loader are gone.
+- Only the guide box is decoded; a read needs a valid check digit and the same value twice; codes fold to
+  12-digit UPC-A. iOS prefers the multi-lens rear camera (close focus). 1x/2x and light when the camera
+  offers them. "Take a photo instead" on both tabs. The camera stops when the page is hidden.
+- A failed barcode lookup is now an error, not "that barcode isn't in the food databases".
+- NOT yet tried on a phone. The checklist for both phones is in the commit and `ONE_APP_PLAN.md`.
+
+**Reliability.**
+- "Change today's target" wrote the wrong weekday in US time zones (UTC `getDay()`); fixed and tested under
+  `America/Chicago`. It also no longer flattens the week when the plan cannot be read.
+- Every GraphQL read and write has a 30s deadline ("That took too long. Try again.").
+- FatSecret, Open Food Facts barcode, RxNav and the profile calls have breakers or timeouts.
+- Failed reads no longer draw as empty: weight, blood pressure, saved meals and foods, the food report,
+  activity, every Health tab, household, the calorie plan, the weight goal.
+- Null or partial records no longer crash saved meals/foods, BP rows, household members.
+- The error boundary is per page (navigation stays), with Try again and Go to Today.
+- Double-tap guards on doses, plan save, first run, meal and food dialogs. Failed saves keep what was typed.
+- Custom foods: fiber, sugar and sodium were typed and silently dropped; now saved.
+
+**Easier.**
+- Calorie plan is four plain questions and "Your daily target is N calories", with the same maths. A person
+  with a plan sees the plan first. "Stay at this weight" is a choice. Details behind "Adjust the details".
+- Trends > Health: one compact day control, four pills (Overview, Sleep, Meals, Recovery), watch setup behind
+  a button; "InfluxDB" appears once, marked Advanced. No watch: one friendly card, on Activity too.
+- Weight and Blood pressure: entry first (no floating buttons), the number big, trend, then history.
+- Settings regrouped: How it looks, About you, Calorie plan, Household, Connected devices, Account.
+- Favourites show in the add sheet. Favourite and Remove sit under the food's name in Edit.
+- Login is a FitnessGeek card, not the suite splash.
+
+**Look.** The page follows the day (sky wash, sun or moon); meal pictures; the ring sweeps in; segmented
+toggles; Medications lost its leftover Label-era giant title and 6px padding; number tiles keep value and
+unit on one line; dialogs have 16px side padding; spacing redone on the 4px unit across forms.
+
+**Removed:** old dashboard cards, `WeightGoalWizard`, `ThumbFab`, `ModeSelector` (nothing imported them).
+
+**Found, not fixed (ranked):**
+1. A retry after a timeout can log twice: `addFoodLog`, `addBloodPressure`, `logMeal`, `copyFitnessMeal` have
+   no idempotency key (gateway work).
+2. A food search with every source down reads as "no results".
+3. `GET /meds/search` answers `200 []` when RxNav is down.
+4. Apollo's auth link can hang on a second 401 (shared `packages/api-client`).
+5. Recovery tips still include supplement advice (ashwagandha, magnesium); content, Chef's call.
+6. Activity distance is in km.

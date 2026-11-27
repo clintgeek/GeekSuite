@@ -1,319 +1,413 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Box, Typography, TextField, Button, CircularProgress, LinearProgress,
-  Stepper, Step, StepLabel, StepButton, FormControl, InputLabel, Select, MenuItem, Alert, InputAdornment
+  Alert, AlertTitle, Box, Button, CircularProgress, FormControl, InputLabel, MenuItem, Select, TextField, Typography,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
-import { useToast } from '@geeksuite/ui';
+import { Check as CheckIcon } from '@mui/icons-material';
+import { useInRouterContext } from 'react-router-dom';
+import { GeekErrorState, useToast } from '@geeksuite/ui';
+import { isPlanCalculationStale, localDateString } from '@geeksuite/utils';
 import { userService } from '../../services/userService.js';
 import { settingsService } from '../../services/settingsService.js';
 import { bodyCompService } from '../../services/bodyCompService.js';
-import { useAuth } from '@geeksuite/auth';
-import { isPlanCalculationStale } from '@geeksuite/utils';
-import ModeSelector from './ModeSelector';
-import KetoPlanStep from './KetoPlanStep';
-import { Page, Rule, Surface, Tag } from '../primitives';
-import { BmrSourceNote, MetabolismCard, PlanComparison, ProteinBasisNote, previewMacros } from './planProvenance.jsx';
-import { planTarget, weekenderHasRoom, weekenderSuggestion, MEASURED_ACTIVITY, usableMeasuredActivity } from './planMath.js';
-import { parseHeightToInches, buildCaloriePlan, nutritionGoalPayload } from './calorieCalc.js';
-import QuickTarget from './QuickTarget.jsx';
 import { influxService } from '../../services/influxService.js';
 import { weightService } from '../../services/weightService.js';
-import { localDateString } from '@geeksuite/utils';
 import { useExperience } from '../../contexts/ExperienceContext.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
+import { fmt } from '../../utils/plainWords.js';
 import { currentAverage } from '../Weight/weightTrend.js';
-import { fmt, macroLine } from '../../utils/plainWords.js';
+import { planBannerKind } from '../Dashboard/PlanAccuracyBanner.jsx';
+import { LabelBar, Page, Surface } from '../primitives';
+import KetoPlanStep from './KetoPlanStep';
+import HeightField from './HeightField.jsx';
+import QuickTarget, { BigChoice, DoneButton } from './QuickTarget.jsx';
+import { PlanComparison, previewMacros } from './planProvenance.jsx';
+import {
+  planTarget, weekenderSuggestion, MEASURED_ACTIVITY, RATE_OPTIONS, usableMeasuredActivity,
+} from './planMath.js';
+import { parseHeightToInches, buildCaloriePlan, nutritionGoalPayload } from './calorieCalc.js';
+import { Disclosure, PlanHeadline, PlanWorking } from './PlanResult.jsx';
 
-const lbAdornment = { endAdornment: <InputAdornment position="end">lb</InputAdornment> };
+/**
+ * The calorie plan (/calorie-wizard).
+ *
+ * A few plain questions, one at a time — what you weigh, where you want to
+ * get to, how fast, how active — then "Your daily target is N calories" and
+ * one Save. Everything a normal person would not know (how the week is
+ * spread, keto and its split, the numbers behind the target) sits behind a
+ * tap on the last screen.
+ *
+ * A person who already has a plan sees that plan first, with "Change plan".
+ *
+ * NOTHING HERE IS NEW MATHS. The answers go to `buildCaloriePlan` and the
+ * save is `nutritionGoalPayload` (calorieCalc.js), exactly as before; the
+ * questions are only asked more plainly and prefilled from what is already
+ * known (the 7-day average weight, the profile, the plan being replaced).
+ *
+ * `?quick=1` is the one-screen quick target (QuickTarget.jsx), unchanged.
+ */
+
+const SPEEDS = [
+  { rate: 0.5, title: 'Slowly', body: '½ lb a week' },
+  { rate: 1, title: 'Steady', body: '1 lb a week. Most people pick this.' },
+  { rate: 1.5, title: 'Faster', body: '1½ lb a week' },
+  { rate: 2, title: 'Fast', body: '2 lb a week' },
+  { rate: 2.5, title: 'Very fast', body: '2½ lb a week. Hard to keep up.' },
+];
+
+const ACTIVITY = [
+  { id: 'sedentary', title: 'Mostly sitting', body: 'A desk job, little or no exercise' },
+  { id: 'light', title: 'Lightly active', body: 'Light exercise 1–3 days a week' },
+  { id: 'moderate', title: 'Active', body: 'Exercise 3–5 days a week' },
+  { id: 'very', title: 'Very active', body: 'Hard exercise 6–7 days a week' },
+  { id: 'extra', title: 'Extra active', body: 'Very hard exercise or a physical job' },
+];
+
+const PLAN_TYPES = [
+  { id: 'standard', title: 'The same every day' },
+  { id: 'weekender', title: 'More on Friday and Saturday', body: 'A little less on the other days' },
+  { id: 'auto', title: 'Make up for a day I go over', body: 'The rest of the week adjusts' },
+];
+
+const SEXES = [
+  { value: 'female', label: 'Female' },
+  { value: 'male', label: 'Male' },
+  { value: 'other', label: 'Other' },
+  { value: 'prefer-not-to-say', label: 'Rather not say' },
+];
+
+const DEFAULT_KETO = {
+  net_carb_limit_g: 20,
+  track_net_carbs: true,
+  macro_split: { preset: 'classic', fat_pct: 70, protein_pct: 25, carb_pct: 5 },
+};
+
+const plausibleAge = (v) => Number(v) >= 13 && Number(v) <= 110;
+const plausibleWeight = (v) => Number(v) >= 60 && Number(v) <= 700;
+const round1 = (n) => Math.round(Number(n) * 10) / 10;
+
+/** A saved rate as one of the offered speeds: the next one up, so a rate the
+ * safety floor slowed down (1.7) goes back to what was asked for (2). */
+const offeredRate = (rate) => {
+  const r = Number(rate);
+  if (!(r > 0)) return 1;
+  return RATE_OPTIONS.find((o) => o >= r) ?? RATE_OPTIONS[RATE_OPTIONS.length - 1];
+};
+
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const daysFromSchedule = (schedule) => (
+  Array.isArray(schedule) && schedule.length === 7
+    ? DAYS.map((day, i) => ({ day, calories: Math.round(schedule[i] || 0) }))
+    : DAYS.map((day) => ({ day, calories: 0 }))
+);
+
+/**
+ * The stored `nutrition_goal` in the shape `buildCaloriePlan` returns, so
+ * the saved plan and a new one are drawn by the same code.
+ *
+ * A saved plan carries what you burn in a day and its floor, so whether it
+ * was held up by the floor — and the rate it really delivers — can be
+ * recomputed for display. Plans saved before 2026-09-23 stored the REQUESTED
+ * rate even when the floor made it unreachable.
+ */
+export function planFromSaved(ng, { fallbackWeight = 0 } = {}) {
+  if (!ng) return null;
+  const savedTarget = Number(ng.tdee) > 0 && Number(ng.min_safe_calories) > 0 && Number(ng.weight_change_rate) > 0
+    ? planTarget({ tdee: Number(ng.tdee), requestedRate: ng.weight_change_rate, minSafe: Number(ng.min_safe_calories) })
+    : null;
+  const bmr = Math.round(ng.bmr || 0);
+  return {
+    currentWeight: ng.start_weight || Number(fallbackWeight) || 0,
+    targetWeight: Number(ng.target_weight) > 0 ? Number(ng.target_weight) : null,
+    weightToLose: ng.start_weight && ng.target_weight ? Math.abs(ng.start_weight - ng.target_weight) : 0,
+    bmr,
+    bmrSource: ng.bmr_source === 'scan' ? 'scan' : 'mifflin',
+    leanMassLb: ng.lean_mass_lb ?? null,
+    bmrScans: null,
+    tdee: Math.round(ng.tdee || 0),
+    dailyCalories: Math.round(ng.daily_calorie_target || 0),
+    weeklyDeficit: Math.round((ng.weight_change_rate || 0) * 500),
+    timeline: ng.timeline_weeks || 0,
+    activityLevel: ng.activity_level || 'sedentary',
+    weightChangeRate: savedTarget ? savedTarget.effectiveRate : (ng.weight_change_rate || 0),
+    requestedRate: ng.weight_change_rate || 0,
+    floored: Boolean(savedTarget?.floored),
+    planType: ng.plan_type || 'standard',
+    schedule: daysFromSchedule(ng.weekly_schedule),
+    weekenderSuggestion: savedTarget && ng.plan_type === 'weekender'
+      ? weekenderSuggestion({ tdee: ng.tdee, minSafe: ng.min_safe_calories, currentRate: savedTarget.effectiveRate })
+      : null,
+    rules: {
+      minSafeCalories: ng.min_safe_calories || 1200,
+      capPercent: 20,
+      // A saved plan always had a real calories-at-rest figure at save time.
+      calculationValid: bmr > 0,
+      autoAdjust: ng.plan_type === 'auto',
+    },
+  };
+}
+
+/** The settings read. A failed read is a failure, never "no plan". */
+async function readSettings() {
+  try {
+    const resp = await settingsService.getSettings();
+    const data = resp?.data || resp;
+    if (!data || typeof data !== 'object') throw new Error('No settings in the response');
+    const ng = data.nutrition_goal;
+    const wg = data.weight_goal;
+    const wgTarget = Number(wg?.targetWeight);
+    return {
+      ok: true,
+      savedGoal: ng && ng.enabled ? ng : null,
+      // The weight goal's target, used to prefill "goal weight".
+      weightGoalTarget: wg && (wg.enabled || wg.is_active) && wgTarget > 0 ? wgTarget : null,
+    };
+  } catch (error) {
+    return { ok: false, message: errorMessage(error, 'Couldn’t load your plan. Try again.') };
+  }
+}
+
+/**
+ * Everything the questions are prefilled from. No part of it is fatal: a
+ * piece that can't be had is simply asked for (or, for the watch and the
+ * scale, not offered).
+ */
+async function readDetails() {
+  const [profile, latestWeight, averageWeight, scan, measuredActivity] = await Promise.all([
+    userService.getProfile().then((data) => ({ ok: true, data }), () => ({ ok: false, data: null })),
+    Promise.resolve().then(() => userService.getLatestWeight()).catch(() => null),
+    // The 7-day average the Weight page shows, by the SAME helper over the
+    // same logs, so "to lose" here and "to go" there can't drift apart (D-3).
+    Promise.resolve().then(() => weightService.getWeightLogs()).then((response) => {
+      const mean = Number(currentAverage(Array.isArray(response?.data) ? response.data : []));
+      return Number.isFinite(mean) && mean > 0 ? mean : null;
+    }).catch(() => null),
+    // The body-scan figure. `source === 'scan'` means the server found a
+    // usable lean mass (a 14-day mean, latest scan ≤ 30 days old).
+    Promise.resolve().then(() => bodyCompService.getSummary()).then(
+      (resp) => ({ bmr: (resp?.data ?? resp)?.bmr || null, failed: false }),
+      () => ({ bmr: null, failed: true }),
+    ),
+    // Not announced when missing: without a watch the option isn't offered.
+    Promise.resolve().then(() => influxService.getTrends({ days: 30, end: localDateString() }))
+      .then((trends) => usableMeasuredActivity(trends?.activeKcal30))
+      .catch(() => null),
+  ]);
+  return { profile, latestWeight, averageWeight, scan, measuredActivity };
+}
+
+function StepFrame({ step, total, title, hint, headingRef, children, onBack, onNext, canNext, nextLabel = 'Next' }) {
+  return (
+    <Surface
+      component="form"
+      noValidate
+      data-testid="plan-step"
+      data-step={step}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (canNext) onNext();
+      }}
+      sx={{ display: 'flex', flexDirection: 'column', gap: 5 }}
+    >
+      <Box>
+        <Typography sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.875rem' }}>
+          {`Step ${step} of ${total}`}
+        </Typography>
+        <LabelBar value={(step / total) * 100} label={`Step ${step} of ${total}`} height={6} sx={{ mt: 2, mb: 0 }} />
+      </Box>
+      <Box>
+        <Typography
+          component="h2"
+          ref={headingRef}
+          tabIndex={-1}
+          sx={{ fontSize: '1.5rem', fontWeight: 700, lineHeight: 1.25, letterSpacing: '-0.01em', outline: 'none' }}
+        >
+          {title}
+        </Typography>
+        {hint && <Typography sx={{ color: 'text.secondary', fontSize: '1rem', mt: 1 }}>{hint}</Typography>}
+      </Box>
+      {children}
+      <Box sx={{ display: 'flex', gap: 3, justifyContent: { sm: 'flex-end' } }}>
+        {onBack && (
+          <Button type="button" variant="tonal" size="large" onClick={onBack} sx={{ minHeight: 48, flex: { xs: 1, sm: 'none' }, minWidth: { sm: 112 } }}>
+            Back
+          </Button>
+        )}
+        <Button type="submit" variant="contained" size="large" disabled={!canNext} sx={{ minHeight: 48, flex: { xs: 2, sm: 'none' }, minWidth: { sm: 160 } }}>
+          {nextLabel}
+        </Button>
+      </Box>
+    </Surface>
+  );
+}
+
+const Choices = ({ labelledBy, label, children }) => (
+  <Box role="radiogroup" aria-labelledby={labelledBy} aria-label={label} sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+    {children}
+  </Box>
+);
 
 const CalorieGoalWizard = () => {
-  const { user } = useAuth();
-  const theme = useTheme();
   const { notify } = useToast();
-  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
-  // True when the saved plan predates the BMR unit fix. See loadExistingGoal.
-  const [planStale, setPlanStale] = useState(false);
-  const [activeStep, setActiveStep] = useState(0);
-  const [mode, setMode] = useState('standard');
-  const [ketoConfig, setKetoConfig] = useState({
-    net_carb_limit_g: 20,
-    track_net_carbs: true,
-    macro_split: { preset: 'classic', fat_pct: 70, protein_pct: 25, carb_pct: 5 }
-  });
-
-  // User profile data
-  const [profile, setProfile] = useState({
-    age: '',
-    weight: '',
-    height: '',
-    gender: '',
-    activityLevel: 'sedentary',
-    currentFitnessLevel: 'beginner'
-  });
-
-  // Goal data
-  const [goal, setGoal] = useState({
-    targetWeight: '',
-    weightChangeRate: '1', // lbs per week
-    planType: 'standard',
-    timeline: '',
-    dailyCalories: 0,
-    weeklyDeficit: 0
-  });
-
-  // Results
-  const [plan, setPlan] = useState(null);
-  const [hasExistingGoal, setHasExistingGoal] = useState(false);
-  // The stored nutrition_goal, kept apart from `plan` so a re-run can show
-  // saved-vs-new before anything is overwritten (plan D2), and so macro
-  // previews merge the fields the save leaves untouched — the settings
-  // mutation MERGES into nutrition_goal, it does not replace it.
-  const [savedGoal, setSavedGoal] = useState(null);
-  const [weightGoalTarget, setWeightGoalTarget] = useState(null);
-  const [goalLoaded, setGoalLoaded] = useState(false);
-
-  // The body-scan BMR summary (`bodyCompositionSummary.bmr`). `source ===
-  // 'scan'` means the server found a usable lean mass: a 14-day mean, latest
-  // scan ≤ 30 days old (plan D1). Anything else — no scans, stale scans, a
-  // failed fetch — means Mifflin-St Jeor, and the card says so.
-  const [scanBmr, setScanBmr] = useState(null);
-  const [scanLoadFailed, setScanLoadFailed] = useState(false);
-  // Garmin's measured active kcal (30-day mean) — offered in place of a
-  // guessed activity multiplier when enough days exist (planMath.js).
-  const [measuredActivity, setMeasuredActivity] = useState(null);
-  const usableLeanMassLb = scanBmr?.source === 'scan' && Number(scanBmr?.lean_mass_lb) > 0
-    ? Number(scanBmr.lean_mass_lb)
-    : null;
-
-  // Set only when a filled-in height fails every format parseHeightToInches
-  // knows about. Distinct from "field is empty" (which just disables the
-  // Next/Calculate buttons via the existing required-field check).
-  const [heightError, setHeightError] = useState(false);
-  // Where the prefilled weight came from: 'average' (7-day), 'latest', or null.
-  const [weightBasis, setWeightBasis] = useState(null);
-
-  // The one-screen quick target (IA-1, L8), when a link says ?quick=1. Read
-  // from window.location rather than the router so the wizard still mounts on
-  // its own in a test. Without the flag it is the four-step wizard.
+  const inRouter = useInRouterContext();
   const { goal: experienceGoal } = useExperience();
-  const [quickFlag] = useState(() => {
+
+  // The one-screen quick target, when a link says ?quick=1. Read from
+  // window.location rather than the router so this still mounts on its own
+  // in a test.
+  const [quick] = useState(() => {
     try {
       return new URLSearchParams(window.location.search).get('quick') === '1';
     } catch {
       return false;
     }
   });
-  const quick = quickFlag;
 
-  // Load user profile and any existing saved goal on mount
-  useEffect(() => {
-    loadUserProfile();
-    loadExistingGoal();
+  const [status, setStatus] = useState('loading'); // 'loading' | 'error' | 'ready'
+  const [loadError, setLoadError] = useState(null);
+  // The stored nutrition_goal (enabled), kept apart from the answers so a
+  // re-run shows saved-vs-new before anything is overwritten, and so macro
+  // previews merge the fields a save leaves untouched (the settings write
+  // MERGES into nutrition_goal).
+  const [savedGoal, setSavedGoal] = useState(null);
+  const [weightGoalTarget, setWeightGoalTarget] = useState(null);
+  const [details, setDetails] = useState(null);
+
+  const [stage, setStage] = useState('steps'); // 'summary' | 'steps' | 'result'
+  const [stepIndex, setStepIndex] = useState(0);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [form, setForm] = useState({
+    weight: '', height: '', age: '', gender: '', activityLevel: 'sedentary',
+    targetWeight: '', rate: 1, maintain: false, planType: 'standard',
+  });
+  const [mode, setMode] = useState('standard');
+  const [ketoConfig, setKetoConfig] = useState(DEFAULT_KETO);
+
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [justSaved, setJustSaved] = useState(false);
+  const [removal, setRemoval] = useState('idle'); // 'idle' | 'confirm' | 'busy'
+  const [removeError, setRemoveError] = useState(null);
+
+  const set = (patch) => setForm((prev) => ({ ...prev, ...patch }));
+
+  const load = useCallback(async () => {
+    setStatus('loading');
+    setLoadError(null);
+    const [settings, next] = await Promise.all([readSettings(), readDetails()]);
+    if (!settings.ok) {
+      setLoadError(settings.message);
+      setStatus('error');
+      return;
+    }
+    const ng = settings.savedGoal;
+    const profile = next.profile.data?.profile || {};
+    // The 7-day average is the plan's starting weight; the latest weigh-in
+    // is the fallback.
+    const startWeight = next.averageWeight || next.latestWeight || null;
+    const weight = startWeight ? String(round1(startWeight)) : '';
+    const measured = next.measuredActivity;
+    const savedActivity = ng?.activity_level;
+    const activityLevel = savedActivity === MEASURED_ACTIVITY
+      ? (measured ? MEASURED_ACTIVITY : 'sedentary')
+      : (ACTIVITY.some((a) => a.id === savedActivity) ? savedActivity : 'sedentary');
+    // The goal she has, unless she is already at or past it.
+    const savedTarget = [ng?.target_weight, settings.weightGoalTarget].map(Number).find((t) => t > 0);
+    const targetWeight = savedTarget && (!plausibleWeight(weight) || savedTarget < Number(weight)) ? String(round1(savedTarget)) : '';
+
+    setSavedGoal(ng);
+    setWeightGoalTarget(settings.weightGoalTarget);
+    setDetails({
+      // Unrounded, as the quick target has always been handed it.
+      weightRaw: startWeight ? String(startWeight) : '',
+      weightBasis: next.averageWeight ? 'average' : (next.latestWeight ? 'latest' : null),
+      profileLoaded: next.profile.ok,
+      profile: { age: profile.age || '', height: profile.height || '', gender: profile.gender || '' },
+      // What the profile already holds: these are shown, not asked.
+      known: {
+        height: parseHeightToInches(profile.height) !== null,
+        age: plausibleAge(profile.age),
+        gender: Boolean(profile.gender),
+      },
+      scanBmr: next.scan.bmr,
+      scanLoadFailed: next.scan.failed,
+      measuredActivity: measured,
+    });
+    setForm({
+      weight,
+      height: profile.height || '',
+      age: profile.age ? String(profile.age) : '',
+      gender: profile.gender || '',
+      activityLevel,
+      targetWeight,
+      rate: offeredRate(ng?.weight_change_rate),
+      maintain: ng ? (ng.weight_change_rate != null && Number(ng.weight_change_rate) === 0) : experienceGoal === 'maintain',
+      planType: PLAN_TYPES.some((p) => p.id === ng?.plan_type) ? ng.plan_type : 'standard',
+    });
+    setMode(ng?.mode === 'keto' ? 'keto' : 'standard');
+    setKetoConfig(ng?.keto || DEFAULT_KETO);
+    // A plan with no target in it is nothing to show: ask instead.
+    setStage(ng && Number(ng.daily_calorie_target) > 0 ? 'summary' : 'steps');
+    setStepIndex(0);
+    setStatus('ready');
+    // The experience goal only seeds the first answer; a later change to it
+    // must not reload the page under the person.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const buildDaysFromSchedule = (scheduleArray) => {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    if (!Array.isArray(scheduleArray) || scheduleArray.length !== 7) {
-      return days.map((d) => ({ day: d, calories: 0 }));
-    }
-    return days.map((d, i) => ({ day: d, calories: Math.round(scheduleArray[i] || 0) }));
+  useEffect(() => { load(); }, [load]);
+
+  /** The stored plan again, without a spinner (after the quick target saves). */
+  const refreshSaved = async () => {
+    const settings = await readSettings();
+    if (!settings.ok) return;
+    setSavedGoal(settings.savedGoal);
+    setWeightGoalTarget(settings.weightGoalTarget);
   };
 
-  const loadExistingGoal = async () => {
-    try {
-      const resp = await settingsService.getSettings();
-      const data = resp?.data || resp?.data?.data || resp;
-      const ng = data?.nutrition_goal;
-      // A plan saved before 2026-09-20 was built with the pounds-and-inches
-      // BMR bug and is up to 45% too high. Its inputs were never persisted,
-      // so it cannot be silently recomputed — the only honest handling is to
-      // say so and let the user re-enter three fields.
-      setPlanStale(isPlanCalculationStale(ng));
-      // The weight goal's target, for the quick target's save (it asks how
-      // fast, not where to).
-      const wg = data?.weight_goal;
-      const wgTarget = Number(wg?.targetWeight);
-      setWeightGoalTarget(wg && (wg.enabled || wg.is_active) && wgTarget > 0 ? wgTarget : null);
-      setSavedGoal(ng && ng.enabled ? ng : null);
-      if (ng && ng.enabled) {
-        const computedWeeklyDeficit = (ng.weight_change_rate || 0) * 500;
-        const scheduleDays = buildDaysFromSchedule(ng.weekly_schedule);
-        // A saved plan carries its TDEE and floor, so whether it was clamped
-        // to the floor — and the rate it really delivers — can be recomputed
-        // for display. Plans saved before 2026-09-23 stored the REQUESTED rate
-        // even when the floor made it unreachable.
-        const savedTarget = Number(ng.tdee) > 0 && Number(ng.min_safe_calories) > 0 && Number(ng.weight_change_rate) > 0
-          ? planTarget({ tdee: Number(ng.tdee), requestedRate: ng.weight_change_rate, minSafe: Number(ng.min_safe_calories) })
-          : null;
-        const derivedPlan = {
-          currentWeight: ng.start_weight || parseFloat(profile.weight) || 0,
-          targetWeight: ng.target_weight || 0,
-          weightToLose: ng.start_weight && ng.target_weight ? Math.abs(ng.start_weight - ng.target_weight) : 0,
-          bmr: Math.round(ng.bmr || 0),
-          bmrSource: ng.bmr_source === 'scan' ? 'scan' : 'mifflin',
-          leanMassLb: ng.lean_mass_lb ?? null,
-          bmrScans: null,
-          tdee: Math.round(ng.tdee || 0),
-          dailyCalories: Math.round(ng.daily_calorie_target || 0),
-          weeklyDeficit: Math.round(computedWeeklyDeficit || 0),
-          timeline: ng.timeline_weeks || 0,
-          activityLevel: ng.activity_level || profile.activityLevel,
-          weightChangeRate: savedTarget ? savedTarget.effectiveRate : (ng.weight_change_rate || 0),
-          requestedRate: ng.weight_change_rate || 0,
-          floored: Boolean(savedTarget?.floored),
-          planType: ng.plan_type || 'standard',
-          schedule: scheduleDays,
-          weekenderSuggestion: savedTarget && ng.plan_type === 'weekender'
-            ? weekenderSuggestion({ tdee: ng.tdee, minSafe: ng.min_safe_calories, currentRate: savedTarget.effectiveRate })
-            : null,
-          rules: {
-            minSafeCalories: ng.min_safe_calories || 1200,
-            capPercent: 20,
-            // A previously-saved goal always had a real BMR at save time
-            // (the Step 1 gate and calculateCaloriePlan's guard both saw to
-            // that) — this just keeps the Safety Check card consistent for
-            // goals loaded back from settings rather than freshly computed.
-            calculationValid: Math.round(ng.bmr || 0) > 0,
-            autoAdjust: (ng.plan_type === 'auto')
-          }
-        };
-        setPlan(derivedPlan);
-        setHasExistingGoal(true);
-        setActiveStep(3);
-        if (ng.mode) setMode(ng.mode);
-        if (ng.keto) setKetoConfig(ng.keto);
-      }
-    } catch {
-      // no-op
-    } finally {
-      setGoalLoaded(true);
-    }
-  };
+  const scanBmr = details?.scanBmr || null;
+  const measuredActivity = details?.measuredActivity || null;
+  const usableLeanMassLb = scanBmr?.source === 'scan' && Number(scanBmr?.lean_mass_lb) > 0
+    ? Number(scanBmr.lean_mass_lb)
+    : null;
 
-  const loadUserProfile = async () => {
-    try {
-      setIsLoadingProfile(true);
+  // ── The answers, and whether each step has what it needs ────────────────
+  const heightOk = parseHeightToInches(form.height) !== null;
+  const youOk = plausibleWeight(form.weight) && heightOk && plausibleAge(form.age) && Boolean(form.gender);
+  const targetTyped = String(form.targetWeight).trim() !== '';
+  const targetOk = plausibleWeight(form.targetWeight) && (!plausibleWeight(form.weight) || Number(form.targetWeight) < Number(form.weight));
+  const goalOk = form.maintain || targetOk;
+  const stepIds = form.maintain ? ['you', 'goal', 'activity'] : ['you', 'goal', 'speed', 'activity'];
+  const stepId = stepIds[Math.min(stepIndex, stepIds.length - 1)];
 
-      // Profile (baseGeek), latest weight (fitnessGeek) and the body-scan
-      // BMR in parallel. The profile step's spinner covers all three, so a
-      // plan can't be calculated before we know whether a scan exists.
-      const [userData, latestWeight, averageWeight] = await Promise.all([
-        userService.getProfile(),
-        userService.getLatestWeight(),
-        loadAverageWeight(),
-        loadScanBmr(),
-        loadMeasuredActivity(),
-      ]);
+  // The plan these answers make — the wizard's own arithmetic, recomputed as
+  // an answer changes so the last screen's details can be adjusted in place.
+  const draft = useMemo(() => {
+    if (!youOk || !goalOk) return null;
+    const next = buildCaloriePlan({
+      profile: { age: form.age, weight: form.weight, height: form.height, gender: form.gender, activityLevel: form.activityLevel },
+      goal: {
+        targetWeight: form.maintain ? '' : form.targetWeight,
+        weightChangeRate: form.maintain ? 0 : form.rate,
+        planType: form.planType,
+      },
+      usableLeanMassLb,
+      scanBmr,
+      measuredActivity,
+    });
+    // Never a plan built on a height that couldn't be read.
+    return next.heightError || !(next.dailyCalories > 0) ? null : next;
+  }, [youOk, goalOk, form, usableLeanMassLb, scanBmr, measuredActivity]);
 
-      // The 7-day average is the plan's starting weight — the same basis as
-      // the weight goal card's "to go" (D-3). Before, this was the single
-      // latest weigh-in, and the wizard's "lb to lose" and the card's "to go"
-      // disagreed by more than a pound. The latest reading is the fallback.
-      const startWeight = averageWeight || latestWeight;
-      setWeightBasis(averageWeight ? 'average' : (latestWeight ? 'latest' : null));
-      setProfile({
-        age: userData?.profile?.age || '',
-        height: userData?.profile?.height || '',
-        gender: userData?.profile?.gender || '',
-        weight: startWeight ? startWeight.toString() : '',
-        activityLevel: 'sedentary',
-        currentFitnessLevel: 'beginner'
-      });
-    } catch (error) {
-      console.error('Failed to load user profile:', error);
-    } finally {
-      setIsLoadingProfile(false);
-    }
-  };
+  const savedPlan = useMemo(
+    () => planFromSaved(savedGoal, { fallbackWeight: form.weight }),
+    // The fallback weight only matters for a plan saved without one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [savedGoal],
+  );
+  const savedMode = savedGoal?.mode === 'keto' ? 'keto' : 'standard';
 
-  // The 7-day average the weight goal card shows, computed by the SAME helper
-  // (weightTrend.currentAverage) over the same logs, so the wizard's "to lose"
-  // and the card's "to go" can't drift apart (review D-3). Null when it can't
-  // be had.
-  const loadAverageWeight = async () => {
-    try {
-      const response = await weightService.getWeightLogs();
-      const mean = Number(currentAverage(Array.isArray(response?.data) ? response.data : []));
-      return Number.isFinite(mean) && mean > 0 ? mean : null;
-    } catch {
-      return null;
-    }
-  };
-
-  // Not fatal and not announced: without Garmin/Influx the option simply
-  // isn't offered (a user without the integration gets a 403 here).
-  const loadMeasuredActivity = async () => {
-    try {
-      const trends = await influxService.getTrends({ days: 30, end: localDateString() });
-      setMeasuredActivity(usableMeasuredActivity(trends?.activeKcal30));
-    } catch {
-      setMeasuredActivity(null);
-    }
-  };
-
-  const loadScanBmr = async () => {
-    try {
-      const resp = await bodyCompService.getSummary();
-      const summary = resp?.data ?? resp;
-      setScanBmr(summary?.bmr || null);
-      setScanLoadFailed(false);
-    } catch (error) {
-      // Not fatal: Mifflin-St Jeor is the fallback, and the metabolism card
-      // names it (and says the scans couldn't be loaded).
-      console.error('Failed to load body scans:', error);
-      setScanBmr(null);
-      setScanLoadFailed(true);
-    }
-  };
-
-  // The plan arithmetic lives in calorieCalc.js (pure, shared with the
-  // quick target): Mifflin-St Jeor or Katch-McArdle, TDEE, the safety floor
-  // and the rate the floor really delivers.
-  const calculateCaloriePlan = () => {
-    const next = buildCaloriePlan({ profile, goal, usableLeanMassLb, scanBmr, measuredActivity });
-
-    // Belt-and-suspenders: the Step 1 "Next" button is gated on a parseable
-    // height, so in practice this branch shouldn't be reachable from the UI.
-    // But a null/0 height used to become a BMR of 0, then a "Safe" plan — so
-    // it gets its own guard rather than trusting the earlier gate.
-    if (next.heightError) {
-      setHeightError(true);
-      return;
-    }
-    setHeightError(false);
-
-    setGoal(prev => ({
-      ...prev,
-      dailyCalories: next.dailyCalories,
-      weeklyDeficit: next.weeklyDeficit,
-      timeline: next.timeline
-    }));
-
-    setPlan(next);
-    setActiveStep(3);
-  };
-
-  const handleSaveProfile = async () => {
-    try {
-      const profileUpdates = {};
-      if (profile.age && !user.profile?.age) profileUpdates.age = profile.age;
-      if (profile.height && !user.profile?.height) profileUpdates.height = profile.height;
-      if (profile.gender && !user.profile?.gender) profileUpdates.gender = profile.gender;
-
-      if (Object.keys(profileUpdates).length > 0) {
-        await userService.updateProfile(profileUpdates);
-        notify('Profile saved', { tone: 'success' });
-      }
-    } catch (error) {
-      console.error('Failed to update profile:', error);
-      notify(errorMessage(error, 'Couldn’t save your profile. Try again.'), { tone: 'error' });
-    }
-  };
-
-  // What the user has saved today, for the old-vs-new comparison. Null when
-  // there is no saved plan, so a first-time run shows no comparison.
+  // What is saved today, for the old-vs-new comparison. Null when there is
+  // no saved plan, so a first plan shows no comparison.
   const savedSnapshot = savedGoal && Number(savedGoal.daily_calorie_target) > 0
     ? {
       dailyCalories: Math.round(savedGoal.daily_calorie_target),
@@ -323,705 +417,454 @@ const CalorieGoalWizard = () => {
     }
     : null;
 
-  // Standard-mode macro grams at the base daily target, as derivedMacros
-  // will serve them after this plan is saved (fixed/weekly use the same
-  // rules; weekender days differ only in carbs).
-  const standardMacroPreview = plan && mode !== 'keto' && plan.dailyCalories > 0
-    ? previewMacros(
-      hasExistingGoal
-        ? { ...(savedGoal || {}), mode: 'standard' }
-        : { ...(savedGoal || {}), mode: 'standard', target_weight: plan.targetWeight, goal_weight_lbs: plan.targetWeight },
-      { leanMassLb: usableLeanMassLb, calories: plan.dailyCalories }
-    )
+  // Protein, carbs and fat as they will be served once this plan is saved:
+  // the same two functions the server runs, so the preview can't disagree.
+  const draftTargetFields = draft && Number.isFinite(draft.targetWeight)
+    ? { target_weight: draft.targetWeight, goal_weight_lbs: draft.targetWeight }
+    : {};
+  const draftMacros = draft && mode !== 'keto'
+    ? previewMacros({ ...(savedGoal || {}), mode: 'standard', ...draftTargetFields }, { leanMassLb: usableLeanMassLb, calories: draft.dailyCalories })
     : null;
+  const savedMacros = savedPlan && savedMode !== 'keto' && savedPlan.dailyCalories > 0
+    ? previewMacros({ ...savedGoal, mode: 'standard' }, { leanMassLb: usableLeanMassLb, calories: savedPlan.dailyCalories })
+    : null;
+  const draftEnd = useMemo(() => {
+    if (!draft || !(draft.timeline > 0) || !Number.isFinite(draft.targetWeight)) return null;
+    const end = new Date();
+    end.setDate(end.getDate() + draft.timeline * 7);
+    return end;
+  }, [draft]);
 
-  // Short, so the four labels fit on a phone without wrapping a word a line.
-  const steps = ['Approach', 'About you', 'Goal', 'Plan'];
+  // Each screen moves focus to its heading, so a screen reader hears the
+  // question (and a phone shows it from the top).
+  const headingRef = useRef(null);
+  const drawn = useRef(false);
+  useEffect(() => {
+    if (status !== 'ready') return;
+    if (!drawn.current) { drawn.current = true; return; }
+    headingRef.current?.focus?.();
+  }, [status, stage, stepId]);
+
+  const startOver = () => {
+    setJustSaved(false);
+    setSaveError(null);
+    setRemoval('idle');
+    setRemoveError(null);
+    setStepIndex(0);
+    setStage('steps');
+  };
+
+  /** The one-tap fix: today's details and the saved answers, straight to the
+   * new target (old and new side by side, one Save). */
+  const reworkFromSaved = () => {
+    setJustSaved(false);
+    setSaveError(null);
+    if (draft) {
+      setStage('result');
+      return;
+    }
+    setStepIndex(youOk ? 1 : 0);
+    setStage('steps');
+  };
+
+  const nextStep = () => {
+    if (stepIndex >= stepIds.length - 1) setStage('result');
+    else setStepIndex(stepIndex + 1);
+  };
+  const backStep = () => setStepIndex(Math.max(0, stepIndex - 1));
+
+  const save = async () => {
+    if (!draft || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    const payload = nutritionGoalPayload(draft, { mode, keto: mode === 'keto' ? ketoConfig : undefined });
+    try {
+      await settingsService.updateSettings({ nutrition_goal: payload });
+    } catch (error) {
+      // Said where she is looking, and nothing she answered is lost.
+      const message = errorMessage(error, 'Couldn’t save your plan. Try again.');
+      setSaveError(message);
+      notify(message, { tone: 'error' });
+      setSaving(false);
+      return;
+    }
+    // What she had to type is kept on her profile, so she isn't asked again.
+    // Only what was missing, and never a reason to fail the save she asked for.
+    if (details?.profileLoaded) {
+      const updates = {};
+      if (!details.known.age && plausibleAge(form.age)) updates.age = Number(form.age);
+      if (!details.known.height && heightOk) updates.height = form.height;
+      if (!details.known.gender && form.gender) updates.gender = form.gender;
+      if (Object.keys(updates).length > 0) {
+        try { await userService.updateProfile(updates); } catch { /* the plan is what she asked for */ }
+      }
+    }
+    // The write merges, so what is stored is the old goal with this over it.
+    // Shown from that rather than a re-read: a read that came back a moment
+    // stale would put the old plan (and its warning) back on screen.
+    setSavedGoal((prev) => ({ ...(prev || {}), ...payload }));
+    setSaving(false);
+    setJustSaved(true);
+    setStage('summary');
+    notify(`Plan saved. Your target is now ${fmt(draft.dailyCalories)} calories a day`, { tone: 'success' });
+  };
+
+  const removePlan = async () => {
+    if (removal === 'busy') return;
+    setRemoval('busy');
+    setRemoveError(null);
+    try {
+      await settingsService.updateSettings({ nutrition_goal: { enabled: false } });
+    } catch (error) {
+      const message = errorMessage(error, 'Couldn’t remove your plan. Try again.');
+      setRemoveError(message);
+      notify(message, { tone: 'error' });
+      setRemoval('confirm');
+      return;
+    }
+    setSavedGoal(null);
+    setRemoval('idle');
+    setJustSaved(false);
+    setStepIndex(0);
+    setStage('steps');
+    notify('Plan removed', { tone: 'success' });
+  };
+
+  if (status === 'error') {
+    return (
+      <Page narrow>
+        <Surface>
+          <GeekErrorState title="Couldn’t load your plan" description={loadError || 'Couldn’t load your plan. Try again.'} onRetry={load} />
+        </Surface>
+      </Page>
+    );
+  }
 
   if (quick) {
     return (
       <QuickTarget
-        loading={isLoadingProfile || !goalLoaded}
-        initialProfile={profile}
-        weightBasis={weightBasis}
+        loading={status !== 'ready'}
+        initialProfile={{ ...(details?.profile || {}), weight: details?.weightRaw || '' }}
+        weightBasis={details?.weightBasis || null}
         maintain={experienceGoal === 'maintain'}
         targetWeight={weightGoalTarget ?? (Number(savedGoal?.target_weight) > 0 ? Number(savedGoal.target_weight) : null)}
         currentTarget={Number(savedGoal?.daily_calorie_target) > 0 ? Math.round(savedGoal.daily_calorie_target) : null}
         usableLeanMassLb={usableLeanMassLb}
         scanBmr={scanBmr}
-        scanLoadFailed={scanLoadFailed}
-        onSaved={loadExistingGoal}
+        scanLoadFailed={Boolean(details?.scanLoadFailed)}
+        onSaved={refreshSaved}
       />
     );
   }
 
-  return (
-    // No extra paper column on a phone (visual review C4): the page sits on
-    // the cream with the app's own gutter, its cards straight on it.
-    // The phone gutter the quick target and every other page keep (UX review
-    // 2026-11, A6): at xs: 0 the cards and "Step 4 of 4" ran to the screen edge.
-    <Page narrow>
-      {/* Header */}
-      <Box>
-        <Typography component="h1" variant="h4" sx={{ mb: 0.5 }}>Calorie plan</Typography>
-        <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-          Tell me your goal and I’ll work out how much to eat each day.
-        </Typography>
+  if (status !== 'ready') {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 16 }}>
+        <CircularProgress aria-label="Loading your plan" />
       </Box>
+    );
+  }
 
-      {/* Stepper (hide when showing existing goal summary). Steps the user has
-          already completed are clickable so Step 1 (and beyond) has a way
-          back to Step 0 — previously the only exits from Step 1 were "Save
-          Profile" and "Next", with no way to revisit the standard-vs-keto
-          choice short of abandoning the wizard. Steps ahead of activeStep
-          stay inert: clicking forward would skip the required-field checks
-          each step guards. */}
-      {/* A plan saved before 2026-09-20 was computed by feeding pounds and
-          inches to a formula that wants kilograms and centimetres, so its
-          calorie target is 11-45% too high — worse the heavier the person.
-          The planner of that era saved only its outputs, so there is nothing
-          to recompute FROM: this cannot be repaired silently, and leaving it
-          unmentioned would mean someone eating to a maintenance number while
-          the app calls them compliant. Hence a plain warning that survives
-          until the plan is re-saved, rather than a toast. */}
-      {planStale && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          This plan was calculated with a unit error that made its calorie
-          target too high — by more than 20% for many people. The original
-          height, weight and age weren’t saved, so it can’t be
-          corrected automatically. Make a new plan to get an accurate
-          target.
-        </Alert>
-      )}
+  // ── A plan already saved: the plan first, "Change plan" second ──────────
+  if (stage === 'summary' && savedPlan && savedPlan.dailyCalories > 0) {
+    const notice = planBannerKind(savedGoal, scanBmr); // 'stale' | 'scan' | null
+    const primary = notice ? 'fix' : justSaved ? 'done' : 'change';
+    return (
+      <Page narrow data-testid="plan-page">
+        {/* WHY the target can't be trusted, and the one tap that fixes it.
+            Never rewritten for her: a change to what she eats is hers to
+            make, so the new target is shown beside the old before a Save. */}
+        {notice === 'stale' && (
+          <Alert severity="warning" data-testid="plan-stale-notice" sx={{ alignItems: 'flex-start' }}>
+            <AlertTitle>This target is probably too high</AlertTitle>
+            It was worked out before a mistake in the maths was fixed. The mistake set targets too high, by more
+            than 20% for many people. The weight, height and age it used weren’t kept, so it can’t be corrected
+            for you. Work out a new one from your details today: you’ll see the old and new targets side by side,
+            and nothing changes until you save.
+            <Box sx={{ mt: 3 }}>
+              <Button variant="contained" onClick={reworkFromSaved} sx={{ minHeight: 44 }}>Work out a new target</Button>
+            </Box>
+          </Alert>
+        )}
+        {notice === 'scan' && (
+          <Alert severity="info" data-testid="plan-scan-notice" sx={{ alignItems: 'flex-start' }}>
+            <AlertTitle>Your body scans can make this more accurate</AlertTitle>
+            {`Your scans measure what you burn at rest: ${fmt(scanBmr.bmr)} calories a day. This plan uses an estimate of ${fmt(savedGoal.bmr)}. `}
+            You’ll see the old and new targets side by side, and nothing changes until you save.
+            <Box sx={{ mt: 3 }}>
+              <Button variant="contained" onClick={reworkFromSaved} sx={{ minHeight: 44 }}>Update my target</Button>
+            </Box>
+          </Alert>
+        )}
 
-      {/* On a phone the four labels wrapped a word a line and clipped
-          ("Calori"): a compact "Step N of 4" with a basil bar instead, the
-          same shape as First run. The full stepper from sm up. */}
-      {!hasExistingGoal && (
-        <Box data-testid="plan-step-compact" sx={{ display: { xs: 'block', sm: 'none' }, mb: 3 }}>
-          <LinearProgress
-            variant="determinate"
-            value={((activeStep + 1) / steps.length) * 100}
-            aria-hidden
-            sx={{ height: 8, mb: 1, '& .MuiLinearProgress-bar': { bgcolor: 'primary.main' } }}
+        <Surface data-testid="plan-summary" sx={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {justSaved && (
+            <Typography role="status" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1.5, color: 'text.secondary' }}>
+              <CheckIcon aria-hidden sx={{ fontSize: 20, color: 'success.main' }} /> Saved. Today now counts down from this.
+            </Typography>
+          )}
+          <PlanHeadline
+            plan={savedPlan}
+            mode={savedMode}
+            keto={savedGoal.keto || DEFAULT_KETO}
+            macros={savedMacros}
+            endDate={savedGoal.estimated_end_date}
+            headingRef={headingRef}
           />
-          <Typography sx={{ color: 'text.secondary', fontWeight: 700, fontSize: '1rem' }}>
-            Step {activeStep + 1} of {steps.length}
-          </Typography>
-        </Box>
-      )}
-      {!hasExistingGoal && (
-        <Stepper activeStep={activeStep} sx={{ mb: 4, display: { xs: 'none', sm: 'flex' } }}>
-          {steps.map((label, index) => (
-            <Step key={label}>
-              {index < activeStep ? (
-                <StepButton onClick={() => setActiveStep(index)}>{label}</StepButton>
-              ) : (
-                <StepLabel>{label}</StepLabel>
-              )}
-            </Step>
-          ))}
-        </Stepper>
-      )}
+          <Disclosure label="How this was worked out" testId="plan-working-toggle">
+            <PlanWorking plan={savedPlan} />
+          </Disclosure>
 
-      {/* Step 0: Mode Selector */}
-      {!hasExistingGoal && activeStep === 0 && (
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="h5" sx={{ fontFamily: 'inherit', mb: 1 }}>
-            Choose your approach
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            This changes what your targets and Home show.
-          </Typography>
-          <ModeSelector value={mode} onChange={setMode} />
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-            <Button variant="contained" onClick={() => setActiveStep(1)}>
-              Continue
-            </Button>
-          </Box>
-        </Box>
-      )}
-
-      {/* Step 1: Profile */}
-      {!hasExistingGoal && activeStep === 1 && (
-        <Surface>
-          <Typography component="h2" sx={{ fontWeight: 700, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
-            About you
-          </Typography>
-          <Rule weight="medium" sx={{ mb: 2 }} />
-
-          {isLoadingProfile ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-              <CircularProgress size={24} />
+          {removal === 'idle' ? (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
+              {primary === 'done' && inRouter && <DoneButton variant="contained" sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 160 } }} />}
+              <Button
+                variant={primary === 'change' || (primary === 'done' && !inRouter) ? 'contained' : 'tonal'}
+                size="large"
+                onClick={startOver}
+                sx={{ minHeight: 48, flex: { xs: 1, sm: 'none' } }}
+              >
+                Change plan
+              </Button>
+              <Button color="error" size="large" onClick={() => setRemoval('confirm')} sx={{ minHeight: 48, flex: { xs: 1, sm: 'none' } }}>
+                Remove plan
+              </Button>
             </Box>
           ) : (
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <TextField
-                label="Age"
-                type="number"
-                inputMode="decimal"
-                value={profile.age}
-                onChange={(e) => setProfile(prev => ({ ...prev, age: e.target.value }))}
-                size="small"
-              />
-              <TextField
-                label="Weight now"
-                type="number"
-                inputMode="decimal"
-                InputProps={lbAdornment}
-                value={profile.weight}
-                onChange={(e) => setProfile(prev => ({ ...prev, weight: e.target.value }))}
-                size="small"
-              />
-              <TextField
-                label="Height"
-                placeholder={"5'11\""}
-                value={profile.height}
-                onChange={(e) => {
-                  setProfile(prev => ({ ...prev, height: e.target.value }));
-                  // Clear a stale error the instant the user edits the field
-                  // again — don't leave yesterday's error glued to today's input.
-                  if (heightError) setHeightError(false);
-                }}
-                size="small"
-                // Live validation: as soon as there's SOMETHING in the field,
-                // tell the user right away whether we can read it, instead of
-                // waiting for a "Calculate My Plan" click three steps later
-                // to discover the height silently became a BMR of 0.
-                error={!!profile.height && parseHeightToInches(profile.height) === null}
-                helperText={
-                  !!profile.height && parseHeightToInches(profile.height) === null
-                    ? "I can’t read that height. Try 5'11\", 5 ft 11, or 71 (inches)."
-                    : "Like 5'11\", 5 ft 11, or 71 (inches)"
-                }
-              />
-              <FormControl size="small">
-                <InputLabel>Gender</InputLabel>
-                <Select
-                  value={profile.gender}
-                  onChange={(e) => setProfile(prev => ({ ...prev, gender: e.target.value }))}
-                  label="Gender"
-                >
-                  <MenuItem value="">Select gender</MenuItem>
-                  <MenuItem value="male">Male</MenuItem>
-                  <MenuItem value="female">Female</MenuItem>
-                  <MenuItem value="other">Other</MenuItem>
-                  <MenuItem value="prefer-not-to-say">Prefer not to say</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControl size="small">
-                {/* labelId links the label to the select: without it the
-                    control had no accessible name at all. */}
-                <InputLabel id="wizard-activity-level-label">Activity level</InputLabel>
-                <Select
-                  labelId="wizard-activity-level-label"
-                  value={profile.activityLevel}
-                  onChange={(e) => setProfile(prev => ({ ...prev, activityLevel: e.target.value }))}
-                  label="Activity level"
-                >
-                  <MenuItem value="sedentary">Sedentary (little or no exercise)</MenuItem>
-                  <MenuItem value="light">Lightly active (light exercise 1–3 days a week)</MenuItem>
-                  <MenuItem value="moderate">Moderately active (exercise 3–5 days a week)</MenuItem>
-                  <MenuItem value="very">Very active (hard exercise 6–7 days a week)</MenuItem>
-                  <MenuItem value="extra">Extra active (very hard exercise or a physical job)</MenuItem>
-                  {measuredActivity && (
-                    <MenuItem value={MEASURED_ACTIVITY}>
-                      {`Measured by Garmin (+${measuredActivity.mean.toLocaleString('en-US')} cal a day, last ${measuredActivity.days} days)`}
-                    </MenuItem>
-                  )}
-                  {!measuredActivity && profile.activityLevel === MEASURED_ACTIVITY && (
-                    <MenuItem value={MEASURED_ACTIVITY} disabled>Measured by Garmin (no recent data — pick a level)</MenuItem>
-                  )}
-                </Select>
-              </FormControl>
-              {profile.activityLevel === MEASURED_ACTIVITY && measuredActivity && (
-                <Typography variant="caption" data-testid="measured-activity-note" sx={{ color: 'text.secondary', gridColumn: '1 / -1' }}>
-                  Your calories at rest (BMR) plus the activity your watch measured. It leaves out digestion (about 10% of what you eat), so it errs low — the safe direction for losing weight.
-                </Typography>
-              )}
+            <Box role="group" aria-label="Remove plan" data-testid="plan-remove-confirm">
+              <Typography sx={{ fontWeight: 600 }}>Remove this plan?</Typography>
+              <Typography sx={{ color: 'text.secondary', mt: 1, mb: 3 }}>
+                Today will stop showing a calorie target. What you’ve logged stays.
+              </Typography>
+              {removeError && <Alert severity="error" sx={{ mb: 3 }}>{removeError}</Alert>}
+              <Box sx={{ display: 'flex', gap: 3 }}>
+                <Button variant="tonal" size="large" onClick={() => { setRemoval('idle'); setRemoveError(null); }} disabled={removal === 'busy'} sx={{ minHeight: 48, flex: { xs: 1, sm: 'none' } }}>
+                  Keep it
+                </Button>
+                <Button color="error" size="large" onClick={removePlan} disabled={removal === 'busy'} sx={{ minHeight: 48, flex: { xs: 1, sm: 'none' } }}>
+                  {removal === 'busy' ? 'Removing…' : 'Yes, remove it'}
+                </Button>
+              </Box>
             </Box>
           )}
-
-          <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              onClick={() => setActiveStep(0)}
-            >
-              Back
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={handleSaveProfile}
-              disabled={
-                !profile.age || !profile.weight || !profile.height || !profile.gender ||
-                parseHeightToInches(profile.height) === null
-              }
-            >
-              Save details
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => setActiveStep(2)}
-              disabled={
-                !profile.age || !profile.weight || !profile.height || !profile.gender ||
-                parseHeightToInches(profile.height) === null
-              }
-              sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
-            >
-              Next: set goal
-            </Button>
-          </Box>
         </Surface>
-      )}
+      </Page>
+    );
+  }
 
-      {/* Step 2: Goal Setting */}
-      {!hasExistingGoal && activeStep === 2 && (
-        <Surface>
-          <Typography component="h2" sx={{ fontWeight: 700, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
-            Set your weight goal
-          </Typography>
-          <Rule weight="medium" sx={{ mb: 2 }} />
-
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 3 }}>
-            <TextField
-              label="Goal weight"
-              type="number"
-              inputMode="decimal"
-              InputProps={lbAdornment}
-              value={goal.targetWeight}
-              onChange={(e) => setGoal(prev => ({ ...prev, targetWeight: e.target.value }))}
-              size="small"
-            />
-            <FormControl size="small">
-              <InputLabel>How fast</InputLabel>
-              <Select
-                value={goal.weightChangeRate}
-                onChange={(e) => setGoal(prev => ({ ...prev, weightChangeRate: e.target.value }))}
-                label="How fast"
-              >
-                <MenuItem value="0.5">½ lb a week (slow and steady)</MenuItem>
-                <MenuItem value="1">1 lb a week (recommended)</MenuItem>
-                <MenuItem value="1.5">1½ lb a week (moderate)</MenuItem>
-                <MenuItem value="2">2 lb a week (fast)</MenuItem>
-                <MenuItem value="2.5">2½ lb a week (very fast)</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small">
-              <InputLabel>Plan type</InputLabel>
-              <Select
-                value={goal.planType}
-                onChange={(e) => setGoal(prev => ({ ...prev, planType: e.target.value }))}
-                label="Plan type"
-              >
-                <MenuItem value="standard">Standard (the same every day)</MenuItem>
-                <MenuItem value="weekender">Weekend boost (more on Fri and Sat)</MenuItem>
-                <MenuItem value="auto">Auto (adjusts if you go over)</MenuItem>
-                <MenuItem value="stepFlex" disabled>Step or workout flex (coming soon)</MenuItem>
-              </Select>
-            </FormControl>
+  // ── The answer: one sentence, the details behind a tap, one Save ────────
+  if (stage === 'result' && draft) {
+    return (
+      <Page narrow data-testid="plan-page">
+        <Surface data-testid="plan-result" sx={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <Box aria-live="polite">
+            <PlanHeadline plan={draft} mode={mode} keto={ketoConfig} macros={draftMacros} endDate={draftEnd} headingRef={headingRef} />
           </Box>
 
-          {/* Preview calculations */}
-          {profile.weight && goal.targetWeight && (
-            <Box sx={{ mb: 3 }}>
-              <Rule weight="medium" />
-              <Box>
-                <Typography component="h3" sx={{ fontWeight: 700, fontSize: '1.0625rem', py: 0.75 }}>
-                  At a glance
-                </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                  <Box>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Weight now</Typography>
-                    <Typography variant="h6">{profile.weight} lb</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Goal weight</Typography>
-                    <Typography variant="h6">{goal.targetWeight} lb</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>To lose</Typography>
-                    {/* The plan, not a problem: ink, never error red (C15). */}
-                    <Typography variant="h6" sx={{ color: 'text.primary' }}>
-                      {Math.abs(parseFloat(profile.weight) - parseFloat(goal.targetWeight)).toFixed(1)} lb
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>How long</Typography>
-                    <Typography variant="h6">
-                      {Math.ceil(Math.abs(parseFloat(profile.weight) - parseFloat(goal.targetWeight)) / parseFloat(goal.weightChangeRate))} weeks
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Box>
-          )}
+          {/* Saved vs new: only while replacing a plan. */}
+          <PlanComparison saved={savedSnapshot} next={draft} />
 
-          {/* Should be unreachable — Step 1 already blocks an unparseable
-              height — but calculateCaloriePlan sets this if it's ever hit
-              anyway, and it must produce a visible error, not a plan built
-              on a BMR of 0. */}
-          {heightError && (
-            <Alert severity="error" sx={{ mb: 3 }}>
-              Your plan can’t be worked out without your height. Go back to
-              About you and enter it, like 5'11", 5 ft 11, or 71 (inches).
-            </Alert>
-          )}
-
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              onClick={() => setActiveStep(1)}
-            >
-              Back
-            </Button>
-            <Button
-              variant="contained"
-              onClick={calculateCaloriePlan}
-              disabled={!goal.targetWeight || !goal.weightChangeRate}
-              sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
-            >
-              Work out my plan
-            </Button>
-          </Box>
-        </Surface>
-      )}
-
-      {/* Step 3b: Keto Plan (shown when mode === 'keto', new goal only) */}
-      {!hasExistingGoal && mode === 'keto' && plan && activeStep === 3 && (
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="h5" sx={{ fontFamily: 'inherit', mb: 3 }}>
-            Set up your keto plan
-          </Typography>
-          <PlanComparison saved={savedSnapshot} next={plan} />
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="body2" sx={{ color: 'text.primary' }}>
-              Calories at rest (BMR) {fmt(plan.bmr)} cal a day · your target {fmt(plan.dailyCalories)} cal
-            </Typography>
-            <BmrSourceNote source={plan.bmrSource} leanMassLb={plan.leanMassLb} scans={plan.bmrScans} scanLoadFailed={scanLoadFailed} />
-          </Box>
-          <KetoPlanStep
-            ketoConfig={ketoConfig}
-            onChange={setKetoConfig}
-            calorieTarget={plan?.dailyCalories}
-            baseGoal={{ ...(savedGoal || {}), target_weight: plan.targetWeight, goal_weight_lbs: plan.targetWeight }}
-            leanMassLb={usableLeanMassLb}
-          />
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-            <Button onClick={() => setActiveStep(2)}>Back</Button>
-            <Button
-              variant="contained"
-              onClick={async () => {
-                try {
-                  await settingsService.updateSettings({
-                    nutrition_goal: nutritionGoalPayload(plan, { mode, keto: ketoConfig }),
-                  });
-                  notify(`Keto plan saved. Your target is now ${fmt(plan.dailyCalories)} calories a day`, { tone: 'success' });
-                  setHasExistingGoal(true);
-                  await loadExistingGoal();
-                } catch (e) {
-                  console.error('Failed to save keto goal', e);
-                  notify(errorMessage(e, 'Couldn’t save your keto plan. Try again.'), { tone: 'error' });
-                }
-              }}
-            >
-              Save plan
-            </Button>
-          </Box>
-        </Box>
-      )}
-
-      {/* Step 3a: Keto Existing Summary (shown when hasExistingGoal and mode=keto) */}
-      {hasExistingGoal && mode === 'keto' && plan && activeStep >= 3 && (
-        <Box>
-          <Typography component="h2" sx={{ fontWeight: 700, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
-            Your keto plan
-          </Typography>
-          <Rule weight="medium" sx={{ mb: 2 }} />
-          {/* Basil, like the standard plan: warning ochre means a warning
-              (visual review B2), and a keto plan isn't one. */}
-          <Surface sx={{ mb: 3 }}>
-            <Box>
-              <Typography variant="h5" sx={{ mb: 1, color: 'text.primary' }}>
-                {ketoConfig.net_carb_limit_g}g net carbs a day
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-                {ketoConfig.macro_split?.preset === 'lazy'
-                  ? 'Lazy keto: watching the carb cap only.'
-                  : `Split: ${ketoConfig.macro_split?.fat_pct ?? 70}% fat · ${ketoConfig.macro_split?.protein_pct ?? 25}% protein · ${ketoConfig.macro_split?.carb_pct ?? 5}% carbs`}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Tag>{`${Number(plan.dailyCalories).toLocaleString('en-US')} cal a day`}</Tag>
-                <Tag>{`${ketoConfig.track_net_carbs ? 'Net carbs' : 'Total carbs'}`}</Tag>
-                {plan.weightToLose > 0 && <Tag>{`${plan.weightToLose.toFixed(1)} lb to goal`}</Tag>}
-              </Box>
-            </Box>
-          </Surface>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="contained"
-              onClick={() => {
-                setGoal(prev => ({
-                  ...prev,
-                  targetWeight: plan.targetWeight?.toString() || prev.targetWeight,
-                  weightChangeRate: plan.weightChangeRate?.toString() || prev.weightChangeRate,
-                  planType: plan.planType || prev.planType
-                }));
-                setHasExistingGoal(false);
-                setActiveStep(0);
-              }}
-              sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
-            >
-              Change plan
-            </Button>
-            <Button
-              variant="outlined"
-              color="error"
-              onClick={async () => {
-                try {
-                  await settingsService.updateSettings({ nutrition_goal: { enabled: false } });
-                  setHasExistingGoal(false);
-                  setPlan(null);
-                  notify('Keto plan removed', { tone: 'success' });
-                } catch (e) {
-                  console.error('Failed to remove keto goal', e);
-                  notify(errorMessage(e, 'Couldn’t remove your keto plan. Try again.'), { tone: 'error' });
-                }
-              }}
-            >
-              Remove plan
-            </Button>
-          </Box>
-        </Box>
-      )}
-
-      {/* Step 3a: Calorie Plan or Existing Summary (standard mode) */}
-      {(mode === 'standard' || (hasExistingGoal && mode !== 'keto')) && plan && activeStep >= 3 && (
-        <Box>
-          <Typography component="h2" sx={{ fontWeight: 700, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
-            Your calorie plan
-          </Typography>
-          <Rule weight="medium" sx={{ mb: 2 }} />
-
-          {/* Saved vs new — only while re-running over an existing plan */}
-          {!hasExistingGoal && <PlanComparison saved={savedSnapshot} next={plan} />}
-
-          {/* Summary Card */}
-          <Surface sx={{ mb: 3 }}>
-            <Box>
-              <Typography variant="h5" sx={{ mb: 2, color: 'text.primary' }}>
-                Your daily target: {fmt(plan.dailyCalories)} calories
-              </Typography>
-              <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                That’s about {plan.weightChangeRate} lb a week, at a safe pace.
-              </Typography>
-              <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
-                Plan type: {plan.planType === 'standard' ? 'Standard' : plan.planType === 'weekender' ? 'Weekend boost (more on Fri and Sat)' : 'Auto adjust'}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                {/* Info tags, one shape (visual review B5). */}
-                <Tag>{`${ plan.weightToLose.toFixed(1) } lb to lose`}</Tag>
-                <Tag>{`${ plan.timeline } weeks`}</Tag>
-                <Tag>{`${ plan.weightChangeRate } lb/week`}</Tag>
-              </Box>
-              {standardMacroPreview && (
-                <Box sx={{ mt: 2 }} data-testid="macro-preview">
-                  <Typography variant="body2" sx={{ color: 'text.primary', fontFamily: "inherit", fontVariantNumeric: 'tabular-nums' }}>
-                    {macroLine({ protein: standardMacroPreview.grams.protein_g, carbs: standardMacroPreview.grams.carbs_g, fat: standardMacroPreview.grams.fat_g })}
-                  </Typography>
-                  <ProteinBasisNote rules={standardMacroPreview.rules} />
-                </Box>
-              )}
-            </Box>
-          </Surface>
-
-          {/* Weekly Targets */}
-          <Surface sx={{ mb: 3 }}>
-            <Box>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Your week
-              </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(4, minmax(0, 1fr))', sm: 'repeat(7, minmax(0, 1fr))' }, gap: 1 }}>
-                {plan.schedule.map((d) => (
-                  <Box key={d.day} sx={{ textAlign: 'center', pt: 0.5, pb: 0.5, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>{d.day}</Typography>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{fmt(d.calories)}</Typography>
-                  </Box>
-                ))}
-              </Box>
-              {plan.floored && (
-                <Typography variant="body2" data-testid="plan-floor-note" sx={{ color: 'text.secondary', mt: 1.5 }}>
-                  {`Your target is at the safety floor (${plan.rules?.minSafeCalories?.toLocaleString('en-US')} cal, 80% of your calories at rest), so this plan loses about ${plan.weightChangeRate} lb a week, not ${plan.requestedRate}. The timeline uses ${plan.weightChangeRate}.`}
-                </Typography>
-              )}
-              {plan.planType === 'weekender' && !weekenderHasRoom(plan.schedule) && (
-                <Typography variant="body2" data-testid="plan-weekender-note" sx={{ color: 'text.secondary', mt: 1 }}>
-                  {plan.weekenderSuggestion
-                    ? `No room for a weekend boost at this rate: every day is already at the floor. At ${plan.weekenderSuggestion.rate} lb a week you’d eat ${plan.weekenderSuggestion.weekday.toLocaleString('en-US')} on other days and ${plan.weekenderSuggestion.weekend.toLocaleString('en-US')} on Fri and Sat.`
-                    : 'No room for a weekend boost: every day is already at the safety floor, even at the slowest rate.'}
-                </Typography>
-              )}
-              {plan.rules?.autoAdjust && (
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
-                  Auto: if you go over on a day, the rest of the week adjusts, staying above {fmt(plan.rules.minSafeCalories)} cal.
-                </Typography>
-              )}
-            </Box>
-          </Surface>
-
-          {/* Detailed Breakdown */}
-          <Surface sx={{ mb: 3, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, columnGap: 3, rowGap: 2 }}>
-            <MetabolismCard plan={plan} scanLoadFailed={!hasExistingGoal && scanLoadFailed} />
-
-            <Box>
-              <Box>
-                <Rule weight="medium" />
-                <Typography component="h3" sx={{ fontWeight: 700, fontSize: '1.0625rem', py: 0.75 }}>
-                  Under your daily burn
-                </Typography>
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>How far under, each day</Typography>
-                  {/* The plan, not a problem: neutral ink (D-12). */}
-                  <Typography variant="h6" sx={{ color: 'text.primary' }}>
-                    {Number(plan.weeklyDeficit).toLocaleString('en-US')} cal a day
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {(plan.weeklyDeficit * 7).toLocaleString('en-US')} cal a week = {plan.weightChangeRate} lb a week
-                  </Typography>
+          <Box>
+            <Disclosure label="Adjust the details" testId="plan-details-toggle" defaultOpen={mode === 'keto'}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <Box>
+                  <Typography id="plan-type-label" sx={{ fontWeight: 600, mb: 2 }}>Through the week</Typography>
+                  <Choices labelledBy="plan-type-label">
+                    {PLAN_TYPES.map((p) => (
+                      <BigChoice
+                        key={p.id}
+                        selected={form.planType === p.id}
+                        onClick={() => set({ planType: p.id })}
+                        title={p.title}
+                        body={p.body}
+                        testId={`plan-type-${p.id}`}
+                      />
+                    ))}
+                  </Choices>
                 </Box>
                 <Box>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>Safety check</Typography>
-                  {/* `calculationValid` (bmr > 0) gates this before the calorie
-                      floor does. dailyCalories >= 1200 is true of every plan,
-                      including one built on a BMR that never actually
-                      computed — that plan should never be able to say "Safe". */}
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      color: !plan.rules?.calculationValid
-                        ? theme.palette.error.main
-                        : plan.dailyCalories >= 1200
-                          ? theme.palette.success.main
-                          : theme.palette.warning.main
-                    }}
-                  >
-                    {!plan.rules?.calculationValid
-                      ? 'Calculation error'
-                      : plan.dailyCalories >= 1200 ? 'Safe' : 'Below minimum'}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {!plan.rules?.calculationValid
-                      ? 'Your height couldn’t be read, so this plan isn’t reliable'
-                      : 'Minimum recommended: 1,200 cal a day'}
-                  </Typography>
+                  <Typography id="plan-mode-label" sx={{ fontWeight: 600, mb: 2 }}>What you count</Typography>
+                  <Choices labelledBy="plan-mode-label">
+                    <BigChoice selected={mode !== 'keto'} onClick={() => setMode('standard')} title="Calories" body="Protein, carbs and fat follow from the target" testId="plan-mode-standard" />
+                    <BigChoice selected={mode === 'keto'} onClick={() => setMode('keto')} title="Calories and carbs (keto)" body="A daily cap on carbs, and more fat" testId="plan-mode-keto" />
+                  </Choices>
                 </Box>
+                {mode === 'keto' && (
+                  <KetoPlanStep
+                    ketoConfig={ketoConfig}
+                    onChange={setKetoConfig}
+                    calorieTarget={draft.dailyCalories}
+                    baseGoal={{ ...(savedGoal || {}), ...draftTargetFields }}
+                    leanMassLb={usableLeanMassLb}
+                  />
+                )}
               </Box>
-            </Box>
-          </Surface>
-
-          {/* Tips */}
-          <Surface sx={{ mb: 3 }}>
-            <Box>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Tips
-              </Typography>
-              <ul style={{ margin: 0, paddingLeft: '1rem' }}>
-                <li>
-                  <Typography variant="body2">
-                    Log what you eat every day
-                  </Typography>
-                </li>
-                <li>
-                  <Typography variant="body2">
-                    Weigh in at least once a week
-                  </Typography>
-                </li>
-                <li>
-                  <Typography variant="body2">
-                    If you’re not losing weight, eat 100–200 calories less a day
-                  </Typography>
-                </li>
-                <li>
-                  <Typography variant="body2">
-                    If you’re losing too fast, eat 100–200 calories more a day
-                  </Typography>
-                </li>
-                <li>
-                  <Typography variant="body2">
-                    Eat plenty of protein to keep your muscle
-                  </Typography>
-                </li>
-              </ul>
-            </Box>
-          </Surface>
-
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            {hasExistingGoal ? (
-              <>
-                <Button
-                  variant="contained"
-                  onClick={() => {
-                    // Prefill wizard from existing plan and return to step 0 so mode can be changed
-                    setGoal(prev => ({
-                      ...prev,
-                      targetWeight: plan.targetWeight?.toString() || prev.targetWeight,
-                      weightChangeRate: plan.weightChangeRate?.toString() || prev.weightChangeRate,
-                      planType: plan.planType || prev.planType
-                    }));
-                    setHasExistingGoal(false);
-                    setActiveStep(0);
-                  }}
-                >
-                  Change plan
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={async () => {
-                    try {
-                      await settingsService.updateSettings({ nutrition_goal: { enabled: false } });
-                      setHasExistingGoal(false);
-                      setPlan(null);
-                      notify('Plan removed', { tone: 'success' });
-                    } catch (e) {
-                      console.error('Failed to remove nutrition goal', e);
-                      notify(errorMessage(e, 'Couldn’t remove your plan. Try again.'), { tone: 'error' });
-                    }
-                  }}
-                >
-                  Remove plan
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="outlined"
-                  onClick={() => setActiveStep(2)}
-                >
-                  Back
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={async () => {
-                    try {
-                      await settingsService.updateSettings({
-                        nutrition_goal: nutritionGoalPayload(plan, { mode, keto: mode === 'keto' ? ketoConfig : undefined }),
-                      });
-                      notify(`Plan saved. Your target is now ${fmt(plan.dailyCalories)} calories a day`, { tone: 'success' });
-                      setHasExistingGoal(true);
-                      // Refresh from backend to ensure we reflect the persisted state
-                      await loadExistingGoal();
-                    } catch (e) {
-                      console.error('Failed to save nutrition goal', e);
-                      notify(errorMessage(e, 'Couldn’t save your plan. Try again.'), { tone: 'error' });
-                    }
-                  }}
-                >
-                  Save plan
-                </Button>
-              </>
-            )}
+            </Disclosure>
+            <Disclosure label="How this was worked out" testId="plan-working-toggle">
+              <PlanWorking plan={draft} scanLoadFailed={Boolean(details?.scanLoadFailed)} />
+            </Disclosure>
+            <Box sx={{ borderTop: (t) => `1px solid ${t.palette.divider}` }} aria-hidden />
           </Box>
-        </Box>
+
+          {saveError && <Alert severity="error" data-testid="plan-save-error">{saveError}</Alert>}
+          <Box sx={{ display: 'flex', gap: 3, justifyContent: { sm: 'flex-end' } }}>
+            <Button variant="tonal" size="large" onClick={() => { setSaveError(null); setStepIndex(stepIds.length - 1); setStage('steps'); }} disabled={saving} sx={{ minHeight: 48, flex: { xs: 1, sm: 'none' }, minWidth: { sm: 112 } }}>
+              Back
+            </Button>
+            <Button variant="contained" size="large" onClick={save} disabled={saving} sx={{ minHeight: 48, flex: { xs: 2, sm: 'none' }, minWidth: { sm: 160 } }}>
+              {saving ? 'Saving…' : 'Save plan'}
+            </Button>
+          </Box>
+        </Surface>
+      </Page>
+    );
+  }
+
+  // ── The questions ───────────────────────────────────────────────────────
+  const known = details?.known || { height: false, age: false, gender: false };
+  const allKnown = known.height && known.age && known.gender;
+  const ask = (field) => editingDetails || !known[field];
+  const weightNote = details?.weightBasis === 'average' ? 'your 7-day average' : details?.weightBasis === 'latest' ? 'your last weigh-in' : null;
+  const total = stepIds.length;
+  const stepNumber = stepIds.indexOf(stepId) + 1;
+  const frame = { step: stepNumber, total, headingRef, onNext: nextStep, onBack: stepNumber > 1 ? backStep : undefined };
+  const weightBad = form.weight !== '' && !plausibleWeight(form.weight);
+  const ageBad = form.age !== '' && !plausibleAge(form.age);
+  const inches = parseHeightToInches(form.height);
+
+  return (
+    <Page narrow data-testid="plan-page">
+      {savedPlan && savedPlan.dailyCalories > 0 && (
+        <Typography sx={{ color: 'text.secondary' }} data-testid="plan-current-target">
+          {`Your target now is ${fmt(savedPlan.dailyCalories)} calories. Nothing changes until you save. `}
+          <Button onClick={() => setStage('summary')} sx={{ minHeight: 44, px: 1, verticalAlign: 'baseline' }}>Keep it</Button>
+        </Typography>
+      )}
+
+      {stepId === 'you' && (
+        <StepFrame {...frame} title="What do you weigh now?" hint="I’ll use this to work out how much to eat each day." canNext={youOk}>
+          <TextField
+            label="Weight now (lb)"
+            type="number"
+            value={form.weight}
+            onChange={(e) => set({ weight: e.target.value })}
+            error={weightBad}
+            helperText={weightBad ? 'A weight from 60 to 700 lb.' : (weightNote && form.weight === String(round1(details.weightRaw)) ? `From ${weightNote}` : undefined)}
+            inputProps={{ inputMode: 'decimal', step: 'any' }}
+            fullWidth
+          />
+          {allKnown && !editingDetails ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+              <Typography sx={{ color: 'text.secondary' }} data-testid="plan-known">
+                {`Also using your height (${Math.floor(inches / 12)}'${inches % 12}") and age (${form.age}).`}
+              </Typography>
+              <Button onClick={() => setEditingDetails(true)} sx={{ minHeight: 44 }}>Change these</Button>
+            </Box>
+          ) : (
+            <>
+              {!editingDetails && (
+                <Typography sx={{ color: 'text.secondary' }}>
+                  A few more things, just this once. They’re kept on your profile.
+                </Typography>
+              )}
+              {ask('height') && (
+                <HeightField idPrefix="plan-height" label="Height" value={form.height} onChange={(h) => set({ height: h })} />
+              )}
+              {ask('age') && (
+                <TextField
+                  label="Age"
+                  type="number"
+                  value={form.age}
+                  onChange={(e) => set({ age: e.target.value })}
+                  error={ageBad}
+                  helperText={ageBad ? 'An age from 13 to 110.' : undefined}
+                  inputProps={{ inputMode: 'numeric' }}
+                  fullWidth
+                />
+              )}
+              {ask('gender') && (
+                <FormControl fullWidth>
+                  <InputLabel id="plan-sex-label">Sex</InputLabel>
+                  <Select labelId="plan-sex-label" label="Sex" value={form.gender} onChange={(e) => set({ gender: e.target.value })}>
+                    {SEXES.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
+                  </Select>
+                </FormControl>
+              )}
+            </>
+          )}
+        </StepFrame>
+      )}
+
+      {stepId === 'goal' && (
+        <StepFrame {...frame} title="What are you aiming for?" canNext={goalOk}>
+          <Choices label="What are you aiming for?">
+            <BigChoice selected={!form.maintain} onClick={() => set({ maintain: false })} title="Lose weight" testId="plan-goal-lose" />
+            <BigChoice selected={form.maintain} onClick={() => set({ maintain: true })} title="Stay at this weight" testId="plan-goal-maintain" />
+          </Choices>
+          {!form.maintain && (
+            <TextField
+              label="Goal weight (lb)"
+              type="number"
+              value={form.targetWeight}
+              onChange={(e) => set({ targetWeight: e.target.value })}
+              error={targetTyped && !targetOk}
+              helperText={targetTyped && !targetOk
+                ? (plausibleWeight(form.targetWeight) ? `Pick a weight below your weight now (${form.weight} lb).` : 'A weight from 60 to 700 lb.')
+                : `You weigh ${form.weight} lb now.`}
+              inputProps={{ inputMode: 'decimal', step: 'any', 'data-testid': 'plan-goal-weight' }}
+              fullWidth
+            />
+          )}
+        </StepFrame>
+      )}
+
+      {stepId === 'speed' && (
+        <StepFrame {...frame} title="How fast?" hint="Slower is easier to stick to." canNext>
+          <Choices label="How fast?">
+            {SPEEDS.map((s) => (
+              <BigChoice
+                key={s.rate}
+                selected={form.rate === s.rate}
+                onClick={() => set({ rate: s.rate })}
+                title={s.title}
+                body={s.body}
+                testId={`plan-speed-${s.rate}`}
+              />
+            ))}
+          </Choices>
+        </StepFrame>
+      )}
+
+      {stepId === 'activity' && (
+        <StepFrame {...frame} title="How active are you?" hint="On a normal week. If you’re not sure, pick the lower one." canNext nextLabel="See my target">
+          <Choices label="How active are you?">
+            {ACTIVITY.map((a) => (
+              <BigChoice
+                key={a.id}
+                selected={form.activityLevel === a.id}
+                onClick={() => set({ activityLevel: a.id })}
+                title={a.title}
+                body={a.body}
+                testId={`plan-activity-${a.id}`}
+              />
+            ))}
+            {measuredActivity && (
+              <BigChoice
+                selected={form.activityLevel === MEASURED_ACTIVITY}
+                onClick={() => set({ activityLevel: MEASURED_ACTIVITY })}
+                title="Use what my watch measured"
+                body={`About ${fmt(measuredActivity.mean)} calories of activity a day, over the last ${measuredActivity.days} days`}
+                testId="plan-activity-measured"
+              />
+            )}
+          </Choices>
+          {form.activityLevel === MEASURED_ACTIVITY && measuredActivity && (
+            <Typography variant="body2" data-testid="measured-activity-note" sx={{ color: 'text.secondary' }}>
+              This uses your watch instead of a guess. It leaves out the calories you burn digesting food (about
+              10% of what you eat), so it comes out a little low, which is the safe direction when losing weight.
+            </Typography>
+          )}
+        </StepFrame>
       )}
     </Page>
   );

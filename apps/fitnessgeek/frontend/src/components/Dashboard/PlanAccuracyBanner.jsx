@@ -57,8 +57,10 @@ const fmt = (n) => Math.round(Number(n)).toLocaleString('en-US');
  * One sentence and one link (SIMPLE_AND_FULL_PLAN.md item 4). The job is
  * still live — a plan saved before the Sep 20 fix really is ~1,000 kcal high,
  * and it is deliberately never rewritten for the person — so it stays, said
- * plainly. Formula talk belongs in the calorie plan, which shows the old and
- * new targets side by side before anything changes.
+ * plainly. The link says what it leads to: the calorie plan opens on WHY
+ * ("See why") with one button that works out a new target from today's
+ * details and shows it beside the old one before anything changes
+ * (AIGoalPlanner.jsx, the `notice` on the saved plan).
  *
  * This is a quiet note at the foot of Home's nutrition card, not a banner
  * above it — a muted sentence with its
@@ -107,11 +109,11 @@ export default function PlanAccuracyBanner({ nutritionGoal, scanBmr, sx }) {
       <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'inherit', fontWeight: stale ? 700 : 400 }}>
         {stale
           ? 'Your daily calorie target is probably too high.'
-          : `Your body scans say you burn ${fmt(scanBmr.bmr)} calories a day at rest (BMR). Your plan uses ${fmt(nutritionGoal.bmr)}.`}
+          : `Your body scans say you burn ${fmt(scanBmr.bmr)} calories a day at rest. Your plan uses ${fmt(nutritionGoal.bmr)}.`}
       </Typography>
       <Box component="span" sx={{ display: 'inline-flex', gap: 1 }}>
         <Button component={RouterLink} to={WIZARD_ROUTE} variant="text" sx={linkSx}>
-          Review my plan
+          {stale ? 'See why' : 'Update my plan'}
         </Button>
         {/* Where it may be put off, a "Not now" — never an unlabelled ✕.
             The stale note stays undismissable (see above). */}

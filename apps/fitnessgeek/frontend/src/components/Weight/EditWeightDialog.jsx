@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, TextField, Typography } from '@mui/material';
 import { Edit as EditIcon } from '@mui/icons-material';
 import { utcDateString } from '@geeksuite/utils';
 import { useGeekDialogFullScreen } from '@geeksuite/ui';
@@ -46,7 +46,7 @@ const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
   };
 
   const handleSave = async () => {
-    if (!valid || !log) return;
+    if (!valid || !log || saving) return;
     setSaving(true);
     setError('');
     try {
@@ -92,13 +92,15 @@ const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
         cancel: <Button onClick={close} disabled={saving}>Cancel</Button>,
       })}
     >
+      {/* 16px between the parts: the suite's spacing unit is 4px. */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4, pt: 1 }}>
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} role="alert">
+        <Alert severity="error" role="alert">
           {error}
         </Alert>
       )}
       {fromScale && (
-        <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', mb: 2, lineHeight: 1.5 }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.5 }}>
           This came from the scale. A later scale import for this day will replace your edit.
         </Typography>
       )}
@@ -109,11 +111,10 @@ const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-        sx={{ mb: 2, mt: 1 }}
         inputProps={{ inputMode: 'decimal', step: '0.1', min: '0', max: '1000' }}
         InputProps={{ endAdornment: unitWord }}
         error={value !== '' && !valid}
-        helperText={value !== '' && !valid ? 'Enter a weight between 0 and 1,000.' : ' '}
+        helperText={value !== '' && !valid ? 'Enter a weight between 0 and 1,000.' : undefined}
         autoFocus
       />
       <TextField
@@ -125,6 +126,7 @@ const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
         minRows={2}
         inputProps={{ maxLength: 500 }}
       />
+      </Box>
     </PremiumDialog>
   );
 };

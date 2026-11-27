@@ -45,8 +45,8 @@ export default function HeightField({ value, onChange, onBlur, label = 'Height',
         if (!e.currentTarget.contains(e.relatedTarget)) onBlur?.(joined);
       }}
     >
-      <Typography id={`${idPrefix}-label`} sx={{ fontWeight: 700, fontSize: '1rem', mb: 1 }}>{label}</Typography>
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+      <Typography id={`${idPrefix}-label`} sx={{ fontWeight: 600, fontSize: '1rem', mb: 2 }}>{label}</Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
         <TextField
           label="Feet"
           type="number"
@@ -67,7 +67,7 @@ export default function HeightField({ value, onChange, onBlur, label = 'Height',
       <Typography
         variant="body2"
         role={invalid ? 'alert' : undefined}
-        sx={{ color: invalid ? 'error.main' : 'text.secondary', mt: 0.75 }}
+        sx={{ color: invalid ? 'error.main' : 'text.secondary', mt: 1.5, display: invalid || helperText ? 'block' : 'none' }}
       >
         {invalid ? 'Feet from 3 to 7, inches from 0 to 11.' : helperText}
       </Typography>

@@ -1,4 +1,5 @@
 import { Outlet, useLocation } from 'react-router-dom';
+import ErrorBoundary from '../ErrorBoundary.jsx';
 import { useMediaQuery, useTheme } from '@mui/material';
 import { GeekShell, GeekAppFrame, GeekBottomNav, GeekToastProvider, geekLayout } from '@geeksuite/ui';
 import { bottomNavActiveId, bottomNavItems } from './navConfig.jsx';
@@ -54,7 +55,11 @@ export default function ModernLayout() {
     >
       <GeekToastProvider>
         <GeekAppFrame>
-          <Outlet />
+          {/* One bad page shows its error here and keeps the navigation;
+              going somewhere else clears it. */}
+          <ErrorBoundary resetKey={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </GeekAppFrame>
       </GeekToastProvider>
     </GeekShell>

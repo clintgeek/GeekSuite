@@ -26,7 +26,7 @@ const Card = ({ label, children, testId }) => (
     component="article"
     aria-label={label}
     data-testid={testId}
-    sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 1.25, minWidth: 0 }}
+    sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2.5, minWidth: 0 }}
   >
     {children}
   </Surface>
@@ -45,7 +45,7 @@ export const ChangeLine = ({ change }) => {
         <React.Fragment key={i}>
           {i > 0 && <Box component="span" sx={{ color: 'text.secondary' }}>{' · '}</Box>}
           {p.label && <Box component="span">{p.label} </Box>}
-          <Box component="span" sx={{ ...mono, mr: 0.75 }}>{p.amount}</Box>
+          <Box component="span" sx={{ ...mono, mr: 1.5 }}>{p.amount}</Box>
         </React.Fragment>
       ))}
       <Box component="span" sx={{ color: change.kind === 'delta' ? 'text.secondary' : 'text.primary' }}>
@@ -75,13 +75,13 @@ const Headline = ({ label, value, decimals, unit, sub, segments, end, minSpan, s
       display: 'grid',
       gridTemplateColumns: 'minmax(0, 1fr) minmax(88px, 42%)',
       alignItems: 'end',
-      columnGap: 2,
+      columnGap: 4,
     }}
   >
     <Box sx={{ minWidth: 0 }}>
-      <SectionLabel sx={{ mb: 1 }}>{label}</SectionLabel>
+      <SectionLabel sx={{ mb: 2 }}>{label}</SectionLabel>
       <StatNumber value={value} decimals={decimals} unit={unit} size="display" />
-      {sub && <Typography sx={{ ...caption, mt: 0.75 }}>{sub}</Typography>}
+      {sub && <Typography sx={{ ...caption, mt: 1.5 }}>{sub}</Typography>}
     </Box>
     {segments?.length ? (
       <Spark segments={segments} end={end} minSpan={minSpan} label={sparkLabel} />
@@ -154,11 +154,11 @@ export const IntensityCard = ({ card, end, window }) => {
 /** A small labelled figure for the compact cards. */
 const Figure = ({ label, value, unit, decimals = 0, note }) => (
   <Box sx={{ minWidth: 0 }}>
-    <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 600, mb: 0.5 }}>{label}</Typography>
+    <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem', fontWeight: 600, mb: 1 }}>{label}</Typography>
     {value === null || value === undefined
       ? <StatNumber value="—" size="body" />
       : <StatNumber value={value} decimals={decimals} unit={unit} size="body" />}
-    {note && <Typography sx={{ ...caption, fontSize: '0.75rem', mt: 0.25 }}>{note}</Typography>}
+    {note && <Typography sx={{ ...caption, fontSize: '0.75rem', mt: 0.5 }}>{note}</Typography>}
   </Box>
 );
 
@@ -172,7 +172,7 @@ export const StressBatteryCard = ({ stress, high, low, end, window }) => {
   return (
     <Card label={label} testId="trend-stress">
       <SectionLabel>{label}</SectionLabel>
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', columnGap: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', columnGap: 4 }}>
         <Figure label="Stress" value={stress.current?.mean} unit="/ 100" />
         <Figure label="Battery high" value={high.current?.mean} />
         <Figure label="Battery low" value={low.current?.mean} />
@@ -187,7 +187,7 @@ export const StressBatteryCard = ({ stress, high, low, end, window }) => {
               : change}
         />
       )}
-      <Meaning>Lower stress is calmer. Body Battery is Garmin’s 0–100 energy estimate: what you charge to overnight, and drain to by evening.</Meaning>
+      <Meaning>Stress is Garmin’s 0–100 estimate from your heart rate; lower is calmer. Body Battery is its 0–100 energy estimate: what you charge to overnight, and drain to by evening.</Meaning>
     </Card>
   );
 };
@@ -209,7 +209,7 @@ export const FitnessAgeCard = ({ model }) => {
         {model.achievable !== null && model.asOf ? ' · ' : ''}
         {model.asOf ? `as of ${formatDay(model.asOf)}` : ''}
       </Typography>
-      <Meaning>Garmin’s estimate from your fitness level (VO2 max). It moves over months, not weeks.</Meaning>
+      <Meaning>Garmin’s estimate of how old your fitness looks, from how well your body uses oxygen (VO2 max). It moves over months, not weeks.</Meaning>
     </Card>
   );
 };
@@ -220,7 +220,7 @@ const DetailLink = ({ to, children }) => (
     to={to}
     size="small"
     endIcon={<ArrowIcon fontSize="small" />}
-    sx={{ alignSelf: 'flex-start', minHeight: 44, px: 1, ml: -1, mt: 'auto', mb: -1 }}
+    sx={{ alignSelf: 'flex-start', minHeight: 44, px: 2, ml: -2, mt: 'auto', mb: -2 }}
   >
     {children}
   </Button>
@@ -293,7 +293,7 @@ export const BodyCompCard = ({ summary }) => {
     <Card label={label} testId="trend-body-comp">
       <SectionLabel>{label}</SectionLabel>
       <StatNumber value={current.body_fat_pct} decimals={1} unit="% body fat" size="display" />
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: 4 }}>
         <Figure label="Fat mass" value={current.fat_mass_lb} decimals={1} unit="lb" />
         <Figure label="Lean mass" value={current.lean_mass_lb} decimals={1} unit="lb" />
       </Box>
@@ -331,7 +331,7 @@ export const BPCard = ({ model }) => {
       <SectionLabel>{label}</SectionLabel>
       <Box>
         <Reading a={model.avg7} unit="mmHg" size="display" />
-        <Typography sx={{ ...caption, mt: 0.75 }}>
+        <Typography sx={{ ...caption, mt: 1.5 }}>
           {model.avg7 ? `7-day average · ${count(model.avg7)}` : 'No readings in the last 7 days'}
         </Typography>
       </Box>
@@ -341,7 +341,7 @@ export const BPCard = ({ model }) => {
         <Box component="span" sx={{ color: 'text.secondary' }}> · {count(model.avg30)}</Box>
       </Typography>
       {model.category && model.category.stage !== 'Unknown' && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: model.category.color, flexShrink: 0 }} />
           <Typography sx={{ ...caption, color: 'text.primary' }}>
             The {model.categoryOf} average is in the {model.category.stage} range

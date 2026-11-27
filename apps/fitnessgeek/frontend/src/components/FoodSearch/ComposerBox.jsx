@@ -87,7 +87,7 @@ const ComposerBox = ({
         id={labelId}
         component="label"
         htmlFor={`${labelId}-input`}
-        sx={{ display: 'block', fontSize: '1rem', fontWeight: 700, color: 'text.primary', mb: 0.75 }}
+        sx={{ display: 'block', fontSize: '1rem', fontWeight: 700, color: 'text.primary', mb: 1.5 }}
       >
         Tell me what you ate
       </Typography>
@@ -186,7 +186,8 @@ const ComposerBox = ({
         )}
       </Box>
 
-      {mealPicker && <Box sx={{ mt: 1 }}>{mealPicker}</Box>}
+      {/* 4px theme unit: 10px under the box, 12px above the button. */}
+      {mealPicker && <Box sx={{ mt: 2.5 }}>{mealPicker}</Box>}
 
       <Button
         variant={quiet && !thinking ? 'outlined' : 'contained'}
@@ -202,7 +203,7 @@ const ComposerBox = ({
           ? <CircularProgress size={20} thickness={5} aria-hidden sx={{ color: theme.palette.primary.contrastText }} />
           : undefined}
         sx={{
-          mt: 1.25,
+          mt: 3,
           // Full width on a phone; from md it is its own size, never a bar.
           width: { xs: '100%', md: 'auto' },
           minWidth: { md: 160 },

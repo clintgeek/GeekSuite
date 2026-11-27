@@ -100,8 +100,8 @@ const settingsScenes = [
       await must(page.locator('[data-testid="experience-settings"]'), 'How it looks');
       await must(page.locator('[data-testid="about-you"]'), 'About you');
       const plans = await must(page.locator('[data-testid="settings-plans"]'), 'Plans and imports');
-      await must(plans.getByRole('link', { name: 'Calorie plan' }), 'the way to the calorie plan');
-      await must(plans.getByRole('link', { name: 'Import a scan' }), 'the way to Import a scan');
+      await must(plans.getByRole('link', { name: /Calorie plan/ }), 'the way to the calorie plan');
+      await must(page.locator('[data-testid="settings-devices"]').getByRole('link', { name: /Import a scan/ }), 'the way to Import a scan (under Connected devices)');
       await absent(page.getByRole('button', { name: /^more settings$/i }), 'the "More settings" fold');
       await absent(page.locator('#more-settings'), 'the "More settings" fold');
       for (const gone of ['mode-simple', 'mode-full', 'simple-view-line']) await absent(page.locator(`[data-testid="${gone}"]`), gone);
@@ -129,9 +129,10 @@ const settingsScenes = [
     ...SETTINGS_PAGE,
     async fn(page, h) {
       const plans = await must(page.locator('[data-testid="settings-plans"]'), 'Plans and imports');
-      await must(plans.getByRole('heading', { name: 'Plans and imports', level: 2 }), 'its heading');
-      if ((await plans.getByRole('link', { name: 'Calorie plan' }).getAttribute('href')) !== '/calorie-wizard') throw new Error('Calorie plan does not go to /calorie-wizard');
-      if ((await plans.getByRole('link', { name: 'Import a scan' }).getAttribute('href')) !== '/scan-import') throw new Error('Import a scan does not go to /scan-import');
+      await must(plans.getByRole('heading', { name: 'Calorie plan', level: 2 }), 'its heading');
+      if ((await plans.getByRole('link', { name: /Calorie plan/ }).getAttribute('href')) !== '/calorie-wizard') throw new Error('Calorie plan does not go to /calorie-wizard');
+      const devices = await must(page.locator('[data-testid="settings-devices"]'), 'Connected devices');
+      if ((await devices.getByRole('link', { name: /Import a scan/ }).getAttribute('href')) !== '/scan-import') throw new Error('Import a scan does not go to /scan-import');
       await scrollToSection(page, h, '#plans', 96);
     },
   }),
@@ -144,6 +145,11 @@ const settingsScenes = [
   stubbed('61b-settings-garmin', {
     ...SETTINGS_PAGE,
     async fn(page, h) {
+      const connected = await must(page.locator('[data-testid="garmin-connected"]'), 'the "Connected as" line');
+      if (!/^Connected as chef@example\.com$/.test((await connected.innerText()).trim())) throw new Error('garmin-connected does not read "Connected as chef@example.com"');
+      // The login form is behind "Change Garmin login" now.
+      await (await must(page.getByRole('button', { name: 'Change Garmin login' }), 'the "Change Garmin login" button')).click();
+      await h.settle(500);
       await must(page.getByRole('button', { name: 'Update Garmin login', exact: true }), '"Update Garmin login" (it said "Save", d-fixes)');
       if (await page.getByRole('button', { name: /^connect garmin$/i }).count()) throw new Error('"Connect Garmin" showing for a saved login');
       if ((await page.getByLabel('Garmin email').inputValue()) !== 'chef@example.com') throw new Error('Garmin email did not fill');
@@ -686,6 +692,25 @@ const bloodPressure = [
     },
   }),
 ];
+
+// Signed out: the opposite of every other scene. The session reads (/api/me
+// and the refresh behind it) answer 401, so the app has no user and /login
+// shows its card. Page-scoped; dropped again in teardown.
+const signedOut = (r) => json(r, { error: 'Unauthorized' }, 401);
+settingsScenes.push(
+  stubbed('62z-login-signed-out', {
+    path: '/login',
+    viewports: ['phone', 'desktop'],
+    rest: { '**/api/me': signedOut, '**/api/auth/refresh': signedOut },
+    async fn(page) {
+      await must(page.locator('[data-testid="login-page"]'), 'the Login card');
+      await must(page.getByText('FitnessGeek').first(), 'the FitnessGeek name');
+      await must(page.getByRole('button', { name: 'Sign in', exact: true }), '"Sign in"');
+      await must(page.getByRole('button', { name: 'Create an account', exact: true }), '"Create an account"');
+      if (!/\/login$/.test(new URL(page.url()).pathname)) throw new Error(`left /login for ${page.url()}`);
+    },
+  }),
+);
 
 export const scenes = [
   ...settingsScenes,

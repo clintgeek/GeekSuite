@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Button,
   Typography,
   List,
-  CircularProgress,
   TextField
 } from '@mui/material';
 import {
   Restaurant as FoodIcon,
   Search as SearchIcon,
-  Add as AddIcon
+  Add as AddIcon,
+  CloudOff as FailedIcon
 } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
 import { useFoodManagement } from '../hooks/useFoodManagement.js';
@@ -21,22 +21,12 @@ import Shell from './embeddedShell.jsx';
 import { foodService } from '../services/foodService.js';
 import { errorMessage } from '../utils/errorMessage.js';
 import FoodDeleteDialog from '../components/MyFoods/FoodDeleteDialog.jsx';
-import { Page, LabelPanel, EmptyState, SurfaceSkeleton } from '../components/primitives';
-
-const EMPTY_FOOD_FORM = {
-  name: '',
-  brand: '',
-  calories_per_serving: '',
-  protein_grams: '',
-  carbs_grams: '',
-  fat_grams: '',
-  serving_size: 1,
-  serving_unit: 'oz'
-};
+import { EMPTY_FOOD_FORM, foodPayloadFromForm } from '../components/MyFoods/foodForm.js';
+import { Surface, EmptyState, SurfaceSkeleton } from '../components/primitives';
 
 const MyFoods = ({ embedded = false }) => {
   const {
-    foods,
+    foods: loadedFoods,
     loading,
     error,
     successMessage,
@@ -57,11 +47,29 @@ const MyFoods = ({ embedded = false }) => {
     clearSuccess();
   }, [successMessage, notify, clearSuccess]);
 
+  // One null in the list (or a list that isn't one) used to take the whole
+  // page to the error boundary. Only real rows are drawn.
+  const foods = useMemo(
+    () => (Array.isArray(loadedFoods) ? loadedFoods : []).filter((f) => f && typeof f === 'object'),
+    [loadedFoods]
+  );
+
+  // A FAILED READ IS NOT AN EMPTY LIBRARY. The hook reports a failure as a
+  // message and leaves the list as it was, so a first load that failed drew
+  // "No foods yet" under an error toast. With nothing loaded, an error can
+  // only be the read: say so on the page, with a way to try again.
+  const [loadFailed, setLoadFailed] = useState(false);
   useEffect(() => {
     if (!error) return;
+    if (foods.length === 0) setLoadFailed(true);
     notify(error, { tone: 'error' });
     clearError();
-  }, [error, notify, clearError]);
+  }, [error, notify, clearError, foods.length]);
+  useEffect(() => { if (foods.length > 0) setLoadFailed(false); }, [foods.length]);
+  const retryLoad = () => {
+    setLoadFailed(false);
+    loadFoods();
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -89,24 +97,14 @@ const MyFoods = ({ embedded = false }) => {
   };
 
   const handleCreateFood = async () => {
-    if (!createForm?.name?.trim()) return;
+    // `creating` is checked as well as the button's disabled state: two taps
+    // can land before the first re-render, and each would save a copy.
+    if (creating || !createForm?.name?.trim()) return;
     setCreating(true);
     try {
-      await foodService.create({
-        name: createForm.name.trim(),
-        brand: createForm.brand?.trim() || undefined,
-        nutrition: {
-          calories_per_serving: Number(createForm.calories_per_serving) || 0,
-          protein_grams: Number(createForm.protein_grams) || 0,
-          carbs_grams: Number(createForm.carbs_grams) || 0,
-          fat_grams: Number(createForm.fat_grams) || 0
-        },
-        serving: {
-          size: Number(createForm.serving_size) || 1,
-          unit: createForm.serving_unit || 'oz'
-        }
-      });
-      notify(`Saved ${createForm.name.trim()}`, { tone: 'success' });
+      const payload = foodPayloadFromForm(createForm);
+      await foodService.create(payload);
+      notify(`Saved ${payload.name}`, { tone: 'success' });
       setCreateForm(null);
       loadFoods();
     } catch (err) {
@@ -117,6 +115,7 @@ const MyFoods = ({ embedded = false }) => {
   };
 
   const handleEditFood = (food) => {
+    if (!food) return;
     if (food.recipe) {
       openBuilder(food);
       return;
@@ -124,7 +123,7 @@ const MyFoods = ({ embedded = false }) => {
     const nutrition = food.nutrition || {};
     setEditingFood(food);
     setEditForm({
-      name: food.name,
+      name: food.name || '',
       brand: food.brand || '',
       calories_per_serving: nutrition.calories_per_serving ?? 0,
       protein_grams: nutrition.protein_grams ?? 0,
@@ -145,7 +144,7 @@ const MyFoods = ({ embedded = false }) => {
   };
 
   const handleEditSubmit = async () => {
-    if (!editingFood) return;
+    if (!editingFood || editLoading) return;
 
     setEditLoading(true);
 
@@ -195,7 +194,7 @@ const MyFoods = ({ embedded = false }) => {
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingFood) return;
+    if (!deletingFood || deleteLoading) return;
 
     setDeleteLoading(true);
     // Gateway shape: `id`, not `_id` — see handleEditSubmit.
@@ -220,66 +219,91 @@ const MyFoods = ({ embedded = false }) => {
     );
   });
 
-  if (loading) {
-    return (
-      <Shell embedded={embedded}>
-        <SurfaceSkeleton rows={5} />
-      </Shell>
-    );
-  }
+  const searching = Boolean(searchQuery);
+  const count = filteredFoods.length;
 
   return (
     <Shell embedded={embedded}>
-      <Typography sx={{ color: 'text.secondary', fontSize: '1rem' }}>
-        Your custom entries and everything you’ve saved for quick access.
-      </Typography>
-
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        {/* One filled blue button per view: New food. New recipe is outlined. */}
-        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => openBuilder(null)}>
-          New recipe
-        </Button>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateForm({ ...EMPTY_FOOD_FORM })}>
-          New food
-        </Button>
+      {/* The intro and the two ways to make something, on one row from sm
+          up. No card title: the tab already says "Foods". */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 4, rowGap: 3 }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '1rem', flex: '1 1 240px', minWidth: 0 }}>
+          Foods you made, and foods you’ve logged.
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          {/* One filled blue button per view: New food. New recipe is tonal. */}
+          <Button variant="tonal" startIcon={<AddIcon />} onClick={() => openBuilder(null)} sx={{ minHeight: 44 }}>
+            New recipe
+          </Button>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateForm({ ...EMPTY_FOOD_FORM })} sx={{ minHeight: 44 }}>
+            New food
+          </Button>
+        </Box>
       </Box>
 
-      {/* Search — theme-aware, no hardcoded colors */}
-      <TextField
-        fullWidth
-        size="small"
-        placeholder="Search your foods…"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        InputProps={{
-          startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-        }}
-      />
+      {/* Search: only when there is something to search. */}
+      {foods.length > 0 && (
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Search your foods…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          inputProps={{ 'aria-label': 'Search your foods' }}
+          InputProps={{
+            startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+          }}
+        />
+      )}
 
-      {/* Foods list or empty state */}
-      {filteredFoods.length === 0 ? (
+      {/* Failed, empty, or the list. */}
+      {/* The skeleton stands in for the list only, and only on a first
+          load: the whole page used to be swapped for it on every re-read,
+          which unmounted the open dialog in the middle of its own save. */}
+      {loading && foods.length === 0 ? (
+        <SurfaceSkeleton rows={5} />
+      ) : loadFailed && foods.length === 0 ? (
+        <EmptyState
+          icon={FailedIcon}
+          title="Couldn’t load your foods"
+          copy="Nothing is lost. Check your connection and try again."
+          action={<Button variant="contained" onClick={retryLoad}>Try again</Button>}
+          data-testid="my-foods-failed"
+        />
+      ) : count === 0 ? (
         <EmptyState
           icon={FoodIcon}
-          title={searchQuery ? 'Nothing matches that' : 'No foods yet'}
+          title={searching ? 'Nothing matches that' : 'No foods yet'}
           copy={
-            searchQuery
+            searching
               ? 'Try a different word, or clear the search to see everything in your library.'
               : 'Foods you create, and foods you log often, show up here. + New food makes one now.'
           }
+          action={searching ? <Button variant="tonal" onClick={() => setSearchQuery('')}>Clear search</Button> : undefined}
         />
       ) : (
-        <LabelPanel level={1} title="Your foods" metaRight={`${filteredFoods.length} ${filteredFoods.length === 1 ? 'food' : 'foods'}`}>
-          <List sx={{ p: 0 }}>
-            {filteredFoods.map((food) => (
-              <FoodListItem
-                key={food.id ?? food._id}
-                food={food}
-                onEdit={handleEditFood}
-                onDelete={handleDeleteFood}
-              />
-            ))}
-          </List>
-        </LabelPanel>
+        <Box>
+          <Typography
+            role="status"
+            sx={{ fontSize: '0.875rem', color: 'text.secondary', fontVariantNumeric: 'tabular-nums', mb: 2, px: 1 }}
+          >
+            {searching
+              ? `${count} of ${foods.length} ${foods.length === 1 ? 'food' : 'foods'}`
+              : `${count} ${count === 1 ? 'food' : 'foods'}`}
+          </Typography>
+          <Surface sx={{ py: { xs: 1, sm: 2 } }}>
+            <List sx={{ p: 0 }} aria-label="Your foods">
+              {filteredFoods.map((food, index) => (
+                <FoodListItem
+                  key={food.id ?? food._id ?? `row-${index}`}
+                  food={food}
+                  onEdit={handleEditFood}
+                  onDelete={handleDeleteFood}
+                />
+              ))}
+            </List>
+          </Surface>
+        </Box>
       )}
 
       {/* Edit Dialog */}
@@ -288,7 +312,7 @@ const MyFoods = ({ embedded = false }) => {
         food={editingFood}
         form={editForm}
         onChange={setEditForm}
-        onClose={() => setEditDialogOpen(false)}
+        onClose={() => { if (!editLoading) setEditDialogOpen(false); }}
         onSave={handleEditSubmit}
         loading={editLoading}
       />
@@ -307,7 +331,7 @@ const MyFoods = ({ embedded = false }) => {
         food={null}
         form={createForm || EMPTY_FOOD_FORM}
         onChange={setCreateForm}
-        onClose={() => setCreateForm(null)}
+        onClose={() => { if (!creating) setCreateForm(null); }}
         onSave={handleCreateFood}
         loading={creating}
       />
@@ -316,7 +340,7 @@ const MyFoods = ({ embedded = false }) => {
       <FoodDeleteDialog
         open={deleteDialogOpen}
         food={deletingFood}
-        onClose={() => setDeleteDialogOpen(false)}
+        onClose={() => { if (!deleteLoading) setDeleteDialogOpen(false); }}
         onConfirm={handleDeleteConfirm}
         loading={deleteLoading}
       />

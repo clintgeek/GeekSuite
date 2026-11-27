@@ -1,167 +1,348 @@
 /**
- * The Calorie Wizard's own Height placeholder ("5'11", missing the closing
- * inch mark) didn't match parseHeightToInches' `/(\d+)'(\d+)"/`. Typing
- * exactly what the placeholder suggested made calculateBMR return 0 → a
- * dailyCalories floor of 1200 → and the Safety Check card reported "Safe"
- * over a calculation that never happened, with no error shown anywhere.
+ * The calorie plan: a few plain questions, one at a time, then "Your daily
+ * target is N calories" and one Save (2026-11-27). The arithmetic is
+ * calorieCalc.js, unchanged; these tests pin the way it is asked.
  *
- * These tests pin all three parts of the fix:
- *   1. the placeholder itself is now a parseable height
- *   2. a height the parser can't read produces a VISIBLE error and blocks
- *      progress, instead of silently becoming a BMR of 0
- *   3. even if a broken calculation were reached, the Safety Check could
- *      never call it "Safe" (checked indirectly here: the "Safe"/"Below
- *      minimum" verdict is provably unreachable for unparseable input,
- *      because the wizard can't advance past Step 1 with one)
+ * Still pinned from the old four-step wizard:
+ *   - a height that can't be read produces a VISIBLE error and blocks
+ *     progress, instead of silently becoming a calories-at-rest of 0 and a
+ *     1,200 floor reported as "Safe"
+ *   - an evening plan starts on the LOCAL calendar day
  *
- * Every one of these goes red on the pre-fix component: the placeholder
- * itself is exactly the string that broke parsing, "Next" was never gated
- * on height validity, and there was no error text to find.
+ * New here:
+ *   - a failed read of the saved plan is an error with a retry, never "you
+ *     have no plan" (a save from that screen would have replaced the plan)
+ *   - a failed save says so on the page and keeps every answer
+ *   - a person with a plan sees the plan first, with "Change plan"
+ *   - the "too high" plan explains why and is one tap from a new target
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { BMR_CALC_VERSION, mifflinStJeorBMR, tdeeFromBMR } from '@geeksuite/utils';
 
 vi.mock('../../../services/influxService.js', () => ({ influxService: { getTrends: vi.fn(async () => ({ available: false, days: [], activeKcal30: null })) } }));
-// No 7-day average here: the plan starts from the latest weigh-in, as these
-// tests were written against.
+// No 7-day average here: the plan starts from the latest weigh-in.
 vi.mock('../../../services/weightService.js', () => ({
   weightService: { getWeightLogs: vi.fn(async () => ({ success: true, data: [] })) },
 }));
 vi.mock('../../../services/userService.js', () => ({
-  userService: {
-    getProfile: vi.fn(() => Promise.resolve({ profile: {} })),
-    getLatestWeight: vi.fn(() => Promise.resolve(null)),
-    updateProfile: vi.fn(() => Promise.resolve({ success: true })),
-  },
+  userService: { getProfile: vi.fn(), getLatestWeight: vi.fn(), updateProfile: vi.fn() },
 }));
-
 vi.mock('../../../services/settingsService.js', () => ({
-  settingsService: {
-    getSettings: vi.fn(() => Promise.resolve({ data: {} })),
-    updateSettings: vi.fn(() => Promise.resolve({})),
-  },
+  settingsService: { getSettings: vi.fn(), updateSettings: vi.fn() },
 }));
-
-vi.mock('@geeksuite/auth', () => ({
-  useAuth: () => ({ user: { profile: {} } }),
-}));
-// No scans: these tests are about the Mifflin path.
+// No scans: these tests are about the estimate path.
 vi.mock('../../../services/bodyCompService.js', () => ({
   bodyCompService: { getSummary: vi.fn(() => Promise.resolve({ success: true, data: { total_scans: 0, bmr: { bmr: null, source: 'mifflin', lean_mass_lb: null, scans: 0 } } })) },
 }));
-
+const notify = vi.fn();
 vi.mock('@geeksuite/ui', async (importOriginal) => {
   const actual = await importOriginal();
-  return { ...actual, useToast: () => ({ notify: vi.fn() }) };
+  return { ...actual, useToast: () => ({ notify }) };
 });
 
+const { settingsService } = await import('../../../services/settingsService.js');
+const { userService } = await import('../../../services/userService.js');
 const { default: CalorieGoalWizard } = await import('../AIGoalPlanner.jsx');
 
-/** Advances from Step 0 (mode selector) to Step 1 (profile), the wizard's default. */
-async function goToProfileStep() {
-  render(<CalorieGoalWizard />);
-  fireEvent.click(await screen.findByRole('button', { name: /Continue/i }));
-  // Profile step shows a spinner while loadUserProfile resolves; wait for a
-  // field that only exists once the spinner is gone. ("Your Profile" itself
-  // matches twice — the Stepper label and the panel heading — so it can't be
-  // used as the settle signal.)
-  await screen.findByLabelText(/^Age$/i);
+const KNOWN = { age: 30, height: '5\'11"', gender: 'male' };
+
+// A plan saved at the current version: 180 lb, 5'11", 30, male, moderate.
+const SAVED_PLAN = {
+  enabled: true, mode: 'standard', plan_type: 'weekender', activity_level: 'moderate',
+  bmr: 1798, bmr_source: 'mifflin', bmr_calc_version: BMR_CALC_VERSION, tdee: 2787, min_safe_calories: 1438,
+  daily_calorie_target: 2037, weekly_schedule: [1915, 1915, 1915, 1915, 2343, 2343, 1915],
+  start_weight: 180, target_weight: 165, goal_weight_lbs: 165, weight_change_rate: 1.5, timeline_weeks: 10,
+};
+// The same person's plan from before the unit fix: no version, no inputs.
+const STALE_PLAN = {
+  enabled: true, bmr: 2900, tdee: 3480, daily_calorie_target: 2980,
+  start_weight: 180, target_weight: 165, weight_change_rate: 1, plan_type: 'standard',
+};
+
+function setup({ profile = {}, weight = null, nutrition_goal = null } = {}) {
+  settingsService.getSettings.mockResolvedValue({ data: { nutrition_goal } });
+  settingsService.updateSettings.mockResolvedValue({});
+  userService.getProfile.mockResolvedValue({ profile });
+  userService.getLatestWeight.mockResolvedValue(weight);
+  userService.updateProfile.mockResolvedValue({ success: true });
+  return render(<CalorieGoalWizard />);
 }
 
-async function fillRequiredFieldsExceptHeight() {
-  fireEvent.change(screen.getByLabelText(/^Age$/i), { target: { value: '30' } });
-  fireEvent.change(screen.getByLabelText(/Weight now/i), { target: { value: '180' } });
+const next = () => fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
-  // MUI's Select isn't a native <select>: it's a div acting as a listbox
-  // trigger, so it has to be opened and an option clicked rather than
-  // fired at with a plain `change` event. Its trigger doesn't get an
-  // aria-labelledby back to the InputLabel in this build (no `labelId`/`id`
-  // pairing is wired up), so it has no accessible name to query by — the
-  // Profile step's field order (Age, Weight, Height, Gender, Activity Level)
-  // is the only reliable handle: Gender is the first of the two selects.
-  const [genderCombo] = screen.getAllByRole('combobox');
-  fireEvent.mouseDown(genderCombo);
+/** Step 1 for a person the app knows nothing about. */
+async function fillAboutYou({ feet = '5', inches = '11' } = {}) {
+  fireEvent.change(await screen.findByLabelText(/Weight now/i), { target: { value: '180' } });
+  fireEvent.change(screen.getByTestId('plan-height-feet'), { target: { value: feet } });
+  fireEvent.change(screen.getByTestId('plan-height-inches'), { target: { value: inches } });
+  fireEvent.change(screen.getByLabelText(/^Age$/i), { target: { value: '30' } });
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Sex/i }));
   fireEvent.click(await screen.findByRole('option', { name: 'Male' }));
 }
 
-describe('Calorie Wizard — height parsing and the Safety Check', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+/** Goal weight → How fast? → How active? → the answer. */
+async function answerTheRest({ targetWeight = '170' } = {}) {
+  await screen.findByRole('heading', { name: 'What are you aiming for?' });
+  fireEvent.change(screen.getByLabelText(/Goal weight/i), { target: { value: targetWeight } });
+  next();
+  await screen.findByRole('heading', { name: 'How fast?' });
+  next();
+  await screen.findByRole('heading', { name: 'How active are you?' });
+  fireEvent.click(screen.getByRole('button', { name: 'See my target' }));
+  await screen.findByTestId('plan-result');
+}
+
+describe('Calorie plan — plain questions, one at a time', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('asks one thing per step and ends on "Your daily target is N calories"', async () => {
+    setup();
+    expect(await screen.findByRole('heading', { name: 'What do you weigh now?' })).toBeInTheDocument();
+    expect(screen.getByText('Step 1 of 4')).toBeInTheDocument();
+    // One question on screen: not the goal, the speed or the activity.
+    expect(screen.queryByText('How fast?')).toBeNull();
+    expect(screen.queryByLabelText(/Goal weight/i)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+
+    await fillAboutYou();
+    next();
+    await answerTheRest();
+
+    const bmr = mifflinStJeorBMR({ weightLb: 180, heightIn: 71, age: 30, gender: 'male' });
+    const target = Math.round(tdeeFromBMR(bmr, 'sedentary') - 500);
+    expect(screen.getByTestId('plan-headline')).toHaveTextContent(`Your daily target is ${target.toLocaleString('en-US')} calories`);
+    expect(screen.getByTestId('plan-outcome')).toHaveTextContent(/That should lose about 1 lb a week\. You’d reach 170 lb around /);
+    // No jargon on the answer; the working is behind a tap.
+    expect(document.body.textContent).not.toMatch(/BMR|TDEE|kcal|Mifflin|Katch/);
+    expect(screen.queryByTestId('metabolism-card')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save plan' })).toBeInTheDocument();
   });
 
-  it('the placeholder itself is a height the parser can read', async () => {
-    await goToProfileStep();
-    const heightField = screen.getByPlaceholderText('5\'11"');
-    expect(heightField).toBeInTheDocument();
-  });
-
-  it('typing the placeholder text (no closing quote) shows a visible error and blocks Next', async () => {
-    await goToProfileStep();
-    await fillRequiredFieldsExceptHeight();
-
-    // This is the exact string the OLD placeholder told the user to type.
-    fireEvent.change(screen.getByLabelText(/^Height$/i), { target: { value: "5'11" } });
-
-    expect(await screen.findByText(/can’t read that height/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Next: set goal/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Save details/i })).toBeDisabled();
-
-    // The bug this replaces: a "Safe" verdict rendered over a calculation
-    // that never happened. With Next disabled, that verdict is unreachable —
-    // confirm it never appears anywhere in the document for this input.
+  it('a height that can’t be read shows an error and blocks Next', async () => {
+    setup();
+    await fillAboutYou({ feet: '9', inches: '2' });
+    expect(await screen.findByText('Feet from 3 to 7, inches from 0 to 11.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    // The bug this replaces: "Safe" over a calculation that never happened.
     expect(screen.queryByText(/^Safe$/)).toBeNull();
   });
 
-  it.each([
-    ["5'11\"", 'feet/inches with the closing quote'],
-    ['5 ft 11', 'feet/inches spelled out'],
-    ['71', 'bare inches'],
-  ])('accepts %s (%s) and enables Next', async (value) => {
-    await goToProfileStep();
-    await fillRequiredFieldsExceptHeight();
-    fireEvent.change(screen.getByLabelText(/^Height$/i), { target: { value } });
-
-    await waitFor(() => {
-      expect(screen.queryByText(/can’t read that height/i)).toBeNull();
-    });
-    expect(screen.getByRole('button', { name: /Next: set goal/i })).not.toBeDisabled();
-  });
-
-  it('a valid height reaches a real plan whose Safety Check reflects an actual calculation', async () => {
-    await goToProfileStep();
-    await fillRequiredFieldsExceptHeight();
-    fireEvent.change(screen.getByLabelText(/^Height$/i), { target: { value: '5\'11"' } });
-
-    fireEvent.click(await screen.findByRole('button', { name: /Next: set goal/i }));
-    await screen.findByText('Set your weight goal');
-
-    fireEvent.change(screen.getByLabelText(/Goal weight/i), { target: { value: '170' } });
-    fireEvent.click(screen.getByRole('button', { name: /Work out my plan/i }));
-
-    await screen.findByText('Your calorie plan');
-    // A real BMR was computed (5'11" @ 30/male/180lbs is well above the 1200
-    // floor), so the Safety Check should report the honest verdict — not the
-    // "Calculation error" state reserved for a height that never parsed.
-    expect(screen.getByText('Safe')).toBeInTheDocument();
+  it('a real plan’s safety check reflects an actual calculation', async () => {
+    setup();
+    await fillAboutYou();
+    next();
+    await answerTheRest();
+    fireEvent.click(screen.getByTestId('plan-working-toggle'));
+    expect(await screen.findByText('Safe')).toBeInTheDocument();
     expect(screen.queryByText('Calculation error')).toBeNull();
   });
-});
 
-describe('Calorie Wizard — Stepper navigation', () => {
-  it('Step 1 has a way back to Step 0 (Back button)', async () => {
-    await goToProfileStep();
-    fireEvent.click(screen.getByRole('button', { name: /^Back$/i }));
-    await screen.findByText('Choose your approach');
+  it('Back keeps what was answered', async () => {
+    setup();
+    await fillAboutYou();
+    next();
+    await screen.findByRole('heading', { name: 'What are you aiming for?' });
+    fireEvent.change(screen.getByLabelText(/Goal weight/i), { target: { value: '170' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByLabelText(/Weight now/i)).toHaveValue(180);
+    next();
+    expect(await screen.findByLabelText(/Goal weight/i)).toHaveValue(170);
   });
 
-  it('the Stepper header is clickable for a step already completed', async () => {
-    await goToProfileStep();
-    fireEvent.click(screen.getByRole('button', { name: 'Approach' }));
-    await screen.findByText('Choose your approach');
+  it('shows what it already knows instead of asking, with a way to change it', async () => {
+    setup({ profile: KNOWN, weight: 180 });
+    expect(await screen.findByLabelText(/Weight now/i)).toHaveValue(180);
+    expect(screen.getByText('From your last weigh-in')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-known')).toHaveTextContent('Also using your height (5\'11") and age (30).');
+    expect(screen.queryByLabelText(/^Age$/i)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Next' })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Change these' }));
+    expect(screen.getByLabelText(/^Age$/i)).toHaveValue(30);
+  });
+
+  it('will not take a goal weight above the weight now', async () => {
+    setup({ profile: KNOWN, weight: 180 });
+    await screen.findByLabelText(/Weight now/i);
+    next();
+    fireEvent.change(await screen.findByLabelText(/Goal weight/i), { target: { value: '190' } });
+    expect(screen.getByText('Pick a weight below your weight now (180 lb).')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+  });
+
+  it('"Stay at this weight" asks no speed and saves a target that holds weight', async () => {
+    setup({ profile: KNOWN, weight: 180 });
+    await screen.findByLabelText(/Weight now/i);
+    next();
+    fireEvent.click(await screen.findByTestId('plan-goal-maintain'));
+    expect(screen.queryByLabelText(/Goal weight/i)).toBeNull();
+    expect(screen.getByText('Step 2 of 3')).toBeInTheDocument();
+    next();
+    await screen.findByRole('heading', { name: 'How active are you?' });
+    fireEvent.click(screen.getByRole('button', { name: 'See my target' }));
+    const bmr = mifflinStJeorBMR({ weightLb: 180, heightIn: 71, age: 30, gender: 'male' });
+    expect(await screen.findByTestId('plan-headline')).toHaveTextContent(`${tdeeFromBMR(bmr, 'sedentary').toLocaleString('en-US')} calories`);
+    expect(screen.getByTestId('plan-outcome')).toHaveTextContent('keep your weight about where it is');
+    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
+    await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalledTimes(1));
+    const ng = settingsService.updateSettings.mock.calls[0][0].nutrition_goal;
+    expect(ng).toMatchObject({ weight_change_rate: 0, daily_calorie_target: tdeeFromBMR(bmr, 'sedentary') });
+    expect(ng).not.toHaveProperty('target_weight');
+  });
+
+  it('"Adjust the details" holds the week and keto; the answers are saved as before', async () => {
+    setup({ profile: KNOWN, weight: 180 });
+    await screen.findByLabelText(/Weight now/i);
+    next();
+    await answerTheRest({ targetWeight: '165' });
+    expect(screen.queryByTestId('plan-type-weekender')).toBeNull();
+    fireEvent.click(screen.getByTestId('plan-details-toggle'));
+    fireEvent.click(await screen.findByTestId('plan-type-weekender'));
+    // The week appears once its days differ.
+    expect(await screen.findByTestId('plan-week')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('plan-mode-keto'));
+    expect(await screen.findByText('Net carbs a day, at most')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
+    await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalledTimes(1));
+    const ng = settingsService.updateSettings.mock.calls[0][0].nutrition_goal;
+    expect(ng).toMatchObject({
+      enabled: true, plan_type: 'weekender', mode: 'keto', activity_level: 'sedentary',
+      weight_change_rate: 1, target_weight: 165, goal_weight_lbs: 165, start_weight: 180,
+      keto: { net_carb_limit_g: 20, track_net_carbs: true },
+    });
+    expect(new Set(ng.weekly_schedule).size).toBe(2);
+    expect(ng.calc_inputs).toMatchObject({ weight_lb: 180, height_in: 71, age: 30, gender: 'male' });
+    // Nothing she was not asked for is written to her profile.
+    expect(userService.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('keeps what she had to type on her profile, only what was missing', async () => {
+    setup({ profile: { height: '5\'11"', gender: 'male' }, weight: 180 });
+    fireEvent.change(await screen.findByLabelText(/^Age$/i), { target: { value: '30' } });
+    next();
+    await answerTheRest();
+    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
+    await waitFor(() => expect(userService.updateProfile).toHaveBeenCalledWith({ age: 30 }));
   });
 });
 
-describe('Calorie Wizard — an evening plan starts today (review P2)', () => {
+describe('Calorie plan — reliability', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('a failed read of the saved plan is an error with a retry, not "no plan"', async () => {
+    settingsService.getSettings.mockReset();
+    settingsService.getSettings.mockRejectedValueOnce(new Error('boom')).mockResolvedValue({ data: { nutrition_goal: SAVED_PLAN } });
+    userService.getProfile.mockResolvedValue({ profile: KNOWN });
+    userService.getLatestWeight.mockResolvedValue(180);
+    render(<CalorieGoalWizard />);
+    expect(await screen.findByText('Couldn’t load your plan')).toBeInTheDocument();
+    expect(screen.queryByText('What do you weigh now?')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /try again|retry/i }));
+    expect(await screen.findByTestId('plan-summary')).toBeInTheDocument();
+  });
+
+  it('a failed save says so on the page, keeps every answer, and can be tried again', async () => {
+    setup({ profile: KNOWN, weight: 180 });
+    await screen.findByLabelText(/Weight now/i);
+    next();
+    await answerTheRest({ targetWeight: '165' });
+    const headline = screen.getByTestId('plan-headline').textContent;
+    settingsService.updateSettings.mockRejectedValueOnce(new Error('boom'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
+    expect(await screen.findByTestId('plan-save-error')).toHaveTextContent('Couldn’t save your plan. Try again.');
+    expect(screen.getByTestId('plan-headline')).toHaveTextContent(headline);
+    expect(screen.queryByTestId('plan-summary')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
+    expect(await screen.findByTestId('plan-summary')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Saved');
+    expect(settingsService.updateSettings).toHaveBeenCalledTimes(2);
+    expect(settingsService.updateSettings.mock.calls[1][0].nutrition_goal.target_weight).toBe(165);
+  });
+
+  it('a second tap while saving does not save twice', async () => {
+    setup({ profile: KNOWN, weight: 180 });
+    await screen.findByLabelText(/Weight now/i);
+    next();
+    await answerTheRest();
+    let finish;
+    settingsService.updateSettings.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const save = screen.getByRole('button', { name: 'Save plan' });
+    fireEvent.click(save);
+    expect(await screen.findByRole('button', { name: 'Saving…' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Saving…' }));
+    finish({});
+    await screen.findByTestId('plan-summary');
+    expect(settingsService.updateSettings).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Calorie plan — a person who already has one', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('sees the plan first, and "Change plan" starts from what she chose before', async () => {
+    setup({ profile: KNOWN, weight: 178, nutrition_goal: SAVED_PLAN });
+    const summary = await screen.findByTestId('plan-summary');
+    expect(summary).toHaveTextContent('Your daily target is 2,037 calories');
+    expect(summary).toHaveTextContent('That should lose about 1½ lb a week.');
+    expect(screen.getByTestId('plan-week')).toHaveTextContent('2,343');
+    expect(screen.queryByText('What do you weigh now?')).toBeNull();
+    expect(screen.queryByTestId('plan-stale-notice')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change plan' }));
+    expect(await screen.findByLabelText(/Weight now/i)).toHaveValue(178);
+    expect(screen.getByTestId('plan-current-target')).toHaveTextContent('Your target now is 2,037 calories. Nothing changes until you save.');
+    next();
+    expect(await screen.findByLabelText(/Goal weight/i)).toHaveValue(165);
+    next();
+    expect(await screen.findByTestId('plan-speed-1.5')).toHaveAttribute('aria-checked', 'true');
+    next();
+    expect(await screen.findByTestId('plan-activity-moderate')).toHaveAttribute('aria-checked', 'true');
+    expect(settingsService.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it('the "too high" plan says why, and is one tap from a new target beside the old', async () => {
+    setup({ profile: KNOWN, weight: 180, nutrition_goal: STALE_PLAN });
+    const notice = await screen.findByTestId('plan-stale-notice');
+    expect(notice).toHaveTextContent('This target is probably too high');
+    expect(notice).toHaveTextContent(/before a mistake in the maths was fixed/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Work out a new target' }));
+    const bmr = mifflinStJeorBMR({ weightLb: 180, heightIn: 71, age: 30, gender: 'male' });
+    const target = Math.round(tdeeFromBMR(bmr, 'sedentary') - 500);
+    expect(await screen.findByTestId('plan-headline')).toHaveTextContent(`Your daily target is ${target.toLocaleString('en-US')} calories`);
+    expect(screen.getByTestId('plan-comparison')).toHaveTextContent(`2,980 → ${target.toLocaleString('en-US')} cal`);
+    // Nothing was written by looking.
+    expect(settingsService.updateSettings).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
+    await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalledTimes(1));
+    const ng = settingsService.updateSettings.mock.calls[0][0].nutrition_goal;
+    expect(ng).toMatchObject({ daily_calorie_target: target, bmr_calc_version: BMR_CALC_VERSION, target_weight: 165, weight_change_rate: 1 });
+    // Saved at the current version, so the notice is gone.
+    await screen.findByTestId('plan-summary');
+    expect(screen.queryByTestId('plan-stale-notice')).toBeNull();
+  });
+
+  it('"Remove plan" asks first, and a failed removal keeps the plan on screen', async () => {
+    setup({ profile: KNOWN, weight: 180, nutrition_goal: SAVED_PLAN });
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove plan' }));
+    expect(settingsService.updateSettings).not.toHaveBeenCalled();
+    expect(screen.getByText('Remove this plan?')).toBeInTheDocument();
+
+    settingsService.updateSettings.mockRejectedValueOnce(new Error('boom'));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, remove it' }));
+    expect(await screen.findByText('Couldn’t remove your plan. Try again.')).toBeInTheDocument();
+    expect(screen.getByTestId('plan-summary')).toHaveTextContent('2,037 calories');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, remove it' }));
+    expect(await screen.findByRole('heading', { name: 'What do you weigh now?' })).toBeInTheDocument();
+    expect(settingsService.updateSettings).toHaveBeenLastCalledWith({ nutrition_goal: { enabled: false } });
+  });
+});
+
+describe('Calorie plan — an evening plan starts today (review P2)', () => {
   const realTZ = process.env.TZ;
   afterEach(() => {
     vi.useRealTimers();
@@ -169,20 +350,16 @@ describe('Calorie Wizard — an evening plan starts today (review P2)', () => {
   });
 
   it('start_date is the LOCAL calendar day, not tomorrow in UTC', async () => {
+    vi.clearAllMocks();
     process.env.TZ = 'America/Chicago';
     vi.useFakeTimers({ toFake: ['Date'] });
     // 22:30 Central on Oct 15 is already Oct 16 in UTC.
     vi.setSystemTime(new Date('2026-10-16T03:30:00.000Z'));
-    await goToProfileStep();
-    await fillRequiredFieldsExceptHeight();
-    fireEvent.change(screen.getByLabelText(/^Height$/i), { target: { value: '5\'11"' } });
-    fireEvent.click(await screen.findByRole('button', { name: /Next: set goal/i }));
-    await screen.findByText('Set your weight goal');
-    fireEvent.change(screen.getByLabelText(/Goal weight/i), { target: { value: '170' } });
-    fireEvent.click(screen.getByRole('button', { name: /Work out my plan/i }));
-    await screen.findByText('Your calorie plan');
-    fireEvent.click(screen.getByRole('button', { name: /^Save plan$/i }));
-    const { settingsService } = await import('../../../services/settingsService.js');
+    setup({ profile: KNOWN, weight: 180 });
+    await screen.findByLabelText(/Weight now/i);
+    next();
+    await answerTheRest();
+    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
     await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalled());
     const goal = settingsService.updateSettings.mock.calls.at(-1)[0].nutrition_goal;
     expect(goal.start_date).toBe('2026-10-15');

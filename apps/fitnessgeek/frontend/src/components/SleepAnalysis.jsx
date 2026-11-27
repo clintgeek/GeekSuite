@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { influxService } from '../services/influxService';
 import {
   Box,
@@ -15,9 +15,11 @@ import {
   ListItemText,
   Divider,
   Stack,
-  Tooltip,
 } from '@mui/material';
-import { LabelPanel, FactHeadline, LabelBar, Tag } from './primitives';
+import { GeekErrorState } from '@geeksuite/ui';
+import { LabelPanel, FactHeadline, LabelBar, Tag, EmptyState } from './primitives';
+import { EXPLAIN, WATCH_DOWN_TEXT, watchOutcome, sentenceWord } from './Reports/watchWords.js';
+import { errorMessage } from '../utils/errorMessage.js';
 import {
   ExpandMore as ExpandMoreIcon,
   Bedtime as BedtimeIcon,
@@ -32,33 +34,39 @@ import {
   Info as InfoIcon
 } from '@mui/icons-material';
 
-/** Garmin's ALL-CAPS words ("GOOD", "BALANCED") in sentence case. */
-const sentenceWord = (word) => (typeof word === 'string' && word
-  ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase().replace(/_/g, ' ')
-  : word);
+/** A number for the screen, or a dash when the watch sent none. */
+const show = (value) => (value == null || (typeof value === 'number' && !Number.isFinite(value)) ? '—' : value);
+/** Whole hours and the minutes left over; dashes when the minutes are missing. */
+const hoursAndMinutes = (minutes) => {
+  const n = Number(minutes);
+  if (minutes == null || !Number.isFinite(n)) return { hours: '—', rest: '' };
+  return { hours: Math.floor(n / 60), rest: `h ${Math.round(n % 60)}m` };
+};
 const HRV_WORDS = { HIGH: 'High', BALANCED: 'Balanced', LOW: 'Low', UNBALANCED: 'Unbalanced' };
 
 /** An accordion drawn as a card: hairline edge, 16px corners, no shadow. */
 const accordionSx = {
-  mb: 1,
+  // 12px between the cards: the suite's spacing unit is 4px.
+  mb: 3,
   border: (t) => `1px solid ${t.palette.divider}`,
   borderRadius: '16px',
   overflow: 'hidden',
   boxShadow: 'none',
   backgroundImage: 'none',
   '&:before': { display: 'none' },
-  '&.Mui-expanded': { margin: '0 0 8px' },
+  '&.Mui-expanded': { margin: '0 0 12px' },
+  '&:last-of-type': { mb: 0 },
   '& .MuiAccordionSummary-root': { minHeight: 56 },
-  '& .MuiAccordionDetails-root': { borderTop: (t) => `1px solid ${t.palette.divider}`, pt: 2 },
+  '& .MuiAccordionDetails-root': { borderTop: (t) => `1px solid ${t.palette.divider}`, pt: 4 },
 };
-const accordionTitleSx = { fontWeight: 700, fontSize: '1.125rem', lineHeight: 1.2 };
+const accordionTitleSx = { fontWeight: 700, fontSize: '1.0625rem', lineHeight: 1.25 };
 
 /** A small status mark beside a label; the label is the words. */
 const StatusMark = ({ color }) => (
   color && color !== 'default' ? (
     <Box
       aria-hidden
-      sx={{ width: 10, height: 10, flexShrink: 0, bgcolor: `${color}.main` }}
+      sx={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, bgcolor: `${color}.main` }}
     />
   ) : null
 );
@@ -72,40 +80,45 @@ const StatusMark = ({ color }) => (
  *   caller passing a trend lives, so a strong recovery night showed a red
  *   up-arrow.
  */
-function MetricCard({ label, value, unit, color = 'default', trend = null, higherIsBetter = false, tooltip = '' }) {
+function MetricCard({ label, value, unit, color = 'default', trend = null, higherIsBetter = false, hint = '' }) {
+  // `hint` is one plain line under the number. It used to be a hover
+  // tooltip, which a phone never shows.
   return (
-    <Tooltip title={tooltip} arrow>
-      <Box
-        sx={{
-          height: '100%',
-          borderTop: (t) => `1px solid ${t.palette.divider}`,
-          pt: 1,
-          pb: 0.5,
-        }}
-      >
-        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }}>
-          <StatusMark color={color} />
-          <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, lineHeight: 1.2 }}>
-            {label}
+    <Box
+      sx={{
+        height: '100%',
+        borderTop: (t) => `1px solid ${t.palette.divider}`,
+        pt: 3,
+        pb: 1,
+      }}
+    >
+      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+        <StatusMark color={color} />
+        <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1.2 }}>
+          {label}
+        </Typography>
+      </Stack>
+      <Stack direction="row" spacing={1.5} alignItems="baseline">
+        <Typography component="div" sx={{ fontWeight: 700, fontSize: '1.75rem', lineHeight: 1, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+          {show(value)}
+        </Typography>
+        {unit && (
+          <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.secondary' }}>
+            {unit}
           </Typography>
-        </Stack>
-        <Stack direction="row" spacing={1} alignItems="baseline">
-          <Typography component="div" sx={{ fontWeight: 700, fontSize: '2rem', lineHeight: 1, letterSpacing: '-0.02em' }}>
-            {value}
-          </Typography>
-          {unit && (
-            <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.secondary' }}>
-              {unit}
-            </Typography>
-          )}
-          {typeof trend === 'number' && trend !== 0 && (
-            trend > 0
-              ? <TrendingUpIcon color={higherIsBetter ? 'success' : 'error'} />
-              : <TrendingDownIcon color={higherIsBetter ? 'error' : 'success'} />
-          )}
-        </Stack>
-      </Box>
-    </Tooltip>
+        )}
+        {typeof trend === 'number' && trend !== 0 && (
+          trend > 0
+            ? <TrendingUpIcon color={higherIsBetter ? 'success' : 'error'} titleAccess="Above your usual" />
+            : <TrendingDownIcon color={higherIsBetter ? 'error' : 'success'} titleAccess="Below your usual" />
+        )}
+      </Stack>
+      {hint && (
+        <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.4, mt: 1 }}>
+          {hint}
+        </Typography>
+      )}
+    </Box>
   );
 }
 
@@ -113,21 +126,22 @@ function MetricCard({ label, value, unit, color = 'default', trend = null, highe
  * Progress bar with label
  */
 function ProgressMetric({ label, value, max = 100, color = 'primary', showPercentage = true }) {
-  const percentage = Math.min(100, (value / max) * 100);
+  const known = value != null && Number.isFinite(Number(value));
+  const percentage = known ? Math.min(100, (value / max) * 100) : 0;
 
   return (
-    <Box sx={{ mb: 1 }}>
+    <Box sx={{ mb: 3 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
         <Typography variant="body2" sx={{ fontWeight: 600 }}>{label}</Typography>
         <Typography variant="body2" fontWeight="bold">
-          {showPercentage ? `${Math.round(percentage)}%` : `${value}${max ? `/${max}` : ''}`}
+          {!known ? '—' : showPercentage ? `${Math.round(percentage)}%` : `${value}${max ? `/${max}` : ''}`}
         </Typography>
       </Stack>
       {/* Blue is the measured bar; a stage that misses its line is marked in
           the theme's warning colour, a stage that makes it stays blue. */}
       <LabelBar
         value={percentage}
-        label={`${label}: ${Math.round(percentage)}%`}
+        label={known ? `${label}: ${Math.round(percentage)}%` : `${label}: no reading`}
         height={10}
         sx={{ my: 0.5, '& > div': { bgcolor: color === 'primary' || color === 'success' || color === 'info' ? 'primary.main' : `${color}.main` } }}
       />
@@ -158,9 +172,9 @@ function RecommendationItem({ recommendation }) {
       </ListItemIcon>
       <ListItemText
         primary={
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" alignItems="center" sx={{ flexWrap: 'wrap', columnGap: 2, rowGap: 1 }}>
             <Typography variant="subtitle2">{recommendation.issue}</Typography>
-            <Tag>{recommendation.category.replace('_', ' ')}</Tag>
+            {recommendation.category && <Tag>{sentenceWord(String(recommendation.category))}</Tag>}
           </Stack>
         }
         secondary={
@@ -184,6 +198,9 @@ function RecommendationItem({ recommendation }) {
 export default function SleepAnalysis({ date }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const [expanded, setExpanded] = useState({
     architecture: false,
     cardiovascular: false,
@@ -193,29 +210,41 @@ export default function SleepAnalysis({ date }) {
   });
 
   useEffect(() => {
-    async function fetchSleepData() {
-      if (!date) return;
+    if (!date) return undefined;
+    let current = true;
 
+    async function fetchSleepData() {
       setLoading(true);
+      setError(null);
 
       try {
         const response = await influxService.getSleepAnalysis(date);
-        // Backend returns { available: false, reason, message } for both "no data"
-        // and "influx unavailable" cases — treat both as empty-state, not an error.
-        setData(response);
+        if (!current) return;
+        // { available: false } means two different things. With
+        // reason 'influx_unavailable' the data server could not be reached:
+        // a failed read, said as one. Without it, the watch sent no sleep.
+        // The server's own `message` is never shown; it names the database.
+        if (watchOutcome(response) === 'down') {
+          setData(null);
+          setError(WATCH_DOWN_TEXT);
+        } else {
+          setData(response);
+        }
       } catch (err) {
-        // Defensive: backend should no longer 500, but handle it quietly.
-        console.warn('Sleep analysis unavailable:', err.message);
-        // Synthesize the same shape as a backend "unavailable" response so the
-        // existing !data.available empty-state renders instead of an error alert.
-        setData({ available: false, message: 'Couldn’t load your sleep for this night. Try again.' });
+        if (!current) return;
+        console.warn('Sleep analysis unavailable:', err?.message);
+        // This used to be folded into the "No sleep for this night" state,
+        // so a failed read looked like a night with no sleep.
+        setData(null);
+        setError(errorMessage(err, 'Couldn’t load your sleep for this night. Try again.'));
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     }
 
     fetchSleepData();
-  }, [date]);
+    return () => { current = false; };
+  }, [date, attempt]);
 
   const handleAccordionChange = (panel) => (event, isExpanded) => {
     setExpanded(prev => ({ ...prev, [panel]: isExpanded }));
@@ -224,50 +253,65 @@ export default function SleepAnalysis({ date }) {
   if (loading) {
     return (
       <LabelPanel title="Your sleep">
-        <Typography sx={{ pt: 1 }}>Loading your sleep…</Typography>
+        <Typography sx={{ color: 'text.secondary' }}>Loading your sleep…</Typography>
       </LabelPanel>
     );
+  }
+
+  if (error) {
+    return <GeekErrorState title="Couldn’t load your sleep" error={error} onRetry={retry} data-testid="sleep-error" />;
   }
 
   if (!data || !data.available) {
     return (
-      <LabelPanel title="Your sleep">
-        <Alert severity="info" sx={{ mt: 1.5 }}>
-          <AlertTitle>No sleep for this night</AlertTitle>
-          {data?.message || 'Your watch hasn’t sent sleep for this night yet.'}
-        </Alert>
-      </LabelPanel>
+      <EmptyState
+        icon={BedtimeIcon}
+        title="No sleep for this night"
+        copy="Your watch hasn’t sent sleep for this night yet. It shows here after the watch syncs."
+        data-testid="sleep-empty"
+      />
     );
   }
 
-  const { qualityScore, qualityLabel, metrics, recommendations, warnings } = data;
+  const { qualityScore, qualityLabel } = data;
+  // A partial record must not take the panel down: every group defaults to
+  // empty, and a missing number draws as a dash.
+  const metrics = {
+    architecture: {}, continuity: {}, cardiovascular: {}, hrvRecovery: {}, stress: {}, respiration: {},
+    ...(data.metrics || {}),
+  };
+  const recommendations = Array.isArray(data.recommendations) ? data.recommendations.filter(Boolean) : [];
+  const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
+  const asleep = hoursAndMinutes(metrics.architecture.asleepMinutes);
+  const inBed = hoursAndMinutes(metrics.architecture.totalMinutes);
 
   return (
     <Box>
       {/* Summary panel: the score is the headline */}
-      <LabelPanel title="Your sleep" level={1} sx={{ mb: 2 }}>
+      <LabelPanel title="Your sleep" level={1} sx={{ mb: 3 }}>
           {qualityScore != null ? (
-            <Tooltip title="Garmin’s sleep score for this night — the same number your watch shows" arrow>
-              <Box>
-                <FactHeadline caption="Sleep score" name={qualityLabel ? <Tag>{sentenceWord(qualityLabel)}</Tag> : ''} value={`${qualityScore}/100`} />
-              </Box>
-            </Tooltip>
+            <>
+              <FactHeadline caption="Sleep score" name={qualityLabel ? <Tag>{sentenceWord(qualityLabel)}</Tag> : ''} value={`${qualityScore}/100`} />
+              <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1 }}>
+                {`${EXPLAIN.sleepScore} The same number your watch shows.`}
+              </Typography>
+            </>
           ) : (
             <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
               No score from the watch yet
             </Typography>
           )}
-          <Box sx={{ height: 12 }} />
+          <Box sx={{ height: 16 }} />
 
           {/* Key metrics: four headline numbers under one rule, no boxes */}
-          <Grid container columnSpacing={2} rowSpacing={1.5} sx={{ mb: 2 }}>
+          <Grid container columnSpacing={4} rowSpacing={2} sx={{ mb: 2 }}>
             <Grid item xs={6} sm={3}>
               <MetricCard
                 label="Time asleep"
-                value={Math.floor(metrics.architecture.asleepMinutes / 60)}
-                unit={`h ${metrics.architecture.asleepMinutes % 60}m`}
+                value={asleep.hours}
+                unit={asleep.rest || undefined}
                 color={metrics.architecture.asleepMinutes >= 420 ? 'success' : 'warning'}
-                tooltip="Time asleep, not counting time awake in bed (aim for 7–9 hours)"
+                hint="Not counting time awake in bed. Aim for 7 to 9 hours."
               />
             </Grid>
             <Grid item xs={6} sm={3}>
@@ -276,7 +320,7 @@ export default function SleepAnalysis({ date }) {
                 value={metrics.architecture.deepPercent}
                 unit="%"
                 color={metrics.architecture.deepPercent >= 15 ? 'success' : 'warning'}
-                tooltip="Share of time asleep spent in deep sleep. Flagged below 15%, the same line the recommendations use."
+                hint="Of your time asleep. Marked when under 15%."
               />
             </Grid>
             <Grid item xs={6} sm={3}>
@@ -291,11 +335,7 @@ export default function SleepAnalysis({ date }) {
                 }
                 trend={metrics.hrvRecovery.hrvDeviation}
                 higherIsBetter
-                tooltip={
-                  metrics.hrvRecovery.baselineHRV != null
-                    ? `Garmin’s overnight heart-rate variability (HRV), against your ${metrics.hrvRecovery.baselineHRV} ms average over the nights before`
-                    : 'Garmin’s overnight heart-rate variability (HRV). A comparison appears once there are three nights to compare against.'
-                }
+                hint={`Heart-rate variability. ${EXPLAIN.hrv}`}
               />
             </Grid>
             <Grid item xs={6} sm={3}>
@@ -304,18 +344,18 @@ export default function SleepAnalysis({ date }) {
                 value={metrics.architecture.sleepEfficiency}
                 unit="%"
                 color={metrics.architecture.sleepEfficiency >= 90 ? 'success' : 'warning'}
-                tooltip="How much of your time in bed you were asleep (aim for over 90%)"
+                hint="Aim for over 90%."
               />
             </Grid>
           </Grid>
 
           {/* Warnings */}
           {warnings.length > 0 && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
+            <Alert severity="warning" sx={{ mt: 3 }}>
               <AlertTitle>Worth a look</AlertTitle>
-              <List dense>
+              <List dense disablePadding>
                 {warnings.map((warning, idx) => (
-                  <ListItem key={idx} sx={{ py: 0 }}>
+                  <ListItem key={idx} disableGutters sx={{ py: 0 }}>
                     <ListItemText primary={warning} />
                   </ListItem>
                 ))}
@@ -331,13 +371,13 @@ export default function SleepAnalysis({ date }) {
         sx={accordionSx}
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={3} alignItems="center">
             <BedtimeIcon />
             <Typography sx={accordionTitleSx}>Sleep stages</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
-          <Grid container spacing={2}>
+          <Grid container spacing={4}>
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle2" gutterBottom>Time in each stage</Typography>
               <ProgressMetric
@@ -363,23 +403,23 @@ export default function SleepAnalysis({ date }) {
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle2" gutterBottom>How settled you were</Typography>
-              <Stack spacing={1}>
+              <Stack spacing={2}>
                 <Typography variant="body2">
-                  <strong>Time in bed:</strong> {Math.floor(metrics.architecture.totalMinutes / 60)}h {metrics.architecture.totalMinutes % 60}m
-                  {' · '}<strong>asleep</strong> {Math.floor(metrics.architecture.asleepMinutes / 60)}h {metrics.architecture.asleepMinutes % 60}m
+                  <strong>Time in bed:</strong> {inBed.hours}{inBed.rest}
+                  {' · '}<strong>asleep</strong> {asleep.hours}{asleep.rest}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Awakenings:</strong> {metrics.continuity.awakenings} times
+                  <strong>Times awake:</strong> {show(metrics.continuity.awakenings)}
                 </Typography>
                 {/* Transitions per hour asleep. There is deliberately no
                     Good/High chip: nothing calibrates a threshold for Garmin's
                     segment granularity, and the index this replaced read "92%
                     · High" on every night because it could not vary. */}
                 <Typography variant="body2">
-                  <strong>Stage changes:</strong> {metrics.continuity.transitionsPerHour} per hour asleep
+                  <strong>Stage changes:</strong> {show(metrics.continuity.transitionsPerHour)} per hour asleep
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Stage changes in all:</strong> {metrics.continuity.stageTransitions}
+                  <strong>Stage changes in all:</strong> {show(metrics.continuity.stageTransitions)}
                 </Typography>
               </Stack>
             </Grid>
@@ -394,19 +434,19 @@ export default function SleepAnalysis({ date }) {
         sx={accordionSx}
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={3} alignItems="center">
             <HeartIcon />
             <Typography sx={accordionTitleSx}>Heart rate overnight</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
-          <Grid container spacing={2}>
+          <Grid container spacing={4}>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
                 label="Resting heart rate"
                 value={metrics.cardiovascular.restingHeartRate}
                 unit="bpm"
-                tooltip="10th percentile HR during sleep"
+hint="The low your heart settled to overnight."
               />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
@@ -414,7 +454,7 @@ export default function SleepAnalysis({ date }) {
                 label="Average while asleep"
                 value={metrics.cardiovascular.avgHeartRate}
                 unit="bpm"
-                tooltip="Average heart rate throughout sleep"
+hint="Across the whole night."
               />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
@@ -422,7 +462,7 @@ export default function SleepAnalysis({ date }) {
                 label="Average in deep sleep"
                 value={metrics.cardiovascular.avgDeepSleepHR}
                 unit="bpm"
-                tooltip="Average heart rate during deep sleep"
+hint="While in deep sleep."
               />
             </Grid>
           </Grid>
@@ -440,19 +480,22 @@ export default function SleepAnalysis({ date }) {
         sx={accordionSx}
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={3} alignItems="center">
             <BrainIcon />
             <Typography sx={accordionTitleSx}>Heart-rate variability (HRV) and recovery</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
-          <Grid container spacing={2}>
+          <Grid container spacing={4}>
             <Grid item xs={12} md={6}>
-              <Stack spacing={2}>
+              <Stack spacing={4}>
                 <Box>
                   <Typography variant="subtitle2" gutterBottom>HRV</Typography>
                   <Typography variant="body2">
                     <strong>Last night:</strong> {metrics.hrvRecovery.avgHRV ?? '—'}{metrics.hrvRecovery.avgHRV != null && ' ms'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                    {EXPLAIN.hrv}
                   </Typography>
                   {metrics.hrvRecovery.baselineHRV != null ? (
                     <>
@@ -462,7 +505,7 @@ export default function SleepAnalysis({ date }) {
                       </Typography>
                       <Typography variant="body2">
                         <strong>Difference:</strong> {metrics.hrvRecovery.hrvDeviation > 0 ? '+' : ''}{metrics.hrvRecovery.hrvDeviation}%
-                        <Tag sx={{ ml: 1 }}>
+                        <Tag sx={{ ml: 2 }}>
                           {HRV_WORDS[metrics.hrvRecovery.hrvStatus] || sentenceWord(metrics.hrvRecovery.hrvStatus)}
                         </Tag>
                       </Typography>
@@ -479,32 +522,45 @@ export default function SleepAnalysis({ date }) {
                 </Box>
                 <Box>
                   <Typography variant="subtitle2" gutterBottom>Body Battery</Typography>
-                  <Typography variant="body2">
-                    <strong>Start:</strong> {metrics.stress.bodyBatteryStart}
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                    {EXPLAIN.bodyBattery}
                   </Typography>
                   <Typography variant="body2">
-                    <strong>End:</strong> {metrics.stress.bodyBatteryEnd}
+                    <strong>At bedtime:</strong> {show(metrics.stress.bodyBatteryStart)}
                   </Typography>
                   <Typography variant="body2">
-                    <strong>Recovery:</strong> {metrics.stress.bodyBatteryChange >= 0 ? '+' : ''}{metrics.stress.bodyBatteryChange} points
-                    <Tag sx={{ ml: 1 }}>{metrics.stress.bodyBatteryChange >= 20 ? 'Good' : 'Low'}</Tag>
+                    <strong>On waking:</strong> {show(metrics.stress.bodyBatteryEnd)}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Charged overnight:</strong> {metrics.stress.bodyBatteryChange >= 0 ? '+' : ''}{show(metrics.stress.bodyBatteryChange)} points
+                    {metrics.stress.bodyBatteryChange != null && (
+                      <Tag sx={{ ml: 2 }}>{metrics.stress.bodyBatteryChange >= 20 ? 'Good' : 'Low'}</Tag>
+                    )}
                   </Typography>
                 </Box>
               </Stack>
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle2" gutterBottom>Stress while asleep</Typography>
-              <Typography variant="body2" paragraph>
-                <strong>Average stress:</strong> {metrics.stress.avgStress}/100
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                {EXPLAIN.stress}
               </Typography>
-              <Typography variant="body2" paragraph>
-                <strong>Stress spikes:</strong> {metrics.stress.stressSpikes}
+              <Typography variant="body2">
+                <strong>Average stress:</strong> {show(metrics.stress.avgStress)}/100
               </Typography>
-              <Alert severity={metrics.stress.avgStress < 40 ? 'success' : 'warning'}>
-                {metrics.stress.avgStress < 40
-                  ? '✓ Low stress while asleep: your body was recovering'
-                  : 'Stress stayed up while you slept. You may not be fully recovered.'}
-              </Alert>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                <strong>Stress spikes:</strong> {show(metrics.stress.stressSpikes)}
+              </Typography>
+              {metrics.stress.avgStress != null && (
+                <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Tag tone={metrics.stress.avgStress < 40 ? 'success' : 'warning'}>
+                    {metrics.stress.avgStress < 40 ? 'Calm' : 'Raised'}
+                  </Tag>
+                  {metrics.stress.avgStress < 40
+                    ? 'Low stress while asleep: your body was recovering.'
+                    : 'Stress stayed up while you slept. You may not be fully recovered.'}
+                </Typography>
+              )}
             </Grid>
           </Grid>
         </AccordionDetails>
@@ -517,45 +573,44 @@ export default function SleepAnalysis({ date }) {
         sx={accordionSx}
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={3} alignItems="center">
             <AirIcon />
             <Typography sx={accordionTitleSx}>Breathing</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
-          <Grid container spacing={2}>
+          <Grid container spacing={4}>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
                 label="Breaths a minute"
                 value={metrics.respiration.avgRespirationRate}
-                unit="bpm"
-                tooltip="Average breaths per minute during sleep"
+                hint="Your average while asleep."
               />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
-                label="Avg SpO2"
+                label="Blood oxygen, average"
                 value={metrics.respiration.avgSpO2}
                 unit="%"
                 color={metrics.respiration.avgSpO2 >= 95 ? 'success' : 'warning'}
-                tooltip="Average blood oxygen saturation"
+hint={EXPLAIN.spo2}
               />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
-                label="Min SpO2"
+                label="Blood oxygen, lowest"
                 value={metrics.respiration.minSpO2}
                 unit="%"
                 color={metrics.respiration.minSpO2 >= 90 ? 'success' : 'error'}
-                tooltip="Minimum blood oxygen level (warning if <90%)"
+hint="Marked when under 90%."
               />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
-                label="SpO2 dips"
+                label="Blood oxygen dips"
                 value={metrics.respiration.spo2Dips}
                 color={metrics.respiration.spo2Dips === 0 ? 'success' : 'warning'}
-                tooltip="Separate stretches with blood oxygen below 90%. A wrist sensor reads low when the arm is pressed or cold, so treat a pattern across nights as the signal, not one night."
+hint="Stretches under 90%. A wrist sensor reads low when the arm is pressed or cold, so one night proves little."
               />
             </Grid>
           </Grid>
@@ -583,7 +638,7 @@ export default function SleepAnalysis({ date }) {
           sx={accordionSx}
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={3} alignItems="center">
               <CheckIcon />
               <Typography sx={accordionTitleSx}>Recommendations ({recommendations.length})</Typography>
             </Stack>

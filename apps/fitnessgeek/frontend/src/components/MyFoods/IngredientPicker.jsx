@@ -22,6 +22,8 @@ const IngredientPicker = ({ open, onClose, onPick, title = 'Add an ingredient' }
   const [results, setResults] = useState([]);
   const [busy, setBusy] = useState(false);
   const [searched, setSearched] = useState(false);
+  // The search itself failed: not the same thing as nothing matching.
+  const [failed, setFailed] = useState(false);
   const run = useRef(0);
 
   useEffect(() => {
@@ -29,6 +31,7 @@ const IngredientPicker = ({ open, onClose, onPick, title = 'Add an ingredient' }
     setQuery('');
     setResults([]);
     setSearched(false);
+    setFailed(false);
     return undefined;
   }, [open]);
 
@@ -40,9 +43,14 @@ const IngredientPicker = ({ open, onClose, onPick, title = 'Add an ingredient' }
       setBusy(true);
       try {
         const foods = await foodService.suggest(query, { limit: 15 });
-        if (run.current === id) setResults(foods || []);
+        if (run.current === id) {
+          setResults((Array.isArray(foods) ? foods : []).filter((f) => f && typeof f === 'object'));
+          setFailed(false);
+        }
       } catch {
-        // A failed typeahead is not fatal — "Search more" may still answer.
+        // A failed typeahead is not fatal — "Search more" may still answer —
+        // but it is not "nothing matches" either.
+        if (run.current === id) setFailed(true);
       } finally {
         if (run.current === id) {
           setBusy(false);
@@ -58,9 +66,13 @@ const IngredientPicker = ({ open, onClose, onPick, title = 'Add an ingredient' }
     setBusy(true);
     try {
       const foods = await foodService.search(query, { limit: 25, includeAI: true });
-      if (run.current === id) setResults(foods || []);
+      if (run.current === id) {
+        setResults((Array.isArray(foods) ? foods : []).filter((f) => f && typeof f === 'object'));
+        setFailed(false);
+      }
     } catch {
-      // keep the typeahead results on screen
+      // keep the typeahead results on screen, and say the search didn't run
+      if (run.current === id) setFailed(true);
     } finally {
       if (run.current === id) {
         setBusy(false);
@@ -84,7 +96,8 @@ const IngredientPicker = ({ open, onClose, onPick, title = 'Add an ingredient' }
         label="Search foods"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        sx={{ mb: 2 }}
+        // 4px theme unit: 8px clears the label under the header; 16px below.
+        sx={{ mt: 2, mb: 4 }}
       />
       <Box role="list" aria-label="Matching foods" sx={{ display: 'flex', flexDirection: 'column' }}>
         {results.map((food, i) => (
@@ -107,7 +120,7 @@ const IngredientPicker = ({ open, onClose, onPick, title = 'Add an ingredient' }
               }}
             >
               <Box sx={{ minWidth: 0 }}>
-                <Typography noWrap sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>{food.name}</Typography>
+                <Typography noWrap sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>{food.name || 'Unnamed food'}</Typography>
                 <Typography noWrap sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
                   {[food.brand, servingText(food)].filter(Boolean).join(' · ')}
                 </Typography>
@@ -120,13 +133,18 @@ const IngredientPicker = ({ open, onClose, onPick, title = 'Add an ingredient' }
         ))}
       </Box>
       {busy && <CircularProgress size={20} aria-label="Searching" sx={{ display: 'block', mx: 'auto', my: 2 }} />}
-      {!busy && searched && results.length === 0 && (
-        <Typography sx={{ color: 'text.secondary', py: 2 }}>
-          Nothing in your own foods matches. Try Search more.
+      {!busy && failed && (
+        <Typography role="alert" sx={{ color: 'text.primary', fontWeight: 600, py: 3 }}>
+          Couldn’t search just now. Check your connection and try again.
+        </Typography>
+      )}
+      {!busy && !failed && searched && results.length === 0 && (
+        <Typography role="status" sx={{ color: 'text.secondary', py: 3 }}>
+          {query.trim() ? 'Nothing in your own foods matches. Try Search more.' : 'Type a food’s name to find it.'}
         </Typography>
       )}
       {query.trim() && (
-        <Button onClick={deep} disabled={busy} sx={{ mt: 1 }}>
+        <Button variant="tonal" onClick={deep} disabled={busy} sx={{ mt: 2, minHeight: 44 }}>
           Search more
         </Button>
       )}

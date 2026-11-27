@@ -10,6 +10,8 @@ import { errorMessage } from '../utils/errorMessage.js';
 export const useWeight = () => {
   const [weightLogs, setWeightLogs] = useState([]);
   const [weightGoal, setWeightGoal] = useState(null);
+  // The goal could not be READ (which is not "there is no goal").
+  const [goalLoadFailed, setGoalLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -129,9 +131,13 @@ export const useWeight = () => {
         } else {
           setWeightGoal(null);
         }
+        setGoalLoadFailed(false);
       } catch (goalsError) {
+        // A failed read keeps the goal that was on screen. Clearing it drew
+        // "No weight goal yet" (and offered to set one) after every refresh
+        // that hit a blip, e.g. the reload behind a saved weigh-in.
         logger.error('Error loading weight goals:', goalsError);
-        setWeightGoal(null);
+        setGoalLoadFailed(true);
       }
     } catch (error) {
       setAutoCloseMessage(errorMessage(error, "Couldn’t load your weights. Try again."), setError);
@@ -269,6 +275,7 @@ export const useWeight = () => {
     // State
     weightLogs,
     weightGoal,
+    goalLoadFailed,
     loading,
     error,
     success,

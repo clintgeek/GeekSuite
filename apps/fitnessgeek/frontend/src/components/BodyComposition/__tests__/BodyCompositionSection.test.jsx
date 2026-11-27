@@ -101,14 +101,30 @@ describe('change card', () => {
 });
 
 describe('states', () => {
-  it('empty: explains where scans come from and links to Import Scan', () => {
+  // Most people have no body-composition scale. They used to get a card
+  // headed "No scans yet" that talked about a Nextcloud folder.
+  it('empty: one quiet line with a link to Import a scan, and no card, heading or jargon', () => {
     renderSection({ summary: { total_scans: 0, current: null, change: null } });
-    expect(screen.getByText('No scans yet')).toBeInTheDocument();
-    expect(screen.getByText(/Nextcloud/)).toBeInTheDocument();
+    const line = screen.getByTestId('body-comp-invite');
+    expect(line).toHaveTextContent('Have a scale that measures body fat?');
     expect(screen.getByRole('link', { name: /import a scan/i })).toHaveAttribute('href', '/scan-import');
+    expect(screen.queryByRole('heading')).toBeNull();
+    expect(document.querySelector('[data-fg-panel]')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Nextcloud|No scans yet|export/i);
   });
 
-  it('error: says so, offers a retry, and says the weight is unaffected', async () => {
+  it('loading with nothing yet: draws nothing (no skeleton card that then vanishes)', () => {
+    const { container } = renderSection({ summary: null, loading: true });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('a retry in flight keeps the failure on screen', () => {
+    renderSection({ summary: null, loading: true, error: 'x', onRetry: () => {} });
+    expect(screen.getByRole('alert')).toHaveTextContent(/didn.t load/i);
+    expect(screen.getByRole('button', { name: /trying/i })).toBeDisabled();
+  });
+
+  it('error: says so in one line and offers a retry', async () => {
     const onRetry = vi.fn();
     const user = userEvent.setup();
     renderSection({ summary: null, error: 'Body composition could not be loaded.', onRetry });
@@ -122,6 +138,14 @@ describe('states', () => {
     expect(screen.getByText(/Average of 8 scans/)).toBeInTheDocument();
     expect(screen.queryByTestId('trend')).toBeNull();
     expect(screen.getByText(/couldn.t load its scan history/)).toBeInTheDocument();
+  });
+
+  it('a failed scan history can be retried where it failed', async () => {
+    const onRetry = vi.fn();
+    const user = userEvent.setup();
+    renderSection({ summary: EARLY, scansError: 'x', onRetry });
+    await user.click(screen.getByRole('button', { name: /try again/i }));
+    expect(onRetry).toHaveBeenCalled();
   });
 });
 

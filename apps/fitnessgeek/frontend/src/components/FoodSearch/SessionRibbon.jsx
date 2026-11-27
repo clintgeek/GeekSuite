@@ -94,15 +94,15 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
         mt: 2,
         display: 'flex',
         alignItems: 'center',
-        gap: 1,
-        px: 2,
-        py: 1,
+        gap: 2,
+        px: 3,
+        py: 2,
         border: `1px solid ${theme.palette.divider}`,
         borderRadius: '12px',
         boxShadow: '0 8px 24px rgba(16, 24, 40, 0.12)',
         backgroundColor: theme.palette.background.paper,
         animation: `${riseIn} 260ms cubic-bezier(0.22, 1, 0.36, 1)`,
-        pb: `calc(${theme.spacing(1)} + var(--safe-area-inset-bottom, 0px))`
+        pb: `calc(${theme.spacing(2)} + var(--safe-area-inset-bottom, 0px))`
       }}
     >
       <LoggedIcon sx={{ color: primary, fontSize: 22, flexShrink: 0 }} aria-hidden />

@@ -55,7 +55,9 @@ describe('the weight goal card', () => {
   it('says which number "to go" is measured from (D-3)', () => {
     renderCard();
     expect(screen.getByText('24.9 lb to go')).toBeInTheDocument();
-    expect(screen.getByTestId('weight-basis')).toHaveTextContent('From your 7-day average, 219.9 lb');
+    // The big number IS the basis, and is named as that right under it.
+    expect(screen.getByTestId('weight-now')).toHaveTextContent('219.9 lb');
+    expect(screen.getByTestId('weight-basis')).toHaveTextContent('7-day average');
   });
 
   // The Label: "behind" is a filled tag in warning.main (an amber, not the
@@ -98,7 +100,7 @@ describe('the trend in words (L25)', () => {
   it('leads with the trend in words, with the goal maths below it', () => {
     renderCard();
     expect(screen.getByTestId('weight-trend-words')).toHaveTextContent('Down 12.1 lb since June');
-    expect(screen.getByText('From your 7-day average, 219.9 lb')).toBeInTheDocument();
+    expect(screen.getByText('7-day average')).toBeInTheDocument();
     expect(screen.getAllByTestId('weight-basis')).toHaveLength(1);
     expect(screen.getByTestId('weight-status')).toBeInTheDocument();
     expect(screen.getByTestId('weight-pace')).toBeInTheDocument();
@@ -123,5 +125,36 @@ describe('one basis for "now" (D-3)', () => {
 
   it("neededPacePerWeek is the dates' pace", () => {
     expect(neededPacePerWeek(GOAL)).toBeCloseTo(37 / (166 / 7), 5);
+  });
+
+  // A person who weighs in but never set a goal opened this card to "No
+  // weight goal yet" and no number at all.
+  it('with no goal, the number is still the first thing on the card', () => {
+    renderCard({ goal: null, currentWeight: 219.9 });
+    expect(screen.getByTestId('weight-now')).toHaveTextContent('219.9 lb');
+    expect(screen.getByTestId('weight-basis')).toHaveTextContent('7-day average');
+    expect(screen.getByRole('button', { name: /set your goal/i })).toBeInTheDocument();
+  });
+
+  it('with no goal and no weigh-ins there is no number to show', () => {
+    renderCard({ goal: null, currentWeight: null, weightLogs: [] });
+    expect(screen.queryByTestId('weight-now')).toBeNull();
+  });
+
+  it('the percent sits on the goal bar, with no orphaned "% of goal" heading or "Amount this week"', () => {
+    renderCard();
+    expect(document.body.textContent).not.toMatch(/% of goal|Amount this week/);
+    expect(screen.getByText('33%')).toBeInTheDocument();
+  });
+});
+
+describe('a goal that could not be read', () => {
+  it('says so and offers a retry, never "No weight goal yet"', () => {
+    const onRetryGoal = vi.fn();
+    renderCard({ goal: null, goalUnknown: true, onRetryGoal });
+    expect(screen.getByTestId('weight-goal-unknown')).toHaveTextContent('Couldn’t load your goal');
+    expect(screen.queryByText('No weight goal yet')).toBeNull();
+    screen.getByRole('button', { name: 'Try again' }).click();
+    expect(onRetryGoal).toHaveBeenCalled();
   });
 });

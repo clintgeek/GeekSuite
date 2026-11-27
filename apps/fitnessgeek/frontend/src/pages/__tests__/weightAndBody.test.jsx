@@ -55,13 +55,27 @@ beforeEach(() => {
 });
 
 describe('Weight & body page', () => {
-  it('says what it is in one line, and does not repeat the top bar\'s title', async () => {
+  it('opens on the weigh-in and the number, and does not repeat the top bar\'s title', async () => {
     getSummary.mockResolvedValue({ success: true, data: { total_scans: 0 } });
     renderPage();
+    // The weigh-in is a card in the page at every width (it was a floating
+    // button on phones), and the number is on the page even with no goal.
+    const entry = await screen.findByTestId('weight-quick-add');
+    expect(within(entry).getByLabelText(/today.s weight/i)).toBeInTheDocument();
+    expect(within(entry).getByRole('button', { name: 'Log' })).toBeDisabled();
+    expect(screen.getByTestId('weight-now')).toHaveTextContent(/^31\d\.\d lb$/);
+    expect(screen.getByTestId('weight-basis')).toHaveTextContent('7-day average');
     // SIMPLE_AND_FULL_PLAN.md item 8: the title used to appear three times
     // (top bar, eyebrow, heading). The top bar keeps it.
-    expect(await screen.findByText(/averaged so one heavy day doesn.t move the needle/)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /weight & body/i })).toBeNull();
+  });
+
+  it('a person with no scans sees one quiet line about them, not a card', async () => {
+    getSummary.mockResolvedValue({ success: true, data: { total_scans: 0 } });
+    renderPage();
+    const line = await screen.findByTestId('body-comp-invite');
+    expect(within(line).getByRole('link', { name: 'Import a scan' })).toHaveAttribute('href', '/scan-import');
+    expect(screen.queryByText('What your weight is made of')).toBeNull();
   });
 
   it('a failed body-comp query leaves the weight half standing', async () => {
@@ -69,8 +83,42 @@ describe('Weight & body page', () => {
     getScans.mockRejectedValue(new Error('boom'));
     renderPage();
     expect(await screen.findAllByTestId('weight-log-row')).toHaveLength(2);
-    expect(await screen.findByText(/your scans didn.t load/i)).toBeInTheDocument();
-    expect(screen.getByText(/your weight above is unaffected/i)).toBeInTheDocument();
+    expect(await screen.findByText(/body-composition scans didn.t load/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  // A failed read is not an empty log. This drew "No weigh-ins yet" and "No
+  // weight goal yet" for a person with a year of weigh-ins and a bad signal.
+  it('a soft failure to load the weights says so, never "No weigh-ins yet"', async () => {
+    getSummary.mockResolvedValue({ success: true, data: { total_scans: 0 } });
+    getWeightLogs.mockResolvedValue({ success: false });
+    renderPage();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/your weights didn.t load/i);
+    expect(screen.queryByText('No weigh-ins yet')).toBeNull();
+    expect(screen.queryByText('No weight goal yet')).toBeNull();
+  });
+
+  it('a thrown failure does the same, and Try again brings the weights back', async () => {
+    getSummary.mockResolvedValue({ success: true, data: { total_scans: 0 } });
+    getWeightLogs.mockRejectedValueOnce(new Error('Network Error'));
+    const user = userEvent.setup();
+    renderPage();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/your weights didn.t load/i);
+    expect(screen.queryByText('No weigh-ins yet')).toBeNull();
+    await user.click(within(alert).getByRole('button', { name: /try again/i }));
+    expect(await screen.findAllByTestId('weight-log-row')).toHaveLength(2);
+    expect(screen.queryByText(/your weights didn.t load/i)).toBeNull();
+  });
+
+  it('a brand-new account is still an empty page, with no chart and one way in', async () => {
+    getSummary.mockResolvedValue({ success: true, data: { total_scans: 0 } });
+    getWeightLogs.mockResolvedValue({ success: true, data: [] });
+    renderPage();
+    expect(await screen.findByText('No weigh-ins yet')).toBeInTheDocument();
+    expect(screen.queryByTestId('weight-chart')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByTestId('weight-quick-add')).toBeInTheDocument();
   });
 
   it('an update that answers with no row is a failure, shown in the dialog', async () => {
@@ -106,6 +154,8 @@ describe('Weight & body page', () => {
     expect(screen.getByRole('button', { name: /edit the 316\.9/i, hidden: true })).toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).toBeNull();
     release();
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // The close is a reload, a toast and a 200 ms exit transition: about a
+    // second on a busy machine, which is waitFor's whole default.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), { timeout: 5000 });
   });
 });

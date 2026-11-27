@@ -6,8 +6,12 @@
  *     login has a button. No "Unsaved changes" bar, no Units.
  *   - Writes stay PARTIAL, and nothing is written over a failed load.
  *   - One app (DOCS/ONE_APP_PLAN.md): no Simple / Full chooser and no "More
- *     settings" fold; everything is on the page for everybody. Calorie plan
- *     and Import a scan, which have no row in the navigation, are linked here.
+ *     settings" fold. Calorie plan and Import a scan, which have no row in
+ *     the navigation, are linked here.
+ *   - 2026-11-27: what people change comes first, "Connected devices" last.
+ *     The watch shows only its switch until it is on, folds its login away
+ *     once connected, and its sleep suggestion is not shown without it. A
+ *     failed save keeps what was typed and says so beside the field.
  *
  * Earlier pins kept: the dead Notifications switches stay gone.
  */
@@ -65,6 +69,9 @@ const { userService } = await import('../../services/userService.js');
 const { ExperienceContext } = await import('../../contexts/ExperienceContext.jsx');
 const { default: Settings } = await import('../Settings.jsx');
 
+const WATCH_ON = { ...SETTINGS, garmin: { enabled: true, username: 'h@example.com' } };
+const withWatch = () => settingsService.getSettings.mockResolvedValue({ data: JSON.parse(JSON.stringify(WATCH_ON)) });
+
 const experience = (over = {}) => ({
   largerText: false,
   preferredName: 'Heather',
@@ -94,7 +101,7 @@ beforeEach(() => {
 describe('Settings — what the page holds', () => {
   it('no notification toggles, no Units, no unsaved-changes bar', async () => {
     mount();
-    await screen.findByRole('checkbox', { name: /Sleep apnea screening suggestion/i });
+    await screen.findByRole('checkbox', { name: /Use my Garmin watch/i });
     expect(screen.queryByText(/Enable Notifications/i)).toBeNull();
     expect(screen.queryByText(/^Notifications$/i)).toBeNull();
     expect(screen.queryByText(/^Units$/)).toBeNull();
@@ -117,6 +124,7 @@ describe('Settings — what the page holds', () => {
 
 describe('Settings — saves as it changes (IA-3)', () => {
   it('the sleep apnea switch saves health_alerts alone, at once, and says Saved', async () => {
+    withWatch();
     mount();
     const toggle = await screen.findByRole('checkbox', { name: /Sleep apnea screening suggestion/i });
     expect(toggle).toBeChecked(); // no stored value -> default on
@@ -128,6 +136,7 @@ describe('Settings — saves as it changes (IA-3)', () => {
 
   it('a failed save puts the switch back and says so', async () => {
     settingsService.updateSettings.mockRejectedValueOnce(new Error('Network Error'));
+    withWatch();
     mount();
     const toggle = await screen.findByRole('checkbox', { name: /Sleep apnea screening suggestion/i });
     fireEvent.click(toggle);
@@ -153,20 +162,42 @@ describe('Settings — saves as it changes (IA-3)', () => {
     fireEvent.click(connect);
     await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalledTimes(1));
     expect(settingsService.updateSettings.mock.calls[0][0]).toEqual({ garmin: { enabled: true, username: 'h@example.com', password: 'pw' } });
-    // Connected now: the same button updates the login (d-fixes; it said "Save").
+    // Connected now: it says so and folds the login away; opened again, the
+    // same button updates the login (d-fixes; it said "Save").
+    expect(await screen.findByTestId('garmin-connected')).toHaveTextContent('Connected as h@example.com');
+    fireEvent.click(screen.getByRole('button', { name: 'Change Garmin login' }));
     expect(await screen.findByRole('button', { name: 'Update Garmin login' })).toBeInTheDocument();
   });
 
   it('a connected Garmin account offers "Update Garmin login"', async () => {
     settingsService.getSettings.mockResolvedValue({ data: { ...SETTINGS, garmin: { enabled: true, username: 'h@example.com' } } });
     mount();
+    // Connected: one line says so, and the login is folded away.
+    expect(await screen.findByTestId('garmin-connected')).toHaveTextContent('Connected as h@example.com');
+    expect(screen.queryByLabelText(/Garmin email/i)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Change Garmin login' }));
     expect(await screen.findByRole('button', { name: 'Update Garmin login' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Garmin email/i)).toHaveValue('h@example.com');
     expect(screen.queryByRole('button', { name: 'Save Garmin login' })).toBeNull();
+  });
+
+  it('a failed Garmin login save says so under the button and keeps what was typed', async () => {
+    settingsService.getSettings.mockResolvedValue({ data: { ...SETTINGS, garmin: { enabled: true, username: '' } } });
+    mount();
+    const connect = await screen.findByRole('button', { name: 'Connect Garmin' });
+    fireEvent.change(screen.getByLabelText(/Garmin email/i), { target: { value: 'h@example.com' } });
+    fireEvent.change(screen.getByLabelText(/Garmin password/i), { target: { value: 'pw' } });
+    settingsService.updateSettings.mockRejectedValueOnce(new Error('boom'));
+    fireEvent.click(connect);
+    expect(await screen.findByTestId('garmin-error')).toHaveTextContent('Couldn’t save your Garmin login. Try again.');
+    expect(screen.getByLabelText(/Garmin email/i)).toHaveValue('h@example.com');
+    expect(screen.getByLabelText(/Garmin password/i)).toHaveValue('pw');
+    expect(screen.getByRole('button', { name: 'Connect Garmin' })).not.toBeDisabled();
   });
 
   it('the theme saves on change, through the account, with no settings write', async () => {
     mount();
-    await screen.findByRole('checkbox', { name: /Sleep apnea/i });
+    await screen.findByRole('checkbox', { name: /Use my Garmin watch/i });
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Theme' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Dark' }));
     expect(setThemePreference).toHaveBeenCalledWith('dark');
@@ -196,6 +227,30 @@ describe('Settings — About you (IA-2)', () => {
     fireEvent.change(field, { target: { value: 'Heth' } });
     fireEvent.blur(field);
     await waitFor(() => expect(v.update).toHaveBeenCalledWith({ preferred_name: 'Heth' }));
+  });
+
+  it('a name that fails to save stays in the field, with the failure said beside it', async () => {
+    const v = mount({ update: vi.fn(() => Promise.resolve({ ok: false })) });
+    const field = await screen.findByLabelText('What should I call you?');
+    fireEvent.change(field, { target: { value: 'Heth' } });
+    fireEvent.blur(field);
+    expect(await screen.findByText('Couldn’t save that. Try again.')).toBeInTheDocument();
+    expect(field).toHaveValue('Heth');
+    // Leaving the field again tries again.
+    fireEvent.blur(field);
+    await waitFor(() => expect(v.update).toHaveBeenCalledTimes(2));
+  });
+
+  it('an age that fails to save stays in the field, with the failure said beside it', async () => {
+    userService.updateProfile.mockRejectedValueOnce(new Error('boom'));
+    mount();
+    const age = await screen.findByLabelText('Age');
+    fireEvent.change(age, { target: { value: '53' } });
+    fireEvent.blur(age);
+    expect(await screen.findByText('Couldn’t save that. Try again.')).toBeInTheDocument();
+    expect(age).toHaveValue(53);
+    fireEvent.blur(age);
+    await waitFor(() => expect(userService.updateProfile).toHaveBeenCalledTimes(2));
   });
 
   it('"Your goal" can be changed after the first run', async () => {
@@ -248,19 +303,47 @@ describe('Settings — one app (ONE_APP_PLAN.md §2, §3)', () => {
     await waitFor(() => expect(v.setLargerText).toHaveBeenCalledWith(true));
   });
 
-  it('nothing waits behind "More settings": Garmin, Household and Account are on the page for everybody', async () => {
+  it('nothing waits behind "More settings": the watch, Household and Account are on the page for everybody', async () => {
     mount();
-    expect(await screen.findByLabelText(/Garmin email/i)).toBeInTheDocument();
+    expect(await screen.findByRole('checkbox', { name: /Use my Garmin watch/i })).toBeInTheDocument();
     expect(screen.getByTestId('household')).toBeInTheDocument();
     expect(screen.getByTestId('account-email')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'More settings' })).toBeNull();
   });
 
-  it('links to Calorie plan and Import a scan, which have no row in the navigation', async () => {
+  it('a person without the watch sees one switch: no login fields, no sleep suggestion', async () => {
     mount();
-    const plans = await screen.findByTestId('settings-plans');
-    expect(within(plans).getByRole('link', { name: 'Calorie plan' })).toHaveAttribute('href', '/calorie-wizard');
-    expect(within(plans).getByRole('link', { name: 'Import a scan' })).toHaveAttribute('href', '/scan-import');
+    const watch = await screen.findByRole('checkbox', { name: /Use my Garmin watch/i });
+    expect(watch).not.toBeChecked();
+    expect(screen.queryByLabelText(/Garmin email/i)).toBeNull();
+    expect(screen.queryByLabelText(/Garmin password/i)).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: /Sleep apnea/i })).toBeNull();
+    // Turning it on asks for the login.
+    fireEvent.click(watch);
+    expect(await screen.findByLabelText(/Garmin email/i)).toBeInTheDocument();
+  });
+
+  it('what people change comes first; Connected devices comes last, before Account', async () => {
+    mount();
+    await screen.findByRole('checkbox', { name: /Use my Garmin watch/i });
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+      'How it looks', 'About you', 'Calorie plan', 'Connected devices', 'Account',
+    ]);
+  });
+
+  it('links to Calorie plan (with the target, when there is one) and Import a scan', async () => {
+    settingsService.getSettings.mockResolvedValue({ data: { ...SETTINGS, nutrition_goal: { enabled: true, daily_calorie_target: 1950 } } });
+    mount();
+    const plan = within(await screen.findByTestId('settings-plans')).getByRole('link', { name: /Calorie plan/ });
+    expect(plan).toHaveAttribute('href', '/calorie-wizard');
+    await waitFor(() => expect(plan).toHaveTextContent('1,950 calories a day'));
+    expect(within(screen.getByTestId('settings-devices')).getByRole('link', { name: /Import a scan/ })).toHaveAttribute('href', '/scan-import');
+  });
+
+  it('with no plan the Calorie plan row offers to set one', async () => {
+    mount();
+    await screen.findByRole('checkbox', { name: /Use my Garmin watch/i });
+    expect(within(screen.getByTestId('settings-plans')).getByRole('link', { name: /Calorie plan/ })).toHaveTextContent('Set a daily calorie target');
   });
 });
 

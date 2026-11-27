@@ -42,7 +42,8 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
   const formatDate = (dateString) => nearDay(utcDateString(dateString), localDateString());
   const u = unit === 'lbs' ? 'lb' : unit;
 
-  const sortedLogs = [...(logs || [])].sort((a, b) => {
+  // A null or dateless row (a partial record) is skipped, not a crash.
+  const sortedLogs = (Array.isArray(logs) ? logs : []).filter((l) => l && l.log_date).sort((a, b) => {
     const da = utcDateString(a.log_date);
     const db = utcDateString(b.log_date);
     return da < db ? 1 : da > db ? -1 : 0;
@@ -53,7 +54,7 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
       <EmptyState
         icon={WeightIcon}
         title="No weigh-ins yet"
-        copy="Log a weight with the button below, or import a scale export — scale readings land here on their own."
+        copy="Type today’s weight at the top of this page and tap Log. Every weigh-in is kept here."
       />
     );
   }
@@ -72,7 +73,8 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
     >
       <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
         {visible.map((log, index) => {
-          const weight = parseFloat(log.weight_value).toFixed(1);
+          const n = parseFloat(log?.weight_value);
+          const weight = Number.isFinite(n) ? n.toFixed(1) : '—';
           const when = formatDate(log.log_date);
           const fromScale = log.source === 'arboleaf_xlsx';
           return (
@@ -81,12 +83,12 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
               key={log.id}
               first={index === 0}
               data-testid="weight-log-row"
-              sx={{ gap: 1, py: 0.5 }}
+              sx={{ gap: 1, py: 1.5 }}
             >
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography component="span" sx={{ fontWeight: 700, fontSize: '1.125rem' }}>
+                <Typography component="span" sx={{ fontWeight: 700, fontSize: '1.0625rem', fontVariantNumeric: 'tabular-nums' }}>
                   {weight}
-                  <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 700 }}> {u}</Box>
+                  <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 500, color: 'text.secondary' }}> {u}</Box>
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25, flexWrap: 'wrap' }}>
                   <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>{when}</Typography>

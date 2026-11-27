@@ -54,6 +54,25 @@ describe('the meds checklist', () => {
     expect(screen.getByRole('checkbox', { name: 'Metformin, evening' })).toHaveAttribute('aria-checked', 'false');
   });
 
+  it('a second tap while the first is still saving writes nothing more', async () => {
+    let finish;
+    medsService.log.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    render(<Harness />);
+    const lisinopril = await screen.findByRole('checkbox', { name: 'Lisinopril, morning' });
+    await act(async () => { fireEvent.click(lisinopril); });
+    // The tick is on screen at once; the write has not answered yet.
+    const ticked = screen.getByRole('checkbox', { name: 'Lisinopril, morning, taken' });
+    await act(async () => { fireEvent.click(ticked); });
+    expect(medsService.log).toHaveBeenCalledTimes(1);
+    await act(async () => { finish({ _id: 'new' }); });
+    expect(screen.getByRole('checkbox', { name: 'Lisinopril, morning, taken' })).toHaveAttribute('aria-checked', 'true');
+    // Once it has answered, the dose can be unticked again.
+    medsService.log.mockResolvedValue({ _id: 'newer' });
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'Lisinopril, morning, taken' })); });
+    expect(medsService.log).toHaveBeenCalledTimes(2);
+    expect(medsService.log).toHaveBeenLastCalledWith('m1', { date: '2026-09-27', time_of_day: 'morning', taken: false });
+  });
+
   it('a failed save is taken back and said plainly', async () => {
     medsService.log.mockRejectedValue(new Error('offline'));
     render(<Harness />);

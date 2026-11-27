@@ -209,9 +209,10 @@ describe('Quick target — the wizard', () => {
     expect(await screen.findByText('How fast?')).toBeInTheDocument();
   });
 
-  it('without the flag it is the four-step wizard, unchanged', async () => {
+  it('without the flag it is the step-by-step plan, one question at a time', async () => {
     setup({ quick: false });
-    expect(await screen.findByText(/Choose your approach/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'What do you weigh now?' })).toBeInTheDocument();
     expect(screen.queryByText('How fast?')).toBeNull();
+    expect(screen.queryByTestId('quick-target')).toBeNull();
   });
 });

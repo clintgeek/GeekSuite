@@ -24,12 +24,13 @@ import {
 const grid = {
   display: 'grid',
   gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' },
-  gap: 2,
+  // 12px on a phone, 16px from md: the suite's spacing unit is 4px.
+  gap: { xs: 3, md: 4 },
 };
 
 const Group = ({ label, children }) => (
-  <Box component="section" aria-label={label} sx={{ mb: 3, '&:last-of-type': { mb: 0 } }}>
-    <SectionLabel sx={{ mb: 1.25 }}>{label}</SectionLabel>
+  <Box component="section" aria-label={label} sx={{ mb: 6, '&:last-of-type': { mb: 0 } }}>
+    <SectionLabel sx={{ mb: 2.5 }}>{label}</SectionLabel>
     {children}
   </Box>
 );
@@ -42,7 +43,7 @@ const Skeletons = ({ n }) => (
 
 /** One source failed: said once, in place of its cards, never blanking the rest. */
 const SourceNotice = ({ children, action, testId }) => (
-  <Surface data-testid={testId} sx={{ borderStyle: 'dashed', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
+  <Surface data-testid={testId} sx={{ borderStyle: 'dashed', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 3 }}>
     <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.5, flex: '1 1 240px' }}>
       {children}
     </Typography>
@@ -92,12 +93,12 @@ const BodyRecoverySection = () => {
       <SourceNotice
         testId="garmin-not-connected"
         action={(
-          <Button component={RouterLink} to="/settings#garmin" variant="outlined" size="small" sx={{ minHeight: 44 }}>
+          <Button component={RouterLink} to="/settings#garmin" variant="tonal" sx={{ minHeight: 44 }}>
             Connect Garmin
           </Button>
         )}
       >
-        Heart rate, sleep and activity trends show here once Garmin is connected.
+        Connect a Garmin watch to see heart rate, sleep and activity trends here.
       </SourceNotice>
     );
   } else if (garmin.status === 'unavailable' || garmin.status === 'error') {
@@ -105,7 +106,7 @@ const BodyRecoverySection = () => {
       <SourceNotice
         testId="garmin-unavailable"
         action={(
-          <Button onClick={reload} variant="outlined" size="small" sx={{ minHeight: 44 }}>
+          <Button onClick={reload} variant="tonal" sx={{ minHeight: 44 }}>
             Try again
           </Button>
         )}
@@ -118,10 +119,10 @@ const BodyRecoverySection = () => {
   }
 
   return (
-    <Box component="section" aria-labelledby="body-recovery-heading" id="body-recovery" sx={{ mb: 5 }}>
-      <Box sx={{ mb: 2.5 }}>
+    <Box component="section" aria-labelledby="body-recovery-heading" id="body-recovery">
+      <Box sx={{ mb: 4 }}>
         <DisplayHeading size="card" id="body-recovery-heading">Body and recovery, last 90 days</DisplayHeading>
-        <Typography data-testid="body-recovery-window" sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.55, mt: 0.75, maxWidth: 720 }}>
+        <Typography data-testid="body-recovery-window" sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.55, mt: 1.5, maxWidth: 720 }}>
           {compareWindow.planned
             ? `Each number is a 7-day average, compared with the same week a month ago (${span}).`
             : `Each number is a 7-day average, compared with the week of ${span}.`}
@@ -129,7 +130,7 @@ const BodyRecoverySection = () => {
       </Box>
 
       {garminNotice ? (
-        <Box sx={{ mb: 3 }}>{garminNotice}</Box>
+        <Box sx={{ mb: 6 }}>{garminNotice}</Box>
       ) : (
         <>
           <Group label="Heart and recovery">

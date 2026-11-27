@@ -562,16 +562,9 @@ export default function Medications() {
       </Typography>
 
       {doses.total > 0 && (
-        // The page's main panel: today's doses as big tick rows. The
-        // checklist draws its own title (components/Home), so the level-1
-        // size and the thick rule are set from here.
-        <Surface
-          sx={{
-            p: { xs: 1.5, sm: 2 },
-            '& #meds-checklist-title': { fontSize: { xs: '2.25rem', sm: '2.5rem' }, letterSpacing: '-0.01em', lineHeight: 1 },
-            '& [data-testid="meds-checklist"] > div[aria-hidden]': { borderTopWidth: '10px' },
-          }}
-        >
+        // The page's main panel: today's doses as big tick rows, in the
+        // same card and title size as every other card.
+        <Surface>
           {/* Today or yesterday (L23). The checklist's own heading names the
               day too, so which one she's ticking is said in words. */}
           <ToggleButtonGroup
@@ -579,13 +572,13 @@ export default function Medications() {
             value={day}
             onChange={(e, v) => { if (v) setDay(v); }}
             aria-label="Which day to tick"
-            sx={{ mb: 1.5, '& .MuiToggleButton-root': { minHeight: 44, px: 2.5, textTransform: 'none', fontWeight: 700, fontSize: '1rem' } }}
+            sx={{ mb: 4 }}
           >
             <ToggleButton value="today">Today</ToggleButton>
             <ToggleButton value="yesterday">Yesterday</ToggleButton>
           </ToggleButtonGroup>
           {day === 'yesterday' && (
-            <Typography sx={{ color: 'text.secondary', fontSize: '1rem', mb: 1.5 }}>
+            <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', mb: 3 }}>
               Showing yesterday, {shortDay(yesterday, today)}. Ticks here are saved for yesterday.
             </Typography>
           )}
@@ -641,11 +634,11 @@ export default function Medications() {
         </Box>
       ) : (
       <LabelPanel title="Your medications, by time of day" titleComponent="h3">
-        <Stack spacing={2} sx={{ pt: 1 }}>
+        <Stack spacing={5} sx={{ pt: 1 }}>
           {/* Groups are named in the form's words; empty ones are skipped. */}
           {MED_GROUPS.filter(g => myMeds.some(g.match)).map(({ key: slot, label, match }) => (
             <Box key={slot}>
-              <Typography component="h4" sx={{ fontWeight: 700, fontSize: '1.0625rem', lineHeight: 1.2, pb: 0.5, borderBottom: (t) => `1px solid ${t.palette.divider}` }}>
+              <Typography component="h4" sx={{ fontWeight: 600, fontSize: '0.8125rem', letterSpacing: '0.02em', color: 'text.secondary', lineHeight: 1.2, pb: 1.5, borderBottom: (t) => `1px solid ${t.palette.divider}` }}>
                 {SLOT_WORD[slot] || label}
               </Typography>
               <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
@@ -704,7 +697,8 @@ export default function Medications() {
           `size="small"` renders under the 44px tap floor the mobile harness
           enforces, so minHeight only — the compact look is unchanged. */}
       {myMeds.length > 0 && (
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', '& .MuiButton-root': { minHeight: 44, minWidth: 44 } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', '& .MuiButton-root': { minHeight: 44, minWidth: 44 } }}>
+        <Typography sx={{ width: '100%', fontSize: '0.9375rem', color: 'text.secondary' }}>For your doctor</Typography>
         <Button size="small" variant="outlined" onClick={handleCopyExport}>Copy text</Button>
         <Button size="small" variant="outlined" onClick={handleDownloadExport}>Download .txt</Button>
         <Button size="small" variant="outlined" onClick={handleDownloadPdf}>Download PDF</Button>

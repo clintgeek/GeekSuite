@@ -45,8 +45,8 @@ export const DESTINATIONS = {
   trends: { id: '/trends', label: 'Trends', to: '/trends', Icon: InsightsIcon, description: 'Food, activity and health over time' },
   saved: { id: '/saved-foods', label: 'Saved foods', to: '/saved-foods', Icon: MenuBookIcon, description: 'Meals and foods you saved' },
   wizard: { id: '/calorie-wizard', label: 'Calorie plan', to: '/calorie-wizard', Icon: CalculateIcon, description: 'Work out a daily calorie target' },
-  scan: { id: '/scan-import', label: 'Import a scan', to: '/scan-import', Icon: UploadFileIcon, description: 'Body-composition scans from the scale' },
-  settings: { id: '/settings', label: 'Settings', to: '/settings', Icon: SettingsIcon, description: 'Larger text, theme, your details and more' },
+  scan: { id: '/scan-import', label: 'Import a scan', to: '/scan-import', Icon: UploadFileIcon, description: 'Body scans from a smart scale' },
+  settings: { id: '/settings', label: 'Settings', to: '/settings', Icon: SettingsIcon, description: 'Text size, theme and your details' },
 };
 
 // The More row: a place of its own.

@@ -2,10 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Box, Button, TextField } from '@mui/material';
 import { settingsService } from '../../services/settingsService.js';
 
-// JS getDay(): Sun=0..Sat=6 → Mon=0..Sun=6. Kept exactly as the Food log
-// had it (`new Date('YYYY-MM-DD')` reads the day as UTC midnight); moving the
-// page must not move which slot of the schedule is written.
-const mondayFirstIndex = (dateStr) => (new Date(dateStr).getDay() + 6) % 7;
+// Which slot of the Mon=0..Sun=6 weekly schedule a calendar day ("YYYY-MM-DD")
+// falls in. The readers (the gateway's `derivedMacros`, which Today draws its
+// target from) take the weekday of the calendar day itself, so the writer
+// must too. `new Date('YYYY-MM-DD')` is UTC midnight, which west of UTC is
+// the evening BEFORE: in US zones `.getDay()` on it wrote Thursday's slot
+// when the person changed Friday's target, and Today went on showing the old
+// number. The day is built from its own parts instead, so no zone is involved.
+export const mondayFirstIndex = (dateStr) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr || ''));
+  const date = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12) : new Date();
+  return (date.getDay() + 6) % 7;
+};
 
 /**
  * "Change today's target": one number and Save, inside Today's "Macros and
@@ -30,7 +38,10 @@ export default function DayTargetEditor({ day, goal = 0, onSaved }) {
     try {
       const resp = await settingsService.getSettings();
       const data = resp?.data || resp;
-      const ng = data?.nutrition_goal || {};
+      // No plan came back: stop. Writing now would replace the whole week
+      // with seven copies of today's number.
+      if (!data?.nutrition_goal) throw new Error('The calorie plan could not be read');
+      const ng = data.nutrition_goal;
       const minSafe = ng?.min_safe_calories || 1200;
       const schedule = Array.isArray(ng?.weekly_schedule) && ng.weekly_schedule.length === 7
         ? [...ng.weekly_schedule]

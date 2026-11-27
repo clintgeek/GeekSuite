@@ -58,6 +58,93 @@ const landedOn = (page, path, query = {}) => {
   }
 };
 
+// ── The barcode scanner ──────────────────────────────────────────────────
+// A camera for a browser that has none: `getUserMedia` answers with a canvas
+// stream, so the scanner's own code runs end to end — one stream on the
+// <video>, the guide-box crop, and the bundled WebAssembly decoder (headless
+// Chromium on Linux has no built-in BarcodeDetector, which is exactly an
+// iPhone's position). `ean13` draws that number as a real EAN-13 in the middle
+// of a portrait frame; without it the frame is an empty shelf.
+const FAKE_CAMERA = ({ ean13 } = {}) => {
+  const L = ['0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011'];
+  const R = L.map((p) => [...p].map((b) => (b === '1' ? '0' : '1')).join(''));
+  const G = R.map((p) => [...p].reverse().join(''));
+  const PARITY = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'];
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1920;
+  const g = canvas.getContext('2d');
+  let tick = 0;
+  const paint = () => {
+    g.fillStyle = '#8a8f98';
+    g.fillRect(0, 0, 1080, 1920);
+    if (ean13) {
+      const parity = PARITY[Number(ean13[0])];
+      let bits = '101';
+      for (let i = 0; i < 6; i += 1) bits += (parity[i] === 'L' ? L : G)[Number(ean13[i + 1])];
+      bits += '01010';
+      for (let i = 0; i < 6; i += 1) bits += R[Number(ean13[i + 7])];
+      bits += '101';
+      const unit = 7;
+      const width = bits.length * unit;
+      const left = (1080 - width) / 2;
+      g.fillStyle = '#fff';
+      g.fillRect(left - 80, 810, width + 160, 300);
+      g.fillStyle = '#000';
+      [...bits].forEach((b, i) => { if (b === '1') g.fillRect(left + i * unit, 840, unit, 240); });
+    }
+    // A canvas stream only sends a frame when the canvas changes.
+    g.fillStyle = tick % 2 ? '#8a8f98' : '#8b8f98';
+    g.fillRect(0, 0, 2, 2);
+    tick += 1;
+  };
+  paint();
+  window.__fakeCameraTimer = setInterval(paint, 100);
+  window.__fakeCameraOpens = 0;
+  const media = navigator.mediaDevices;
+  window.__realGetUserMedia = media.getUserMedia.bind(media);
+  media.getUserMedia = async () => {
+    window.__fakeCameraOpens += 1;
+    return canvas.captureStream(15);
+  };
+};
+const DROP_FAKE_CAMERA = () => {
+  // The scanner's two per-device notes, so no scene inherits another's.
+  try {
+    localStorage.removeItem('barcodeScanHistory');
+    localStorage.removeItem('barcodeScanCamera');
+  } catch { /* storage unavailable */ }
+  clearInterval(window.__fakeCameraTimer);
+  if (window.__realGetUserMedia) navigator.mediaDevices.getUserMedia = window.__realGetUserMedia;
+};
+const openScanner = async (page, h) => {
+  const add = await must(page.getByRole('button', { name: /^add to breakfast$/i }).first(), 'Breakfast’s "Add"');
+  await add.click();
+  await h.settle(900);
+  await (await must(page.getByRole('button', { name: 'Scan a barcode' }), 'the "Scan a barcode" link')).click();
+  await h.settle(900);
+  return must(page.getByRole('dialog', { name: 'Scan a barcode' }), 'the scanner');
+};
+// The runner skips teardown when setup throws, and one page serves every
+// scene of a viewport: a failed scanner scene must not leave its camera or its
+// route behind for the next one.
+const scannerScene = (fn) => async (page, h) => {
+  try {
+    await fn(page, h);
+  } catch (err) {
+    await page.evaluate(DROP_FAKE_CAMERA).catch(() => {});
+    await page.unroute('**/api/foods*').catch(() => {});
+    throw err;
+  }
+};
+const closeScanner = async (page, h) => {
+  await page.evaluate(DROP_FAKE_CAMERA);
+  await page.unroute('**/api/foods*').catch(() => {});
+  await h.esc(400);
+  await h.esc(400);
+};
+
+
 export const scenes = [
   {
     // Today, from the top: the day and a greeting, what is left (ring and
@@ -185,6 +272,72 @@ export const scenes = [
       await must(page.getByRole('dialog'), 'the add sheet');
     },
     teardown: (page, h) => h.esc(),
+  },
+  {
+    // The scanner with the camera running: the guide box over the picture,
+    // the one line of help, and "Take a photo instead". Exactly one camera
+    // stream was opened to get here.
+    name: '03b-scanner-camera',
+    viewports: ['phone'],
+    goto: '/dashboard',
+    wait: 1600,
+    setup: scannerScene(async (page, h) => {
+      await page.evaluate(FAKE_CAMERA, {});
+      const dialog = await openScanner(page, h);
+      await dialog.locator('[data-testid="scanner-guide"][data-state="scanning"]').waitFor({ timeout: 10000 });
+      await must(dialog.getByText('Hold the barcode inside the box. If it’s blurry, move back a little.'), 'the line of help');
+      await must(dialog.getByRole('button', { name: 'Take a photo instead' }), '"Take a photo instead"');
+      const opens = await page.evaluate(() => window.__fakeCameraOpens);
+      if (opens !== 1) throw new Error(`the scanner opened the camera ${opens} times, not once`);
+      const playing = await dialog.locator('video').evaluate((v) => v.videoWidth > 0 && !v.paused && v.srcObject?.active === true);
+      if (!playing) throw new Error('the camera stream is not the one playing in the scanner');
+    }),
+    teardown: closeScanner,
+  },
+  {
+    // The scanner READS a barcode held in the box: the real decoder on the
+    // real frame, "Got it", then the lookup — here a product that is in no
+    // database, so the scanner stays open and says so.
+    name: '03c-scanner-reads',
+    viewports: ['phone'],
+    goto: '/dashboard',
+    wait: 1600,
+    setup: scannerScene(async (page, h) => {
+      const asked = [];
+      await page.route('**/api/foods*', (r) => {
+        asked.push(new URL(r.request().url()).searchParams.get('barcode'));
+        return json(r, { success: true, data: [] });
+      });
+      await page.evaluate(FAKE_CAMERA, { ean13: '4006381333931' });
+      const dialog = await openScanner(page, h);
+      // "Got it" is on screen only for as long as the lookup takes; what it
+      // leaves behind is the answer.
+      await dialog.getByText(/That barcode isn’t in the food databases/).waitFor({ timeout: 15000 });
+      if (!asked.includes('4006381333931')) throw new Error(`the scanner looked up ${JSON.stringify(asked)}, not the barcode in the picture`);
+      await must(dialog.getByRole('button', { name: 'Start camera' }), '"Start camera", to try another');
+      // The decoder is the app's own file: a .wasm was fetched, and from here.
+      const wasm = await page.evaluate(() => performance.getEntriesByType('resource').map((e) => e.name).filter((n) => /\.wasm($|\?)/.test(n) || /jsdelivr|unpkg/.test(n)));
+      const origin = new URL(page.url()).origin;
+      if (!wasm.some((n) => n.startsWith(origin))) throw new Error('the scanner read a barcode without loading the bundled decoder');
+      const foreign = wasm.filter((n) => !n.startsWith(origin));
+      if (foreign.length) throw new Error(`the decoder was fetched from outside the app: ${foreign.join(', ')}`);
+    }),
+    teardown: closeScanner,
+  },
+  {
+    // No camera (headless Chromium has none; a phone that said no is the same
+    // screen): the reason, the number box, and the photo route still offered.
+    name: '03d-scanner-no-camera',
+    viewports: ['phone'],
+    goto: '/dashboard',
+    wait: 1600,
+    setup: scannerScene(async (page, h) => {
+      const dialog = await openScanner(page, h);
+      await dialog.getByPlaceholder('8–14 digits').waitFor({ timeout: 10000 });
+      await must(dialog.getByRole('alert'), 'why the camera is not being used');
+      await must(dialog.getByRole('button', { name: 'Take a photo instead' }), '"Take a photo instead"');
+    }),
+    teardown: closeScanner,
   },
   {
     // A converted form dialog, full-screen below sm: Copy from another day,
@@ -498,6 +651,9 @@ export const scenes = [
     setup: (page, h) => withPageOps(page, opsWithPlan(SCAN_PLAN), async () => {
       await page.goto(h.base + '/calorie-wizard', { waitUntil: 'networkidle' });
       await h.settle(1600);
+      // The source note is behind a tap ("How this was worked out").
+      await (await must(page.locator('[data-testid="plan-working-toggle"]'), 'How this was worked out')).click();
+      await h.settle(500);
       await must(page.locator('[data-testid="bmr-source"][data-source="scan"]'), 'scan BMR source note');
       await scrollToSection(page, h, 'text=What you burn', 96);
     }),
@@ -505,8 +661,8 @@ export const scenes = [
   },
   {
     // Re-running the wizard over a saved (stale) weekender plan: old vs new,
-    // before anything is saved (plan D2). Walks Change plan → Continue → Next →
-    // Work out my plan, with the profile coming from USER in fixtures.mjs.
+    // before anything is saved (plan D2). Walks Change plan → Next ×3 (weight, goal
+    // weight, speed) → See my target, with the profile coming from USER in fixtures.mjs.
     name: '17-wizard-old-vs-new',
     setup: (page, h) => withPageOps(page, opsWithPlan({
       // A weekender moves calories to Sat/Sun and keeps the weekly average
@@ -519,13 +675,15 @@ export const scenes = [
       await h.settle(1600);
       await (await must(page.getByRole('button', { name: /^change plan$/i }).first(), 'Change plan')).click();
       await h.settle(500);
-      await (await must(page.getByRole('button', { name: /^continue$/i }).first(), 'Continue')).click();
-      await h.settle(500);
-      const next = await must(page.getByRole('button', { name: /next: set goal/i }).first(), 'Next: Set Goal');
-      if (await next.isDisabled()) throw new Error('profile incomplete: Next: Set Goal is disabled');
-      await next.click();
-      await h.settle(500);
-      await (await must(page.getByRole('button', { name: /work out my plan/i }).first(), 'Work out my plan')).click();
+      // Steps: weight, goal weight, speed — "Next" each — then the last one
+      // says "See my target".
+      for (const step of ['weight', 'goal weight', 'speed']) {
+        const next = await must(page.getByRole('button', { name: /^next$/i }).first(), `Next (${step})`);
+        if (await next.isDisabled()) throw new Error(`the ${step} step refuses to go on: Next is disabled`);
+        await next.click();
+        await h.settle(500);
+      }
+      await (await must(page.getByRole('button', { name: /^see my target$/i }).first(), 'See my target')).click();
       await h.settle(900);
       await must(page.locator('[data-testid="plan-comparison"]'), 'old-vs-new card');
       await scrollToSection(page, h, '[data-testid="plan-comparison"]', 120);

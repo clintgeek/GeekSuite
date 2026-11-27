@@ -6,7 +6,7 @@
 //
 // Prefix 4x. The list's numbers are the old 21–37 composer scenes' neighbours,
 // not replacements: those stay in scenes.mjs.
-import { graphqlRoute } from '../../lib/net.mjs';
+import { graphqlRoute, json } from '../../lib/net.mjs';
 import { OPS, FOOD_LOGS, SUGGEST_LONG, experienceOf } from './fixtures.mjs';
 import { withHistoryBounds } from './history-ops.mjs';
 import {
@@ -663,6 +663,38 @@ const startListening = async (page, h, sheet) => {
   await h.settle(400);
   await must(sheet.getByTestId('mic-listening'), '"Listening…"');
 };
+
+// The add sheet with starred foods: GET /api/foods/favorites answers two, and
+// the sheet offers them as a "Favorites" row of chips. (A page-scoped REST
+// stub, dropped in teardown; the module cache lives for one page load.)
+const FAVORITES = [
+  { id: 'fav-yogurt', name: 'Greek yogurt', brand: 'Fage', nutrition: { calories_per_serving: 190, protein_grams: 18, carbs_grams: 8, fat_grams: 10 } },
+  { id: 'fav-ribeye', name: 'Ribeye', brand: null, nutrition: { calories_per_serving: 620, protein_grams: 48, carbs_grams: 0, fat_grams: 46 } },
+];
+{
+  const base = sheetScene('40z-add-sheet-favorites', {
+    meal: 'lunch', suggest: soupSuggest, viewports: ['phone', 'desktop'],
+    fn: async (page, h, sheet) => {
+      const chips = await must(sheet.locator('[data-testid="favorite-chips"]'), 'the Favorites chips');
+      await must(sheet.getByRole('heading', { name: 'Favorites' }), 'the "Favorites" heading');
+      await must(chips.getByRole('button', { name: /Greek yogurt/ }), 'the Greek yogurt chip');
+      await must(chips.getByRole('button', { name: /Ribeye/ }), 'the Ribeye chip');
+      await chips.scrollIntoViewIfNeeded();
+      await h.settle(300);
+    },
+  });
+  const drop = (page) => page.unroute('**/api/foods/favorites');
+  scenes.push({
+    ...base,
+    async setup(page, h) {
+      await page.route('**/api/foods/favorites', (r) => json(r, { success: true, data: FAVORITES }));
+      try { await base.setup(page, h); } catch (err) { await drop(page); throw err; }
+    },
+    async teardown(page, h) {
+      try { await base.teardown(page, h); } finally { await drop(page); }
+    },
+  });
+}
 
 export const tail = [
   // Listening, with what it has heard so far.

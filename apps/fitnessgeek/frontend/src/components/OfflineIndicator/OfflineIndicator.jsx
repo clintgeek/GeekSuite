@@ -6,8 +6,13 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus.js';
 /**
  * Says so when there's no signal, and says what that means. There is no
  * offline queue, so it never promises a sync (review B17).
+ *
+ * "Changes", not "new entries": an edit, a removal and a ticked dose fail
+ * offline just the same. The banner closes after a few seconds, so the chip
+ * that stays says it too; "Offline" alone left the consequence to be guessed.
  */
-export const OFFLINE_BANNER = 'You’re offline. New entries won’t save until you’re back online.';
+export const OFFLINE_BANNER = 'You’re offline. Changes can’t be saved until you’re back online.';
+export const OFFLINE_CHIP = 'Offline. Changes won’t save';
 
 const OfflineIndicator = () => {
   const { isOnline } = useOnlineStatus();
@@ -22,8 +27,10 @@ const OfflineIndicator = () => {
   return (
     <>
       <Chip
+        role="status"
+        data-testid="offline-chip"
         icon={<OfflineIcon />}
-        label="Offline"
+        label={OFFLINE_CHIP}
         color="warning"
         size="small"
         sx={{

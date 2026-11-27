@@ -5,16 +5,15 @@ import {
   Box,
   Button,
   ToggleButton,
-  ToggleButtonGroup,
-  CircularProgress
+  ToggleButtonGroup
 } from '@mui/material';
 import {
   MonitorHeart as BPIcon,
-  Assessment as ReportIcon,
+  CloudOff as CloudOffIcon,
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
-import { EmptyState, Page, SuspenseSurface } from '../components/primitives';
+import { EmptyState, Page, SurfaceSkeleton, SuspenseSurface } from '../components/primitives';
 import BPInsights from '../components/BloodPressure/BPInsights.jsx';
 import QuickAddBP from '../components/BloodPressure/QuickAddBP.jsx';
 import BPLogList from '../components/BloodPressure/BPLogList.jsx';
@@ -45,6 +44,7 @@ const BloodPressure = () => {
   const { notify } = useToast();
   const [bpLogs, setBPLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadProblem, setLoadProblem] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [hrSeries, setHrSeries] = useState([]);
   // `?add=1` — the Today strip's "Add BP" — opens the add dialog directly.
@@ -155,17 +155,28 @@ const BloodPressure = () => {
 
   // `silent` refreshes in place: a reload after a save, delete or undo must
   // not swap the page for its spinner (and unmount an open dialog).
+  //
+  // A FAILED READ IS NOT "NO READINGS". A failed first load used to leave
+  // `bpLogs` empty with only a toast, so the page drew a brand-new account's
+  // "No readings yet" for someone with a year of readings and a bad signal.
+  // `loadProblem` is that failure; the page says so and offers a retry. A
+  // failed refresh behind readings already on screen keeps them and toasts.
   const loadBPData = async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
+    const failed = (message) => {
+      if (silent) notify(message, { tone: 'error' });
+      else setLoadProblem(true);
+    };
     try {
       const response = await bpService.getBPLogs();
-      if (response.success) {
-        setBPLogs(response.data);
+      if (response?.success && Array.isArray(response.data)) {
+        setBPLogs(response.data.filter(Boolean));
+        setLoadProblem(false);
       } else {
-        notify('Couldn’t load your blood pressure readings. Try again.', { tone: 'error' });
+        failed('Couldn’t load your blood pressure readings. Try again.');
       }
     } catch (error) {
-      notify(errorMessage(error, 'Couldn’t load your blood pressure readings. Try again.'), { tone: 'error' });
+      failed(errorMessage(error, 'Couldn’t load your blood pressure readings. Try again.'));
       logger.error('Error loading BP data:', error);
     } finally {
       if (!silent) setLoading(false);
@@ -326,76 +337,103 @@ const BloodPressure = () => {
     }
   };
 
+  const gap = { xs: 4, md: 5 };
+  const twoColumns = {
+    display: { xs: 'flex', md: 'grid' },
+    flexDirection: 'column',
+    gridTemplateColumns: '400px minmax(0, 1fr)',
+    gap,
+    alignItems: { md: 'start' },
+  };
+
   if (loading) {
+    // The shape of the page that is coming, not a spinner in a void.
     return (
-      <Box sx={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '50vh',
-        p: 2
-      }}>
-        <CircularProgress />
-      </Box>
+      <Page aria-busy="true" data-testid="bp-loading">
+        <Box sx={twoColumns}>
+          <SurfaceSkeleton rows={4} />
+          <SurfaceSkeleton rows={4} height={320} />
+        </Box>
+      </Page>
     );
   }
 
-  const gap = { xs: 1.75, md: 2.25 };
-
-  return (
-    // `fab`: Page leaves the clearance the "Add BP" ThumbFab needs under the
-    // last panel on a phone and a portrait tablet (visual review C1; the
-    // 2026-11-26 tablet bug).
-    <Page fab>
-      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-        Track your blood pressure and heart health over time.
-      </Typography>
-
-      {bpLogs.length === 0 ? (
-        /* A brand-new account has no average, and on a phone its only way in
-           was the floating button: give the page its own first step. */
+  if (loadProblem && bpLogs.length === 0) {
+    return (
+      <Page>
         <EmptyState
-          icon={BPIcon}
-          title="No readings yet"
-          copy="Log a reading and I’ll show your average here."
+          role="alert"
+          icon={CloudOffIcon}
+          title="Your readings didn’t load"
+          copy="Nothing is lost. Check your connection and try again."
           action={(
-            <Button
-              variant="contained"
-              size="large"
-              onClick={() => setSearchParams((prev) => {
-                const next = new URLSearchParams(prev);
-                next.set('add', '1');
-                return next;
-              })}
-              sx={{ minHeight: 56, width: { xs: '100%', md: 'auto' } }}
-            >
-              Log your first reading
+            <Button variant="contained" onClick={() => loadBPData()} sx={{ minHeight: 48 }}>
+              Try again
             </Button>
           )}
         />
-      ) : (
-        <>
-          {/* Phone: one column, in order. From md: the summary card (about
-              400px) left; the range toggle and the charts it governs wide on
-              the right. */}
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '400px minmax(0, 1fr)' },
-              gap,
-              alignItems: 'start',
-            }}
-          >
-            {/* The answer first: the week's average, in words (review D-1). */}
-            <BPInsights bpLogs={bpLogs} />
+      </Page>
+    );
+  }
 
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap, minWidth: 0 }}>
+  const hasLogs = bpLogs.length > 0;
+  // Phone: one column, in the order a person needs it: log a reading, the
+  // number, the charts, the readings. From md: two columns that pack
+  // independently (the entry card, the number and the readings on the left
+  // at about 400px; the range toggle and the charts it governs wide on the
+  // right). On a phone the two column wrappers dissolve (`display:
+  // contents`) and `order` puts the charts between the number and the list.
+  const column = { display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap, minWidth: 0 };
+
+  return (
+    <Page>
+      <Box sx={twoColumns}>
+        <Box sx={column}>
+          {/* The entry first: one filled button on a phone, a card from md. */}
+          <Box sx={{ order: 1 }}>
+            <QuickAddBP
+              onAdd={handleAddBP}
+              unit="mmHg"
+              autoOpen={autoOpenAdd}
+              onAutoOpened={clearAddParam}
+            />
+          </Box>
+
+          {hasLogs && (
+            <>
+              {/* The answer next: the week's average, in words (review D-1). */}
+              <Box sx={{ order: 2 }}>
+                <BPInsights bpLogs={bpLogs} />
+              </Box>
+              <Box sx={{ order: 5 }}>
+                <BPLogList
+                  logs={bpLogs}
+                  onDelete={handleDeleteBP}
+                  onEdit={handleEditBP}
+                  unit="mmHg"
+                />
+              </Box>
+            </>
+          )}
+        </Box>
+
+        <Box sx={column}>
+          {!hasLogs ? (
+            /* A brand-new account: one friendly card. The button above (the
+               card, from md) is the way in, so this has no second one. */
+            <Box sx={{ order: 2 }}>
+              <EmptyState
+                icon={BPIcon}
+                title="No readings yet"
+                copy="Log a reading and your average, your trend and every reading show up here."
+              />
+            </Box>
+          ) : (
+            <>
               {/* Time range and "View report" in one row. The range toggle
                   sits ABOVE the donut and the trend it governs, and the
-                  donut's title names the window (review D-1). "View report"
-                  stays up here, out of the lane of the floating Log BP button
-                  (review item 9). */}
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                  donut's title names the window (review D-1). */}
+              <Box sx={{ order: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                 <ToggleButtonGroup
                   size="small"
                   value={timeRangeState}
@@ -418,60 +456,49 @@ const BloodPressure = () => {
                   <ToggleButton value="365" aria-label="1 year">1y</ToggleButton>
                   <ToggleButton value="all">All</ToggleButton>
                 </ToggleButtonGroup>
+                {/* Second rank: the page's one filled button is the entry. */}
                 <Button
                   onClick={() => setShowReport(true)}
-                  variant="outlined"
+                  variant="tonal"
                   startIcon={<PdfIcon />}
                   sx={{ minHeight: 44 }}
                 >
                   View report
                 </Button>
+                {insufficientDataMessage && (
+                  <Typography sx={{ flexBasis: '100%', fontSize: '0.875rem', color: 'text.secondary' }}>
+                    {insufficientDataMessage}
+                  </Typography>
+                )}
               </Box>
 
-              {insufficientDataMessage && (
-                <Typography sx={{ fontSize: '0.8125rem', color: 'warning.main', fontWeight: 600 }}>
-                  {insufficientDataMessage}
-                </Typography>
+              <Box sx={{ order: 3, minWidth: 0 }}>
+                <SuspenseSurface rows={3} height={220}>
+                  <BPCategoryDistribution bpLogs={filteredBPLogs} windowLabel={RANGE_WORDS[timeRangeState]} />
+                </SuspenseSurface>
+              </Box>
+
+              <Box sx={{ order: 3, minWidth: 0 }}>
+                <SuspenseSurface rows={4} height={320}>
+                  <BPChartNivo
+                    data={filteredBPLogs}
+                    title="Your blood pressure over time"
+                  />
+                </SuspenseSurface>
+              </Box>
+
+              {/* Today's heart rate, only for a person whose watch sends it. */}
+              {hrSeries && hrSeries.length > 0 && (
+                <Box sx={{ order: 4, minWidth: 0 }}>
+                  <SuspenseSurface rows={4} height={300}>
+                    <BPHRChart data={hrSeries} title="Heart rate today, from your watch" />
+                  </SuspenseSurface>
+                </Box>
               )}
-
-              <SuspenseSurface rows={3} height={220}>
-                <BPCategoryDistribution bpLogs={filteredBPLogs} windowLabel={RANGE_WORDS[timeRangeState]} />
-              </SuspenseSurface>
-
-              <SuspenseSurface rows={4} height={320}>
-                <BPChartNivo
-                  data={filteredBPLogs}
-                  title="Your blood pressure over time"
-                />
-              </SuspenseSurface>
-            </Box>
-          </Box>
-
-          {/* Heart Rate series from Garmin */}
-          {hrSeries && hrSeries.length > 0 && (
-            <SuspenseSurface rows={4} height={300}>
-              <BPHRChart data={hrSeries} title="Heart rate (Garmin)" />
-            </SuspenseSurface>
+            </>
           )}
-        </>
-      )}
-
-      {/* Quick Add (a desktop panel; the FAB on phones) and the log */}
-      <QuickAddBP
-        onAdd={handleAddBP}
-        unit="mmHg"
-        autoOpen={autoOpenAdd}
-        onAutoOpened={clearAddParam}
-      />
-      {/* The empty state above already says "No readings yet". */}
-      {bpLogs.length > 0 ? (
-        <BPLogList
-          logs={bpLogs}
-          onDelete={handleDeleteBP}
-          onEdit={handleEditBP}
-          unit="mmHg"
-        />
-      ) : null}
+        </Box>
+      </Box>
 
       {/* Edit dialog — a separate instance from QuickAddBP's own "add"
           dialog, opened from a BPLogList row and pre-filled from it. See

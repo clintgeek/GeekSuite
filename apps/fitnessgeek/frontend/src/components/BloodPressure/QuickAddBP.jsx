@@ -4,11 +4,9 @@ import {
   TextField,
   Button,
   Box,
-  useTheme,
-  Grid
+  useTheme
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
-import ThumbFab from '../primitives/ThumbFab.jsx';
 import { LabelPanel, Tag } from '../primitives';
 import AddBPDialog from './AddBPDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
@@ -28,7 +26,8 @@ import { validateBPForm, DUPLICATE_MESSAGE } from './bpForm.js';
 import BPSaveError from './BPSaveError.jsx';
 
 /**
- * QuickAddBP — the desktop inline "add" card, plus the mobile FAB → dialog.
+ * QuickAddBP — the entry at the top of the Blood pressure page: one filled
+ * button that opens the dialog on phones, an inline card from md.
  *
  * `existingTodayBP` is gone. It warned about a restriction — one reading per
  * calendar day — that the backend no longer enforces (see AddBPDialog.jsx's
@@ -152,124 +151,117 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
   const looksFinished = String(systolic).length >= 2 && String(diastolic).length >= 2;
   const liveError = check.error && looksFinished ? check.error : '';
 
+  const numberField = { inputMode: 'numeric' };
+
   return (
     <>
-      {/* Phones: the thumb-zone "Log BP" button, with its words. */}
-      <ThumbFab label="Log BP" testId="add-bp-fab" onClick={() => setShowDialog(true)} />
+      {/* Phones and portrait tablets: the page's one filled button, first on
+          the page and in the flow, like "What did you eat?" on Today. It was
+          a floating button, which sat on top of the page's own text. The test
+          id is the old one, kept for the scenes that open the dialog with it. */}
+      <Button
+        variant="contained"
+        size="large"
+        fullWidth
+        startIcon={<AddIcon />}
+        data-testid="add-bp-fab"
+        onClick={() => setShowDialog(true)}
+        sx={{ display: { xs: 'inline-flex', md: 'none' }, minHeight: 56, fontSize: '1rem' }}
+      >
+        Log blood pressure
+      </Button>
 
-      {/* Desktop version */}
+      {/* From md: the same entry as a card, at the top of the left column. */}
       <LabelPanel
-        title="Log blood pressure"
-        titleComponent="h3"
+        title="Log a reading"
+        titleComponent="h2"
         sx={{ width: '100%', display: { xs: 'none', md: 'block' } }}
       >
-        <Box sx={{ pt: 1.5 }}>
+        <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 4, pt: 1 }}>
+          {/* Three short fields in a 400px card: the short names fit, and the
+              full ones ("Top number (systolic)") are what a screen reader
+              hears and what the line under them says. */}
+          <Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 3 }}>
+              <TextField
+                label="Top"
+                type="number"
+                value={systolic}
+                onChange={(e) => setSystolic(e.target.value)}
+                inputProps={{ ...numberField, 'aria-label': 'Top number (systolic)' }}
+              />
+              <TextField
+                label="Bottom"
+                type="number"
+                value={diastolic}
+                onChange={(e) => setDiastolic(e.target.value)}
+                inputProps={{ ...numberField, 'aria-label': 'Bottom number (diastolic)' }}
+              />
+              <TextField
+                label="Pulse"
+                type="number"
+                value={pulse}
+                onChange={(e) => setPulse(e.target.value)}
+                inputProps={{ ...numberField, 'aria-label': 'Pulse (optional)' }}
+              />
+            </Box>
+            <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', lineHeight: 1.5, mt: 1.5 }}>
+              The two numbers on your cuff, for example 120 over 80, in {unit}. Pulse is optional.
+            </Typography>
+          </Box>
 
-          <form onSubmit={handleSubmit}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid xs={12} sm={2}>
-                <TextField
-                  fullWidth
-                  label="Top number (systolic)"
-                  type="number"
-                  value={systolic}
-                  onChange={(e) => setSystolic(e.target.value)}
-                  inputProps={{ inputMode: 'numeric' }}
-                  InputProps={{
-                    endAdornment: <Typography variant="caption">{unit}</Typography>
-                  }}
-                  size="small"
-                />
-              </Grid>
-
-              <Grid xs={12} sm={2}>
-                <TextField
-                  fullWidth
-                  label="Bottom number (diastolic)"
-                  type="number"
-                  value={diastolic}
-                  onChange={(e) => setDiastolic(e.target.value)}
-                  inputProps={{ inputMode: 'numeric' }}
-                  InputProps={{
-                    endAdornment: <Typography variant="caption">{unit}</Typography>
-                  }}
-                  size="small"
-                />
-              </Grid>
-
-              <Grid xs={12} sm={2}>
-                <TextField
-                  fullWidth
-                  label="Pulse"
-                  type="number"
-                  value={pulse}
-                  onChange={(e) => setPulse(e.target.value)}
-                  inputProps={{ inputMode: 'numeric' }}
-                  InputProps={{
-                    endAdornment: <Typography variant="caption">bpm</Typography>
-                  }}
-                  size="small"
-                />
-              </Grid>
-
-              <Grid xs={12} sm={2}>
-                <DateField
-                  fullWidth
-                  value={date}
-                  onChange={setPickedDate}
-                  size="small"
-                />
-              </Grid>
-
-              <Grid xs={12} sm={2}>
-                <TextField
-                  fullWidth
-                  label="Time"
-                  type="time"
-                  value={time}
-                  onChange={(e) => { setTime(e.target.value); setWhenTouched(true); }}
-                  size="small"
-                  InputLabelProps={{ shrink: true }}
-                  inputProps={{ step: 60 }}
-                />
-              </Grid>
-
-              <Grid xs={12} sm={2}>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  fullWidth
-                  // Not until the reading can be saved (UX review 2026-11, A8).
-                  disabled={loading || Boolean(check.error)}
-                  startIcon={<AddIcon />}
-                >
-                  {loading ? 'Saving…' : 'Log'}
-                </Button>
-              </Grid>
-            </Grid>
-
-            {/* BP Status indicator */}
-            {bpStatus && (
-              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="body2">
-                  This reading is
-                </Typography>
-                <Tag fill={bpStatus.color}>{bpStatus.status}</Tag>
-              </Box>
-            )}
-
-            <BPSaveError
-              error={error || liveError}
-              duplicate={Boolean(duplicate)}
-              onSaveLater={saveOneMinuteLater}
-              busy={loading}
-              sx={{ mt: 2 }}
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 3 }}>
+            <DateField
+              fullWidth
+              value={date}
+              onChange={setPickedDate}
+              size="medium"
+              max={today}
+              sx={{ minWidth: 0 }}
             />
-          </form>
+            <TextField
+              fullWidth
+              label="Time"
+              type="time"
+              value={time}
+              onChange={(e) => { setTime(e.target.value); setWhenTouched(true); }}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ step: 60 }}
+            />
+          </Box>
+
+          {/* BP Status indicator */}
+          {bpStatus && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="body2">
+                This reading is
+              </Typography>
+              <Tag fill={bpStatus.color}>{bpStatus.status}</Tag>
+            </Box>
+          )}
+
+          {/* While the dialog is open it shows its own errors. */}
+          <BPSaveError
+            error={error || liveError}
+            duplicate={Boolean(duplicate)}
+            onSaveLater={saveOneMinuteLater}
+            busy={loading}
+          />
+
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            // Not until the reading can be saved (UX review 2026-11, A8).
+            disabled={loading || Boolean(check.error)}
+            sx={{ minHeight: 48 }}
+          >
+            {loading ? 'Saving…' : 'Log'}
+          </Button>
         </Box>
       </LabelPanel>
 
-      {/* Mobile Dialog */}
+      {/* The dialog: phones, and `?add=1` from Today. */}
       <AddBPDialog
         open={showDialog}
         onClose={() => setShowDialog(false)}

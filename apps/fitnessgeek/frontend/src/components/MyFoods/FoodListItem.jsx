@@ -10,79 +10,61 @@ import {
   DeleteOutline as DeleteIcon,
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
-import { getSourceColor, getSourceName } from './FoodSourceUtils.jsx';
+import { getSourceName } from './FoodSourceUtils.jsx';
 import { fmt, macroLine } from '../../utils/plainWords.js';
 
 /**
- * FoodListItem — a clean row rendered inside the parent Surface list.
+ * FoodListItem — one saved food, a row in the Saved foods list.
  *
- * Matches the row pattern used by MyMeals.jsx: no per-row border, no hardcoded
- * colors. Source color appears as an 8px accent dot, not an avatar. Numbers use
- * tabular figures.
+ * The name, then one quiet line: brand or source, then the numbers
+ * ("Fage · 190 cal · P 18 · C 8 · F 10 g"). The line is two groups that
+ * each stay whole; when the row is too narrow for both, the numbers move to
+ * a second line together, and no separator dot is left hanging at the end of
+ * the first (it used to read "Blue Diamond · 164 cal ·" over "P 6 · C 6").
+ *
+ * No source dot: it was a grey bullet on most rows and nobody could say what
+ * the colours meant. The source is named in words when it is known.
+ *
+ * A row with no food at all draws nothing, and a food with no name or no
+ * nutrition still draws, so one bad record cannot take the page down.
  */
+
+// A dot before every group but the first on its line: each group carries its
+// dot in its own left padding, and the wrapper clips whatever falls left of
+// the line's start.
+const SEP = 16;
+const groupSx = {
+  position: 'relative',
+  pl: `${SEP}px`,
+  whiteSpace: 'nowrap',
+  minWidth: 0,
+  '&::before': { content: '"·"', position: 'absolute', left: 0, width: SEP, textAlign: 'center', opacity: 0.6 },
+};
+
 const FoodListItem = ({ food, onEdit, onDelete }) => {
   const theme = useTheme();
-  const sourceColor = getSourceColor(food.source, theme);
+  if (!food || typeof food !== 'object') return null;
+  const name = String(food.name || '').trim() || 'Unnamed food';
   const sourceName = getSourceName(food.source);
-  const nutrition = food.nutrition || {};
-  const calories = Math.round(nutrition.calories_per_serving || 0);
+  const nutrition = (food.nutrition && typeof food.nutrition === 'object') ? food.nutrition : {};
+  const calories = Math.round(Number(nutrition.calories_per_serving) || 0);
   const isRecipe = Boolean(food.recipe);
   const makes = Number(food.recipe?.yield_servings);
+  const brand = String(food.brand || '').trim();
 
   return (
     <ListItem
+      data-testid="saved-food-row"
       sx={{
-        pl: 0,
-        // Clear the two 44px action buttons: `px` here used to override the
-        // room MUI reserves for secondaryAction, so the macros ran under the
-        // edit icon. Spacing unit is 4px — 24 = 96px.
-        pr: 24,
-        py: 1.25,
-        borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+        px: 0,
+        py: 2.5,
+        gap: 1,
+        alignItems: 'center',
+        borderBottom: (t) => `1px solid ${t.palette.divider}`,
         '&:last-child': { borderBottom: 'none' },
-        '& .MuiListItemSecondaryAction-root': { right: 0 },
       }}
-      secondaryAction={
-        <Box sx={{ display: 'flex', gap: 0.5 }}>
-          {/* Outlined icons in the secondary ink; Delete turns red only
-              under a finger or pointer (visual review B7). */}
-          <IconButton
-            aria-label={`Edit ${food.name}`}
-            onClick={() => onEdit(food)}
-            size="small"
-            sx={{ color: 'text.secondary' }}
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            aria-label={`Delete ${food.name}`}
-            onClick={() => onDelete(food)}
-            size="small"
-            sx={{
-              color: 'text.secondary',
-              '&:hover, &:active': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) },
-            }}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Box>
-      }
     >
-      {/* Accent dot indicating source */}
-      <Box
-        sx={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          backgroundColor: sourceColor,
-          flexShrink: 0,
-          mr: 1.75,
-          alignSelf: 'center',
-        }}
-      />
-
-      <Box sx={{ flex: 1, minWidth: 0, pr: 2 }}>
-        {/* Name + brand */}
+      <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography
           sx={{
             fontWeight: 700,
@@ -92,83 +74,72 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
             overflowWrap: 'anywhere',
           }}
         >
-          {food.name}
+          {name}
         </Typography>
 
-        {/* Meta row — source · calories · P/C/F (mono + dots) */}
-        <Typography
-          component="span"
+        <Box sx={{ overflow: 'hidden', mt: 0.5 }}>
+          <Typography
+            component="span"
+            sx={{
+              fontSize: '0.8125rem',
+              lineHeight: 1.5,
+              color: 'text.secondary',
+              display: 'flex',
+              flexWrap: 'wrap',
+              ml: `-${SEP}px`,
+            }}
+          >
+            {brand && (
+              <Box component="span" sx={{ ...groupSx, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                {brand}
+              </Box>
+            )}
+            {/* The source in words. As coloured ink it failed contrast (grey
+                #757575 on the dark theme is 3.49:1, audited 2026-10-13). */}
+            {sourceName && (
+              <Box component="span" sx={{ ...groupSx, fontWeight: 500 }}>{sourceName}</Box>
+            )}
+            {isRecipe && (
+              <Box component="span" sx={groupSx}>
+                <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>Recipe</Box>
+                {makes > 0 && (
+                  <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums', ml: 1 }}>
+                    makes {Math.round(makes * 100) / 100}
+                  </Box>
+                )}
+              </Box>
+            )}
+            <Box component="span" sx={{ ...groupSx, fontVariantNumeric: 'tabular-nums' }}>
+              {fmt(calories)} cal
+              <Box component="span" aria-hidden sx={{ opacity: 0.6, mx: '6px' }}>·</Box>
+              {macroLine({ protein: nutrition.protein_grams, carbs: nutrition.carbs_grams, fat: nutrition.fat_grams }, { dense: true })}
+            </Box>
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Outlined icons in the secondary ink; Delete turns red only under a
+          finger or pointer (visual review B7). 44px targets. */}
+      <Box sx={{ display: 'flex', flexShrink: 0, mr: -2 }}>
+        <IconButton
+          aria-label={`Edit ${name}`}
+          onClick={() => onEdit?.(food)}
+          sx={{ width: 44, height: 44, color: 'text.secondary' }}
+        >
+          <EditIcon fontSize="small" />
+        </IconButton>
+        <IconButton
+          aria-label={`Delete ${name}`}
+          onClick={() => onDelete?.(food)}
           sx={{
-            fontSize: '0.8125rem',
+            width: 44,
+            height: 44,
             color: 'text.secondary',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            mt: 0.25,
-            flexWrap: 'wrap',
+            '&:hover, &:active': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) },
           }}
         >
-          {food.brand && (
-            <>
-              <Box
-                component="span"
-                sx={{
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  maxWidth: 160,
-                }}
-              >
-                {food.brand}
-              </Box>
-              <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
-            </>
-          )}
-          {sourceName && (
-            <>
-              <Box
-                component="span"
-                // The source colour is the dot's job. As ink it failed contrast —
-                // grey #757575 on the dark theme is 3.49:1 (first audited 2026-10-13).
-                sx={{ color: 'text.secondary', fontWeight: 500 }}
-              >
-                {sourceName}
-              </Box>
-              <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
-            </>
-          )}
-          {isRecipe && (
-            <>
-              <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>Recipe</Box>
-              {makes > 0 && (
-                <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                  makes {Math.round(makes * 100) / 100}
-                </Box>
-              )}
-              <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
-            </>
-          )}
-          <Box
-            component="span"
-            sx={{
-              fontFamily: "inherit",
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {fmt(calories)} cal
-          </Box>
-          <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
-          <Box
-            component="span"
-            sx={{
-              fontFamily: "inherit",
-              fontVariantNumeric: 'tabular-nums',
-              fontSize: '0.75rem',
-            }}
-          >
-            {macroLine({ protein: nutrition.protein_grams, carbs: nutrition.carbs_grams, fat: nutrition.fat_grams }, { dense: true })}
-          </Box>
-        </Typography>
+          <DeleteIcon fontSize="small" />
+        </IconButton>
       </Box>
     </ListItem>
   );

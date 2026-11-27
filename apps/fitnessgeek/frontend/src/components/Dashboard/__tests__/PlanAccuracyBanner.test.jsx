@@ -38,14 +38,14 @@ describe('PlanAccuracyBanner', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('shows the stale-plan banner as one sentence, Review my plan → the wizard, and no Not now', () => {
+  it('shows the stale-plan banner as one sentence, See why → the calorie plan, and no Not now', () => {
     renderBanner(STALE, SCAN);
     const banner = screen.getByTestId('plan-accuracy-banner');
     expect(banner).toHaveAttribute('data-kind', 'stale');
-    expect(banner.textContent).toMatch(/^Your daily calorie target is probably too high\.Review my plan$/);
+    expect(banner.textContent).toMatch(/^Your daily calorie target is probably too high\.See why$/);
     // Plain words: no formula talk on the home screen (SIMPLE_AND_FULL_PLAN.md item 4).
     expect(banner.textContent).not.toMatch(/formula|Sep 20|BMR/);
-    expect(screen.getByRole('link', { name: 'Review my plan' })).toHaveAttribute('href', '/calorie-wizard');
+    expect(screen.getByRole('link', { name: 'See why' })).toHaveAttribute('href', '/calorie-wizard');
     expect(screen.queryByRole('button', { name: 'Not now' })).toBeNull();
     // Only one banner, even though a scan BMR is also available.
     expect(screen.getAllByTestId('plan-accuracy-banner')).toHaveLength(1);
@@ -57,10 +57,10 @@ describe('PlanAccuracyBanner', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('offers the scan BMR with both numbers, and Review my plan → the wizard', () => {
+  it('offers the scan figure with both numbers, in plain words, and Update my plan → the calorie plan', () => {
     renderBanner(CURRENT_MIFFLIN, SCAN);
-    expect(screen.getByText('Your body scans say you burn 2,104 calories a day at rest (BMR). Your plan uses 2,330.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Review my plan' })).toHaveAttribute('href', '/calorie-wizard');
+    expect(screen.getByText('Your body scans say you burn 2,104 calories a day at rest. Your plan uses 2,330.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Update my plan' })).toHaveAttribute('href', '/calorie-wizard');
   });
 
   it('remembers a dismissal per plan', () => {

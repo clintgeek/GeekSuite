@@ -270,7 +270,7 @@ export function garminCards(payload, { end }) {
     }),
     hrv: card('hrv', 'Overnight heart-rate variability (HRV)', (d) => d.overnightHRV, {
       unit: 'ms', deltaUnit: 'ms', decimals: 0, steady: 2, minSpan: 10,
-      meaning: 'Higher usually means better recovered. Compare it with your own, not anyone else’s.',
+      meaning: 'The tiny changes in time between heartbeats. Higher usually means better recovered; compare it with your own, not anyone else’s.',
     }),
     sleepScore: card('sleepScore', 'Sleep score', (d) => d.sleepScore, {
       unit: '/ 100', deltaUnit: 'points', decimals: 0, steady: 2, minSpan: 10,

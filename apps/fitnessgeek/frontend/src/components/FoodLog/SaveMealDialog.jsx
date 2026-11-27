@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Button,
   TextField,
   Box,
   Typography,
-  Chip,
-  Divider
+  Chip
 } from '@mui/material';
 import {
   Restaurant as FoodIcon
@@ -20,10 +19,17 @@ const SaveMealDialog = ({
   onClose,
   onSave,
   mealType,
-  logs,
+  logs: givenLogs,
   loading = false
 }) => {
+  // A null row (or no list at all) is not a food: it used to throw on
+  // `log.food_item` and take the page down with it.
+  const logs = (Array.isArray(givenLogs) ? givenLogs : []).filter((log) => log && typeof log === 'object');
   const [mealName, setMealName] = useState('');
+  // Each opening starts with an empty name: after a successful save the page
+  // closes this without going through handleClose, and the last meal's name
+  // was still in the box the next time.
+  useEffect(() => { if (open) setMealName(''); }, [open]);
   // Save at the bottom on a phone, like Edit entry (UX review L9).
   const fullScreen = useGeekDialogFullScreen();
 
@@ -51,6 +57,7 @@ const SaveMealDialog = ({
   const unresolvedCount = logs.filter(log => !resolveFoodId(log)).length;
 
   const handleSave = () => {
+    if (loading) return;
     if (mealName.trim() && logs.length > 0) {
       const food_items = logs
         .map(log => {
@@ -69,7 +76,10 @@ const SaveMealDialog = ({
     }
   };
 
+  // The name is cleared when the dialog is closed on purpose, not while a
+  // save is in flight: a failed save keeps what was typed.
   const handleClose = () => {
+    if (loading) return;
     setMealName('');
     onClose();
   };
@@ -115,7 +125,7 @@ const SaveMealDialog = ({
           <Button
             onClick={handleSave}
             variant="contained"
-            disabled={!mealName.trim() || loading || unresolvedCount === logs.length}
+            disabled={!mealName.trim() || loading || logs.length === 0 || unresolvedCount === logs.length}
           >
             {loading ? 'Saving…' : 'Save'}
           </Button>
@@ -127,7 +137,12 @@ const SaveMealDialog = ({
         ),
       })}
     >
-        <Box sx={{ mb: 3 }}>
+        <Box
+          component="form"
+          onSubmit={(e) => { e.preventDefault(); handleSave(); }}
+          // 4px theme unit: 8px clears the floating label under the header.
+          sx={{ pt: 2 }}
+        >
           <TextField
             autoFocus
             fullWidth
@@ -135,22 +150,25 @@ const SaveMealDialog = ({
             placeholder="For example, Taco night"
             value={mealName}
             onChange={(e) => setMealName(e.target.value)}
-            sx={{ mb: 2 }}
+            inputProps={{ maxLength: 80, enterKeyHint: 'done' }}
+            sx={{ mb: 5 }}
           />
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            This meal has {logs.length} food{logs.length !== 1 ? 's' : ''}:
+            {logs.length === 0
+              ? 'There is nothing in this meal to save yet.'
+              : `This meal has ${logs.length} food${logs.length !== 1 ? 's' : ''}:`}
           </Typography>
 
           {unresolvedCount > 0 && (
-            <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
+            <Typography variant="body2" role="status" sx={{ mb: 2, color: 'text.primary', fontWeight: 600 }}>
               {unresolvedCount === 1
                 ? '1 food can’t go in a saved meal — it isn’t in the food list.'
                 : `${unresolvedCount} foods can’t go in a saved meal — they aren’t in the food list.`}
             </Typography>
           )}
 
-          <Box sx={{ mb: 2 }}>
+          <Box sx={{ mb: 5 }}>
             {logs.map((log, index) => {
               const food_item = log.food_item || log.food_item_id;
               const servings = log.servings || 1;
@@ -161,13 +179,13 @@ const SaveMealDialog = ({
                   sx={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 1,
-                    py: 1,
+                    gap: 2,
+                    minHeight: 44,
+                    py: 1.5,
                     borderBottom: (t) => `1px solid ${t.palette.divider}`
                   }}
                 >
-                  <FoodIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-                  <Typography variant="body2" sx={{ flex: 1 }}>
+                  <Typography sx={{ flex: 1, minWidth: 0, fontSize: '1rem', overflowWrap: 'anywhere' }}>
                     {food_item?.name || 'A food'}
                   </Typography>
                   <Chip
@@ -180,9 +198,7 @@ const SaveMealDialog = ({
             })}
           </Box>
 
-          <Divider sx={{ my: 2 }} />
-
-          <Typography variant="body2" fontWeight={600} gutterBottom>
+          <Typography variant="body2" fontWeight={600} sx={{ mb: 2 }}>
             Altogether
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>

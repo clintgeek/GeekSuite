@@ -10,6 +10,7 @@ import PlanAccuracyBanner from '../components/Dashboard/PlanAccuracyBanner.jsx';
 import { Surface, SurfaceSkeleton, Page } from '../components/primitives';
 import DayHeader from '../components/Home/DayHeader.jsx';
 import { daylightFor } from '../components/Home/daylight.js';
+import { EMPTY_FOOD_FORM, foodPayloadFromForm } from '../components/MyFoods/foodForm.js';
 import WhatIsLeft from '../components/Home/WhatIsLeft.jsx';
 import DayDetails from '../components/Home/DayDetails.jsx';
 import MealCards from '../components/Home/MealCards.jsx';
@@ -72,17 +73,6 @@ import { MEAL_ORDER } from '../theme/theme.jsx';
 
 export const HOME_LOAD_PROBLEM = 'Can’t reach FitnessGeek right now. What you logged is safe.';
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-const EMPTY_FOOD_FORM = {
-  name: '',
-  brand: '',
-  calories_per_serving: '',
-  protein_grams: '',
-  carbs_grams: '',
-  fat_grams: '',
-  serving_size: 1,
-  serving_unit: 'oz',
-};
 
 // A calendar day moved by whole days, built from its parts so it never slips.
 const shiftDay = (day, by) => {
@@ -204,20 +194,7 @@ const Today = () => {
     if (!createForm?.name) return;
     setCreatingFood(true);
     try {
-      const created = await createFood({
-        name: createForm.name.trim(),
-        brand: createForm.brand?.trim() || undefined,
-        nutrition: {
-          calories_per_serving: Number(createForm.calories_per_serving) || 0,
-          protein_grams: Number(createForm.protein_grams) || 0,
-          carbs_grams: Number(createForm.carbs_grams) || 0,
-          fat_grams: Number(createForm.fat_grams) || 0,
-        },
-        serving: {
-          size: Number(createForm.serving_size) || 1,
-          unit: createForm.serving_unit || 'oz',
-        },
-      });
+      const created = await createFood(foodPayloadFromForm(createForm));
       setCreateForm(null);
       if (created) await logItems([{ ...created, servings: 1 }], addMeal);
     } catch (error) {
@@ -312,8 +289,11 @@ const Today = () => {
           mealType={firstMeal}
           onFinish={finishFirstRun}
           onTryLogging={async (answers) => {
-            await finishFirstRun(answers);
-            openAdd(firstMeal);
+            // Only open the add sheet once the answers are saved; the
+            // result goes back so the card can say a save failed.
+            const result = await finishFirstRun(answers);
+            if (result?.ok !== false) openAdd(firstMeal);
+            return result;
           }}
         />
         {addDialog}

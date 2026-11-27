@@ -99,8 +99,9 @@ export default function FixSheet({ item, onClose, fixes }) {
         </Typography>
       </DialogTitle>
       <DialogContent sx={{ pb: 3 }}>
-        <Typography sx={{ fontSize: '1rem', fontWeight: 700, mt: 1, mb: 1 }}>How big was it?</Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        {/* 4px theme unit: 8px between buttons, 20px between the three ways to fix it. */}
+        <Typography sx={{ fontSize: '1rem', fontWeight: 700, mt: 2, mb: 2 }}>How big was it?</Typography>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <Button variant="outlined" sx={bigButton} disabled={Boolean(working)} onClick={() => onClose?.()}>
             About right
           </Button>
@@ -115,7 +116,7 @@ export default function FixSheet({ item, onClose, fixes }) {
         <Box
           component="form"
           onSubmit={(e) => { e.preventDefault(); if (canSave) setTo(Math.round(typed)); }}
-          sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mt: 3 }}
+          sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', mt: 5 }}
         >
           <TextField
             label="Calories"
@@ -133,7 +134,7 @@ export default function FixSheet({ item, onClose, fixes }) {
         <Box
           component="form"
           onSubmit={(e) => { e.preventDefault(); sayInstead(); }}
-          sx={{ mt: 3 }}
+          sx={{ mt: 5 }}
         >
           <TextField
             fullWidth
@@ -150,7 +151,7 @@ export default function FixSheet({ item, onClose, fixes }) {
             fullWidth
             disabled={!actually.trim() || Boolean(working)}
             startIcon={working === 'actually' ? <CircularProgress size={18} color="inherit" aria-hidden /> : null}
-            sx={{ mt: 1, minHeight: 52, fontWeight: 700, fontSize: '1.0625rem', borderWidth: 2, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
+            sx={{ mt: 2, minHeight: 52, fontWeight: 700, fontSize: '1.0625rem', borderWidth: 2, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
           >
             {working === 'actually' ? 'Working it out…' : 'Log this instead'}
           </Button>
@@ -160,7 +161,7 @@ export default function FixSheet({ item, onClose, fixes }) {
           <Alert
             severity="warning"
             action={isSignedOutMessage(error) ? <SignInButton /> : undefined}
-            sx={{ mt: 2, borderRadius: '12px', fontSize: '1rem', color: theme.palette.text.primary, alignItems: 'center' }}
+            sx={{ mt: 4, borderRadius: '12px', fontSize: '1rem', color: theme.palette.text.primary, alignItems: 'center' }}
           >
             {error}
           </Alert>

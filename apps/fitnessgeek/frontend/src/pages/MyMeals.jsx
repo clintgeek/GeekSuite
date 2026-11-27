@@ -2,9 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   Box,
   TextField,
-  List,
-  ListItem,
-  ListItemText,
   IconButton,
   Typography,
   CircularProgress,
@@ -19,6 +16,7 @@ import {
   // A book of meals, so My meals stops sharing My foods' cutlery (C12).
   MenuBook as MealIcon,
   PlaylistAdd as LogIcon,
+  CloudOff as FailedIcon,
 } from '@mui/icons-material';
 import { useToast, useGeekDialogFullScreen } from '@geeksuite/ui';
 import { thumbSaveProps } from '../components/BloodPressure/thumbSave.jsx';
@@ -31,8 +29,7 @@ import { useToday } from '../hooks/useToday.js';
 import { errorMessage } from '../utils/errorMessage.js';
 import { addedMessage, fmt, friendlyDay, mealLabel } from '../utils/plainWords.js';
 import {
-  Page,
-  LabelPanel,
+  Surface,
   EmptyState,
   SurfaceSkeleton,
   PremiumDialog,
@@ -48,12 +45,39 @@ const mealTypeForNow = (now = new Date()) => {
   return 'snack';
 };
 
+/** What to call a meal that somehow has no name. */
+const nameOf = (meal) => String(meal?.name || '').trim() || 'Untitled meal';
+
+/**
+ * How many foods a saved meal holds and what it comes to. Every step is
+ * guarded: a meal with no list, a null entry in the list, or a food that was
+ * deleted (no nutrition) counts for nothing instead of throwing.
+ */
+const mealSummary = (meal) => {
+  const items = (Array.isArray(meal?.food_items) ? meal.food_items : []).filter((it) => it && typeof it === 'object');
+  let total = 0;
+  let known = false;
+  for (const it of items) {
+    const food = (it.food_item_id && typeof it.food_item_id === 'object' ? it.food_item_id : it.food_item) || {};
+    const per = Number(food?.nutrition?.calories_per_serving);
+    if (Number.isFinite(per)) {
+      known = true;
+      total += per * (Number(it.servings) > 0 ? Number(it.servings) : 1);
+    }
+  }
+  // The gateway's own total, when the foods carried no numbers of their own.
+  if (!known && Number(meal?.totalNutrition?.calories_per_serving) > 0) total = Number(meal.totalNutrition.calories_per_serving);
+  return { itemCount: items.length, totalCals: Math.round(total) };
+};
+
 const MyMeals = ({ embedded = false }) => {
   const { notify } = useToast();
   // "Log it" sits at the bottom on a phone, like every save (UX review L9).
   const fullScreen = useGeekDialogFullScreen();
   const [meals, setMeals] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed read is its own state, never "No meals saved yet".
+  const [loadFailed, setLoadFailed] = useState(false);
   const [query, setQuery] = useState('');
   const [editingMeal, setEditingMeal] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -83,17 +107,22 @@ const MyMeals = ({ embedded = false }) => {
     setLoading(true);
     try {
       const data = await fitnessGeekService.getMeals();
-      setMeals(data || []);
+      // One null in the list used to take the page to the error boundary
+      // (`m.name.toLowerCase()`): only real rows are kept.
+      setMeals((Array.isArray(data) ? data : []).filter((m) => m && typeof m === 'object'));
+      setLoadFailed(false);
     } catch (e) {
+      // After a save or a delete the list on screen is still right enough to
+      // keep; with nothing on screen, the page itself says the read failed.
+      setLoadFailed(true);
       notify(errorMessage(e, 'Couldn’t load your meals. Try again.'), { tone: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  const filtered = meals.filter(
-    (m) => !query || m.name.toLowerCase().includes(query.toLowerCase())
-  );
+  const needle = query.trim().toLowerCase();
+  const filtered = meals.filter((m) => !needle || nameOf(m).toLowerCase().includes(needle));
 
   const handleEdit = (meal) => {
     setEditingMeal(meal);
@@ -105,13 +134,17 @@ const MyMeals = ({ embedded = false }) => {
   };
 
   const confirmDelete = async () => {
-    if (!mealToDelete) return;
+    if (!mealToDelete || deleting) return;
     try {
       setDeleting(true);
       await fitnessGeekService.deleteMeal(mealToDelete._id || mealToDelete.id);
-      await loadMeals();
-      notify(`Deleted ${mealToDelete.name}`, { tone: 'success' });
+      // It is gone: say so and close before the list is read again, so a
+      // slow or failed re-read can't leave "Delete" up for a second tap.
+      notify(`Deleted ${nameOf(mealToDelete)}`, { tone: 'success' });
+      const goneId = mealToDelete._id || mealToDelete.id;
+      setMeals((prev) => prev.filter((m) => (m._id || m.id) !== goneId));
       setMealToDelete(null);
+      await loadMeals();
     } catch (e) {
       notify(errorMessage(e, 'Couldn’t delete that meal. Try again.'), { tone: 'error' });
     } finally {
@@ -120,7 +153,7 @@ const MyMeals = ({ embedded = false }) => {
   };
 
   const handleSave = async (payload) => {
-    if (!editingMeal) return;
+    if (!editingMeal || saving) return;
     try {
       setSaving(true);
       await fitnessGeekService.updateMeal(editingMeal._id || editingMeal.id, payload);
@@ -148,7 +181,7 @@ const MyMeals = ({ embedded = false }) => {
       const result = await logItems([{ ...mealToLog, type: 'meal' }], logMealType);
       if ((result?.ok ?? 0) > 0) {
         const day = logDay === today ? '' : ` · ${friendlyDay(logDay, today)}`;
-        offerUndo(addedMessage(logMealType, `${mealToLog.name}${day}`), result.logIds);
+        offerUndo(addedMessage(logMealType, `${nameOf(mealToLog)}${day}`), result.logIds);
         setMealToLog(null);
       } else {
         notify(errorMessage(result?.errors?.[0], 'Couldn’t log that meal. Try again.'), { tone: 'error' });
@@ -160,156 +193,132 @@ const MyMeals = ({ embedded = false }) => {
     }
   };
 
-  const mealSummary = (m) => {
-    const itemCount = m.food_items?.length || 0;
-    const totalCals = (m.food_items || []).reduce((sum, it) => {
-      const f = it.food_item_id || it.food_item || {};
-      const c = f?.nutrition?.calories_per_serving || 0;
-      return sum + c * (it.servings || 1);
-    }, 0);
-    return { itemCount, totalCals: Math.round(totalCals) };
-  };
-
   return (
     <Shell embedded={embedded}>
+      {/* No card title: the tab already says "Meals". */}
       <Typography sx={{ color: 'text.secondary', fontSize: '1rem' }}>
-        Save your favorite combinations and reuse them in a single tap.
+        Meals you saved, ready to log again in one tap.
       </Typography>
 
-      <TextField
-        placeholder="Search meals…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        fullWidth
-        size="small"
-      />
+      {/* Search: only when there is something to search. */}
+      {meals.length > 0 && (
+        <TextField
+          placeholder="Search meals…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          fullWidth
+          size="small"
+          inputProps={{ 'aria-label': 'Search meals' }}
+        />
+      )}
 
-      {loading ? (
+      {loading && meals.length === 0 ? (
         <SurfaceSkeleton rows={4} />
+      ) : loadFailed && meals.length === 0 ? (
+        <EmptyState
+          icon={FailedIcon}
+          title="Couldn’t load your meals"
+          copy="Nothing is lost. Check your connection and try again."
+          action={<Button variant="contained" onClick={loadMeals}>Try again</Button>}
+          data-testid="my-meals-failed"
+        />
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={MealIcon}
-          title={query ? 'Nothing matches that' : 'No meals saved yet'}
+          title={needle ? 'Nothing matches that' : 'No meals saved yet'}
           copy={
-            query
-              ? 'Try a different search, or clear the filter to see everything.'
-              : 'Save a meal from the Food log when you log something worth remembering. It’ll show up here, ready to reuse.'
+            needle
+              ? 'Try a different word, or clear the search to see every meal.'
+              : 'On Today, tap the ⋯ beside a meal and choose “Save as a meal”. It shows up here, ready to log again in one tap.'
           }
+          action={needle ? <Button variant="tonal" onClick={() => setQuery('')}>Clear search</Button> : undefined}
         />
       ) : (
-        <LabelPanel level={1} title="My meals" metaRight={`${filtered.length} ${filtered.length === 1 ? 'meal' : 'meals'}`}>
-          <List sx={{ p: 0 }}>
-            {filtered.map((m) => {
-              const { itemCount, totalCals } = mealSummary(m);
-              return (
-                <ListItem
-                  key={m._id || m.id}
-                  sx={{
-                    pl: 0,
-                    py: 1.25,
-                    // From sm up the actions sit beside the name; on a phone
-                    // they take their own line under it, so nothing overlaps.
-                    pr: { xs: 0, sm: 56 },
-                    flexWrap: { xs: 'wrap', sm: 'nowrap' },
-                    borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
-                    '&:last-child': { borderBottom: 'none' },
-                    '& .MuiListItemSecondaryAction-root': {
-                      right: 0,
-                      position: { xs: 'static', sm: 'absolute' },
-                      transform: { xs: 'none', sm: 'translateY(-50%)' },
-                      width: { xs: '100%', sm: 'auto' },
-                    },
-                  }}
-                  secondaryAction={
-                    <Box sx={{ display: 'flex', alignItems: 'center', ml: { xs: -2, sm: 0 } }}>
+        <Box>
+          <Typography
+            role="status"
+            sx={{ fontSize: '0.875rem', color: 'text.secondary', fontVariantNumeric: 'tabular-nums', mb: 2, px: 1 }}
+          >
+            {needle
+              ? `${filtered.length} of ${meals.length} ${meals.length === 1 ? 'meal' : 'meals'}`
+              : `${filtered.length} ${filtered.length === 1 ? 'meal' : 'meals'}`}
+          </Typography>
+          <Surface sx={{ py: { xs: 1, sm: 2 } }}>
+            <Box component="ul" aria-label="Your saved meals" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+              {filtered.map((m, index) => {
+                const { itemCount, totalCals } = mealSummary(m);
+                const name = nameOf(m);
+                return (
+                  <Box
+                    component="li"
+                    key={m._id || m.id || `meal-${index}`}
+                    data-testid="saved-meal-row"
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      // On a phone the actions take their own line under the
+                      // name, so nothing overlaps; from sm they sit beside it.
+                      flexWrap: { xs: 'wrap', sm: 'nowrap' },
+                      columnGap: 3,
+                      rowGap: 1.5,
+                      py: 3,
+                      borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+                      '&:last-child': { borderBottom: 'none' },
+                    }}
+                  >
+                    <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 0' }, minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary', lineHeight: 1.3, overflowWrap: 'anywhere' }}>
+                        {name}
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
+                        {[
+                          m.meal_type ? mealLabel(m.meal_type) : 'Any meal',
+                          `${itemCount} ${itemCount === 1 ? 'food' : 'foods'}`,
+                          totalCals > 0 ? `${fmt(totalCals)} cal` : null,
+                        ].filter(Boolean).join(' · ')}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: { xs: '1 1 100%', sm: '0 0 auto' } }}>
+                      {/* The row's one action in words; tonal, because the
+                          page has no filled button competing with it. */}
                       <Button
+                        variant="tonal"
                         size="small"
                         startIcon={<LogIcon />}
                         onClick={() => startLog(m)}
-                        aria-label={`Log ${m.name}`}
-                        sx={{ minHeight: 44, fontWeight: 700, mr: { xs: 'auto', sm: 0 } }}
+                        aria-label={`Log ${name}`}
+                        sx={{ minHeight: 44, px: 4, fontWeight: 700, mr: { xs: 'auto', sm: 1 } }}
                       >
                         Log this
                       </Button>
                       {/* Outlined, secondary ink; Delete is red only under a
                           finger or pointer (visual review B7). */}
                       <IconButton
-                        aria-label={`Edit ${m.name}`}
+                        aria-label={`Edit ${name}`}
                         onClick={() => handleEdit(m)}
-                        sx={{ color: 'text.secondary' }}
+                        sx={{ width: 44, height: 44, color: 'text.secondary' }}
                       >
                         <EditIcon />
                       </IconButton>
                       <IconButton
-                        aria-label={`Delete ${m.name}`}
+                        aria-label={`Delete ${name}`}
                         onClick={() => requestDelete(m)}
-                        sx={{ color: 'text.secondary', '&:hover, &:active': { color: 'error.main' } }}
+                        sx={{ width: 44, height: 44, mr: -2, color: 'text.secondary', '&:hover, &:active': { color: 'error.main' } }}
                       >
                         <DeleteIcon />
                       </IconButton>
                     </Box>
-                  }
-                >
-                  <ListItemText
-                    primary={
-                      <Typography
-                        sx={{ fontWeight: 700, fontSize: '1rem', color: 'text.primary' }}
-                      >
-                        {m.name}
-                      </Typography>
-                    }
-                    secondary={
-                      <Typography
-                        component="span"
-                        sx={{
-                          fontSize: '0.8125rem',
-                          color: 'text.secondary',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1,
-                          mt: 0.25,
-                        }}
-                      >
-                        <Box component="span">
-                          {m.meal_type ? mealLabel(m.meal_type) : 'Any meal'}
-                        </Box>
-                        <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
-                        <Box
-                          component="span"
-                          sx={{
-                            fontFamily: "inherit",
-                            fontVariantNumeric: 'tabular-nums',
-                          }}
-                        >
-                          {itemCount} {itemCount === 1 ? 'item' : 'items'}
-                        </Box>
-                        {totalCals > 0 && (
-                          <>
-                            <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
-                            <Box
-                              component="span"
-                              sx={{
-                                fontFamily: "inherit",
-                                fontVariantNumeric: 'tabular-nums',
-                              }}
-                            >
-                              {fmt(totalCals)} cal
-                            </Box>
-                          </>
-                        )}
-                      </Typography>
-                    }
-                  />
-                </ListItem>
-              );
-            })}
-          </List>
-        </LabelPanel>
+                  </Box>
+                );
+              })}
+            </Box>
+          </Surface>
+        </Box>
       )}
 
       <EditMealDialog
         open={editOpen}
-        onClose={() => setEditOpen(false)}
+        onClose={() => { if (!saving) setEditOpen(false); }}
         meal={editingMeal}
         onSave={handleSave}
         loading={saving}
@@ -319,7 +328,7 @@ const MyMeals = ({ embedded = false }) => {
       <PremiumDialog
         open={!!mealToLog}
         onClose={() => !logging && setMealToLog(null)}
-        title={mealToLog ? `Log ${mealToLog.name}` : 'Log a meal'}
+        title={mealToLog ? `Log ${nameOf(mealToLog)}` : 'Log a meal'}
         maxWidth="xs"
         {...thumbSaveProps({
           fullScreen,
@@ -334,13 +343,14 @@ const MyMeals = ({ embedded = false }) => {
             </Button>
           ),
           cancel: (
-            <Button onClick={() => setMealToLog(null)} disabled={logging}>
+            <Button onClick={() => { if (!logging) setMealToLog(null); }} disabled={logging}>
               Cancel
             </Button>
           ),
         })}
       >
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }} role="group" aria-label="Meal">
+        {/* 4px theme unit: 8px between the chips, 20px above the day. */}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 5 }} role="group" aria-label="Meal">
           {MEALS.map((meal) => (
             <Chip
               key={meal}
@@ -393,7 +403,7 @@ const MyMeals = ({ embedded = false }) => {
         }
       >
         <DialogContentText>
-          <strong>{mealToDelete?.name}</strong> will be deleted from your saved
+          <strong>{mealToDelete ? nameOf(mealToDelete) : ''}</strong> will be deleted from your saved
           meals. This can’t be undone.
         </DialogContentText>
       </PremiumDialog>
