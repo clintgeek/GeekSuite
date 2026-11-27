@@ -67,7 +67,7 @@ describe('AIGoalPlanner — BMR units and plan provenance', () => {
     withSettings(STALE_PLAN);
     render(<AIGoalPlanner />);
     await waitFor(() =>
-      expect(screen.getByText(/before a mistake in the maths was fixed/i)).toBeInTheDocument()
+      expect(screen.getByTestId('plan-stale-notice')).toHaveTextContent('Your target can be more accurate now')
     );
   });
 
@@ -75,7 +75,7 @@ describe('AIGoalPlanner — BMR units and plan provenance', () => {
     withSettings({ ...STALE_PLAN, bmr: 2359, bmr_calc_version: BMR_CALC_VERSION });
     render(<AIGoalPlanner />);
     await waitFor(() => expect(settingsService.getSettings).toHaveBeenCalled());
-    expect(screen.queryByText(/before a mistake in the maths was fixed/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('plan-stale-notice')).not.toBeInTheDocument();
   });
 
   it('does not warn a user who has never saved a plan', async () => {
@@ -83,7 +83,7 @@ describe('AIGoalPlanner — BMR units and plan provenance', () => {
     withSettings(null);
     render(<AIGoalPlanner />);
     await waitFor(() => expect(settingsService.getSettings).toHaveBeenCalled());
-    expect(screen.queryByText(/before a mistake in the maths was fixed/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('plan-stale-notice')).not.toBeInTheDocument();
   });
 });
 

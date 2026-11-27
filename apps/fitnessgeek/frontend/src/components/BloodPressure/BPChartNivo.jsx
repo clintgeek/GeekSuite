@@ -18,7 +18,7 @@ import { LabelPanel, buildChartTheme } from '../primitives';
  * dashed, with the word in the legend), a hairline grid, and a rounded tooltip
  * with a hairline edge.
  */
-const BPChartNivo = ({ data, unit = 'mmHg' }) => {
+const BPChartNivo = ({ data }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const muted = theme.palette.text.secondary;
@@ -266,7 +266,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                         color: ink,
                       }}
                     >
-                      {systolic} {unit}
+                      {systolic}
                     </Typography>
                   </Box>
                 )}
@@ -300,7 +300,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                         color: ink,
                       }}
                     >
-                      {diastolic} {unit}
+                      {diastolic}
                     </Typography>
                   </Box>
                 )}

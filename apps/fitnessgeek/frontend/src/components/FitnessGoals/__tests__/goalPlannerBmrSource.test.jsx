@@ -161,7 +161,12 @@ describe('CalorieGoalWizard — protein preview (plan D3)', () => {
     await runToPlan();
     const preview = screen.getByTestId('macro-preview');
     expect(preview.textContent).toMatch(/Protein 177g/);
-    expect(within(preview).getByTestId('protein-basis').textContent).toMatch(/from your lean mass: 1 g per lb × 177 lb/);
+    // The read-back gives the grams and no arithmetic (round two, item 5)…
+    expect(within(preview).queryByTestId('protein-basis')).toBeNull();
+    expect(screen.getByTestId('plan-result').textContent).not.toMatch(/×|per lb/);
+    // …which is under "How this was worked out" (runToPlan opens it), in words.
+    expect((await screen.findByTestId('protein-basis')).textContent).toBe('Protein: 1 gram for each pound of lean body mass, 177 lb.');
+    expect(screen.getByTestId('plan-result').textContent).not.toMatch(/×|per lb/);
   });
 
   it('previews protein from goal weight, with no lean-mass line, without a scan', async () => {
@@ -169,12 +174,22 @@ describe('CalorieGoalWizard — protein preview (plan D3)', () => {
     await runToPlan({ targetWeight: '250' });
     const preview = screen.getByTestId('macro-preview');
     expect(preview.textContent).toMatch(/Protein 200g/); // 0.8 × 250
+    await screen.findByTestId('metabolism-card');
     expect(screen.queryByTestId('protein-basis')).toBeNull();
   });
 });
 
 describe('CalorieGoalWizard — old vs new (plan D2)', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('a plan built on an estimate offers the scan figure calmly; the two numbers are under "How this was worked out"', async () => {
+    setup({ nutrition_goal: { ...CHEF_STALE_PLAN, bmr: 2330, daily_calorie_target: 1800, bmr_calc_version: BMR_CALC_VERSION, bmr_source: 'mifflin' } });
+    const notice = await screen.findByTestId('plan-scan-notice');
+    expect(notice).toHaveTextContent('Your target can be more accurate now');
+    expect(notice.textContent).not.toMatch(/\d/);
+    fireEvent.click(screen.getByTestId('plan-working-toggle'));
+    expect(await screen.findByTestId('plan-working-note')).toHaveTextContent('Your body scans measure 2,104 calories a day at rest. This plan uses an estimate of 2,330.');
+  });
 
   it('shows the saved target and BMR next to the new ones before saving', async () => {
     setup({ nutrition_goal: CHEF_STALE_PLAN });
@@ -186,7 +201,9 @@ describe('CalorieGoalWizard — old vs new (plan D2)', () => {
     const newBmr = katchMcArdleBMR({ leanMassLb: 177 });
     expect(cmp.textContent).toContain(`3,314 → ${newBmr.toLocaleString('en-US')} cal`);
     expect(cmp.textContent).toMatch(/Daily target2,977 → /);
-    expect(cmp.textContent).toMatch(/worked out before a mistake in the maths was fixed/);
+    expect(cmp.textContent).toMatch(/The old target beside the new one/);
+    expect(cmp.textContent).toMatch(/Your details have changed since this was worked out/);
+    expect(document.body.textContent).not.toMatch(/mistake|maths|too high/i);
     expect(cmp.textContent).toMatch(/Nothing changes until you save/);
     // Nothing was written by re-running.
     expect(settingsService.updateSettings).not.toHaveBeenCalled();

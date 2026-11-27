@@ -93,7 +93,8 @@ describe('HouseholdSettings — the household name', () => {
     await user.tab();
 
     await waitFor(() => expect(settingsService.updateHouseholdSettings).toHaveBeenCalledWith({ name: 'The Crockers' }));
-    expect(notify).toHaveBeenCalledWith('Saved', expect.objectContaining({ tone: 'success' }));
+    // Said under the box, not in a toast.
+    expect(await screen.findByRole('status')).toHaveTextContent('Saved');
   });
 
   it('a new household is created with its name', async () => {

@@ -8,7 +8,7 @@
  *     LOCAL calendar day, sent as `start`.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { localDateStringDaysAgo } from '@geeksuite/utils';
 
@@ -58,7 +58,7 @@ describe('Reports — the food report does not wait for the AI', () => {
     renderReports();
     expect((await screen.findAllByText('a day')).length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Loading the summary')).toBeInTheDocument();
-    expect(screen.getByLabelText('Loading the trends')).toBeInTheDocument();
+    expect(screen.getByLabelText('Loading the patterns')).toBeInTheDocument();
   });
 
   it('one AI panel answering does not wait for the other', async () => {
@@ -66,7 +66,7 @@ describe('Reports — the food report does not wait for the AI', () => {
     insightsService.getTrendWatch.mockImplementation(never);
     renderReports();
     expect(await screen.findByText('You ate well this week.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Loading the trends')).toBeInTheDocument();
+    expect(screen.getByLabelText('Loading the patterns')).toBeInTheDocument();
   });
 });
 
@@ -107,10 +107,16 @@ describe('Reports — every window is the local calendar', () => {
     expect(reportsService.getOverview).toHaveBeenCalledWith({ days: 7, start: localDateStringDaysAgo(6) });
   });
 
-  it('the CSV export sends a local `start`, and a failure says so in words', async () => {
+  it('the download is a quiet link at the foot of the page, sends a local `start`, and a failure says so in words', async () => {
     reportsService.export.mockRejectedValue(Object.assign(new Error('Request failed with status code 500'), { response: { status: 500 } }));
     renderReports();
-    const button = await screen.findByRole('button', { name: /Export CSV/ });
+    const button = await screen.findByRole('button', { name: 'Download as a spreadsheet' });
+    expect(screen.queryByText(/Export CSV/)).toBeNull();
+    // Last on the page: after the food report and the body section, not
+    // the first action under the title.
+    const follows = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(screen.getByTestId('reports-food'), button)).toBe(true);
+    expect(within(screen.getByTestId('reports-food')).queryByRole('button', { name: /spreadsheet|export/i })).toBeNull();
     await waitFor(() => expect(button).not.toBeDisabled());
     fireEvent.click(button);
     await waitFor(() => expect(notify).toHaveBeenCalled());

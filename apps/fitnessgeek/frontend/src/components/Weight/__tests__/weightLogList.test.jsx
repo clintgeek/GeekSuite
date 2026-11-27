@@ -33,6 +33,27 @@ describe('WeightLogList', () => {
     expect(within(rows[0]).getByText('after the gym')).toBeInTheDocument();
   });
 
+  // Round two: a "Scale" chip on every row of a person whose scale sends
+  // every weigh-in said nothing 24 times. Only the exceptions are marked.
+  it('marks nothing when every weigh-in came the usual way', () => {
+    const allScale = LOGS.map((l) => ({ ...l, source: 'arboleaf_xlsx' }));
+    render(<WeightLogList logs={allScale} onDelete={() => {}} />);
+    expect(screen.queryAllByTestId('weight-source')).toHaveLength(0);
+    expect(screen.queryByText('Scale')).toBeNull();
+  });
+
+  it('for a person whose scale usually sends them, marks the one that was typed in', () => {
+    const mostlyScale = [
+      ...LOGS.map((l) => ({ ...l, source: 'arboleaf_xlsx' })),
+      { id: 'w4', weight_value: 315.9, log_date: '2026-09-22T00:00:00.000Z', source: 'manual', notes: null },
+    ];
+    render(<WeightLogList logs={mostlyScale} onDelete={() => {}} />);
+    const rows = screen.getAllByTestId('weight-log-row');
+    expect(within(rows[0]).getByText('Typed in')).toBeInTheDocument();
+    expect(screen.getAllByTestId('weight-source')).toHaveLength(1);
+    expect(screen.queryByText('Scale')).toBeNull();
+  });
+
   it('uses the EmptyState primitive when there are no logs', () => {
     render(<WeightLogList logs={[]} onDelete={() => {}} />);
     expect(screen.getByText('No weigh-ins yet')).toBeInTheDocument();

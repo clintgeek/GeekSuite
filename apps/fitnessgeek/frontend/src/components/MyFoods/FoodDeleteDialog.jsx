@@ -20,13 +20,15 @@ const FoodDeleteDialog = ({ open, food, onClose, onConfirm, loading }) => {
       {...thumbSaveProps({
         fullScreen,
         save: (
+          // Destructive is text in the error colour, never a filled red
+          // block (review 2026-11-27); the same as Remove in Edit entry.
           <Button
             onClick={onConfirm}
-            variant="contained"
             color="error"
             disabled={loading}
+            sx={{ fontWeight: 700 }}
           >
-            {loading ? <CircularProgress size={20} /> : 'Delete'}
+            {loading ? <CircularProgress size={20} color="inherit" /> : 'Delete'}
           </Button>
         ),
         cancel: <Button onClick={onClose}>Cancel</Button>,

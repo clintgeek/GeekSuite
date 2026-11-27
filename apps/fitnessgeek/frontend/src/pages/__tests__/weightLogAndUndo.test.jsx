@@ -91,16 +91,34 @@ describe('Weight page — logging', () => {
     fireEvent.change(within(dialog).getByLabelText(/^weight/i), { target: { value: '219.4' } });
     expect(within(dialog).getByRole('button', { name: 'Replace', hidden: true })).toBeEnabled();
 
+    // The common case never shows a date input (round two): Today and
+    // Yesterday are one tap each.
+    expect(within(dialog).queryByLabelText('Date')).toBeNull();
+
     // Backfilling the day before, which has none: an ordinary Save.
-    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-10-14' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yesterday', hidden: true }));
     expect(within(dialog).queryByTestId('weight-replace-note')).toBeNull();
     expect(within(dialog).getByRole('button', { name: 'Save', hidden: true })).toBeInTheDocument();
 
     // The next day, it names the day it would replace.
-    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-10-15' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Today', hidden: true }));
     vi.setSystemTime(new Date(2026, 9, 16, 7, 0, 0));
     fireEvent.change(within(dialog).getByLabelText(/^weight/i), { target: { value: '219.5' } });
     expect(within(dialog).getByTestId('weight-replace-note')).toHaveTextContent('You already have 218.7 for yesterday. Saving replaces it.');
+  });
+
+  it('"Another day" reveals the date field, and the weight saves on the day picked', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 19, 0, 0));
+    renderAt();
+    fireEvent.click(await screen.findByTestId('log-weight-fab'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Another day', hidden: true }));
+    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-10-09' } });
+    fireEvent.change(within(dialog).getByLabelText(/^weight/i), { target: { value: '220.2' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i, hidden: true }));
+    await waitFor(() => expect(createWeightLog).toHaveBeenCalled());
+    expect(createWeightLog.mock.calls.at(-1)[0]).toMatchObject({ weight_value: 220.2, log_date: '2026-10-09' });
   });
 
   it('?add=1 opens the weight dialog directly', async () => {

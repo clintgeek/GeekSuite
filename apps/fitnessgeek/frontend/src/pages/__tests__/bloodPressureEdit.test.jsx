@@ -76,7 +76,7 @@ describe('BloodPressure page — editing a row', () => {
     // Wait for the initial load to land the one reading.
     await screen.findAllByText(/118\/76/);
 
-    const editButtons = screen.getAllByLabelText(/edit the 118\/76 mmhg reading/i);
+    const editButtons = screen.getAllByLabelText(/edit the 118\/76 reading/i);
     await user.click(editButtons[0]);
 
     // QuickAddBP's own desktop card also has a systolic field, always

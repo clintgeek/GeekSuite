@@ -22,9 +22,22 @@ export const INITIAL_ROWS = 10;
  * (FITNESSGEEK_BODY_DATA_PLAN §0) forbids: it teaches reacting to noise. The
  * trend lives in the chart above, as a 7-day average.
  *
- * Rows the scale imported (`source: 'arboleaf_xlsx'`) carry a "Scale" marker
- * so a typed value and a measured one can be told apart (F9).
+ * A typed value and one the scale imported (`source: 'arboleaf_xlsx'`) can be
+ * told apart (F9), but only the EXCEPTIONS are marked: a "Scale" chip on every
+ * row of a person whose scale sends every weigh-in said nothing 24 times
+ * (round-two review). Whichever way most of her weigh-ins arrive is the
+ * usual one and goes unmarked; the odd one out says "Scale" or "Typed in".
+ * The edit dialog still says where a scale row came from.
  */
+const isScale = (log) => log?.source === 'arboleaf_xlsx';
+
+/** 'scale' when most weigh-ins came from the scale, else 'typed'. */
+export function usualSource(logs) {
+  const rows = (Array.isArray(logs) ? logs : []).filter(Boolean);
+  const scale = rows.filter(isScale).length;
+  return scale * 2 > rows.length ? 'scale' : 'typed';
+}
+
 const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
   // The row being edited outlives the dialog's open flag, so the dialog's
   // closing transition still has its date and value to show.
@@ -60,6 +73,7 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
   }
 
   const visible = showAll ? sortedLogs : sortedLogs.slice(0, INITIAL_ROWS);
+  const usual = usualSource(sortedLogs);
 
   return (
     <LabelPanel
@@ -76,7 +90,12 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
           const n = parseFloat(log?.weight_value);
           const weight = Number.isFinite(n) ? n.toFixed(1) : '—';
           const when = formatDate(log.log_date);
-          const fromScale = log.source === 'arboleaf_xlsx';
+          const source = isScale(log) ? 'scale' : 'typed';
+          const oddSource = source === usual
+            ? null
+            : source === 'scale'
+              ? { label: 'Scale', title: 'Imported from the scale' }
+              : { label: 'Typed in', title: 'Typed in, not from the scale' };
           return (
             <ListRow
               component="li"
@@ -92,9 +111,9 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25, flexWrap: 'wrap' }}>
                   <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>{when}</Typography>
-                  {fromScale && (
-                    <Box component="span" title="Imported from the scale" sx={{ display: 'inline-flex' }}>
-                      <Tag>Scale</Tag>
+                  {oddSource && (
+                    <Box component="span" title={oddSource.title} data-testid="weight-source" sx={{ display: 'inline-flex' }}>
+                      <Tag>{oddSource.label}</Tag>
                     </Box>
                   )}
                 </Box>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Alert, Box, Button, Chip, Typography } from '@mui/material';
-import { QrCodeScanner as BarcodeIcon, CheckCircle as AddedIcon, Undo as UndoIcon, Check as CheckIcon } from '@mui/icons-material';
+import { CheckCircle as AddedIcon, Undo as UndoIcon, Check as CheckIcon } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { useToast } from '@geeksuite/ui';
 import ComposerBox from './ComposerBox.jsx';
@@ -17,6 +17,7 @@ import SignInButton, { isSignedOutMessage } from './SignInButton.jsx';
 import { readDraft, writeDraft, draftsAvailable } from './composerDraft.js';
 import { useSpeechInput } from '../../hooks/useSpeechInput.js';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus.js';
+import { useSaysOffline } from '../OfflineIndicator/offlineVoice.js';
 import { useToday } from '../../hooks/useToday.js';
 import { addedMessage, cal, mealLabel, mealWord } from '../../utils/plainWords.js';
 import { errorMessage } from '../../utils/errorMessage.js';
@@ -50,10 +51,10 @@ import {
  *
  *   empty     the box, Log it (dim) and the mic; "Or tap one you've had"
  *             (Same as yesterday's lunch, the Again chips); your own foods,
- *             folded; "Scan a barcode" as a text link.
+ *             folded. The barcode button sits beside the mic, always.
  *   typing    a sentence (composerText.isSentence) folds the list into
  *             "Or pick an exact food (n)" and runs no deep search; a name
- *             ("fage") shows the list open, each row with "+ Add".
+ *             ("fage") shows the list open, each row one tap to add.
  *   day       the words name a day ("last night") that isn't the one on
  *             screen: "Log this to yesterday? [Yes] [No, today]", before
  *             anything is written (Phase 3.17).
@@ -76,7 +77,8 @@ import {
  *
  * Tapping a list row is a picking session, as before: it logs in place and
  * nothing closes. The ribbon shows from the first item, with Done (L10). Its
- * pill becomes "Make it 2" (FoodResultRow).
+ * corner then says "Amount", which opens the serving sheet on that entry
+ * (FoodResultRow).
  *
  * A SECOND TAP IS ANOTHER SERVING (L2). Heather taps "Egg" twice for two
  * eggs (§2a). The second tap on the same row — or the same Again chip — in
@@ -532,7 +534,6 @@ const FoodComposer = ({
 
   /** The row's or chip's "Make it N". */
   const handleMore = useCallback((key, count) => setServings(key, count), [setServings]);
-  const rowMore = useCallback((food, count) => handleMore(identityOf(food), count), [handleMore]);
 
   // ── Describe-and-log ─────────────────────────────────────────────────
   /**
@@ -858,6 +859,10 @@ const FoodComposer = ({
 
   // ── Rendering ────────────────────────────────────────────────────────
   const offline = !isOnline;
+  // This box says "No signal" itself, under the button. In the sheet (which
+  // covers the page), or once there are words in it, that is the one offline
+  // message: the app-wide banner and chip stay quiet (review 2026-11-27).
+  useSaysOffline(offline && !result && (mode === 'dialog' || Boolean(typed)));
   // The day words in this sheet, in one style (L22).
   const dayWords = (d) => sheetDayWords(d, today, day);
   const status = useMemo(() => {
@@ -866,6 +871,9 @@ const FoodComposer = ({
     if (thinking) return { text: slow ? STILL_WORKING_MESSAGE : 'I’m working out the calories.', tone: slow ? 'strong' : 'muted', kind: 'thinking' };
     if (failure) return { text: failure.message, tone: 'strong', kind: failure.kind === 'offline' ? 'offline' : 'failure' };
     if (typed && sentence && onDescribe) return { text: 'I’ll work out the calories. You can fix anything after.', tone: 'muted' };
+    // A short name: the list under the button is the other way in. The
+    // button itself stays "Log it" (review 2026-11-27).
+    if (typed && onDescribe) return { text: 'Tap the one you had below, or Log it and I’ll work it out.', tone: 'muted' };
     return { text: null, tone: 'muted' };
   }, [offline, keepDraft, thinking, slow, failure, typed, sentence, onDescribe]);
 
@@ -990,8 +998,8 @@ const FoodComposer = ({
         listening={speech.listening}
         thinking={thinking}
         canLog={Boolean(typed) && Boolean(onDescribe) && !offline && !busy && !dayAsk}
-        // A short name opens the list, and its rows lead (L20).
-        quiet={Boolean(typed) && !sentence && Boolean(onDescribe)}
+        onBarcodeClick={onBarcodeClick}
+        barcodeDisabled={busy}
         autoFocus={autoFocus || mode === 'dialog'}
         inputRef={inputRef}
         status={status.text}
@@ -1126,21 +1134,8 @@ const FoodComposer = ({
         added={addedByKey}
         onPick={handlePick}
         onAdjust={setAdjusting}
-        onMore={onUpdateLog ? rowMore : undefined}
         onCreateFood={onCreateFood}
       />
-
-      {!typed && onBarcodeClick && (
-        <Button
-          variant="text"
-          startIcon={<BarcodeIcon />}
-          onClick={onBarcodeClick}
-          disabled={busy}
-          sx={{ mt: 0.5, minHeight: 44, px: 0, fontWeight: 700, fontSize: '1rem' }}
-        >
-          Scan a barcode
-        </Button>
-      )}
 
       <SessionRibbon
         items={session}

@@ -238,8 +238,9 @@ const Weight = () => {
             </Box>
           )}
 
-          {/* Body composition: the summary, change and fat/lean trend for a
-              person with scans; one quiet line for everyone else. */}
+          {/* Body composition: one tidy summary for a person with scans (the
+              rest behind "More from your scans"); one quiet line for
+              everyone else. */}
           <Box sx={{ order: 4, minWidth: 0, '&:empty': { display: 'none' } }}>
             <BodyCompositionSection
               summary={bodyComp.summary}
@@ -248,6 +249,7 @@ const Weight = () => {
               error={bodyComp.error}
               scansError={bodyComp.scansError}
               onRetry={bodyComp.reload}
+              defaultOpen={hash === '#body-composition'}
             />
           </Box>
         </Box>

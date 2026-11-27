@@ -35,6 +35,7 @@ import { parseHeightToInches } from '../components/FitnessGoals/calorieCalc.js';
 import { useExperience } from '../contexts/ExperienceContext.jsx';
 import { LabelPanel, Page } from '../components/primitives';
 import { SWITCH_ROW } from '../components/Settings/switchRow.js';
+import SaveNote, { SavedWords, useSaveNote } from '../components/Settings/SaveNote.jsx';
 import { Disclosure } from '../components/FitnessGoals/PlanResult.jsx';
 import { fmt } from '../utils/plainWords.js';
 
@@ -53,9 +54,11 @@ import { fmt } from '../utils/plainWords.js';
  *                         watch is on) and body scans from the scale
  *   6. Account            email, sign out
  *
- * EVERYTHING SAVES AS IT CHANGES (IA-3), with a quiet "Saved". The only
- * explicit button is the Garmin login, because a password half-typed must
- * never be sent. There is no "Unsaved changes" bar any more.
+ * EVERYTHING SAVES AS IT CHANGES (IA-3). The page says so once, at the top
+ * ("Changes save as you make them."), and each save answers with a small
+ * "Saved" beside the thing that changed (SaveNote.jsx), not a toast at the
+ * foot of the screen. The only explicit button is the Garmin login, because a
+ * password half-typed must never be sent.
  *
  * Every write is PARTIAL — just the key that changed (CONTEXT.md, "Settings
  * writes are PARTIAL") — so a change made elsewhere since the page opened is
@@ -68,15 +71,19 @@ import { fmt } from '../utils/plainWords.js';
  * scan have no row in the navigation (DOCS/ONE_APP_PLAN.md §3); their rows
  * here are one of the ways to them.
  *
- * A save that fails says so in a toast AND beside the field, and what was
- * typed stays in the field: leaving it again retries.
+ * A save that fails says so in a toast AND beside the field or switch, and
+ * what was typed stays in the field: leaving it again retries.
+ *
+ * "Your goal" shows the goal the saved calorie plan implies when the person
+ * never answered the question (`goalFromPlan`), so a person with a plan to
+ * lose weight doesn't see three empty circles. Nothing is written until she
+ * picks one.
  */
 
-const SAVED = ['Saved', { tone: 'success', duration: 2000 }];
 const COULDNT = 'Couldn’t save that. Try again.';
 
 const GOALS = [
-  { id: 'lose', title: 'Lose a little weight' },
+  { id: 'lose', title: 'Lose weight' },
   { id: 'maintain', title: 'Keep my weight steady' },
   { id: 'track', title: 'Just keep track' },
 ];
@@ -87,6 +94,18 @@ const SEXES = [
   { value: 'other', label: 'Other' },
   { value: 'prefer-not-to-say', label: 'Rather not say' },
 ];
+
+/**
+ * The goal a saved calorie plan implies: 'lose' | 'maintain' | null. Only an
+ * enabled plan with a target counts; a plan that doesn't say either way
+ * implies nothing.
+ */
+export function goalFromPlan(ng) {
+  if (!ng || ng.enabled === false || !(Number(ng.daily_calorie_target) > 0)) return null;
+  const rate = ng.weight_change_rate;
+  if (rate != null && rate !== '' && Number.isFinite(Number(rate))) return Number(rate) > 0 ? 'lose' : 'maintain';
+  return Number(ng.target_weight) > 0 ? 'lose' : null;
+}
 
 const plausibleAge = (v) => Number.isInteger(Number(v)) && Number(v) >= 13 && Number(v) <= 110;
 
@@ -188,9 +207,12 @@ function useFlushOnLeave(flush) {
 }
 
 /** "About you": the experience answers (their own store) and the profile. */
-function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved }) {
+function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved, planGoal = null }) {
   const { notify } = useToast();
   const { preferredName, goal, update } = useExperience();
+  const note = useSaveNote();
+  // Her own answer; else what her saved plan says. Shown, never written.
+  const shownGoal = goal || planGoal;
   const [name, setName] = useState(preferredName || '');
   const [nameError, setNameError] = useState(false);
 
@@ -203,10 +225,15 @@ function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved }) {
     }
   }, [preferredName]);
 
-  const saveExperience = async (patch) => {
-    const result = await update(patch);
-    if (result?.ok) notify(...SAVED);
-    else notify(COULDNT, { tone: 'error' });
+  const saveExperience = async (patch, key) => {
+    note.clear(key);
+    let result;
+    try { result = await update(patch); } catch { result = { ok: false }; }
+    if (result?.ok) note.saved(key);
+    else {
+      notify(COULDNT, { tone: 'error' });
+      if (key === 'goal') note.failed(key, COULDNT);
+    }
     return result;
   };
 
@@ -219,7 +246,7 @@ function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved }) {
     const before = savedName.current;
     savedName.current = next;
     setNameError(false);
-    const result = await saveExperience({ preferred_name: next || null });
+    const result = await saveExperience({ preferred_name: next || null }, 'name');
     if (!result?.ok) {
       // What was typed stays in the field, with the failure said beside it;
       // leaving the field again retries (it used to snap back to the old name).
@@ -242,21 +269,24 @@ function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved }) {
         onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
         inputProps={{ maxLength: 40, autoComplete: 'given-name' }}
         error={nameError}
-        helperText={nameError ? COULDNT : 'The name I greet you with.'}
+        helperText={nameError ? COULDNT : note.isSaved('name') ? <SavedWords /> : 'The name I greet you with.'}
         sx={{ mb: 6 }}
       />
 
       <Typography id="settings-goal-label" sx={{ fontWeight: 600, fontSize: '1rem', mb: 2 }}>Your goal</Typography>
-      <Box role="radiogroup" aria-labelledby="settings-goal-label" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mb: 6 }}>
+      <Box role="radiogroup" aria-labelledby="settings-goal-label" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         {GOALS.map((g) => (
           <GoalChoice
             key={g.id}
-            selected={goal === g.id}
+            selected={shownGoal === g.id}
             title={g.title}
-            onClick={() => { if (goal !== g.id) saveExperience({ goal: g.id }); }}
+            // A goal shown from the plan isn't saved yet: tapping it saves it.
+            onClick={() => { if (goal !== g.id) saveExperience({ goal: g.id }, 'goal'); }}
           />
         ))}
       </Box>
+      <SaveNote note={note} for="goal" sx={{ mt: 2 }} />
+      <Box sx={{ height: 24 }} />
 
       {profileError ? (
         <GeekErrorState title="Couldn’t load your details" description={profileError} onRetry={onRetryProfile} />
@@ -275,14 +305,16 @@ function ProfileFields({ profile, onProfileSaved }) {
   const [age, setAge] = useState(profile?.age ? String(profile.age) : '');
   // Which field's save failed, said beside it: 'age' | 'height' | 'gender'.
   const [failed, setFailed] = useState(null);
+  const note = useSaveNote();
 
   const saveProfile = async (patch) => {
     const field = Object.keys(patch)[0];
     setFailed((f) => (f === field ? null : f));
+    note.clear();
     try {
       await userService.updateProfile(patch);
       onProfileSaved(patch);
-      notify(...SAVED);
+      note.saved(field);
       return true;
     } catch (err) {
       logger.error('Error saving profile:', err);
@@ -333,10 +365,10 @@ function ProfileFields({ profile, onProfileSaved }) {
             onBlur={saveAge}
             onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
             error={(age !== '' && !plausibleAge(age)) || failed === 'age'}
-            helperText={age !== '' && !plausibleAge(age) ? 'An age from 13 to 110.' : failed === 'age' ? COULDNT : undefined}
+            helperText={age !== '' && !plausibleAge(age) ? 'An age from 13 to 110.' : failed === 'age' ? COULDNT : note.isSaved('age') ? <SavedWords /> : undefined}
             inputProps={{ inputMode: 'numeric' }}
           />
-          <HeightField idPrefix="settings-height" value={profile.height || ''} onChange={(h) => { typedHeight.current = h; }} onBlur={saveHeight} helperText={failed === 'height' ? COULDNT : undefined} />
+          <HeightField idPrefix="settings-height" value={profile.height || ''} onChange={(h) => { typedHeight.current = h; }} onBlur={saveHeight} helperText={failed === 'height' ? COULDNT : note.isSaved('height') ? <SavedWords /> : undefined} />
           <FormControl fullWidth error={failed === 'gender'}>
             <InputLabel id="settings-sex-label">Sex</InputLabel>
             <Select
@@ -348,6 +380,7 @@ function ProfileFields({ profile, onProfileSaved }) {
               {SEXES.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
             </Select>
             {failed === 'gender' && <FormHelperText>{COULDNT}</FormHelperText>}
+            {failed !== 'gender' && note.isSaved('gender') && <FormHelperText><SavedWords /></FormHelperText>}
           </FormControl>
         </Box>
   );
@@ -369,6 +402,8 @@ const Settings = () => {
 
   const [profile, setProfile] = useState(null);
   const [profileError, setProfileError] = useState(null);
+  // "Saved" / the failure, beside the switch or select that was changed.
+  const note = useSaveNote();
 
   useEffect(() => {
     loadSettings();
@@ -431,17 +466,21 @@ const Settings = () => {
    * One section, saved the moment it changes. Optimistic; on failure the
    * section goes back to what it was and the person is told.
    */
-  const saveSection = async (key, value) => {
+  const saveSection = async (key, value, noteKey = key) => {
     if (!settings) return;
     const before = settings[key];
+    note.clear();
     setSettings((prev) => ({ ...prev, [key]: value }));
     try {
       await settingsService.updateSettings({ [key]: value });
-      notify(...SAVED);
+      note.saved(noteKey);
     } catch (err) {
       logger.error('Error saving settings:', err);
       setSettings((prev) => ({ ...prev, [key]: before }));
-      notify(errorMessage(err, COULDNT), { tone: 'error' });
+      const message = errorMessage(err, COULDNT);
+      // The switch goes back, and the line under it says why.
+      note.failed(noteKey, message);
+      notify(message, { tone: 'error' });
     }
   };
 
@@ -449,19 +488,22 @@ const Settings = () => {
     // The theme is the account's, suite-wide (@geeksuite/user saves it);
     // nothing reads a FitnessGeek copy of it.
     setThemePreference(newTheme);
-    notify(...SAVED);
+    note.saved('theme');
   };
 
   const toggleGarmin = async (enabled) => {
     const before = settings.garmin;
+    note.clear();
     setSettings((prev) => ({ ...prev, garmin: { ...prev.garmin, enabled } }));
     try {
       await settingsService.updateSettings({ garmin: { enabled } });
-      notify(...SAVED);
+      note.saved('garmin');
     } catch (err) {
       logger.error('Error saving Garmin:', err);
       setSettings((prev) => ({ ...prev, garmin: before }));
-      notify(errorMessage(err, COULDNT), { tone: 'error' });
+      const message = errorMessage(err, COULDNT);
+      note.failed('garmin', message);
+      notify(message, { tone: 'error' });
     }
   };
 
@@ -483,7 +525,7 @@ const Settings = () => {
       setGarminUsernameSaved(garminUsername.trim());
       setGarminPassword('');
       setSettings((prev) => ({ ...prev, garmin: { ...prev.garmin, enabled: true, username: garminUsername.trim() } }));
-      notify(...SAVED);
+      note.saved('garmin-login');
     } catch (err) {
       logger.error('Error saving Garmin login:', err);
       // Said under the button too; the email and password stay as typed.
@@ -497,6 +539,7 @@ const Settings = () => {
 
   const themeSelect = (
     // 16px under the Larger text row (the spacing unit is 4px: 2.5 was 10px).
+    <>
     <FormControl fullWidth sx={{ mt: 4 }}>
       <InputLabel id="settings-theme-label">Theme</InputLabel>
       <Select
@@ -510,6 +553,8 @@ const Settings = () => {
         <MenuItem value="auto">Same as my device</MenuItem>
       </Select>
     </FormControl>
+    <SaveNote note={note} for="theme" />
+    </>
   );
 
   const garminOn = Boolean(settings?.garmin?.enabled);
@@ -536,7 +581,7 @@ const Settings = () => {
           value={garminPassword}
           onChange={(e) => setGarminPassword(e.target.value)}
           placeholder={connected ? 'Leave blank to keep it' : ''}
-          helperText="Never stored in plain text"
+          helperText="Your Garmin password is kept encrypted."
         />
       </Box>
       {garminError && <Alert severity="error" data-testid="garmin-error">{garminError}</Alert>}
@@ -581,6 +626,7 @@ const Settings = () => {
             // Switch on the right, as everywhere in Settings (A11).
             sx={SWITCH_ROW}
           />
+          <SaveNote note={note} for="garmin" sx={{ mt: 0, mb: 1 }} />
           {garminOn && connected && (
             <Box sx={{ mt: 2 }}>
               <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', wordBreak: 'break-word', mb: 2 }} data-testid="garmin-connected">
@@ -590,6 +636,9 @@ const Settings = () => {
             </Box>
           )}
           {garminOn && !connected && garminLogin}
+          {/* A saved login is always connected, and connecting folds the form
+              away, so its "Saved" is said here, under the fold. */}
+          {garminOn && connected && <SaveNote note={note} for="garmin-login" sx={{ mt: 2, mb: 2 }} />}
         </Box>
 
         {/* Health alerts — per-user opt-outs (settings.health_alerts, default
@@ -601,18 +650,19 @@ const Settings = () => {
               control={
                 <Switch
                   checked={settings.health_alerts?.sleep_apnea_screening !== false}
-                  onChange={(e) => saveSection('health_alerts', { ...(settings.health_alerts || {}), sleep_apnea_screening: e.target.checked })}
+                  onChange={(e) => saveSection('health_alerts', { ...(settings.health_alerts || {}), sleep_apnea_screening: e.target.checked }, 'sleep')}
                 />
               }
               label={(
                 <RowWords
-                  title="Sleep apnea screening suggestion"
-                  body="Suggests a check when your watch records blood-oxygen dips overnight. Wrist readings are noisy, so turn this off if you’ve already talked to your doctor about them."
+                  title="Tell me if my overnight breathing looks worth mentioning to a doctor"
+                  body="From what your watch records while you sleep. Wrist readings are rough, so turn this off if you’ve already talked to your doctor."
                 />
               )}
               labelPlacement="start"
               sx={{ ...SWITCH_ROW, alignItems: 'flex-start', '& .MuiSwitch-root': { mt: 0.5 } }}
             />
+            <SaveNote note={note} for="sleep" sx={{ mt: 0 }} />
           </Box>
         )}
       </>
@@ -621,7 +671,11 @@ const Settings = () => {
 
   return (
     <Page narrow>
-      {/* The top bar already says "Settings"; the page doesn't repeat it. */}
+      {/* The top bar already says "Settings"; the page doesn't repeat it.
+          There is no Save button anywhere on it, so it says why, once. */}
+      <Typography data-testid="settings-autosave" sx={{ color: 'text.secondary', fontSize: '0.9375rem', px: 1 }}>
+        Changes save as you make them.
+      </Typography>
       <ExperienceSettings id="looks">{themeSelect}</ExperienceSettings>
 
       <AboutYou
@@ -629,6 +683,7 @@ const Settings = () => {
         profileError={profileError}
         onRetryProfile={loadProfile}
         onProfileSaved={(patch) => setProfile((prev) => ({ ...prev, ...patch }))}
+        planGoal={goalFromPlan(settings?.nutrition_goal)}
       />
 
       {/* The calorie plan has no row in the navigation; this is one way to it. */}

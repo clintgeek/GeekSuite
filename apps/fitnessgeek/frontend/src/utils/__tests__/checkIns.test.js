@@ -1,5 +1,5 @@
 /**
- * The Today strip — "Weighed ✓ · BP — · Meds 2 of 3" — and the meds
+ * The Today strip — "Weighed ✓ · Blood pressure — · Meds 2 of 3" — and the meds
  * checklist it counts (DOCS/SIMPLE_AND_FULL_PLAN.md item 6).
  */
 import { describe, it, expect } from 'vitest';
@@ -13,13 +13,13 @@ describe('todayStrip', () => {
 
   it('weighed today, no BP yet, 2 of 3 doses', () => {
     const items = todayStrip({ weights: [at(TODAY)], bloodPressures: [at('2026-09-20')], meds: { taken: 2, total: 3 }, today: TODAY });
-    expect(values(items)).toBe('Weighed ✓ · Log BP + · Meds 2 of 3');
+    expect(values(items)).toBe('Weighed ✓ · Blood pressure + · Meds 2 of 3');
     expect(items.map((i) => i.done)).toEqual([true, false, false]);
   });
 
   it('every dose taken reads ✓, not "3 of 3"', () => {
     const items = todayStrip({ weights: [], bloodPressures: [at(TODAY)], meds: { taken: 3, total: 3 }, today: TODAY });
-    expect(values(items)).toBe('Weigh in + · BP ✓ · Meds ✓');
+    expect(values(items)).toBe('Weigh in + · Blood pressure ✓ · Meds ✓');
   });
 
   it('no medications, no meds check-in', () => {

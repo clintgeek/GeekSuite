@@ -4,7 +4,7 @@
  * - Two readings back to back, forms untouched, used to land on the same
  *   minute and hit the `(userId, measured_at)` unique index. An untouched
  *   time now sends the real instant, seconds included.
- * - A duplicate (`BP_DUPLICATE`) offers "Save it one minute later".
+ * - A duplicate (`BP_DUPLICATE`) names both times and offers "Save as 7:43 AM".
  * - Errors are plain words, never `err.message`.
  * - A card left open across midnight saves on the new day.
  * - The labels say which number is which; on a phone Save is at the bottom.
@@ -58,6 +58,7 @@ describe('AddBPDialog — the instant it sends', () => {
 
     type(screen.getByLabelText(/systolic/i), '128');
     type(screen.getByLabelText(/diastolic/i), '82');
+    fireEvent.click(screen.getByRole('button', { name: 'Change the time', hidden: true }));
     type(screen.getByLabelText(/^time$/i), '06:15');
     fireEvent.click(screen.getByRole('button', { name: /^save$/i, hidden: true }));
 
@@ -97,7 +98,11 @@ describe('A8: Save waits for a reading it can save', () => {
 });
 
 describe('AddBPDialog — a duplicate minute', () => {
-  it('says so plainly and offers to save it one minute later', async () => {
+  // Round two: "Save it one minute later" left a person wondering what the
+  // minute was for. The message names both times and the button says what it
+  // will do; it is information (two readings can't share a minute), not a
+  // red error.
+  it('names both times and offers to save it as the next minute', async () => {
     const onAdd = vi.fn()
       .mockRejectedValueOnce(duplicateError())
       .mockResolvedValueOnce(undefined);
@@ -106,13 +111,17 @@ describe('AddBPDialog — a duplicate minute', () => {
 
     type(screen.getByLabelText(/systolic/i), '128');
     type(screen.getByLabelText(/diastolic/i), '82');
+    fireEvent.click(screen.getByRole('button', { name: 'Change the time', hidden: true }));
     type(screen.getByLabelText(/^time$/i), '07:42');
     fireEvent.click(screen.getByRole('button', { name: /^save$/i, hidden: true }));
 
-    expect(await screen.findByText('You already saved a reading at that time.')).toBeInTheDocument();
+    const note = await screen.findByTestId('bp-duplicate');
+    expect(note.textContent).toMatch(/^You already have a reading at 7:42\sAM\. If this is a second one, save it as 7:43\sAM\./);
+    expect(note.className).toMatch(/MuiAlert-(standard|filled|outlined)Info|colorInfo/);
+    expect(document.body.textContent).not.toMatch(/one minute later/i);
     expect(onClose).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /save it one minute later/i, hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: /^save as 7:43\sAM$/i, hidden: true }));
     await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(2));
     const first = new Date(onAdd.mock.calls[0][0].measured_at).getTime();
     const second = new Date(onAdd.mock.calls[1][0].measured_at).getTime();
@@ -133,7 +142,8 @@ describe('AddBPDialog — a duplicate minute', () => {
 
     expect(await screen.findByText(/restarting/i)).toBeInTheDocument();
     expect(screen.queryByText(/status code/i)).toBeNull();
-    expect(screen.queryByRole('button', { name: /one minute later/i, hidden: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^save as /i, hidden: true })).toBeNull();
+    expect(screen.queryByTestId('bp-duplicate')).toBeNull();
   });
 });
 
@@ -199,8 +209,8 @@ describe('BPInsights — the latest reading', () => {
       { id: 'pm', systolic: 121, diastolic: 79, log_date: '2026-10-16T00:00:00.000Z', measured_at: '2026-10-17T01:00:00.000Z' },
     ];
     render(<BPInsights bpLogs={logs} />);
-    // The headline names it (and the big number repeats it).
-    expect(screen.getByTestId('bp-headline')).toHaveTextContent(/121\/79/);
+    // The big number is the newest reading (nothing in the last 7 days).
+    expect(screen.getByTestId('bp-now')).toHaveTextContent('121/79');
     expect(screen.queryByText(/150\/95/)).toBeNull();
   });
 });

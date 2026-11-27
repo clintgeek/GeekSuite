@@ -85,9 +85,12 @@ describe('categorizeBP colours come from the theme', () => {
     expect(categorizeBP(190, 70).color).toBe(light.error.main);
   });
 
-  it('Stage 1 is "high" and so is the error colour: one small set, three colours', () => {
-    expect(categorizeBP(135, 75).color).toBe(light.error.main);
-    expect(categorizeBP(135, 75, 'dark').color).toBe(dark.error.main);
+  // Round two: 128/82 in red with no advice read as an alarm. Stage 1 is the
+  // warning tone; red is for stage 2 and a crisis.
+  it('Stage 1 is the warning colour, not the error red', () => {
+    expect(categorizeBP(135, 75).color).toBe(light.warning.main);
+    expect(categorizeBP(135, 75, 'dark').color).toBe(dark.warning.main);
+    expect(categorizeBP(128, 82).color).not.toBe(light.error.main);
     // The tone NAME stays 'tomato' for callers that tell Stage 1 from Stage 2.
     expect(categorizeBP(135, 75).tone).toBe('tomato');
   });

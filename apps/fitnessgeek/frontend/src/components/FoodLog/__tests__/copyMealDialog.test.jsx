@@ -12,7 +12,7 @@
  *   - a copy ends with the standard toast, and its Undo deletes what was added.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { GeekToastProvider } from '@geeksuite/ui';
 
 const svc = vi.hoisted(() => ({
@@ -58,11 +58,19 @@ const phone = (on) => {
 };
 const originalMatchMedia = window.matchMedia;
 
-const renderDialog = (props = {}) => render(
+const renderRows = (props = {}) => render(
   <GeekToastProvider>
     <CopyMealDialog open currentDate={TODAY} onClose={() => {}} onCopyComplete={() => {}} {...props} />
   </GeekToastProvider>
 );
+
+// The full form is behind "Something else" now (review 2026-11-27); the
+// one-tap rows it opens on have their own tests at the bottom.
+const renderDialog = (props = {}) => {
+  const view = renderRows(props);
+  fireEvent.click(screen.getByTestId('copy-something-else'));
+  return view;
+};
 
 const choose = async (comboName, option) => {
   fireEvent.mouseDown(screen.getByRole('combobox', { name: comboName }));
@@ -159,5 +167,96 @@ describe('Copy a meal — Copy, then Undo', () => {
     const bottom = screen.getByTestId('thumb-save');
     expect(within(bottom).getByRole('button', { name: /^copy$/i, hidden: true })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /^copy$/i, hidden: true })).toHaveLength(1);
+  });
+});
+
+/**
+ * Review 2026-11-27: the dialog opened on five fields and three "Fill in: …"
+ * chips, with Copy off. From a meal's menu it now opens on the likely copies
+ * as rows, one tap each; the form is behind "Something else".
+ */
+describe('Copy a meal — the likely ones first, one tap each', () => {
+  const FROM_DINNER = { fromDate: THURSDAY, fromMealType: 'dinner', targetDate: TODAY, toMealType: 'dinner' };
+  const labels = () => screen.getAllByTestId('copy-shortcut').map((row) => row.textContent);
+  const chefsToday = [
+    { id: 't1', log_date: TODAY, meal_type: 'dinner', food_item: { name: 'Tacos' } },
+    { id: 't2', log_date: TODAY, meal_type: 'dinner', food_item_id: { name: 'Rice' } },
+    { id: 't3', log_date: TODAY, meal_type: 'lunch', food_item: { name: 'Soup' } },
+  ];
+  beforeEach(() => svc.getHouseholdMemberLogs.mockResolvedValue(chefsToday));
+
+  it('opens on rows, not on the form: yesterday, last week, the household, everything', async () => {
+    svc.getLogsForDate.mockImplementation(async (day) => (day === THURSDAY
+      ? [{ id: 'a', log_date: THURSDAY, meal_type: 'dinner', food_item: { name: 'RIBEYE STEAK' } }]
+      : []));
+    renderRows({ prefill: FROM_DINNER });
+    expect(screen.queryByRole('combobox', { name: 'Which meal' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^copy$/i, hidden: true })).toBeNull();
+    await waitFor(() => expect(labels()).toEqual([
+      // What is in it, in title case; an empty one says so and is off.
+      'Yesterday’s dinnerRibeye Steak',
+      'Last Friday’s dinnerNothing logged',
+      'Chef’s dinner todayTacos, Rice',
+      'Everything from yesterdayRibeye Steak',
+    ]));
+    expect(screen.getAllByTestId('copy-shortcut')[1]).toBeDisabled();
+    expect(screen.getByTestId('copy-something-else')).toHaveTextContent('Something else');
+  });
+
+  it('one tap copies yesterday’s dinner into today’s, with the usual Undo toast', async () => {
+    const onClose = vi.fn();
+    const onCopyComplete = vi.fn();
+    renderRows({ prefill: FROM_DINNER, onClose, onCopyComplete });
+    fireEvent.click(screen.getAllByTestId('copy-shortcut')[0]);
+    await waitFor(() => expect(svc.copyMeal).toHaveBeenCalledWith(THURSDAY, TODAY, 'dinner', 'dinner', null));
+    expect(svc.copyMeal).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Copied to today’s dinner ✓ · 3 foods')).toBeInTheDocument();
+    expect(onCopyComplete).toHaveBeenCalledWith(TODAY);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('one tap copies a household member’s meal from the day on screen', async () => {
+    renderRows({ prefill: FROM_DINNER });
+    fireEvent.click(await screen.findByText('Chef’s dinner today'));
+    await waitFor(() => expect(svc.copyMeal).toHaveBeenCalledWith(TODAY, TODAY, 'dinner', 'dinner', 'chef'));
+  });
+
+  it('a second tap while it copies does not copy twice', async () => {
+    let finish;
+    svc.copyMeal.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    renderRows({ prefill: FROM_DINNER });
+    const row = screen.getAllByTestId('copy-shortcut')[0];
+    fireEvent.click(row);
+    fireEvent.click(row);
+    await waitFor(() => expect(row).toHaveTextContent('Copying…'));
+    expect(svc.copyMeal).toHaveBeenCalledTimes(1);
+    await act(async () => { finish([{ id: 'n1' }]); });
+  });
+
+  it('a copy that fails says so on the rows and keeps the dialog open', async () => {
+    const onClose = vi.fn();
+    svc.copyMeal.mockRejectedValue(new Error('down'));
+    svc.getLogsForDate.mockResolvedValue([{ id: 'a', log_date: THURSDAY, meal_type: 'dinner', food_item: { name: 'Ribeye' } }]);
+    renderRows({ prefill: FROM_DINNER, onClose });
+    fireEvent.click(screen.getAllByTestId('copy-shortcut')[0]);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getAllByTestId('copy-shortcut')[0]).not.toBeDisabled();
+  });
+
+  it('"Something else" opens the full form, already set to that meal', async () => {
+    svc.getLogsForDate.mockResolvedValue([{ id: 'a', log_date: THURSDAY, meal_type: 'dinner' }]);
+    renderRows({ prefill: FROM_DINNER });
+    fireEvent.click(screen.getByTestId('copy-something-else'));
+    expect(screen.queryByTestId('copy-shortcuts')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('copy-summary'))
+      .toHaveTextContent('Copy your dinner from Thursday into today’s dinner (1 food)'));
+    expect(screen.getByRole('button', { name: /^copy$/i, hidden: true })).toBeEnabled();
+  });
+
+  it('from the household view it opens straight on the form', async () => {
+    renderRows({ prefill: { fromDate: TODAY, fromMealType: 'dinner', fromUserId: 'chef' } });
+    expect(screen.queryByTestId('copy-shortcuts')).toBeNull();
+    expect(screen.getByTestId('copy-summary')).toBeInTheDocument();
   });
 });

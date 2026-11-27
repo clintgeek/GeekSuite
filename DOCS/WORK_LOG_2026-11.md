@@ -1149,3 +1149,33 @@ unit on one line; dialogs have 16px side padding; spacing redone on the 4px unit
 4. Apollo's auth link can hang on a second 401 (shared `packages/api-client`).
 5. Recovery tips still include supplement advice (ashwagandha, magnesium); content, Chef's call.
 6. Activity distance is in km.
+
+### Round two, 2026-11-28 (after an independent first-time-user review)
+
+A reviewer agent looked at ~115 screenshots as a non-technical iPhone user with no watch. Its verdict: food
+logging beats MyFitnessPal; blood pressure and meds were buried, primary buttons looked disabled, Today doubted
+its own target, Trends was "a Garmin page", Weight scolded. Ratings before this round: looks 7, ease 6, trust 6.
+Changes made in answer (Sage's decisions):
+
+- **Phone tabs are Today · Weight · Pressure · Meds · More** (were Today · Weight · Trends · More): each daily
+  job has a tab. Trends moved under More. This revises the tab set Chef approved in `ONE_APP_PLAN.md`.
+- **Phone header:** no hamburger and no nine-dot grid; the app switcher is a labelled row on More.
+- **Disabled filled buttons are pale blue**, not grey. The weigh-in "Log" is always live and hints when empty.
+- **Today's plan note** is one calm, dismissible line ("Your target can be more accurate now." Update / Not
+  now, 30 days per device) and never shows on a failed load. No copy anywhere mentions past mistakes.
+- **No watch, no watch UI:** Trends is Food only with one quiet line; the Steps tile and the Body and recovery
+  watch groups are gone for that person. Weight and BP history stay.
+- **Weight** leads with progress and says the forecast once, kindly; no "Behind plan". The chart fits her data.
+  Body composition is a three-line summary with "More from your scans".
+- **Blood pressure:** one sentence reconciles the week and the last reading; labelled bars replaced the
+  unlabelled donut; each category has a calm line of guidance; stage 1 is amber (stage 2 stays red).
+- **Dates:** Today / Yesterday / Another day before any native date field.
+- **Adding food:** a barcode button beside the mic; a search row is one button; "Log it" never changes shape;
+  Edit entry has a stepper, not a slider; Copy a meal opens on one-tap rows; Fix has one save; serving and Fix
+  sheets are bottom sheets on phones; "Had recently"; "½ serving"; shouted product names are title-cased.
+- **Medications:** no "Once a day" button (no time chosen means once a day, said in words); drug names read
+  "Lisinopril 10 mg tablet"; "Blood pressure", never "BP", on Today.
+- **Settings** says "Changes save as you make them" and confirms each save in place; gentler wording for the
+  overnight-breathing switch. First run is a full-screen welcome.
+- Kept on purpose: QuickTarget (folding it into the step flow would change four behaviours); the 7-day/30-day
+  CSV export (now "Download as a spreadsheet", at the bottom).

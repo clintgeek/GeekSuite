@@ -385,22 +385,27 @@ const MyMeals = ({ embedded = false }) => {
         onClose={() => !deleting && setMealToDelete(null)}
         title="Delete this meal?"
         maxWidth="xs"
-        primaryAction={
-          <Button
-            onClick={confirmDelete}
-            color="error"
-            variant="contained"
-            disabled={deleting}
-            startIcon={deleting ? <CircularProgress size={16} color="inherit" /> : <DeleteIcon />}
-          >
-            Delete
-          </Button>
-        }
-        secondaryAction={
-          <Button onClick={() => setMealToDelete(null)} disabled={deleting}>
-            Cancel
-          </Button>
-        }
+        // Text in the error colour, never a filled red block (review
+        // 2026-11-27), and in the footer under the thumb on a phone.
+        {...thumbSaveProps({
+          fullScreen,
+          save: (
+            <Button
+              onClick={confirmDelete}
+              color="error"
+              disabled={deleting}
+              startIcon={deleting ? <CircularProgress size={16} color="inherit" /> : <DeleteIcon />}
+              sx={{ fontWeight: 700 }}
+            >
+              Delete
+            </Button>
+          ),
+          cancel: (
+            <Button onClick={() => setMealToDelete(null)} disabled={deleting}>
+              Cancel
+            </Button>
+          ),
+        })}
       >
         <DialogContentText>
           <strong>{mealToDelete ? nameOf(mealToDelete) : ''}</strong> will be deleted from your saved

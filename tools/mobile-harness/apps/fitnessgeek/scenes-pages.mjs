@@ -11,7 +11,7 @@ import { json, corsHeaders } from '../../lib/net.mjs';
 import {
   OPS, SETTINGS, DERIVED, DAILY_SUMMARY, SAVED_MEALS, experienceOf,
 } from './fixtures.mjs';
-import { must, scrollToSection, isoLocal, setDetails, openMealMenu, openEdit } from './helpers.mjs';
+import { must, scrollToSection, isoLocal, setDetails, openMealMenu, openEdit, openBodyCompMore } from './helpers.mjs';
 import { withHistoryBounds, bareOpOf } from './history-ops.mjs';
 
 // `must`, but it waits a few seconds first: a dialog's content (a household log,
@@ -234,6 +234,11 @@ const todayScenes = [
     if ((await calories.inputValue()) !== '156') throw new Error(`total calories reads "${await calories.inputValue()}", wanted 156 (2 × 78)`);
     const first = await dlg.locator('input, [role="slider"], [role="combobox"]').first().getAttribute('id');
     if (first !== (await calories.getAttribute('id'))) throw new Error('total calories is not the first field in the dialog');
+    // Servings is a − / + stepper around a number box now, not a slider.
+    await absent(dlg.locator('[role="slider"]'), 'a servings slider');
+    await need(dlg.getByRole('button', { name: 'Fewer servings' }), 'the "Fewer servings" (−) button');
+    await need(dlg.getByRole('button', { name: 'More servings' }), 'the "More servings" (+) button');
+    await need(dlg.getByLabel('Servings', { exact: true }), 'the Servings box');
     const toggle = await need(detailToggle(dlg), 'the "Per serving and nutrition" disclosure');
     if ((await toggle.innerText()).trim() !== 'Per serving and nutrition') throw new Error(`the disclosure reads "${await toggle.innerText()}"`);
     if ((await toggle.getAttribute('aria-expanded')) !== 'false') throw new Error('"Per serving and nutrition" should start closed');
@@ -275,14 +280,21 @@ const todayScenes = [
     if (!box || box.x < 0 || box.y < 0 || box.x + box.width > vp.width + 0.5 || box.y + box.height > vp.height + 0.5) throw new Error(`the toast runs off the screen: ${JSON.stringify(box)}`);
   }),
 
-  // Copy from another day, out of Breakfast's menu: it opens already set to
-  // that meal on the day before, says so in a sentence with the number of
-  // foods, and Copy is live.
+  // Copy from another day, out of Breakfast's menu: it opens on one-tap rows;
+  // "Something else" opens the form, already set to that meal on the day
+  // before, with a sentence giving the number of foods, and Copy live.
   pageScene('50e-copy-meal-opened', () => dayOps([...logDay(YEST), ...logDay()]), async (page, h) => {
     const menu = await openMealMenu(page, h, 'breakfast');
     await (await menuItem(menu, 'Copy from another day')).click();
     await h.settle(900);
     const dlg = await need(page.getByRole('dialog'), 'copy dialog');
+    // It opens on one-tap rows, each saying what is in it; no Copy button yet.
+    await need(dlg.locator('[data-testid="copy-shortcuts"]'), 'the one-tap rows');
+    await need(dlg.locator('[data-testid="copy-shortcut"]').filter({ hasText: /^Yesterday’s breakfast/ }), '"Yesterday’s breakfast"');
+    await absent(dlg.locator('[data-testid="copy-summary"]'), 'the summary before "Something else"');
+    await absent(dlg.getByRole('button', { name: /^copy$/i }), 'a Copy button on the one-tap rows');
+    await (await need(dlg.locator('[data-testid="copy-something-else"]'), '"Something else"')).click();
+    await h.settle(600);
     const summary = (await (await need(dlg.locator('[data-testid="copy-summary"]'), 'the summary sentence')).innerText()).trim();
     h.log(`copy summary: ${summary}`);
     const want = `Copy your breakfast from ${weekdayOf(YEST)} into today’s breakfast (2 foods)`;
@@ -298,6 +310,10 @@ const todayScenes = [
     await (await menuItem(menu, 'Copy from another day')).click();
     await h.settle(800);
     const dlg = await need(page.getByRole('dialog'), 'copy dialog');
+    // The household's meal is already a one-tap row; the form is for the rest.
+    await need(dlg.locator('[data-testid="copy-shortcut"]').filter({ hasText: /^Sarah’s dinner today/ }), 'the row "Sarah’s dinner today"');
+    await (await need(dlg.locator('[data-testid="copy-something-else"]'), '"Something else"')).click();
+    await h.settle(500);
     await (await need(dlg.getByRole('combobox', { name: /whose log/i }), 'Whose log')).click();
     await (await need(page.getByRole('option', { name: 'Sarah' }), 'Sarah option')).click();
     await h.settle(300);
@@ -307,6 +323,61 @@ const todayScenes = [
     await need(dlg.getByText(/Copy Sarah’s dinner from .* into today’s dinner \(3 foods\)/), 'the Sarah summary');
     await need(dlg.getByRole('button', { name: /^copy$/i, disabled: false }), 'Copy live');
   }, { dialog: true }),
+
+  // The likely copies, one tap each: "Yesterday's breakfast" copies at once, the
+  // dialog closes and the toast says so, with an Undo.
+  pageScene('50l-copy-meal-one-tap', () => ({
+    ...dayOps([...logDay(YEST), ...logDay()]),
+    CopyFitnessMeal: { copyFitnessMeal: [{ __typename: 'FoodLog', id: 'cp1' }, { __typename: 'FoodLog', id: 'cp2' }] },
+  }), async (page, h) => {
+    const menu = await openMealMenu(page, h, 'breakfast');
+    await (await menuItem(menu, 'Copy from another day')).click();
+    await h.settle(900);
+    const dlg = await need(page.getByRole('dialog'), 'copy dialog');
+    const row = await need(dlg.locator('[data-testid="copy-shortcut"]').filter({ hasText: /^Yesterday’s breakfast/ }), '"Yesterday’s breakfast"');
+    // It says what is in it before it is tapped.
+    await need(row.getByText(/Egg/), 'the foods in that row');
+    await row.first().click();
+    await h.settle(1200);
+    if (await page.getByRole('dialog').count()) throw new Error('the copy dialog stayed open after a one-tap copy');
+    const toast = await need(page.locator('[data-geek-toast]').filter({ hasText: /Copied to today’s breakfast ✓/ }), 'the "Copied to today’s breakfast ✓" toast');
+    await need(toast.getByRole('button', { name: 'Undo' }), 'Undo on the toast');
+  }),
+
+  // Today's plan note, put away with "Not now": gone at once, and still gone
+  // after a reload. (The key is the app's own; it is cleared again afterwards so
+  // no later scene starts without the note.)
+  {
+    name: '14a-plan-note-dismiss',
+    async setup(page, h) {
+      const key = 'fg.home.planNote.dismissedAt.v2';
+      const clear = () => page.evaluate((k) => { try { localStorage.removeItem(k); } catch { /* blocked */ } }, key).catch(() => {});
+      try {
+        await page.goto(h.base + '/dashboard', { waitUntil: 'networkidle' });
+        await clear();
+        await page.reload({ waitUntil: 'networkidle' });
+        await h.settle(1600);
+        const note = await need(page.locator('[data-testid="plan-accuracy-banner"]'), 'the plan note');
+        const words = (await note.first().innerText()).replace(/\s+/g, ' ');
+        if (!/Your target can be more accurate now\./.test(words)) throw new Error(`the plan note reads "${words}"`);
+        const update = await need(note.getByRole('link', { name: 'Update' }), 'its "Update" link');
+        if (!/\/calorie-wizard\?update=1$/.test(await update.first().getAttribute('href'))) throw new Error('"Update" does not go to /calorie-wizard?update=1');
+        await (await need(note.getByRole('button', { name: 'Not now' }), '"Not now"')).click();
+        await h.settle(600);
+        await absent(page.locator('[data-testid="plan-accuracy-banner"]'), 'the plan note after "Not now"');
+        await page.reload({ waitUntil: 'networkidle' });
+        await h.settle(1600);
+        await need(page.locator('[data-testid="home-hero"]'), 'Today, after the reload');
+        await absent(page.locator('[data-testid="plan-accuracy-banner"]'), 'the plan note after a reload');
+      } catch (err) {
+        await clear();
+        throw err;
+      }
+    },
+    async teardown(page) {
+      await page.evaluate(() => { try { localStorage.removeItem('fg.home.planNote.dismissedAt.v2'); } catch { /* blocked */ } });
+    },
+  },
 
   // What your household ate: "What Sarah ate today" with a Copy to your log on each meal.
   pageScene('50g-household-view', () => dayOps(logDay()), async (page, h) => {
@@ -525,6 +596,7 @@ const homeFailed = (name, build) => pageScene(name, () => ({ ops: build(), fail:
   }
   await absent(page.locator('[data-testid="calories-sentence"]'), 'a calories sentence after a failed read');
   await absent(page.locator('[data-testid="plate-number"]'), 'a number in the ring after a failed read');
+  await absent(page.locator('[data-testid="plan-accuracy-banner"]'), 'the plan note beside "Can’t reach FitnessGeek"');
   if (await page.getByText(/^Weigh in/).count()) throw new Error('a Weigh in chip after a failed read');
 }, { path: '/dashboard', wait: 2200 });
 
@@ -550,6 +622,7 @@ const homeReloadFailed = (name, build) => {
           throw new Error(`${e.message} :: ${(await page.locator('body').innerText()).slice(0, 700).replace(/\n/g, ' | ')}`);
         }
         await need(page.getByText(/Greek yogurt|Chicken salad wrap/).first(), 'the cards keep their foods');
+        await absent(page.locator('[data-testid="plan-accuracy-banner"]'), 'the plan note after a failed reload');
       }, { fail: (op) => state.armed && FAILING_READS.has(op) });
     },
     async teardown(page, h) { await h.esc(400); await page.unroute('**/graphql'); },
@@ -705,12 +778,16 @@ const weightScenes = [
   pageScene('53-weight-goal', () => goalWeight(), async (page) => {
     const words = (await (await need(page.locator('[data-testid="weight-trend-words"]'), 'the trend words')).innerText()).trim();
     if (!/^Down 1\d(\.\d)? lb since /.test(words)) throw new Error(`trend words say "${words}"`);
-    await need(page.getByText(/You’re losing [\d.]+ lb a week/), 'the pace sentence');
+    // The pace is a fact beside the plan's, never a verdict: no "Behind plan" chip.
+    const pace = (await (await need(page.locator('[data-testid="weight-pace"]'), 'the pace row')).innerText()).replace(/\s+/g, ' ').trim();
+    if (!/Pace\s*\d+(\.\d)? lb a week/.test(pace)) throw new Error(`the pace row reads "${pace}"`);
+    const projection = (await (await need(page.locator('[data-testid="weight-projection"]'), 'where this pace lands')).innerText()).trim();
+    if (!/^At this pace you’d get there around/.test(projection)) throw new Error(`the projection reads "${projection}"`);
     await need(page.getByText(/of 37 lb lost/), '"… of 37 lb lost"');
     await need(page.locator('[data-testid="weight-basis"]').getByText('7-day average'), 'the basis line (7-day average)');
     const now = (await (await need(page.locator('[data-testid="weight-now"]'), 'the big weight')).innerText()).replace(/\s+/g, ' ').trim();
     if (!/^21\d\.\d lb$/.test(now)) throw new Error(`big weight says "${now}"`);
-    await need(page.getByText('Behind plan', { exact: true }), 'the Behind plan chip');
+    await absent(page.getByText('Behind plan', { exact: true }), 'a "Behind plan" verdict');
     // One page for everybody: body composition is always on it, and from md
     // the weigh-in is a card in the left column (the thumb button below it).
     await need(page.locator('#body-composition'), 'body composition');
@@ -736,6 +813,9 @@ const weightScenes = [
     await h.settle(800);
     const dlg = await need(page.getByRole('dialog'), 'weight dialog');
     await need(dlg.getByText(/You already have 218\.7/), 'the replace note first');
+    // The day is Today / Yesterday / Another day; the date field comes with "Another day".
+    await (await need(dlg.getByRole('button', { name: 'Another day', exact: true }), 'the "Another day" button')).click();
+    await h.settle(400);
     await dlg.getByLabel('Date').fill(daysAgo(3));
     await h.settle(500);
     if (await dlg.getByText(/You already have/).count()) throw new Error('the replace note stayed on a free day');
@@ -753,6 +833,7 @@ const weightScenes = [
   // The body-composition trend, the same tap.
   pageScene('53e-bodycomp-tooltip', () => goalWeight(), async (page, h) => {
     await scrollToSection(page, h, '#body-composition');
+    await openBodyCompMore(page, h);
     await scrollToSection(page, h, 'text=Line: 7-day average · dots: each scan', 160);
     await need(page.locator('[data-testid="bodycomp-y-unit"]'), 'the lb caption');
     await tapChartTooltip(page, h, page.locator('svg[aria-label*="over time, in pounds"]').first());
@@ -814,20 +895,23 @@ const firstRunScenes = [
     await next.click();
     await h.settle(500);
     await need(page.getByRole('radio', { name: /keep my weight steady/i }), 'goal choices');
+    // The gentlest answer is already chosen on arrival.
+    const track = await need(page.getByRole('radio', { name: /just keep track/i }), '"Just keep track"');
+    if ((await track.getAttribute('aria-checked')) !== 'true') throw new Error('"Just keep track" is not chosen on arrival');
   }, { viewports: ['phone'] }),
 
   // Step 3: "Try logging your <meal>", "Add my <meal>", and Maybe later.
   pageScene('55-first-run-step3', firstRunOps('simple'), async (page, h) => {
     await need(page.locator('[data-testid="first-run"]'), 'first run');
-    await toStep3(page, h, { goal: /lose a little weight/i });
+    await toStep3(page, h, { goal: /^lose weight/i });
     await need(page.getByRole('heading', { name: /try logging your/i }), 'step 3');
     await need(page.getByRole('button', { name: 'Maybe later' }), 'Maybe later');
   }, { viewports: ['phone'] }),
 
-  // Today right after "Maybe later" with "Lose a little weight" picked and no
+  // Today right after "Maybe later" with "Lose weight" picked and no
   // target: the card offers "Set your daily target", never "Nothing logged".
   pageScene('55a-home-after-maybe-later', firstRunOps('simple'), async (page, h) => {
-    await toStep3(page, h, { goal: /lose a little weight/i });
+    await toStep3(page, h, { goal: /^lose weight/i });
     await (await need(page.getByRole('button', { name: 'Maybe later' }), 'Maybe later')).click();
     await h.settle(1500);
     await absent(page.locator('[data-testid="first-run"]'), 'the first run after "Maybe later"');
@@ -1039,13 +1123,80 @@ async function assertTabsWhole(page, h) {
   if (!outer || !inner || inner.y < outer.y + outer.height - 1) throw new Error(`Health's tabs are not below the Trends tabs: ${JSON.stringify({ outer, inner })}`);
 }
 
+// Trends for a person with no watch (no Garmin login, the watch-data switch
+// off). The app keeps its last answer in localStorage so Trends opens in the
+// right shape; this scene clears it before and after, and restores GraphQL.
+const WATCH_HINT = 'fitnessgeek.watchConnected';
+const noWatchOps = () => ({
+  ...OPS,
+  GetFitnessUserSettings: {
+    fitnessUserSettings: { ...SETTINGS, influxEnabled: false, garmin: { ...SETTINGS.garmin, enabled: false, username: null } },
+  },
+});
+const noWatchScene = (name, path, run) => {
+  const forget = (page) => page.evaluate((k) => { try { localStorage.removeItem(k); } catch { /* blocked */ } }, WATCH_HINT).catch(() => {});
+  return {
+    name,
+    async setup(page, h) {
+      await routeOps(page, noWatchOps());
+      try {
+        await page.goto(h.base + path, { waitUntil: 'networkidle' });
+        await forget(page);
+        await page.reload({ waitUntil: 'networkidle' });
+        await h.settle(1800);
+        await run(page, h);
+      } catch (err) {
+        await page.unroute('**/graphql');
+        await forget(page);
+        throw err;
+      }
+    },
+    async teardown(page) {
+      await page.unroute('**/graphql');
+      await forget(page);
+    },
+  };
+};
+
 const garminScenes = [
   // Trends › Food, as Trends opens from the navigation: no ?tab=, so Food.
   pageScene('70-trends-food', () => OPS, async (page, h) => {
     await assertContainerTabs(page, h, 'Trends sections', TREND_TABS, 'Food');
     await need(page.locator('[data-testid="reports-food"]'), 'the Food report');
     await absent(page.getByRole('tablist', { name: 'Health sections' }), 'Health’s tabs on the Food tab');
+    // The export is a quiet, worded button at the foot, not "Export CSV" up top.
+    const dl = await need(page.locator('[data-testid="reports-download"]'), 'the download button');
+    if ((await dl.first().innerText()).trim() !== 'Download as a spreadsheet') throw new Error(`the download reads "${await dl.first().innerText()}"`);
+    await absent(page.getByText('Export CSV'), '"Export CSV"');
+    // The fixture has days of highlights: with `highlights: []` there is no "What stands out" card at all.
   }, { path: '/trends', wait: 1800 }),
+
+  // Trends for a person with no watch: Food alone, no tab bar, and one quiet
+  // line at the foot that is the way to connect one. (The app remembers the
+  // answer on the device, so it is cleared before and after.)
+  noWatchScene('70c-trends-no-watch', '/trends', async (page, h) => {
+    await need(page.locator('[data-testid="reports-food"]'), 'the Food report');
+    await absent(page.getByRole('tablist', { name: 'Trends sections' }), 'the Trends tabs for a person with no watch');
+    const line = await need(page.locator('[data-testid="trends-watch-line"]'), 'the "Have a Garmin watch?" line');
+    const words = (await line.first().innerText()).replace(/\s+/g, ' ').trim();
+    if (words !== 'Have a Garmin watch? Connect it in Settings to see activity, sleep and heart rate here.') throw new Error(`the watch line reads "${words}"`);
+    if ((await line.first().getAttribute('href')) !== '/settings#devices') throw new Error(`the watch line goes to ${await line.first().getAttribute('href')}`);
+    await need(page.getByRole('heading', { name: 'Your body, last 90 days' }), 'the body section without watch cards');
+    await absent(page.locator('[data-testid="trend-restingHR"]'), 'a watch card for a person with no watch');
+    await scrollToSection(page, h, '[data-testid="trends-watch-line"]', 360);
+  }),
+
+  // …and a link to the Activity tab: one friendly card, not an empty page.
+  noWatchScene('70c-trends-no-watch-activity', '/trends?tab=activity', async (page) => {
+    const card = await need(page.locator('[data-testid="connect-watch"]'), 'the connect-a-watch card');
+    await need(card.getByText('Connect a Garmin watch to see steps, sleep, heart rate and workouts here.'), 'what would be here');
+    const connect = await need(card.getByRole('link', { name: 'Connect in Settings' }), '"Connect in Settings"');
+    if ((await connect.first().getAttribute('href')) !== '/settings#devices') throw new Error(`"Connect in Settings" goes to ${await connect.first().getAttribute('href')}`);
+    const back = await need(page.getByRole('link', { name: 'See your food trends' }), '"See your food trends"');
+    if ((await back.first().getAttribute('href')) !== '/trends') throw new Error(`"See your food trends" goes to ${await back.first().getAttribute('href')}`);
+    await absent(page.getByRole('tablist', { name: 'Trends sections' }), 'the Trends tabs for a person with no watch');
+    await absent(page.locator('[data-testid="reports-food"]'), 'the Food report under the Activity link');
+  }),
 
   // Trends › Activity, reached by tapping its tab: the panel swaps, the
   // address says ?tab=activity, no history entry is added, and the page's old
@@ -1130,7 +1281,7 @@ const garminScenes = [
   }),
   // The days the server has nothing for: sleep and recovery say so in a sentence.
   healthScene('59f-health-sleep-none', 'Sleep', async (page) => {
-    await need(page.getByText('No sleep for this night'), 'the empty sleep state');
+    await need(page.getByText('No sleep recorded for this night'), 'the empty sleep state');
   }, { answers: { sleep: { available: false }, recovery: { available: false } } }),
 ];
 

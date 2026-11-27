@@ -3,8 +3,7 @@ import {
   Button,
   TextField,
   Box,
-  Typography,
-  useTheme
+  Typography
 } from '@mui/material';
 import {
   MonitorHeart as BPIcon,
@@ -14,10 +13,8 @@ import {
 import { localDateString } from '@geeksuite/utils';
 import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
-import { Tag } from '../primitives';
-import DateField from '../primitives/DateField.jsx';
-import { categorizeBP } from '../../utils/bpUtils.js';
-import { bpStageWords } from '../../utils/plainWords.js';
+import BPWhen from './BPWhen.jsx';
+import BPReadingStatus from './BPReadingStatus.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
 import {
   nowLocalTime,
@@ -30,7 +27,7 @@ import {
 } from './bpTimeUtils.js';
 import { thumbSaveProps } from './thumbSave.jsx';
 import BPSaveError from './BPSaveError.jsx';
-import { validateBPForm, DUPLICATE_MESSAGE } from './bpForm.js';
+import { validateBPForm } from './bpForm.js';
 
 // The bounds and their messages live in `bpForm.js`, shared with QuickAddBP.
 
@@ -66,7 +63,6 @@ const blankForm = () => ({
  * exists to support.
  */
 const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null }) => {
-  const theme = useTheme();
   const isEdit = mode === 'edit';
 
   const [systolic, setSystolic] = useState('');
@@ -81,9 +77,12 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
   // row's own instant rather than a minute-rounded copy of it.
   const [whenTouched, setWhenTouched] = useState(false);
   const [timeTouched, setTimeTouched] = useState(false);
-  // The payload that hit `BP_DUPLICATE`, kept so "Save it one minute later"
+  // The payload that hit `BP_DUPLICATE`, kept so saving it a minute later
   // is one tap.
   const [duplicate, setDuplicate] = useState(null);
+  // Bumped each time the form is re-seeded, so the day choice and the
+  // "Change the time" reveal start fresh.
+  const [seed, setSeed] = useState(0);
   const fullScreen = useGeekDialogFullScreen();
 
   // Re-seed the form every time the dialog opens. For "add" that's fresh
@@ -123,6 +122,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
     setWhenTouched(false);
     setTimeTouched(false);
     setDuplicate(null);
+    setSeed((n) => n + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-seed on open/mode/row change only; the setters are stable.
   }, [open, isEdit, initialValues]);
 
@@ -153,7 +153,6 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
     } catch (err) {
       if (isBPDuplicate(err)) {
         setDuplicate(payload);
-        setError(DUPLICATE_MESSAGE);
       } else {
         setError(errorMessage(err, isEdit ? 'Couldn’t save that change. Try again.' : 'Couldn’t save that reading. Try again.'));
       }
@@ -209,24 +208,6 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
     setError('');
     onClose();
   };
-
-  const getBPStatus = () => {
-    if (!systolic || !diastolic) return null;
-
-    const sys = parseInt(systolic);
-    const dia = parseInt(diastolic);
-
-    if (isNaN(sys) || isNaN(dia)) return null;
-
-    // The one shared categoriser — same bands, same order, as the saved row
-    // will get once it lands in BPLogList/BPInsights/BPReport. No local
-    // "High Normal" band here; that band never existed in the AHA guidelines
-    // and let the live-typing category disagree with what got saved.
-    const category = categorizeBP(sys, dia, theme.palette.mode);
-    return { status: bpStageWords(category.stage).label, color: category.color };
-  };
-
-  const bpStatus = getBPStatus();
 
   // Save waits for a reading it can save (UX review 2026-11, A8), as the
   // weight dialog's does: it used to be live with every field empty, a tap
@@ -306,51 +287,26 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
               size="medium"
             />
 
-            {/* Date + time of the reading. Both default to now (see
-                `blankForm`), so the common case never touches them — they
-                exist so a backdated or edited reading can say what time it
-                actually was.
-                `flexWrap: 'wrap'` is a deliberate safety net, not decoration:
-                `DateField`'s own default forces `minWidth: '100%'` below the
-                `sm` breakpoint (it's normally the only field in its row), and
-                a hard px `minWidth` override here would just move the
-                overflow to a smaller screen instead of removing it. Letting
-                the pair wrap onto two lines on a narrow phone keeps this
-                dialog inside the "no horizontal scroll" rule for every width,
-                not just the ones tested. */}
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              <DateField
-                value={date}
-                onChange={(v) => { setDate(v); setWhenTouched(true); }}
-                size="medium"
-                max={localDateString()}
-                sx={{ flex: '1 1 160px', minWidth: 0 }}
-              />
-              <TextField
-                label="Time"
-                type="time"
-                value={time}
-                onChange={(e) => { setTime(e.target.value); setWhenTouched(true); setTimeTouched(true); }}
-                size="medium"
-                InputLabelProps={{ shrink: true }}
-                inputProps={{ step: 60 }}
-                sx={{ flex: '1 1 140px' }}
-              />
-            </Box>
+            {/* When it was taken. Both default to now (see `blankForm`), so
+                the common case shows "Today" and "Taken just now" and never
+                a date or time input (BPWhen). An edit carries its own time,
+                so its time field is open from the start. */}
+            <BPWhen
+              key={seed}
+              date={date}
+              time={time}
+              today={localDateString()}
+              timeOpen={isEdit || timeTouched}
+              onDate={(v) => { setDate(v); setWhenTouched(true); }}
+              onTime={(v) => { setTime(v); setWhenTouched(true); setTimeTouched(true); }}
+            />
 
-            {/* BP Status indicator */}
-            {bpStatus && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography variant="body2">
-                  This reading is
-                </Typography>
-                <Tag fill={bpStatus.color}>{bpStatus.status}</Tag>
-              </Box>
-            )}
+            {/* What this reading is, and one calm line about it. */}
+            <BPReadingStatus systolic={systolic} diastolic={diastolic} />
 
             <BPSaveError
               error={error || liveError}
-              duplicate={Boolean(duplicate)}
+              duplicateAt={duplicate?.measured_at || null}
               onSaveLater={saveOneMinuteLater}
               busy={loading}
             />

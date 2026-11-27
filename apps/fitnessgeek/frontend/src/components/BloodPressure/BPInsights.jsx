@@ -9,17 +9,39 @@ import {
 } from '@mui/icons-material';
 import { localDateString, utcDateString } from '@geeksuite/utils';
 import { newestReadingFirst, readingWhen } from './bpTimeUtils.js';
-import { categorizeBP } from '../../utils/bpUtils.js';
+import { bpGuidance, categorizeBP } from '../../utils/bpUtils.js';
 import { bpStageWords } from '../../utils/plainWords.js';
 import { LabelPanel, FactRow, Rule, Tag } from '../primitives';
 
 /**
  * "Is my blood pressure OK?" — answered with the week, not one reading
  * (review D-1). The headline used to be the LAST reading's category, so one
- * good morning painted an elevated week "Normal". Now it leads with the
- * 7-day average's category in plain words, then the last reading, then a
- * count of readings in the healthy range ("1 of 14", never "7%").
+ * good morning painted an elevated week "Normal". It leads with the 7-day
+ * average and its category.
+ *
+ * ONE SENTENCE RECONCILES THE WEEK AND THE LATEST READING (round-two review).
+ * The card said "A little high", then "Last reading… normal", then "Healthy
+ * range 1 of 14" (a count over every reading ever, beside a 30-day average),
+ * and left the person to work out which was true. Now: "Your average this
+ * week is a little high. Your last reading, today 7:42 AM, was normal." The
+ * rows under it each name their window, and the count of normal readings is
+ * for the same 30 days as the average above it ("1 of 14", never "7%").
  */
+
+/** "a little high (elevated)" → "a little high": the stage name is on the tag. */
+const plain = (stage) => bpStageWords(stage).phrase.replace(/ \(.*\)$/, '');
+
+/** The one sentence under the big number. */
+export function bpSummarySentence({ weekStage, lastStage, lastWhen }) {
+  const when = lastWhen ? `, ${lastWhen},` : '';
+  if (!weekStage) {
+    return `No readings in the last 7 days. Your last one${when} was ${plain(lastStage)}.`;
+  }
+  const week = `Your average this week is ${plain(weekStage)}.`;
+  return weekStage === lastStage
+    ? `${week} So was your last reading${lastWhen ? `, ${lastWhen}` : ''}.`
+    : `${week} Your last reading${when} was ${plain(lastStage)}.`;
+}
 
 // The category itself — name, thresholds — comes from the one shared categoriser.
 const getBPCategory = (systolic, diastolic) => {
@@ -86,12 +108,13 @@ const BPInsights = ({ bpLogs = [] }) => {
       }
     }
 
-    // Calculate percentage in healthy range
-    const healthyReadings = sortedLogs.filter(log => {
+    // Readings in the normal range, counted over the same 30 days as the
+    // average shown beside it (every reading, when none are that recent).
+    const countedLogs = last30Days.length > 0 ? last30Days : sortedLogs;
+    const healthyReadings = countedLogs.filter(log => {
       const category = getBPCategory(log.systolic, log.diastolic);
       return category.name === 'Normal';
     });
-    const healthyPercentage = Math.round((healthyReadings.length / sortedLogs.length) * 100);
 
     // The last reading's category, and the week's — the week leads.
     const currentCategory = getBPCategory(latestReading.systolic, latestReading.diastolic);
@@ -102,12 +125,13 @@ const BPInsights = ({ bpLogs = [] }) => {
       currentCategory,
       weekCategory,
       healthyCount: healthyReadings.length,
+      countedReadings: countedLogs.length,
+      countedRecent: last30Days.length > 0,
       avg7Systolic,
       avg7Diastolic,
       avg30Systolic,
       avg30Diastolic,
       trend,
-      healthyPercentage,
       totalReadings: sortedLogs.length,
       last30DaysCount: last30Days.length
     };
@@ -128,41 +152,32 @@ const BPInsights = ({ bpLogs = [] }) => {
     );
   }
 
-  const getTrendIcon = () => {
-    if (insights.trend === 'improving') {
-      return <TrendingDownIcon sx={{ fontSize: 20, color: getTrendColor() }} />;
-    } else if (insights.trend === 'worsening') {
-      return <TrendingUpIcon sx={{ fontSize: 20, color: getTrendColor() }} />;
-    }
-    return <TrendingFlatIcon sx={{ fontSize: 20, color: getTrendColor() }} />;
-  };
-
-  const getTrendText = () => {
-    if (insights.trend === 'improving') return 'Improving';
-    if (insights.trend === 'worsening') return 'Going up';
-    return 'Stable';
-  };
-
-  const getTrendColor = () => {
-    if (insights.trend === 'improving') return theme.palette.success.main;
-    if (insights.trend === 'worsening') return theme.palette.error.main;
-    return theme.palette.text.primary;
-  };
+  // The trend is a word with an arrow beside it, in the normal ink: "Going
+  // up" in red was a second alarm on a card that already has a status tag.
+  const TrendIcon = insights.trend === 'improving'
+    ? TrendingDownIcon
+    : insights.trend === 'worsening' ? TrendingUpIcon : TrendingFlatIcon;
+  const trendText = insights.trend === 'improving'
+    ? 'Coming down'
+    : insights.trend === 'worsening' ? 'Going up' : 'Steady';
 
   const last = insights.latestReading;
-  const lastWords = `${last.systolic}/${last.diastolic} · ${bpStageWords(insights.currentCategory.name).phrase.replace(/ \(.*\)$/, '')} · ${readingWhen(last)}`;
+  const lastWords = `${last.systolic}/${last.diastolic} · ${plain(insights.currentCategory.name)} · ${readingWhen(last)}`;
   const headCategory = insights.weekCategory || insights.currentCategory;
   const headWords = bpStageWords(headCategory.name);
-  const headline = insights.weekCategory
-    ? `Your average this week: ${insights.avg7Systolic}/${insights.avg7Diastolic} — ${headWords.phrase}`
-    : `Your last reading: ${last.systolic}/${last.diastolic} — ${headWords.phrase}`;
-  // The status colour is the theme's one small set (bpUtils: normal = success,
-  // a little high = warning, high = error), drawn as a Tag's fill with the
-  // words in it, and the heart beside it takes the same tone (UX review
-  // 2026-11, A5). The week's headline number is the page's one big figure.
+  const headline = bpSummarySentence({
+    weekStage: insights.weekCategory?.name || null,
+    lastStage: insights.currentCategory.name,
+    lastWhen: readingWhen(last),
+  });
+  // The status colour is the theme's one small set (bpUtils: normal =
+  // success, a little high and stage 1 = warning, stage 2 and up = error),
+  // drawn as a Tag's wash with the words in it, and the heart beside it takes
+  // the same tone (UX review 2026-11, A5). The week's average is the page's
+  // one big figure.
   const headTone = headCategory?.name === 'Normal'
     ? 'normal'
-    : headCategory?.tone === 'error' || headCategory?.tone === 'tomato' ? 'high' : headCategory?.tone === 'muted' ? 'unknown' : 'raised';
+    : headCategory?.tone === 'error' ? 'high' : headCategory?.tone === 'muted' ? 'unknown' : 'raised';
   const headColor = categorizeBP(
     insights.weekCategory ? insights.avg7Systolic : last.systolic,
     insights.weekCategory ? insights.avg7Diastolic : last.diastolic,
@@ -171,58 +186,76 @@ const BPInsights = ({ bpLogs = [] }) => {
   const headValue = insights.weekCategory
     ? `${insights.avg7Systolic}/${insights.avg7Diastolic}`
     : `${last.systolic}/${last.diastolic}`;
+  const guidance = bpGuidance(headCategory.name);
 
   return (
     <LabelPanel level={1} title="Your blood pressure">
       {/* The number first, big, with its status beside it in words; then one
-          sentence that says what the number is. */}
+          sentence that says what the number is and squares it with the
+          latest reading. */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', columnGap: 3, rowGap: 2 }}>
-        <Typography
-          component="p"
-          data-testid="bp-now"
-          sx={{ m: 0, fontWeight: 700, fontSize: { xs: '2.5rem', sm: '2.75rem' }, lineHeight: 1.05, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
-        >
-          {headValue}
-        </Typography>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            component="p"
+            data-testid="bp-now"
+            sx={{ m: 0, fontWeight: 700, fontSize: { xs: '2.5rem', sm: '2.75rem' }, lineHeight: 1.05, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
+          >
+            {headValue}
+          </Typography>
+        </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <HeartIcon data-testid="bp-heart" data-tone={headTone} aria-hidden sx={{ fontSize: 22, color: headColor }} />
           <Tag fill={headColor} sx={{ fontSize: '0.8125rem' }}>{headWords.label}</Tag>
         </Box>
       </Box>
-      <Typography component="h3" data-testid="bp-headline" sx={{ m: 0, mt: 2, mb: 4, color: 'text.secondary', fontWeight: 400, fontSize: '0.9375rem', lineHeight: 1.5 }}>
+      <Typography component="h3" data-testid="bp-headline" sx={{ m: 0, mt: 3, color: 'text.primary', fontWeight: 400, fontSize: '1rem', lineHeight: 1.5 }}>
         {headline}
       </Typography>
+      {guidance && (
+        <Typography
+          data-testid="bp-guidance"
+          role={guidance.serious ? 'alert' : undefined}
+          sx={{ mt: 1, color: guidance.serious ? 'text.primary' : 'text.secondary', fontWeight: guidance.serious ? 600 : 400, fontSize: '0.9375rem', lineHeight: 1.5 }}
+        >
+          {guidance.text}
+        </Typography>
+      )}
 
-      <Rule weight="medium" />
+      <Rule weight="medium" sx={{ mt: 4 }} />
+      {/* When the week has readings the big number is the week's, so the last
+          reading gets its own row; otherwise the big number IS the last one. */}
+      <Box data-testid="bp-last-reading">
+        {insights.weekCategory && <FactRow first name="Last reading" amount={lastWords} />}
+      </Box>
       {insights.avg30Systolic && (
         <FactRow
-          first
+          first={!insights.weekCategory}
           name="30-day average"
           amount={`${insights.avg30Systolic}/${insights.avg30Diastolic}`}
           of={`· ${insights.last30DaysCount} ${insights.last30DaysCount === 1 ? 'reading' : 'readings'}`}
         />
       )}
-      <FactRow
-        first={!insights.avg30Systolic}
-        name="Last 30 days"
-        amount={
-          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, verticalAlign: 'middle' }}>
-            {getTrendIcon()}
-            <Box component="span" sx={{ color: getTrendColor(), fontWeight: 700 }}>{getTrendText()}</Box>
-          </Box>
-        }
-      />
-      {/* Healthy readings: a count, not a percent (review D-1). */}
+      {/* Normal readings: a count, not a percent (review D-1), over the same
+          30 days as the average above it. */}
       <Box data-testid="bp-healthy-range">
-        <FactRow name="Healthy range" amount={`${insights.healthyCount} of ${insights.totalReadings} readings`} />
+        <FactRow
+          first={!insights.weekCategory && !insights.avg30Systolic}
+          name="In the normal range"
+          amount={`${insights.healthyCount} of ${insights.countedReadings} ${insights.countedReadings === 1 ? 'reading' : 'readings'}`}
+          of={insights.countedRecent ? '· last 30 days' : undefined}
+        />
       </Box>
-      <Box data-testid="bp-last-reading">
-        {insights.weekCategory ? (
-          <FactRow name="Last reading" amount={lastWords} />
-        ) : (
-          <FactRow name="No readings in the last 7 days" />
-        )}
-      </Box>
+      {insights.last30DaysCount >= 4 && (
+        <FactRow
+          name="30-day trend"
+          amount={
+            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
+              <TrendIcon aria-hidden sx={{ fontSize: 20, color: 'text.secondary' }} />
+              <Box component="span" sx={{ fontWeight: 600 }}>{trendText}</Box>
+            </Box>
+          }
+        />
+      )}
     </LabelPanel>
   );
 };

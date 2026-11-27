@@ -1,9 +1,8 @@
 import React from 'react';
-import { Box, Typography, Chip, CircularProgress, ButtonBase, Button } from '@mui/material';
+import { Box, Typography, Chip, CircularProgress, ButtonBase } from '@mui/material';
 import {
   Star as FavoriteIcon,
   History as RecentIcon,
-  Tune as AdjustIcon,
   RestaurantMenu as MealIcon,
   Check as CheckIcon
 } from '@mui/icons-material';
@@ -11,6 +10,7 @@ import { useTheme } from '@mui/material/styles';
 import { netCarbs as calcNetCarbs } from '../../utils/ketoMath';
 import { formatServing } from '../../utils/units.js';
 import { fmt, grams } from '../../utils/plainWords.js';
+import { displayName } from './entries.js';
 
 
 /** A row wide enough for a one-line name and a macro column (B4). */
@@ -54,6 +54,20 @@ const WIDE_ROW = '@container (min-width: 800px)';
  * The amount button says "Amount" (L14): a tooltip doesn't exist on a touch
  * screen, and an unlabelled sliders icon said nothing.
  *
+ * ONE ACTION PER ROW (review 2026-11-27). A row used to end in "+ Add" AND a
+ * sliders icon labelled "Amount": two things to choose between before
+ * anything was logged, and the reviewer could not say what the second did.
+ * Now a row is one tap that adds one serving — the fastest path, and the one
+ * Heather uses. Once it is added, the same corner says "Amount" instead of
+ * "+ Add": that opens the serving sheet on the entry just written (servings,
+ * ounces, cups, another meal) and CHANGES it. "Make it 2" as a separate pill
+ * is gone with it: a second tap on the row is still one more serving, and
+ * Amount has the stepper. The calories sit above that word, right-aligned,
+ * at every width, so the name keeps the rest of the row.
+ *
+ * (The notes above about a "+ Add pill", "Make it 2" and a tune button
+ * describe what this replaced.)
+ *
  * The main area and the trailing buttons are siblings, not nested: a button
  * inside a button is unreachable to a screen reader (axe nested-interactive).
  *
@@ -84,16 +98,15 @@ const round = (value, places = 0) => {
   return Math.round((Number(value) || 0) * factor) / factor;
 };
 
-const PILL_WIDTH = 84;
+const SIDE_WIDTH = 76;
 
 const FoodResultRow = ({
   food,
   onTap,
   onAdjust,
   // `added` is `{ servings }` once this row's food is in the log this sitting:
-  // the subtitle counts, and the pill becomes "Make it N".
+  // the subtitle counts, and the corner offers "Amount".
   added = null,
-  onMore,
   ketoMode = false,
   dense = false,
   pending = false,
@@ -103,6 +116,7 @@ const FoodResultRow = ({
   const muted = theme.palette.text.secondary;
   const primary = theme.palette.primary.main;
   const isMeal = food?.kind === 'meal' || food?.type === 'meal';
+  const name = displayName(food?.name);
 
   const nutrition = (isMeal ? (food?.nutrition || food?.totalNutrition) : food?.nutrition) || {};
   const servings = !isMeal && Number(food?.requestedQuantity) > 0 ? Number(food.requestedQuantity) : 1;
@@ -110,13 +124,12 @@ const FoodResultRow = ({
   const protein = round((nutrition.protein_grams || 0) * servings, 1);
   const fat = round((nutrition.fat_grams || 0) * servings, 1);
 
-  // Keto mode swaps the carb figure rather than adding a fourth number —
-  // one column, labelled, so the row still reads at phone width.
+  // Keto mode swaps the carb figure rather than adding a fourth number.
   const { netCarbs, isMissingFiber } = calcNetCarbs(nutrition);
   const carbValue = ketoMode
     ? round(netCarbs * servings, 1)
     : round((nutrition.carbs_grams || 0) * servings, 1);
-  const carbLabel = ketoMode ? `net${isMissingFiber ? '*' : ''}` : 'C';
+  const carbLabel = ketoMode ? `Net carbs${isMissingFiber ? '*' : ''}` : 'Carbs';
 
   const sourceLabel = isMeal ? null : (SOURCE_LABEL[String(food?.source || '').toLowerCase()] || food?.source);
   const servingText = food?.serving?.size
@@ -126,12 +139,12 @@ const FoodResultRow = ({
   const count = Number(food?.food_count) || (Array.isArray(food?.food_items) ? food.food_items.length : 0);
   const detail = isMeal
     ? ['Saved meal', count ? `${count} food${count === 1 ? '' : 's'}` : null]
-    : [food?.brand, servingText, servings !== 1 ? `×${servings}` : null];
+    : [displayName(food?.brand), servingText, servings !== 1 ? `×${servings}` : null];
   const isAdded = Boolean(added && !isMeal);
-  const canMore = Boolean(isAdded && onMore);
+  const canAdjust = Boolean(isAdded && onAdjust);
   const addedCount = Math.round((Number(added?.servings) || 1) * 100) / 100;
   // "Added" / "2 added", with a drawn check rather than a ✓ glyph (C11).
-  const addedWords = addedCount > 1 ? `${addedCount} added` : 'Added';
+  const addedWords = addedCount !== 1 ? `${addedCount} added` : 'Added';
   const detailText = detail.filter(Boolean).join(' · ');
   const subtitle = pending
     ? 'Adding…'
@@ -150,30 +163,33 @@ const FoodResultRow = ({
   const hasSubtitle = pending || isAdded || Boolean(detailText);
   const inert = disabled || pending;
   const tap = () => { if (!inert) onTap?.(food); };
-  const nextCount = Math.round(addedCount + 1);
-  // Full's dense row form (review U-4): "P 18 · C 8 · F 10 g", whole grams.
-  const macros = isMeal ? null : `P ${grams(protein)} · ${carbLabel} ${grams(carbValue)} · F ${grams(fat)} g`;
+  // Labelled, never "P 18 · C 8 · F 10 g" (shared decision 2026-11-27).
+  const macros = isMeal ? null : `Protein ${grams(protein)}g · ${carbLabel} ${grams(carbValue)}g · Fat ${grams(fat)}g`;
 
-  const pill = (
+  // The row's right-hand corner: the calories over the one word that says
+  // what a tap here does. The same box before and after an add, so nothing
+  // moves under the finger.
+  const side = (word) => (
     <Box
       component="span"
-      aria-hidden
       sx={{
-        width: PILL_WIDTH,
-        minHeight: 44,
+        width: SIDE_WIDTH,
         flexShrink: 0,
-        display: 'inline-flex',
-        alignItems: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
         justifyContent: 'center',
-        
-        // A blue link word, not a filled pill: one filled blue per view.
-        color: primary,
-        fontSize: '0.9375rem',
-        fontWeight: 700,
+        gap: 0.25,
+        textAlign: 'right',
         opacity: disabled && !pending ? 0.6 : 1,
       }}
     >
-      {pending ? <CircularProgress size={18} color="inherit" aria-label={`Adding ${food?.name}`} /> : '+ Add'}
+      <Box component="span" data-testid="food-row-calories" sx={{ fontSize: '0.9375rem', fontWeight: 700, color: 'text.primary', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', lineHeight: 1.3 }}>
+        {fmt(calories)} cal
+      </Box>
+      <Box component="span" aria-hidden sx={{ color: primary, fontSize: '0.875rem', fontWeight: 700, lineHeight: 1.3, minHeight: '1.3em', whiteSpace: 'nowrap' }}>
+        {word}
+      </Box>
     </Box>
   );
 
@@ -186,8 +202,7 @@ const FoodResultRow = ({
         // window said "wide" and names were cut to one word ("Breaded…").
         containerType: 'inline-size',
         display: 'flex',
-        alignItems: 'center',
-        gap: 0.5,
+        alignItems: 'stretch',
         borderBottom: `1px solid ${theme.palette.divider}`,
         transition: 'background-color 120ms ease',
         '@media (hover: hover)': { '&:hover': { backgroundColor: theme.palette.action.hover } },
@@ -197,7 +212,7 @@ const FoodResultRow = ({
         onClick={tap}
         aria-disabled={inert || undefined}
         aria-busy={pending || undefined}
-        aria-label={`${isAdded ? 'Add another' : 'Add'} ${food?.name}, ${fmt(calories)} cal`}
+        aria-label={`${isAdded ? 'Add another' : 'Add'} ${name}, ${fmt(calories)} cal`}
         sx={{
           flex: 1,
           minWidth: 0,
@@ -207,11 +222,12 @@ const FoodResultRow = ({
           textAlign: 'left',
           gap: 1.5,
           minHeight: dense ? 56 : 60,
-          px: 1.5,
-          py: 1,
+          pl: 1.5,
+          pr: canAdjust ? 0.5 : 1.5,
+          py: 1.5,
           borderRadius: '12px',
           cursor: pending ? 'progress' : inert ? 'default' : 'pointer',
-          '&:focus-visible': { outline: `2px solid ${primary}`, outlineOffset: 2 },
+          '&:focus-visible': { outline: `2px solid ${primary}`, outlineOffset: -2 },
         }}
       >
         {isMeal && <MealIcon sx={{ color: primary, flexShrink: 0 }} aria-hidden />}
@@ -242,7 +258,7 @@ const FoodResultRow = ({
                 whiteSpace: 'normal'
               }}
             >
-              {food?.name}
+              {name}
             </Typography>
           </Box>
           <Typography
@@ -257,31 +273,20 @@ const FoodResultRow = ({
             }}
           >
             {subtitle}
-            {/* Phone: the calories live here, beside the brand and serving. */}
-            {!pending && (
-              <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
-                {hasSubtitle ? ' · ' : ''}{fmt(calories)} cal
-              </Box>
-            )}
             {/* Tablet and narrow desktop: the macros, rather than a column. */}
             {!pending && macros && (
-              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' }, [WIDE_ROW]: { display: 'none' } }}>
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' }, fontWeight: 400, color: muted, [WIDE_ROW]: { display: 'none' } }}>
                 {hasSubtitle ? ' · ' : ''}{macros}
               </Box>
             )}
           </Typography>
         </Box>
 
-        <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'baseline', gap: 1.25, flexShrink: 0 }}>
-          <Typography component="span" sx={{ fontSize: '0.9375rem', fontWeight: 700, color: 'text.primary', whiteSpace: 'nowrap' }}>
-            {fmt(calories)} cal
+        {!isMeal && (
+          <Typography component="span" sx={{ display: 'none', [WIDE_ROW]: { display: 'block' }, flexShrink: 0, fontSize: '0.8125rem', color: muted, whiteSpace: 'nowrap' }}>
+            {macros}
           </Typography>
-          {!isMeal && (
-            <Box component="span" sx={{ display: 'none', [WIDE_ROW]: { display: 'flex' }, gap: 1 }}>
-              <Typography component="span" sx={{ fontSize: '0.8125rem', color: muted, whiteSpace: 'nowrap' }}>{macros}</Typography>
-            </Box>
-          )}
-        </Box>
+        )}
 
         {sourceLabel && (
           <Chip
@@ -297,58 +302,29 @@ const FoodResultRow = ({
           />
         )}
 
-        {!canMore && pill}
+        {!canAdjust && side(pending
+          ? <CircularProgress size={16} color="inherit" aria-label={`Adding ${name}`} />
+          : isAdded ? '' : '+ Add')}
       </ButtonBase>
 
-      {canMore && (
-        <Button
-          variant="outlined"
-          onClick={() => { if (!inert) onMore?.(food, nextCount); }}
-          disabled={inert}
-          aria-label={`Make it ${nextCount} ${food?.name}`}
-          sx={{
-            width: PILL_WIDTH,
-            minWidth: PILL_WIDTH,
-            minHeight: 44,
-            flexShrink: 0,
-            
-            borderWidth: 2,
-            fontSize: '0.9375rem',
-            fontWeight: 700,
-            px: 1,
-            whiteSpace: 'nowrap',
-            '@media (hover: hover)': { '&:hover': { borderWidth: 2, bgcolor: theme.palette.action.hover } },
-          }}
-        >
-          Make it {nextCount}
-        </Button>
-      )}
-
-      {/* The serving sheet, for amounts in ounces or cups. Not for a meal. */}
-      {!isMeal && onAdjust && (
+      {/* Once it is in the log: the serving sheet, on that entry. */}
+      {canAdjust && (
         <ButtonBase
           disabled={inert}
           onClick={() => { if (!inert) onAdjust?.(food); }}
-          aria-label={`Change the amount of ${food?.name}`}
+          aria-label={`Change the amount of ${name}`}
           data-testid="amount-button"
           sx={{
-            width: 60,
-            minHeight: 48,
             flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.25,
+            minHeight: 48,
+            pl: 1,
+            pr: 1.5,
             borderRadius: '12px',
-            color: theme.palette.text.secondary,
-            opacity: inert ? 0.6 : 1,
-            '&:focus-visible': { outline: `2px solid ${primary}`, outlineOffset: 2 },
+            '&:focus-visible': { outline: `2px solid ${primary}`, outlineOffset: -2 },
             '@media (hover: hover)': { '&:hover': { bgcolor: theme.palette.action.hover } },
           }}
         >
-          <AdjustIcon fontSize="small" aria-hidden />
-          <Box component="span" aria-hidden sx={{ fontSize: '0.8125rem', fontWeight: 700, lineHeight: 1.1 }}>
-            Amount
-          </Box>
+          {side(pending ? <CircularProgress size={16} color="inherit" aria-hidden /> : 'Amount')}
         </ButtonBase>
       )}
     </Box>

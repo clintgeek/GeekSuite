@@ -88,7 +88,7 @@ describe('the "Just added" strip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Fix Chicken soup' }));
     const sheet = await screen.findByTestId('fix-sheet');
     fireEvent.change(within(sheet).getByLabelText('Calories'), { target: { value: '300' } });
-    fireEvent.click(within(sheet).getByRole('button', { name: 'Save' }));
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Save 300 cal' }));
     await waitFor(() => expect(setLogCalories).toHaveBeenCalledWith('soup', { calories_per_serving: 220 }, 1, 300));
     await waitFor(() => expect(within(screen.getByTestId('just-added')).getAllByTestId('entry-row')[0]).toHaveTextContent('300 cal'));
   });

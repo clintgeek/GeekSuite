@@ -134,8 +134,9 @@ describe('L16 — the one add dialog', () => {
     render();
     const name = await openAdd();
     fireEvent.change(name, { target: { value: 'Fish oil' } });
-    // Once a day is what nothing-picked means, and it says so.
-    expect(screen.getByRole('button', { name: 'Once a day' })).toHaveAttribute('aria-pressed', 'true');
+    // Nothing picked means once a day, and it says so in words (no fifth button).
+    expect(screen.getByTestId('med-when-hint')).toHaveTextContent('No set time? Leave these off and it’s once a day.');
+    expect(screen.queryByRole('button', { name: 'Once a day' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
     await waitFor(() => expect(medsService.save).toHaveBeenCalled());
     expect(medsService.save.mock.calls[0][0]).toMatchObject({ display_name: 'Fish oil', rxcui: null, times_of_day: [] });
@@ -158,16 +159,15 @@ describe('L16 — the one add dialog', () => {
     expect(medsService.save.mock.calls[0][0]).toMatchObject({ display_name: 'Lisinopril', rxcui: '29046', times_of_day: ['morning'] });
   });
 
-  it('maps Midday to the afternoon slot, and Once a day clears the times', async () => {
+  it('maps Midday to the afternoon slot, and a time taps off again', async () => {
     render();
     const name = await openAdd();
     fireEvent.change(name, { target: { value: 'Vitamin D' } });
     fireEvent.click(screen.getByRole('button', { name: 'Morning' }));
     fireEvent.click(screen.getByRole('button', { name: 'Midday' }));
-    expect(screen.getByRole('button', { name: 'Once a day' })).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(screen.getByRole('button', { name: 'Once a day' }));
+    expect(screen.getByTestId('med-when-hint')).toHaveTextContent('You’ll tick it 2 times a day.');
+    fireEvent.click(screen.getByRole('button', { name: 'Morning' }));
     expect(screen.getByRole('button', { name: 'Morning' })).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(screen.getByRole('button', { name: 'Midday' }));
     fireEvent.click(screen.getByRole('button', { name: 'Bedtime' }));
     fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
     await waitFor(() => expect(medsService.save).toHaveBeenCalled());
@@ -298,5 +298,14 @@ describe('L23 — the checklist can tick yesterday', () => {
     await waitFor(() => expect(medsService.getLogsByDate).toHaveBeenLastCalledWith('2026-10-16'));
     await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'Lisinopril, morning' })); });
     expect(medsService.log).toHaveBeenCalledWith('m1', { date: '2026-10-16', time_of_day: 'morning', taken: true });
+  });
+});
+
+describe('drug names read like a person wrote them', () => {
+  it('tidies the database form', async () => {
+    const { tidyDrugName } = await import('../Medications.jsx');
+    expect(tidyDrugName('Lisinopril 10 MG Oral Tablet')).toBe('Lisinopril 10 mg tablet');
+    expect(tidyDrugName('Metformin 500 MG Extended Release Oral Tablet')).toBe('Metformin 500 mg extended release tablet');
+    expect(tidyDrugName('Vitamin D')).toBe('Vitamin D');
   });
 });

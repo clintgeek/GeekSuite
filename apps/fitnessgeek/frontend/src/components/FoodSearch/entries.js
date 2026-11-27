@@ -21,7 +21,43 @@ export const identityOf = (food) => {
 export function withAmount(name, servings) {
   const n = Number(servings);
   if (!name || !Number.isFinite(n) || n <= 0 || Math.abs(n - 1) < 1e-9) return name;
-  return `${name} ×${Math.round(n * 100) / 100}`;
+  const rounded = Math.round(n * 100) / 100;
+  // A whole number is a count ("Egg ×2"). Part of one is said in words:
+  // "Blueberries ×0.5" read like a formula (review 2026-11-27).
+  if (Number.isInteger(rounded)) return `${name} ×${rounded}`;
+  return `${name}, ${servingWords(rounded)}`;
+}
+
+const FRACTIONS = [[0.25, '¼'], [1 / 3, '⅓'], [0.5, '½'], [2 / 3, '⅔'], [0.75, '¾']];
+
+/** "½ serving", "1½ servings", "2 servings", "0.4 servings". */
+export function servingWords(servings) {
+  const n = Math.round((Number(servings) || 0) * 100) / 100;
+  const whole = Math.floor(n);
+  const part = n - whole;
+  const glyph = FRACTIONS.find(([value]) => Math.abs(value - part) < 0.011)?.[1];
+  const number = part < 0.005 ? String(whole) : glyph ? `${whole || ''}${glyph}` : String(n);
+  return `${number} serving${n > 1 ? 's' : ''}`;
+}
+
+const SMALL_WORDS = new Set(['A', 'AN', 'AND', 'FOR', 'IN', 'OF', 'ON', 'THE', 'TO', 'WITH']);
+// Initials that are meant to be capitals.
+const INITIALS = new Set(['BBQ', 'BLT', 'PB', 'PBJ', 'IPA', 'MCT', 'BCAA', 'XL', 'XXL', 'UHT', 'USA', 'UK', 'NY', 'USDA', 'DHA', 'EPA', 'GF', 'MSG', 'KFC', 'IHOP', 'TV', 'OJ']);
+
+/**
+ * A name for the screen. Catalog names arrive shouted ("CHOCOLATE PEANUT
+ * BUTTER protein bar"); the shouted words are shown in title case, apart
+ * from the common initials ("BBQ", "USDA"). The stored name is never
+ * changed: this is for drawing only.
+ */
+export function displayName(name) {
+  const text = String(name ?? '');
+  return text.replace(/[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’]*/g, (word, at) => {
+    if (word.length < 2 || word !== word.toUpperCase() || word === word.toLowerCase()) return word;
+    if (SMALL_WORDS.has(word)) return at === 0 ? word[0] + word.slice(1).toLowerCase() : word.toLowerCase();
+    if (INITIALS.has(word)) return word;
+    return word[0] + word.slice(1).toLowerCase();
+  });
 }
 
 /**

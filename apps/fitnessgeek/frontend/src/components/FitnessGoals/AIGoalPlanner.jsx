@@ -262,6 +262,16 @@ const CalorieGoalWizard = () => {
     }
   });
 
+  // Home's "Update" lands with ?update=1: straight to the new target beside
+  // the old one (the one-tap fix below), when there is one to offer.
+  const [wantsUpdate, setWantsUpdate] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('update') === '1';
+    } catch {
+      return false;
+    }
+  });
+
   const [status, setStatus] = useState('loading'); // 'loading' | 'error' | 'ready'
   const [loadError, setLoadError] = useState(null);
   // The stored nutrition_goal (enabled), kept apart from the answers so a
@@ -428,6 +438,17 @@ const CalorieGoalWizard = () => {
   const savedMacros = savedPlan && savedMode !== 'keto' && savedPlan.dailyCalories > 0
     ? previewMacros({ ...savedGoal, mode: 'standard' }, { leanMassLb: usableLeanMassLb, calories: savedPlan.dailyCalories })
     : null;
+  // The rule protein is set by, for "How this was worked out" (keto too; lazy
+  // keto follows no split, so it has none to explain).
+  const lazyKeto = (cfg) => cfg?.macro_split?.preset === 'lazy';
+  const draftRules = draftMacros?.rules
+    || (draft && mode === 'keto' && !lazyKeto(ketoConfig)
+      ? previewMacros({ ...(savedGoal || {}), mode: 'keto', keto: ketoConfig, ...draftTargetFields }, { leanMassLb: usableLeanMassLb, calories: draft.dailyCalories }).rules
+      : null);
+  const savedRules = savedMacros?.rules
+    || (savedPlan && savedMode === 'keto' && savedPlan.dailyCalories > 0 && !lazyKeto(savedGoal?.keto || DEFAULT_KETO)
+      ? previewMacros({ ...savedGoal, mode: 'keto', keto: savedGoal?.keto || DEFAULT_KETO }, { leanMassLb: usableLeanMassLb, calories: savedPlan.dailyCalories }).rules
+      : null);
   const draftEnd = useMemo(() => {
     if (!draft || !(draft.timeline > 0) || !Number.isFinite(draft.targetWeight)) return null;
     const end = new Date();
@@ -444,6 +465,16 @@ const CalorieGoalWizard = () => {
     if (!drawn.current) { drawn.current = true; return; }
     headingRef.current?.focus?.();
   }, [status, stage, stepId]);
+
+  // ?update=1, once, after the first draw: the saved plan can be more
+  // accurate and today's details make a new one, so show old beside new.
+  // Anything else (no plan, nothing to improve, a detail missing) leaves her
+  // on the page she would have seen anyway.
+  useEffect(() => {
+    if (!wantsUpdate || status !== 'ready') return;
+    setWantsUpdate(false);
+    if (stage === 'summary' && draft && planBannerKind(savedGoal, scanBmr)) setStage('result');
+  }, [wantsUpdate, status, stage, draft, savedGoal, scanBmr]);
 
   const startOver = () => {
     setJustSaved(false);
@@ -571,26 +602,17 @@ const CalorieGoalWizard = () => {
     const primary = notice ? 'fix' : justSaved ? 'done' : 'change';
     return (
       <Page narrow data-testid="plan-page">
-        {/* WHY the target can't be trusted, and the one tap that fixes it.
-            Never rewritten for her: a change to what she eats is hers to
-            make, so the new target is shown beside the old before a Save. */}
-        {notice === 'stale' && (
-          <Alert severity="warning" data-testid="plan-stale-notice" sx={{ alignItems: 'flex-start' }}>
-            <AlertTitle>This target is probably too high</AlertTitle>
-            It was worked out before a mistake in the maths was fixed. The mistake set targets too high, by more
-            than 20% for many people. The weight, height and age it used weren’t kept, so it can’t be corrected
-            for you. Work out a new one from your details today: you’ll see the old and new targets side by side,
-            and nothing changes until you save.
-            <Box sx={{ mt: 3 }}>
-              <Button variant="contained" onClick={reworkFromSaved} sx={{ minHeight: 44 }}>Work out a new target</Button>
-            </Box>
-          </Alert>
-        )}
-        {notice === 'scan' && (
-          <Alert severity="info" data-testid="plan-scan-notice" sx={{ alignItems: 'flex-start' }}>
-            <AlertTitle>Your body scans can make this more accurate</AlertTitle>
-            {`Your scans measure what you burn at rest: ${fmt(scanBmr.bmr)} calories a day. This plan uses an estimate of ${fmt(savedGoal.bmr)}. `}
-            You’ll see the old and new targets side by side, and nothing changes until you save.
+        {/* One calm offer and the one tap that takes it. Never rewritten
+            for her: a change to what she eats is hers to make, so the new
+            target is shown beside the old before a Save. The facts behind
+            it are under "How this was worked out". */}
+        {notice && (
+          <Alert severity="info" data-testid={notice === 'stale' ? 'plan-stale-notice' : 'plan-scan-notice'} sx={{ alignItems: 'flex-start' }}>
+            <AlertTitle>Your target can be more accurate now</AlertTitle>
+            {notice === 'stale'
+              ? 'Your details have changed since this was worked out. '
+              : 'Your body scans can stand in for an estimate. '}
+            You’ll see the old target beside the new one, and nothing changes until you save.
             <Box sx={{ mt: 3 }}>
               <Button variant="contained" onClick={reworkFromSaved} sx={{ minHeight: 44 }}>Update my target</Button>
             </Box>
@@ -612,7 +634,15 @@ const CalorieGoalWizard = () => {
             headingRef={headingRef}
           />
           <Disclosure label="How this was worked out" testId="plan-working-toggle">
-            <PlanWorking plan={savedPlan} />
+            <PlanWorking
+              plan={savedPlan}
+              proteinRules={savedRules}
+              note={notice === 'scan'
+                ? `Your body scans measure ${fmt(scanBmr.bmr)} calories a day at rest. This plan uses an estimate of ${fmt(savedGoal.bmr)}.`
+                : notice === 'stale'
+                  ? 'The weight, height and age this was worked out from weren’t kept. A new target uses your details as they are today.'
+                  : null}
+            />
           </Disclosure>
 
           {removal === 'idle' ? (
@@ -701,7 +731,7 @@ const CalorieGoalWizard = () => {
               </Box>
             </Disclosure>
             <Disclosure label="How this was worked out" testId="plan-working-toggle">
-              <PlanWorking plan={draft} scanLoadFailed={Boolean(details?.scanLoadFailed)} />
+              <PlanWorking plan={draft} proteinRules={draftRules} scanLoadFailed={Boolean(details?.scanLoadFailed)} />
             </Disclosure>
             <Box sx={{ borderTop: (t) => `1px solid ${t.palette.divider}` }} aria-hidden />
           </Box>

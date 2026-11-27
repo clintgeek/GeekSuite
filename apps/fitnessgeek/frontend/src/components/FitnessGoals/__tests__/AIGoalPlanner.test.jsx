@@ -302,13 +302,19 @@ describe('Calorie plan — a person who already has one', () => {
     expect(settingsService.updateSettings).not.toHaveBeenCalled();
   });
 
-  it('the "too high" plan says why, and is one tap from a new target beside the old', async () => {
+  it('a plan that can be more accurate says so calmly, and is one tap from a new target beside the old', async () => {
     setup({ profile: KNOWN, weight: 180, nutrition_goal: STALE_PLAN });
     const notice = await screen.findByTestId('plan-stale-notice');
-    expect(notice).toHaveTextContent('This target is probably too high');
-    expect(notice).toHaveTextContent(/before a mistake in the maths was fixed/);
+    expect(notice).toHaveTextContent('Your target can be more accurate now');
+    expect(notice).toHaveTextContent('Your details have changed since this was worked out.');
+    // Never a word about what went wrong before (round two, item 1).
+    expect(document.body.textContent).not.toMatch(/mistake|maths|too high|bug/i);
+    // The facts stay available, under "How this was worked out".
+    fireEvent.click(screen.getByTestId('plan-working-toggle'));
+    expect(await screen.findByTestId('plan-working-note')).toHaveTextContent(/weren’t kept/);
+    expect(document.body.textContent).not.toMatch(/mistake|maths|too high|bug/i);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Work out a new target' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update my target' }));
     const bmr = mifflinStJeorBMR({ weightLb: 180, heightIn: 71, age: 30, gender: 'male' });
     const target = Math.round(tdeeFromBMR(bmr, 'sedentary') - 500);
     expect(await screen.findByTestId('plan-headline')).toHaveTextContent(`Your daily target is ${target.toLocaleString('en-US')} calories`);
@@ -323,6 +329,36 @@ describe('Calorie plan — a person who already has one', () => {
     // Saved at the current version, so the notice is gone.
     await screen.findByTestId('plan-summary');
     expect(screen.queryByTestId('plan-stale-notice')).toBeNull();
+  });
+
+  // Home's "Update" link: /calorie-wizard?update=1.
+  describe('arriving with ?update=1', () => {
+    const at = (search) => window.history.replaceState(null, '', `/calorie-wizard${search}`);
+    afterEach(() => at(''));
+
+    it('opens straight on the new target beside the old, and writes nothing until Save', async () => {
+      at('?update=1');
+      setup({ profile: KNOWN, weight: 180, nutrition_goal: STALE_PLAN });
+      await screen.findByTestId('plan-result');
+      expect(screen.getByTestId('plan-comparison')).toHaveTextContent(/2,980 → /);
+      expect(screen.getByRole('button', { name: 'Save plan' })).toBeEnabled();
+      expect(settingsService.updateSettings).not.toHaveBeenCalled();
+    });
+
+    it('a plan with nothing to improve just shows the plan', async () => {
+      at('?update=1');
+      setup({ profile: KNOWN, weight: 180, nutrition_goal: SAVED_PLAN });
+      await screen.findByTestId('plan-summary');
+      expect(screen.queryByTestId('plan-result')).toBeNull();
+    });
+
+    it('when a detail is missing it stays on the plan, with the offer and its button', async () => {
+      at('?update=1');
+      setup({ profile: {}, weight: 180, nutrition_goal: STALE_PLAN });
+      await screen.findByTestId('plan-summary');
+      expect(screen.getByRole('button', { name: 'Update my target' })).toBeInTheDocument();
+      expect(screen.queryByTestId('plan-result')).toBeNull();
+    });
   });
 
   it('"Remove plan" asks first, and a failed removal keeps the plan on screen', async () => {

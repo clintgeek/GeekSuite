@@ -41,12 +41,13 @@ const base = {
 const renderReports = () => render(<MemoryRouter><Reports /></MemoryRouter>);
 
 describe('Reports targets and coverage', () => {
-  it('with the plan\'s targets, each day says how it went in a word', async () => {
+  it('with the plan\'s targets, each day says how it went in plain words', async () => {
     overview = { ...base, days_logged: 4, targets: { calories: 1691, protein: 178, carbs: 150, fat: 77, fiber: 25 } };
     renderReports();
     expect((await screen.findAllByTestId('day-status')).map((n) => n.textContent))
       // newest first: 1850, 1750, 1900, 1700 against 1,691
-      .toEqual(['A bit over', 'On target', 'A bit over', 'On target']);
+      // The fact, as a number against the plan's 1,691 (was the words "A bit over").
+      .toEqual(['159 over', 'On target', '209 over', 'On target']);
   });
 
   it('says the averages cover only the logged days', async () => {

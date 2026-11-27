@@ -29,6 +29,7 @@ describe('the week average does not move with the clock', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(`2026-10-17T${hhmm}:00-05:00`));
     render(<BPInsights bpLogs={LOGS} />);
-    expect(screen.getByTestId('bp-headline')).toHaveTextContent('Your average this week: 128/79 — a little high (elevated)');
+    expect(screen.getByTestId('bp-now')).toHaveTextContent('128/79');
+    expect(screen.getByTestId('bp-headline')).toHaveTextContent('Your average this week is a little high.');
   });
 });

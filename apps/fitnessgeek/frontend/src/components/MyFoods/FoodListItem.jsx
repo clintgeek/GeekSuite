@@ -11,16 +11,17 @@ import {
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { getSourceName } from './FoodSourceUtils.jsx';
-import { fmt, macroLine } from '../../utils/plainWords.js';
+import { fmt } from '../../utils/plainWords.js';
+import { displayName } from '../FoodSearch/entries.js';
 
 /**
  * FoodListItem — one saved food, a row in the Saved foods list.
  *
- * The name, then one quiet line: brand or source, then the numbers
- * ("Fage · 190 cal · P 18 · C 8 · F 10 g"). The line is two groups that
- * each stay whole; when the row is too narrow for both, the numbers move to
- * a second line together, and no separator dot is left hanging at the end of
- * the first (it used to read "Blue Diamond · 164 cal ·" over "P 6 · C 6").
+ * The name, then one quiet line that leads with the calories: "190 cal ·
+ * Fage". The protein, carbs and fat are in the edit view, one tap away; the
+ * row used to end in "P 18 · C 8 · F 10 g", which a new person could not read
+ * (review 2026-11-27). Each group on the line stays whole when it wraps, and
+ * no separator dot is left hanging at the end of a line.
  *
  * No source dot: it was a grey bullet on most rows and nobody could say what
  * the colours meant. The source is named in words when it is known.
@@ -44,13 +45,13 @@ const groupSx = {
 const FoodListItem = ({ food, onEdit, onDelete }) => {
   const theme = useTheme();
   if (!food || typeof food !== 'object') return null;
-  const name = String(food.name || '').trim() || 'Unnamed food';
+  const name = displayName(String(food.name || '').trim()) || 'Unnamed food';
   const sourceName = getSourceName(food.source);
   const nutrition = (food.nutrition && typeof food.nutrition === 'object') ? food.nutrition : {};
   const calories = Math.round(Number(nutrition.calories_per_serving) || 0);
   const isRecipe = Boolean(food.recipe);
   const makes = Number(food.recipe?.yield_servings);
-  const brand = String(food.brand || '').trim();
+  const brand = displayName(String(food.brand || '').trim());
 
   return (
     <ListItem
@@ -81,7 +82,7 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
           <Typography
             component="span"
             sx={{
-              fontSize: '0.8125rem',
+              fontSize: '0.875rem',
               lineHeight: 1.5,
               color: 'text.secondary',
               display: 'flex',
@@ -89,6 +90,9 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
               ml: `-${SEP}px`,
             }}
           >
+            <Box component="span" data-testid="saved-food-calories" sx={{ ...groupSx, fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'text.primary' }}>
+              {fmt(calories)} cal
+            </Box>
             {brand && (
               <Box component="span" sx={{ ...groupSx, overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
                 {brand}
@@ -109,11 +113,6 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
                 )}
               </Box>
             )}
-            <Box component="span" sx={{ ...groupSx, fontVariantNumeric: 'tabular-nums' }}>
-              {fmt(calories)} cal
-              <Box component="span" aria-hidden sx={{ opacity: 0.6, mx: '6px' }}>·</Box>
-              {macroLine({ protein: nutrition.protein_grams, carbs: nutrition.carbs_grams, fat: nutrition.fat_grams }, { dense: true })}
-            </Box>
           </Typography>
         </Box>
       </Box>

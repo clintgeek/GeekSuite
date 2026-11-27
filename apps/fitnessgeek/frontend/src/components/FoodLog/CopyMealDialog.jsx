@@ -9,9 +9,13 @@ import {
   Typography,
   Alert,
   CircularProgress,
-  Chip
+  ButtonBase,
+  Link
 } from '@mui/material';
-import { ContentCopy as CopyIcon } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
+import { ContentCopy as CopyIcon, ChevronRight as ChevronIcon } from '@mui/icons-material';
+import { tonalColors } from '../../theme/theme.jsx';
+import { displayName } from '../FoodSearch/entries.js';
 import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import { errorMessage } from '../../utils/errorMessage.js';
@@ -22,7 +26,7 @@ import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 import { useUndoToast } from '../FoodSearch/undoToast.jsx';
-import { dayName, mealOnDayShort } from './dayWords.js';
+import { dayName, mealOnDayShort, shortDate, weekday } from './dayWords.js';
 import { WHOLE_DAY, copySummary, plural } from './copyWords.js';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -65,11 +69,37 @@ const shiftDate = (dateString, deltaDays) => {
  * It opens from a meal's "more" menu on Today (already set to that meal), and
  * from the household view. "Same as yesterday's …" in the add sheet is the
  * one-tap version of the common case.
+ *
+ * THE LIKELY ONES FIRST, ONE TAP EACH (review 2026-11-27). It opened on five
+ * fields and three "Fill in: yesterday's dinner → today's dinner" chips that
+ * only filled the fields in. From a meal's menu it now opens on big rows —
+ * "Yesterday's dinner", "Last Friday's dinner", "Sarah's dinner today" when
+ * someone shares their log, "Everything from yesterday" — each saying what is
+ * in it, each copying in one tap (the toast's Undo takes it back). "Something
+ * else" opens the full form, unchanged, for any other day, meal or person.
+ * From the household view it opens straight on the form, already filled in.
+ * Both ways go through the same `copyMeal` call.
  */
+
+/** The foods in `rows` for one meal (or the whole day), as display names. */
+const foodNames = (rows, day, meal) => (Array.isArray(rows) ? rows : [])
+  .filter((r) => { const d = rowDay(r); return !d || d === day; })
+  .filter((r) => meal === WHOLE_DAY || r?.meal_type === meal)
+  .map((r) => displayName((r?.food_item || r?.food_item_id)?.name || 'A food'));
+
+const listOf = (names) => `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`;
+const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = null }) => {
   const fullScreen = useGeekDialogFullScreen();
+  const theme = useTheme();
   const today = useToday();
   const [copying, setCopying] = useState(false);
+  // The full form, rather than the one-tap rows.
+  const [custom, setCustom] = useState(false);
+  // Which one-tap row is copying, and what each row's source holds
+  // (`{ [key]: string[] }`; a key that is missing is not known yet).
+  const [copyingKey, setCopyingKey] = useState(null);
+  const [shortcutFoods, setShortcutFoods] = useState({});
   const [error, setError] = useState('');
 
   // Form state
@@ -109,6 +139,9 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
       setToMealType('');
       setFromUserId('');
       setError('');
+      // From the household view the choice is already made: the form, filled in.
+      setCustom(Boolean(prefill?.fromUserId));
+      setCopyingKey(null);
 
       if (prefill) {
         setFromDate(prefill.fromDate || currentDate);
@@ -137,7 +170,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
   // Count what's there, so the summary can say "(3 foods)" and an empty
   // meal can say so before Copy is tapped. A failed count isn't a blocker.
   useEffect(() => {
-    if (!open || !fromDate || !fromMealType) {
+    if (!open || !custom || !fromDate || !fromMealType) {
       setSourceCount(null);
       return undefined;
     }
@@ -157,7 +190,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
       }
     })();
     return () => { cancelled = true; };
-  }, [open, fromDate, fromMealType, fromUserId]);
+  }, [open, custom, fromDate, fromMealType, fromUserId]);
 
   const sharingMembers = (Array.isArray(householdMembers) ? householdMembers : []).filter((m) => m?.user_id && m.shares_food_logs);
   const whose = fromUserId ? (householdMembers.find((m) => m?.user_id === fromUserId)?.display_name || 'their') : null;
@@ -168,10 +201,13 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
   const nothingThere = sourceCount === 0;
   const canCopy = Boolean(fromDate && toDate && fromMealType) && !sameSpot && !nothingThere && !copying;
 
-  const handleCopy = async () => {
-    if (!canCopy) return;
+  /** The one copy, for the form's button and for a one-tap row alike. */
+  const runCopy = async ({ fromDate, toDate, fromMealType, toMealType, fromUserId, ownerWord, key = null }) => {
+    if (copying) return;
+    const fromMealWords = fromMealType === WHOLE_DAY ? 'whole day' : mealWord(fromMealType);
     try {
       setCopying(true);
+      setCopyingKey(key);
       setError('');
 
       const wholeDay = fromMealType === WHOLE_DAY;
@@ -206,27 +242,82 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
       setError(errorMessage(err, 'Couldn’t copy that. Try again.'));
     } finally {
       setCopying(false);
+      setCopyingKey(null);
     }
   };
 
-  // "Fill in: …" presets. They only fill the form; the summary below and the
-  // Copy button do the copying. Every one lands on the day on screen —
-  // never tomorrow (the old "Dinner → Tomorrow's Lunch" chip did).
-  const previous = shiftDate(currentDate, -1);
-  const prevWord = currentDate === today ? 'yesterday' : dayName(previous, today);
-  const curWord = dayName(currentDate, today);
-  const presets = [
-    { key: 'dinner', label: `Fill in: ${prevWord}’s dinner → ${curWord}’s dinner`, meal: 'dinner' },
-    { key: 'lunch', label: `Fill in: ${prevWord}’s lunch → ${curWord}’s lunch`, meal: 'lunch' },
-    { key: 'all', label: `Fill in: all of ${prevWord} → ${curWord}`, meal: WHOLE_DAY },
-  ];
-  const fillIn = (preset) => {
-    setFromDate(previous);
-    setFromMealType(preset.meal);
-    setToDate(currentDate);
-    setToMealType('');
-    setError('');
+  const handleCopy = () => {
+    if (!canCopy) return;
+    runCopy({ fromDate, toDate, fromMealType, toMealType, fromUserId, ownerWord });
   };
+
+  // The one-tap rows. Every one lands on the day on screen — never tomorrow
+  // (the old "Dinner → Tomorrow's Lunch" chip did) — and in the meal the
+  // dialog was opened from.
+  const meal = MEAL_TYPES.includes(prefill?.toMealType) ? prefill.toMealType
+    : MEAL_TYPES.includes(prefill?.fromMealType) ? prefill.fromMealType : null;
+  const previous = shiftDate(currentDate, -1);
+  const weekAgo = shiftDate(currentDate, -7);
+  const onToday = currentDate === today;
+  const prevWord = onToday ? 'yesterday' : dayName(previous, today);
+  const shortcuts = [];
+  if (meal) {
+    const m = mealWord(meal);
+    shortcuts.push({ key: 'prev', label: prevWord.includes(' ') ? `${capital(m)} on ${prevWord}` : `${capital(prevWord)}’s ${m}`, fromDate: previous, fromMealType: meal, fromUserId: '', ownerWord: 'your' });
+    shortcuts.push({
+      key: 'week',
+      label: onToday ? `Last ${weekday(weekAgo)}’s ${m}` : `${capital(m)} on ${shortDate(weekAgo, today)}`,
+      fromDate: weekAgo, fromMealType: meal, fromUserId: '', ownerWord: 'your',
+    });
+    for (const member of sharingMembers) {
+      const who = member.display_name || 'Household member';
+      shortcuts.push({
+        key: `member:${member.user_id}`,
+        label: `${who}’s ${m} ${onToday ? 'today' : `on ${dayName(currentDate, today)}`}`,
+        fromDate: currentDate, fromMealType: meal, fromUserId: member.user_id, ownerWord: `${who}’s`,
+      });
+    }
+  }
+  shortcuts.push({ key: 'all', label: `Everything from ${prevWord}`, fromDate: previous, fromMealType: WHOLE_DAY, fromUserId: '', ownerWord: 'your' });
+  const copyShortcut = (shortcut) => runCopy({
+    fromDate: shortcut.fromDate,
+    toDate: currentDate,
+    fromMealType: shortcut.fromMealType,
+    toMealType: shortcut.fromMealType === WHOLE_DAY ? '' : meal,
+    fromUserId: shortcut.fromUserId,
+    ownerWord: shortcut.ownerWord,
+    key: shortcut.key,
+  });
+
+  // What each row would copy, so it can say so ("Greek yogurt, Blueberries")
+  // or say there is nothing there before it is tapped. A read that fails
+  // leaves the row without that line, still tappable.
+  const memberIds = sharingMembers.map((m) => m.user_id).join(',');
+  useEffect(() => {
+    if (!open || custom) return undefined;
+    let cancelled = false;
+    setShortcutFoods({});
+    const read = async (keys, load, day) => {
+      try {
+        const rows = await load();
+        if (cancelled || !Array.isArray(rows)) return;
+        setShortcutFoods((prev) => ({
+          ...prev,
+          ...Object.fromEntries(keys.map(([key, mealType]) => [key, foodNames(rows, day, mealType)])),
+        }));
+      } catch { /* not known: the row stays tappable */ }
+    };
+    read([...(meal ? [['prev', meal]] : []), ['all', WHOLE_DAY]], () => fitnessGeekService.getLogsForDate(previous), previous);
+    if (meal) {
+      read([['week', meal]], () => fitnessGeekService.getLogsForDate(weekAgo), weekAgo);
+      for (const id of memberIds ? memberIds.split(',') : []) {
+        read([[`member:${id}`, meal]], () => fitnessGeekService.getHouseholdMemberLogs(id, currentDate), currentDate);
+      }
+    }
+    return () => { cancelled = true; };
+  }, [open, custom, meal, previous, weekAgo, currentDate, memberIds]);
+
+  const intoWords = meal ? mealOnDayShort(mealWord(meal), currentDate, today) : dayName(currentDate, today);
 
   let summary;
   if (!fromMealType) {
@@ -242,6 +333,26 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
   const groupHeading = { m: 0, mb: 3, fontSize: '0.9375rem', fontWeight: 700, color: 'text.secondary' };
   // Two fields to a row; the fields fill their column so edges line up.
   const fieldGrid = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: 3, rowGap: 4 };
+  const tonal = tonalColors(theme);
+  const shortcutRow = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 2,
+    width: '100%',
+    minHeight: 60,
+    px: 4,
+    py: 2.5,
+    borderRadius: '12px',
+    textAlign: 'left',
+    color: 'text.primary',
+    '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+  };
+  const cancelButton = (
+    <Button onClick={() => { if (!copying) onClose(); }} disabled={copying}>
+      Cancel
+    </Button>
+  );
 
   return (
     <PremiumDialog
@@ -251,7 +362,8 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
       title="Copy a meal"
       icon={CopyIcon}
       maxWidth="sm"
-      {...thumbSaveProps({
+      // The one-tap rows are the actions; Copy belongs to the form.
+      {...(custom ? thumbSaveProps({
         fullScreen,
         save: (
           <Button
@@ -263,26 +375,80 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
             {copying ? 'Copying…' : 'Copy'}
           </Button>
         ),
-        cancel: (
-          <Button onClick={() => { if (!copying) onClose(); }} disabled={copying}>
-            Cancel
-          </Button>
-        ),
-      })}
+        cancel: cancelButton,
+      }) : (fullScreen ? {} : { secondaryAction: cancelButton }))}
     >
-        {/* Presets that fill the form in */}
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 6 }}>
-          {presets.map((preset) => (
-            <Chip
-              key={preset.key}
-              label={preset.label}
-              onClick={() => fillIn(preset)}
-              variant="outlined"
-              // An action pill: 44 tall, round (visual review B5/B6).
-              sx={{ height: 44, fontSize: '0.875rem' }}
-            />
-          ))}
+      {!custom ? (
+        <Box data-testid="copy-shortcuts">
+          <Typography component="h3" sx={{ ...groupHeading, color: 'text.primary', fontSize: '1rem' }}>
+            Copy into {intoWords} from…
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {shortcuts.map((shortcut) => {
+              const foods = shortcutFoods[shortcut.key];
+              const empty = Array.isArray(foods) && foods.length === 0;
+              const busyHere = copyingKey === shortcut.key;
+              return (
+                <ButtonBase
+                  key={shortcut.key}
+                  data-testid="copy-shortcut"
+                  disabled={copying || empty}
+                  onClick={() => copyShortcut(shortcut)}
+                  sx={{
+                    ...shortcutRow,
+                    bgcolor: empty ? 'transparent' : tonal.bg,
+                    border: `1px solid ${empty ? theme.palette.divider : 'transparent'}`,
+                    '@media (hover: hover)': { '&:hover': { bgcolor: tonal.hover } },
+                  }}
+                >
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography component="span" sx={{ display: 'block', fontSize: '1rem', fontWeight: 700, lineHeight: 1.3, color: empty ? 'text.secondary' : 'text.primary' }}>
+                      {busyHere ? 'Copying…' : shortcut.label}
+                    </Typography>
+                    {foods && (
+                      <Typography component="span" sx={{ display: 'block', fontSize: '0.875rem', lineHeight: 1.35, color: 'text.secondary', overflowWrap: 'anywhere' }}>
+                        {empty ? 'Nothing logged' : listOf(foods)}
+                      </Typography>
+                    )}
+                  </Box>
+                  {busyHere
+                    ? <CircularProgress size={20} color="inherit" aria-hidden />
+                    : !empty && <CopyIcon aria-hidden sx={{ fontSize: 20, color: 'text.secondary', flexShrink: 0 }} />}
+                </ButtonBase>
+              );
+            })}
+            <ButtonBase
+              data-testid="copy-something-else"
+              disabled={copying}
+              onClick={() => { setCustom(true); setError(''); }}
+              sx={{ ...shortcutRow, border: `1px solid ${theme.palette.outline || theme.palette.divider}` }}
+            >
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography component="span" sx={{ display: 'block', fontSize: '1rem', fontWeight: 700, lineHeight: 1.3 }}>
+                  Something else
+                </Typography>
+                <Typography component="span" sx={{ display: 'block', fontSize: '0.875rem', lineHeight: 1.35, color: 'text.secondary' }}>
+                  Another day, meal or person
+                </Typography>
+              </Box>
+              <ChevronIcon aria-hidden sx={{ color: 'text.secondary', flexShrink: 0 }} />
+            </ButtonBase>
+          </Box>
         </Box>
+      ) : (
+        <>
+        {!prefill?.fromUserId && (
+          <Link
+            component="button"
+            type="button"
+            underline="hover"
+            disabled={copying}
+            onClick={() => { setCustom(false); setError(''); }}
+            sx={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', fontSize: '0.9375rem', fontWeight: 700, mb: 2 }}
+          >
+            Back to the quick choices
+          </Link>
+        )}
 
         {/* Source */}
         {/* 4px theme unit: 12px under a group's heading, 16px between rows
@@ -371,17 +537,17 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
           <Typography
             data-testid="copy-summary"
             role="status"
-            sx={(theme) => ({
+            sx={{
               fontSize: '1rem',
               fontWeight: 600,
-              color: fromMealType && !sameSpot && !nothingThere
-                ? theme.palette.text.primary
-                : theme.palette.text.secondary,
-            })}
+              color: fromMealType && !sameSpot && !nothingThere ? 'text.primary' : 'text.secondary',
+            }}
           >
             {summary}
           </Typography>
         </Box>
+        </>
+      )}
 
         {error && (
           <Alert severity="error" sx={{ mt: 4 }}>

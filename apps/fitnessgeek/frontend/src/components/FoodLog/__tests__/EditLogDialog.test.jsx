@@ -221,3 +221,73 @@ describe('EditLogDialog: Save under the thumb, Remove inside', () => {
     expect(onRemove).toHaveBeenCalledWith('log-egg');
   });
 });
+
+/**
+ * Review 2026-11-27 (scenes 50c, 50d): a slider for servings beside a
+ * Servings box, under a Calories box, with nothing saying which drove which.
+ * Servings is the serving sheet's − / + now, and each field says its part.
+ */
+describe('EditLogDialog: servings is a stepper, and says how it relates to calories', () => {
+  const EGG = {
+    id: 'log-egg',
+    servings: 2,
+    meal_type: 'breakfast',
+    log_date: '2026-11-27T00:00:00.000Z',
+    nutrition: { calories_per_serving: 78, protein_grams: 6, carbs_grams: 1, fat_grams: 5 },
+    food_item_id: { id: 'egg', name: 'EGG, LARGE' }
+  };
+  const open = () => {
+    const onSave = vi.fn();
+    render(withTheme(<EditLogDialog open onClose={vi.fn()} onSave={onSave} log={EGG} />));
+    return onSave;
+  };
+
+  it('has no slider; one Servings box between − and +', () => {
+    open();
+    expect(screen.queryByRole('slider')).toBeNull();
+    expect(screen.getAllByLabelText('Servings')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Fewer servings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More servings' })).toBeInTheDocument();
+  });
+
+  it('+ and − move a quarter serving and the calories move with them', () => {
+    const onSave = open();
+    expect(screen.getByLabelText('Calories')).toHaveValue('156');
+    fireEvent.click(screen.getByRole('button', { name: 'More servings' }));
+    expect(screen.getByLabelText('Servings')).toHaveValue('2.25');
+    expect(screen.getByLabelText('Calories')).toHaveValue('176');
+    for (let i = 0; i < 5; i += 1) fireEvent.click(screen.getByRole('button', { name: 'Fewer servings' }));
+    expect(screen.getByLabelText('Servings')).toHaveValue('1');
+    expect(screen.getByLabelText('Calories')).toHaveValue('78');
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    // Servings changed; the per-serving calories did not, so no override.
+    expect(onSave.mock.calls[0][1].servings).toBe(1);
+    expect(onSave.mock.calls[0][1]).not.toHaveProperty('calories');
+  });
+
+  it('− stops at a quarter serving', () => {
+    open();
+    for (let i = 0; i < 12; i += 1) fireEvent.click(screen.getByRole('button', { name: 'Fewer servings' }));
+    expect(screen.getByLabelText('Servings')).toHaveValue('0.25');
+    expect(screen.getByRole('button', { name: 'Fewer servings' })).toBeDisabled();
+  });
+
+  it('typing the calories is "I know the total": servings stay, and the per-serving override goes out', () => {
+    const onSave = open();
+    fireEvent.change(screen.getByLabelText('Calories'), { target: { value: '200' } });
+    expect(screen.getByLabelText('Servings')).toHaveValue('2');
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(onSave.mock.calls[0][1]).toMatchObject({ servings: 2, calories: 100 });
+  });
+
+  it('says the relationship in one line each', () => {
+    open();
+    expect(screen.getByText('The total for this entry. Type it here if you know it.')).toBeInTheDocument();
+    expect(screen.getByTestId('edit-log-servings-help')).toHaveTextContent('More or fewer servings changes the calories above.');
+  });
+
+  it('draws a shouted name in title case', () => {
+    open();
+    expect(screen.getByRole('heading', { name: 'Egg, Large' })).toBeInTheDocument();
+  });
+});

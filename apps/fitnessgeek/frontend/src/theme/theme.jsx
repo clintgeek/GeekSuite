@@ -255,8 +255,14 @@ function buildFitnessOverrides(mode) {
             '&:hover': { boxShadow: 'none' },
             '&.Mui-disabled': { color: disabled.ink },
           },
+          // A filled button that is waiting for input stays recognisably the
+          // page's button: a paler blue, not flat grey (2026-11-28: "primary
+          // buttons look disabled on arrival" read as broken).
           contained: {
-            '&.Mui-disabled': { backgroundColor: disabled.bg, color: disabled.ink },
+            '&.Mui-disabled': {
+              backgroundColor: isDark ? '#3A4470' : '#AEBBF1',
+              color: isDark ? '#AEB9E6' : '#FFFFFF',
+            },
           },
           outlined: {
             borderColor: outline,
@@ -315,7 +321,7 @@ function buildFitnessOverrides(mode) {
             fontWeight: 600,
             color: isDark ? '#B9BFCA' : '#4A5160',
             '&.Mui-selected, &.Mui-selected:hover': {
-              backgroundColor: isDark ? '#3A404B' : '#FFFFFF',
+              backgroundColor: isDark ? '#4A5160' : '#FFFFFF',
               color: isDark ? '#ECEEF2' : '#1B1F27',
               boxShadow: isDark ? 'none' : '0 1px 2px rgba(16,24,40,.12)',
             },

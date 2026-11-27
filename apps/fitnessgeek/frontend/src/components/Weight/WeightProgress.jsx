@@ -5,7 +5,7 @@ import { differenceInWeeks, differenceInDays, parseISO, format } from 'date-fns'
 import { shortDay } from '../../utils/dates.js';
 import { utcDateString } from '@geeksuite/utils';
 import { programPace, neededPacePerWeek, trendSince } from './weightTrend.js';
-import { LabelPanel, FactRow, LabelBar, Rule, Tag } from '../primitives';
+import { LabelPanel, FactRow, LabelBar, Rule } from '../primitives';
 
 const WeightProgress = ({
   weightLogs = [],
@@ -197,10 +197,11 @@ const WeightProgress = ({
     );
   }
 
-  // Theme palette only — no hex literals (F10). Nothing on this panel is red
-  // (review D-2: the plan says "nothing turns red"): behind plan is the
-  // warning tone with the words "Behind plan" — never colour alone; ahead and
-  // on track are the blue.
+  // Nothing on this panel grades her (round-two review: someone down 12 lb
+  // read "Behind plan", "Off track" and "well past your goal date"). The
+  // progress leads; the pace is a fact with the plan's beside it; and where
+  // the pace lands is said once, as information, with a way to move the date.
+  // No status tag, nothing red, nothing amber.
   const u = unitWord(unit);
   const total = Math.abs(goal.targetWeight - goal.startWeight);
   const moved = (total * (insights.progressPercent || 0)) / 100;
@@ -213,15 +214,9 @@ const WeightProgress = ({
   const pct = Math.round(insights.progressPercent || 0);
   const goalByDate = goal?.goalDate ? fmtYmd(utcDateString(goal.goalDate)) : '';
 
-  const status = insights.isAhead
-    ? { label: 'Ahead of plan', bg: 'primary.main' }
-    : insights.isBehind
-      ? { label: 'Behind plan', bg: 'warning.main' }
-      : { label: 'On track', bg: 'primary.main' };
-
-  const rateText = insights.currentRate === null
-    ? 'Not measured yet'
-    : `${Math.abs(insights.currentRate).toFixed(1)} ${u} a week`;
+  const measured = insights.currentRate !== null;
+  const needed = neededPacePerWeek(goal);
+  const forecast = forecastWords(insights, goal, u);
 
   return (
     <LabelPanel level={1} title="Your weight">
@@ -258,57 +253,43 @@ const WeightProgress = ({
 
       <Box sx={{ mt: 3 }}>
         <FactRow name="Started" amount={`${trim1(goal.startWeight)} ${u}`} />
-        <FactRow
-          name="Pace"
-          amount={
-            <>
-              {rateText}
-              <Tag fill={status.bg} sx={{ ml: 1.5 }}>
-                <span data-testid="weight-status">{status.label}</span>
-              </Tag>
-            </>
-          }
-        />
-        <FactRow
-          name="Time left"
-          // Weeks while there are a couple left, days at the end: never
-          // "0 weeks · 3 days".
-          amount={(insights.weeksToGoal || 0) >= 2
-            ? `${insights.weeksToGoal} weeks`
-            : `${insights.daysToGoal || 0} ${(insights.daysToGoal || 0) === 1 ? 'day' : 'days'}`}
-        />
+        {/* Her pace beside the one the dates need (review D-2): two numbers,
+            no verdict. */}
+        <Box data-testid="weight-pace">
+          <FactRow
+            name="Pace"
+            amount={measured ? `${Math.abs(insights.currentRate).toFixed(1)} ${u} a week` : 'Not measured yet'}
+            of={measured && needed !== null && total > 0 ? `· your plan needs ${needed.toFixed(1)}` : undefined}
+          />
+          {!measured && (
+            <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', lineHeight: 1.5, mt: -1, pb: 2 }}>
+              {rateWaitText(insights.pace)}
+            </Typography>
+          )}
+        </Box>
       </Box>
 
       <Rule />
-      {/* Pace: hers beside the one the dates need (review D-2) */}
-      <Box data-testid="weight-pace" sx={{ pt: 3 }}>
+      {/* Where this pace lands, said once and plainly (review D-2). */}
+      <Box data-testid="weight-projection" sx={{ pt: 3 }}>
         <Typography sx={{ lineHeight: 1.5 }}>
-          {paceSentence(insights, goal, u)}
+          {forecast.line}
         </Typography>
-        {insights.currentRate === null && (
-          <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', lineHeight: 1.5, mt: 0.5 }}>
-            {rateWaitText(insights.pace)}
+        {forecast.note && (
+          <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.5, mt: 0.5 }}>
+            {forecast.note}
           </Typography>
         )}
-      </Box>
-
-      {/* Projection, in words (review D-2) */}
-      <Box data-testid="weight-projection" sx={{ pt: 3 }}>
-        <Typography component="span" sx={{ fontWeight: 600, display: 'block', lineHeight: 1.4 }}>
-          {projectionHeadline(insights, goal)}
-        </Typography>
-        <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', lineHeight: 1.5, mt: 0.5 }}>
-          {projectionCaption(insights, goal, u)}
-        </Typography>
       </Box>
 
       {onEditGoal && (
         <Button
           variant="text"
           onClick={onEditGoal}
-          sx={{ minHeight: 44, px: 0, mt: 2, mb: -2, fontWeight: 600, color: 'primary.main', justifyContent: 'flex-start', '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }}
+          data-testid="weight-change-goal"
+          sx={{ minHeight: 44, px: 0, mt: 2, mb: -2, fontWeight: 600, color: 'primary.main', justifyContent: 'flex-start', textAlign: 'left', '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }}
         >
-          Change goal
+          {forecast.late ? 'Move the date or change the goal' : 'Change goal'}
         </Button>
       )}
     </LabelPanel>
@@ -375,58 +356,79 @@ function trendWords({ change, since }, u) {
   return `${change < 0 ? 'Down' : 'Up'} ${trim1(Math.abs(change))} ${u} since ${monthName(since)}`;
 }
 
-/**
- * "You're losing 1.3 lb a week. To reach 195 by Dec 1 you'd need 1.5."
- * The needed pace is the dates' (neededPacePerWeek), not the stored rate.
- */
-function paceSentence(insights, goal, u) {
-  const needed = neededPacePerWeek(goal);
-  const goalVerb = goal.targetWeight < goal.startWeight ? 'lose' : 'gain';
-  const by = `To reach ${trim1(goal.targetWeight)} by ${fmtYmd(utcDateString(goal.goalDate))}`;
-  if (goal.targetWeight === goal.startWeight || needed === null) {
-    return insights.currentRate === null
-      ? `Your goal is to stay at ${trim1(goal.targetWeight)} ${u}.`
-      : `You’re ${insights.currentRate < 0 ? 'losing' : 'gaining'} ${Math.abs(insights.currentRate).toFixed(1)} ${u} a week.`;
-  }
-  const need = needed.toFixed(1);
-  if (insights.currentRate === null) return `${by} you’d need to ${goalVerb} ${need} ${u} a week.`;
-  const rate = insights.currentRate;
-  if (Math.abs(rate) < 0.05) return `Your weight is holding steady. ${by} you’d need to ${goalVerb} ${need} ${u} a week.`;
-  const verb = rate < 0 ? 'losing' : 'gaining';
-  const sameWay = (rate < 0) === (goalVerb === 'lose');
-  return `You’re ${verb} ${Math.abs(rate).toFixed(1)} ${u} a week. ${by} you’d need ${sameWay ? need : `to ${goalVerb} ${need}`}.`;
-}
-
 /** Why there's no measured rate yet. */
 function rateWaitText(pace) {
-  if (pace?.phase === 'not-started') return `Your own pace shows once you start, ${fmtYmd(pace.startDate)}`;
+  if (pace?.phase === 'not-started') return `Your own pace shows once you start, ${fmtYmd(pace.startDate)}.`;
   const left = Math.max(1, 14 - (pace?.programDays || 0));
-  return `Your own pace shows after 2 weeks in (${left} day${left === 1 ? '' : 's'} to go)`;
+  return `Your own pace shows after two weeks of weigh-ins (${left} more day${left === 1 ? '' : 's'}).`;
 }
 
-/** The projection's big line: a time of month only when there is an honest one. */
-function projectionHeadline(insights, goal) {
-  const { pace } = insights;
-  if (!pace || pace.phase !== 'measured') return `Your plan finishes ${fmtYmd(utcDateString(goal.goalDate))}`;
-  if (pace.projectedDate) return `At this pace: ${whenInWords(pace.projectedDate)}`;
-  if (pace.heading === 'away') return 'Not heading toward your goal yet';
-  return 'At this pace: well past your goal date';
-}
+/** A finish further out than this is not named as a month. */
+const FORECAST_MAX_DAYS = 548; // about 18 months
 
-/** …and what it means against the goal date. */
-function projectionCaption(insights, goal, u) {
+const daysFromToday = (ymd) => Math.round((new Date(`${ymd}T12:00:00`) - new Date(`${todayYmd()}T12:00:00`)) / 86400000);
+
+/**
+ * Where the pace lands, in one plain sentence, and (once) what that means
+ * against the goal date.
+ *
+ * `line` is the sentence; `note` a quiet second line when there is something
+ * useful to add; `late` is true when the goal date will be missed at this
+ * pace, which is what turns "Change goal" into "Move the date or change the
+ * goal". It is information, never a grade: the old card said "Behind plan",
+ * "well past your goal date" and "more than twice the plan's length out" to a
+ * person who had lost 12 lb.
+ */
+function forecastWords(insights, goal, u) {
   const { pace } = insights;
-  const goalRate = `${Math.abs(insights.goalRate || 0).toFixed(1)} ${u} a week`;
-  if (!pace || pace.phase === 'none') return `Your plan, at ${goalRate}`;
-  if (pace.phase === 'not-started') return `Your plan, at ${goalRate} — the program starts ${fmtYmd(pace.startDate)}`;
-  if (pace.phase === 'too-early') return `Your plan, at ${goalRate}, until there are two weeks of weigh-ins to measure your own pace`;
+  const goalDay = fmtYmd(utcDateString(goal.goalDate));
+  const target = `${trim1(goal.targetWeight)} ${u}`;
+  const needed = neededPacePerWeek(goal);
+  const goalVerb = goal.targetWeight < goal.startWeight ? 'lose' : 'gain';
+  const plan = needed !== null && goal.targetWeight !== goal.startWeight
+    ? `To reach ${target} by ${goalDay} you’d ${goalVerb} about ${needed.toFixed(1)} ${u} a week.`
+    : `Your goal is to stay at ${target}.`;
+
+  if (!pace || pace.phase === 'none') return { line: plan, note: null, late: false };
+  // Not started, or too early to measure: the plan is the forecast. The Pace
+  // row above already says when her own pace will show.
+  if (pace.phase !== 'measured') return { line: plan, note: null, late: false };
+
+  if (pace.heading === 'done') return { line: `You’re at your goal of ${target}.`, note: null, late: false };
   if (pace.projectedDate) {
     const days = insights.daysAheadBehind;
-    if (Math.abs(days) <= 7) return 'That’s right about your goal date.';
-    return `That’s ${gapInWords(days)} ${days < 0 ? 'after' : 'before'} your goal date.`;
+    const when = `At this pace you’d get there around ${whenInWords(pace.projectedDate)}`;
+    if (Math.abs(days) <= 7) return { line: `${when}, right about your goal date.`, note: null, late: false };
+    if (days > 0) return { line: `${when}, ${gapInWords(days)} ahead of your goal date.`, note: null, late: false };
+    return {
+      line: `${when}, ${gapInWords(days)} after your ${goalDay} goal date.`,
+      note: 'That’s still steady progress. You can move the date whenever you like.',
+      late: true,
+    };
   }
-  if (pace.heading === 'away') return `Your trend since ${fmtYmd(pace.startDate)} is going the other way — early weeks are noisy`;
-  return `At this pace the finish is more than twice the plan’s length out`;
+  if (pace.heading === 'away') {
+    return {
+      line: `Your weight hasn’t started moving toward ${target} yet.`,
+      note: 'The first weeks bounce around. Keep weighing in and this will settle.',
+      late: false,
+    };
+  }
+  // Heading the right way, but landing a long way past the goal date.
+  const far = pace.finishDate && daysFromToday(pace.finishDate) <= FORECAST_MAX_DAYS;
+  if (far) {
+    return {
+      line: `At this pace you’d get there around ${monthName(pace.finishDate)}, ${gapInWords(daysFromToday(pace.finishDate) - daysFromToday(utcDateString(goal.goalDate)))} after your ${goalDay} goal date.`,
+      note: 'That’s still steady progress. You can move the date whenever you like.',
+      late: true,
+    };
+  }
+  return {
+    line: pace.heading === 'flat'
+      ? `Your weight is holding steady, so ${goalDay} is likely to come first.`
+      : `At this pace ${target} is more than a year away, so ${goalDay} is likely to come first.`,
+    note: 'A later date or a closer goal may suit you better.',
+    late: true,
+  };
 }
 
 export default WeightProgress;

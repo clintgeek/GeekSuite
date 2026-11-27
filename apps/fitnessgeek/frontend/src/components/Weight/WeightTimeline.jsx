@@ -3,10 +3,9 @@ import { Box, Typography } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { ResponsiveLine } from '@nivo/line';
 import { utcDateString } from '@geeksuite/utils';
-import { readableOn } from '@geeksuite/ui';
 import { LabelPanel, buildChartTheme } from '../primitives';
 import { shortDay } from '../../utils/dates.js';
-import { buildWeightTrend, splitAtGaps } from './weightTrend.js';
+import { buildWeightTrend, fitToWeighIns, splitAtGaps } from './weightTrend.js';
 import ChartTooltip from './chartTooltip.jsx';
 import { massDomain, tooltipDay, useTooltipGuard } from './chartTips.js';
 
@@ -42,22 +41,28 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
   // trend. All of it is computed in weightTrend.js, which is tested alone.
   const model = useMemo(() => buildWeightTrend(weightLogs, { goal }), [weightLogs, goal]);
 
-  const projectionColor = model.projection
-    ? (model.projection.onTrack ? theme.palette.success.main : theme.palette.warning.main)
-    : null;
+  // The x-range is the weigh-ins' (round-two review: a goal line that began
+  // in August, before any data, left most of the chart empty). The goal and
+  // "at this pace" guides are the same lines, clipped to that range.
+  const fit = useMemo(() => fitToWeighIns(model), [model]);
+
+  // "At this pace" is her own line carried forward, so it is her own blue,
+  // dashed. It used to be green or amber with "On track" / "Off track" beside
+  // it: a grade on a chart. The goal card says where the pace lands, once.
+  const projectionColor = fit.projection ? alpha(primary, 0.75) : null;
 
   const chartData = useMemo(() => {
     const lines = [];
-    if (model.goalLine) lines.push({ id: SERIES.goal, color: ink, data: model.goalLine });
+    if (fit.goalLine) lines.push({ id: SERIES.goal, color: ink, data: fit.goalLine });
     if (model.readings.length) {
       lines.push({ id: SERIES.readings, color: alpha(primary, 0.7), data: model.readings });
       lines.push({ id: SERIES.trend, color: primary, data: model.trend });
     }
-    if (model.projection) {
-      lines.push({ id: SERIES.projection, color: projectionColor, data: model.projection.points });
+    if (fit.projection) {
+      lines.push({ id: SERIES.projection, color: projectionColor, data: fit.projection.points });
     }
     return lines;
-  }, [model, ink, primary, projectionColor]);
+  }, [model, fit, ink, primary, projectionColor]);
 
   // At least 10 lb tall (review D-4), so scale noise isn't drawn as a cliff.
   const yAxisDomain = useMemo(
@@ -81,26 +86,15 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
     );
   }
 
-  const paper = theme.palette.background.paper;
   const first = model.readings[0]?.x;
   const last = model.readings[model.readings.length - 1]?.x;
   const rangeText = first && last ? `${shortDay(first)} to ${shortDay(last)}` : undefined;
-  // The status word is 12px text in a domain colour, so it is measured
-  // against the paper it sits on (GEEK_SUITE_DESIGN_LANGUAGE, "Colour on a
-  // surface") — success.main alone is a graphic colour, not an ink.
-  const statusInk = projectionColor ? readableOn(projectionColor, paper, { under: paper }) : null;
 
   const legend = [
     { key: 'trend', label: LEGEND.trend, color: primary, kind: 'line' },
     { key: 'readings', label: LEGEND.readings, color: alpha(primary, 0.7), kind: 'dot' },
-    model.goalLine && { key: 'goal', label: LEGEND.goal, color: ink, kind: 'dash' },
-    model.projection && {
-      key: 'projection',
-      label: LEGEND.projection,
-      color: projectionColor,
-      kind: 'dash',
-      suffix: { label: model.projection.onTrack ? 'On track' : 'Off track', color: statusInk },
-    },
+    fit.goalLine && { key: 'goal', label: LEGEND.goal, color: ink, kind: 'dash' },
+    fit.projection && { key: 'projection', label: LEGEND.projection, color: projectionColor, kind: 'dash' },
   ].filter(Boolean);
 
   return (
@@ -125,7 +119,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
           data={chartData}
           theme={chartTheme}
           role="img"
-          ariaLabel={`Weight over time, in ${u}: a 7-day average line over each weigh-in${model.goalLine ? ', against the goal line' : ''}`}
+          ariaLabel={`Weight over time, in ${u}: a 7-day average line over each weigh-in${fit.goalLine ? ', against the goal line' : ''}`}
           margin={MARGIN}
           xScale={{ type: 'time', format: '%Y-%m-%d', useUTC: false, precision: 'day' }}
           xFormat="time:%Y-%m-%d"
@@ -259,7 +253,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
 
 // Legend item — matches the SectionLabel tick aesthetic. Defined outside the
 // component so React does not remount it on every render.
-const LegendItem = ({ color, label, kind, suffix, muted }) => (
+const LegendItem = ({ color, label, kind, muted }) => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
     {kind === 'dot' ? (
       <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: color, mx: '4px', flexShrink: 0 }} />
@@ -283,17 +277,6 @@ const LegendItem = ({ color, label, kind, suffix, muted }) => (
     >
       {label}
     </Typography>
-    {suffix && (
-      <Typography
-        sx={{
-          fontSize: '0.75rem',
-          fontWeight: 700,
-          color: suffix.color,
-        }}
-      >
-        · {suffix.label}
-      </Typography>
-    )}
   </Box>
 );
 
@@ -303,10 +286,10 @@ const LegendItem = ({ color, label, kind, suffix, muted }) => (
  */
 function paceHint(pace) {
   if (!pace) return null;
-  if (pace.phase === 'not-started') return 'Your program hasn’t started yet — the line follows your plan until it does.';
+  if (pace.phase === 'not-started') return 'Your plan hasn’t started yet. The dashed line is the plan.';
   if (pace.phase === 'too-early') {
     const left = Math.max(1, 14 - pace.programDays);
-    return `A projection from your own pace appears after two weeks of weigh-ins in the program (${left} more day${left === 1 ? '' : 's'}).`;
+    return `After two weeks of weigh-ins this also shows where your pace is heading (${left} more day${left === 1 ? '' : 's'}).`;
   }
   return null;
 }

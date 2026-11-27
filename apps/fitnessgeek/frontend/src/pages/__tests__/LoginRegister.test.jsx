@@ -34,7 +34,8 @@ describe('Login', () => {
   it('says what the app is, in plain words, with one primary button', () => {
     render(<Login />);
     expect(screen.getByRole('heading', { level: 1, name: 'FitnessGeek' })).toBeInTheDocument();
-    expect(screen.getByText('What you eat, your weight and your health, in one place.')).toBeInTheDocument();
+    expect(screen.getByText('Sign in to keep your food, weight and health in one place.')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/GeekSuite/);
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Create an account' })).toBeEnabled();
     // Not the suite splash, and nothing a person has to decode.

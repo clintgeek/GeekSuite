@@ -183,7 +183,7 @@ const tapRow = async (sheet, h, re, what) => {
 
 // ── 40  A row, tapped once and then again ───────────────────────────────
 export const scenes = [
-  // One tap: the row says "Added" (with a drawn check), its pill says "Make it 2", and the ribbon
+  // One tap: the row says "Added" (with a drawn check), its corner says "Amount", and the ribbon
   // names the meal from the first item, with Done.
   sheetScene('40-row-tapped-once', {
     meal: 'breakfast', suggest: eggSuggest,
@@ -191,7 +191,10 @@ export const scenes = [
       await typeInto(sheet, 'egg', h, 1000);
       await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
       await must(sheet.getByText(/^Added$/).first(), '"Added" on the row');
-      await must(sheet.getByRole('button', { name: /^Make it 2/ }), '"Make it 2"');
+      // The corner now says "Amount" (the row has no "Make it 2" pill any more).
+      const amount = await must(sheet.getByRole('button', { name: 'Change the amount of Egg' }), '"Change the amount of Egg"');
+      await must(sheet.getByTestId('amount-button').filter({ hasText: 'Amount' }), 'the "Amount" word');
+      if (!(await amount.isVisible())) throw new Error('the Amount button is not visible');
       await must(sheet.getByTestId('session-ribbon').filter({ hasText: 'Egg added to breakfast' }), 'the ribbon "Egg added to breakfast"');
       await must(sheet.getByTestId('session-done'), 'Done');
       await dismissToasts(page, h);
@@ -205,7 +208,7 @@ export const scenes = [
       await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
       await tapRow(sheet, h, /^Add another Egg, /, 'the Egg row again');
       await must(sheet.getByText(/^2 added$/).first(), '"2 added" on the row');
-      await must(sheet.getByRole('button', { name: /^Make it 3/ }), '"Make it 3"');
+      await must(sheet.getByRole('button', { name: 'Change the amount of Egg' }), '"Change the amount of Egg"');
       // One entry with two servings, named with its amount (UX review 2026-11, B7).
       await must(sheet.getByTestId('session-ribbon').filter({ hasText: 'Egg ×2 added to breakfast' }).filter({ hasText: '144 cal' }), 'the ribbon "Egg ×2 added to breakfast · 144 cal"');
       // Two toasts are up now: stacked, both on screen, neither over Done.
@@ -320,21 +323,24 @@ export const scenes = [
   }),
 
   // ── 43  Long OpenFoodFacts names ──────────────────────────────────────
-  // Phone: two-line names, and "Brand · serving · 190 cal" in the subtitle.
+  // Phone: two-line names, and "Brand · serving" in the subtitle with the calories in the corner.
   sheetScene('43-long-names-phone', {
     meal: 'lunch', suggest: longSuggest, viewports: ['phone'],
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'protein', h, 1100);
       await must(sheet.getByText('Fage Total 0% Greek Yogurt, Plain Nonfat').first(), 'the long Fage name');
-      await must(sheet.getByTestId('food-row-subtitle').filter({ hasText: /Tyson · .*· 260 cal/ }), 'subtitle "Tyson · serving · 260 cal"');
+      // The calories moved out of the subtitle into the row's corner.
+      await must(sheet.getByTestId('food-row-subtitle').filter({ hasText: /^Tyson · / }), 'subtitle "Tyson · serving"');
+      const cal = (await sheet.getByTestId('food-row-calories').filter({ hasText: '260 cal' }).first().innerText()).trim();
+      if (cal !== '260 cal') throw new Error(`the corner reads "${cal}"`);
     },
   }),
-  // Desktop md (1000 wide): the P/C/F line moves into the subtitle.
+  // Desktop md (1000 wide): the macros, spelled out, move into the subtitle.
   sheetScene('43a-long-names-desktop-md', {
     meal: 'lunch', suggest: longSuggest, viewports: ['desktop'], size: { width: 1000, height: 900 },
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'protein', h, 1100);
-      await must(sheet.getByTestId('food-row-subtitle').filter({ hasText: /P 19 · C 14 · F 14 g/ }).first(), 'the P/C/F subtitle');
+      await must(sheet.getByTestId('food-row-subtitle').filter({ hasText: /Protein 19g · Carbs 14g · Fat 14g/ }).first(), 'the labelled macros in the subtitle');
     },
   }),
   // Desktop lg (1280): the macro column; the subtitle drops the macros.
@@ -342,19 +348,21 @@ export const scenes = [
     meal: 'lunch', suggest: longSuggest, viewports: ['desktop'],
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'protein', h, 1100);
-      await must(sheet.getByText(/^P 19 · C 14 · F 14 g$/).first(), 'the macro column');
+      await must(sheet.getByText(/^Protein 19g · Carbs 14g · Fat 14g$/).first(), 'the macro column');
     },
   }),
 
   // ── 44  Name mode and sentence mode ───────────────────────────────────
-  // "fage" is a name: the list is open and Log it steps back to an outline.
+  // "fage" is a name: the list is open, Log it stays filled and the line under it points at the list.
   sheetScene('44-name-mode', {
     meal: 'lunch', suggest: fageSuggest, deep: fageDeep,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'fage', h, 1200);
       const logIt = await must(sheet.getByTestId('log-it'), 'Log it');
-      if (!/Just log ‘fage’/.test(await logIt.innerText())) throw new Error(`name mode button reads "${await logIt.innerText()}"`);
-      if (!/MuiButton-outlined/.test(await logIt.getAttribute('class'))) throw new Error('"Just log \'fage\'" should be outlined');
+      if ((await logIt.innerText()).trim() !== 'Log it') throw new Error(`name mode button reads "${await logIt.innerText()}"`);
+      if (!/MuiButton-contained/.test(await logIt.getAttribute('class'))) throw new Error('"Log it" should be filled in name mode too');
+      const status = (await (await must(sheet.getByTestId('composer-status'), 'the status line')).innerText()).trim();
+      if (status !== 'Tap the one you had below, or Log it and I’ll work it out.') throw new Error(`the status line reads "${status}"`);
       await must(sheet.getByTestId('food-row'), 'the open list');
     },
   }),
@@ -549,9 +557,13 @@ export const scenes = [
     meal: 'breakfast', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
+      // "Amount" exists only once the row is in the log: tap the row, then change it.
+      await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
       await (await must(sheet.getByRole('button', { name: /^Change the amount of Egg$/ }), 'Egg amount button')).click();
       await h.settle(700);
       const dlg = await must(page.getByRole('dialog').last(), 'the serving sheet');
+      await must(dlg.getByRole('heading', { name: 'Change Egg' }).or(dlg.getByText('Change Egg', { exact: true })), 'the title "Change Egg"');
+      await must(dlg.getByRole('button', { name: 'Save', exact: true }), 'Save');
       await must(dlg.getByRole('button', { name: 'Servings' }), 'the Servings toggle');
     },
   }),
@@ -560,6 +572,7 @@ export const scenes = [
     meal: 'breakfast', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
+      await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
       await (await must(sheet.getByRole('button', { name: /^Change the amount of Egg$/ }), 'Egg amount button')).click();
       await h.settle(700);
       const dlg = await must(page.getByRole('dialog').last(), 'the serving sheet');
@@ -573,6 +586,7 @@ export const scenes = [
     meal: 'lunch', suggest: soupSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'soup', h, 1000);
+      await tapRow(sheet, h, /^Add Chicken Noodle Soup, /, 'the Soup row');
       await (await must(sheet.getByRole('button', { name: /^Change the amount of Chicken Noodle Soup$/ }), 'Soup amount button')).click();
       await h.settle(700);
       const dlg = await must(page.getByRole('dialog').last(), 'the serving sheet');

@@ -4,21 +4,32 @@ import { Link as RouterLink } from 'react-router-dom';
 import { isPlanCalculationStale } from '@geeksuite/utils';
 
 /**
- * The dashboard's one line about whether the calorie target can be trusted
- * (DOCS/FITNESSGEEK_BODY_DATA_PLAN.md D2). The plan is never rewritten for
- * the user — a ~1,000 kcal change to what they eat is theirs to make — so
- * this says so plainly and puts the wizard (which shows old vs new) one tap
- * away. At most one banner, in precedence order:
+ * Home's one line about the calorie target (DOCS/FITNESSGEEK_BODY_DATA_PLAN.md
+ * D2). The plan is never rewritten for the person: a change to what they eat
+ * is theirs to make. So this is ONE calm note, "Your target can be more
+ * accurate now.", with one action, "Update", that opens the calorie plan with
+ * the new target already worked out beside the old one and a single Save.
  *
- *   'stale' — the plan predates the Sep 20 BMR unit fix. An accuracy problem,
- *             so it is NOT dismissible; it goes when the plan is re-saved.
- *   'scan'  — a measured (Katch-McArdle) BMR exists and the plan doesn't use
- *             it. An improvement on offer, so it is dismissible, remembered
- *             per plan so a new plan can offer it again.
+ * Why it can be more accurate is not said here; the plan page keeps the facts
+ * under "How this was worked out". There are two reasons, in precedence order
+ * (`data-kind`, for tests and the harness; the words are the same):
+ *
+ *   'stale' — the plan was worked out by an older calculation.
+ *   'scan'  — a measured figure from body scans exists and the plan doesn't
+ *             use it.
+ *
+ * "Not now" puts it away on this device for 30 days. It never shows while the
+ * day couldn't be loaded (`suppress`): a card that says "Can't reach
+ * FitnessGeek" must not also be offering to change a target.
  */
 
 export const WIZARD_ROUTE = '/calorie-wizard';
-const DISMISS_PREFIX = 'fg.dashboard.scanBmrBanner.dismissed:';
+export const UPDATE_ROUTE = `${WIZARD_ROUTE}?update=1`;
+// Versioned: the value is the time it was put away (ms), not a flag. The old
+// per-plan 'fg.dashboard.scanBmrBanner.dismissed:*' keys are simply ignored.
+export const DISMISS_KEY = 'fg.home.planNote.dismissedAt.v2';
+export const DISMISS_DAYS = 30;
+const DISMISS_MS = DISMISS_DAYS * 24 * 60 * 60 * 1000;
 
 /** A saved, enabled plan with a target — anything else gets no banner. */
 const hasPlan = (ng) => !!ng && ng.enabled !== false && Number(ng.daily_calorie_target) > 0;
@@ -31,43 +42,25 @@ export function planBannerKind(nutritionGoal, scanBmr) {
   return null;
 }
 
-/** Identifies one saved plan, so dismissing its offer doesn't silence the next plan's. */
-export const planKey = (ng) => `${ng?.start_date || 'nostart'}|${Math.round(Number(ng?.bmr) || 0)}|${Math.round(Number(ng?.daily_calorie_target) || 0)}`;
-
 // Every storage touch is wrapped: private windows, blocked site data and the
 // harness can all throw on access. Failing closed means "not dismissed".
-function readDismissed(key) {
+function dismissedRecently(now = Date.now()) {
   try {
-    return window.localStorage.getItem(DISMISS_PREFIX + key) === '1';
+    const at = Number(window.localStorage.getItem(DISMISS_KEY));
+    // A time in the future (a clock that was wrong) is not a dismissal.
+    return Number.isFinite(at) && at > 0 && at <= now && now - at < DISMISS_MS;
   } catch {
     return false;
   }
 }
-function writeDismissed(key) {
+function writeDismissed(now = Date.now()) {
   try {
-    window.localStorage.setItem(DISMISS_PREFIX + key, '1');
+    window.localStorage.setItem(DISMISS_KEY, String(now));
   } catch {
     // The dismissal still holds for this page view via state.
   }
 }
 
-const fmt = (n) => Math.round(Number(n)).toLocaleString('en-US');
-
-/**
- * One sentence and one link (SIMPLE_AND_FULL_PLAN.md item 4). The job is
- * still live — a plan saved before the Sep 20 fix really is ~1,000 kcal high,
- * and it is deliberately never rewritten for the person — so it stays, said
- * plainly. The link says what it leads to: the calorie plan opens on WHY
- * ("See why") with one button that works out a new target from today's
- * details and shows it beside the old one before anything changes
- * (AIGoalPlanner.jsx, the `notice` on the saved plan).
- *
- * This is a quiet note at the foot of Home's nutrition card, not a banner
- * above it — a muted sentence with its
- * action as a blue text link, so it never pushes the meals below the fold.
- * The stale note still announces itself (role="alert"); the scan offer is a
- * status, and may be put off with "Not now".
- */
 const linkSx = {
   minHeight: 44,
   minWidth: 0,
@@ -80,19 +73,15 @@ const linkSx = {
   '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
 };
 
-export default function PlanAccuracyBanner({ nutritionGoal, scanBmr, sx }) {
+export default function PlanAccuracyBanner({ nutritionGoal, scanBmr, suppress = false, sx }) {
   const kind = planBannerKind(nutritionGoal, scanBmr);
-  const key = kind === 'scan' ? planKey(nutritionGoal) : null;
-  const [dismissedKey, setDismissedKey] = useState(null);
+  const [dismissed, setDismissed] = useState(false);
 
-  if (!kind) return null;
-  if (kind === 'scan' && (dismissedKey === key || readDismissed(key))) return null;
-
-  const stale = kind === 'stale';
+  if (!kind || suppress || dismissed || dismissedRecently()) return null;
 
   return (
     <Box
-      role={stale ? 'alert' : 'status'}
+      role="status"
       data-testid="plan-accuracy-banner"
       data-kind={kind}
       sx={{
@@ -106,29 +95,24 @@ export default function PlanAccuracyBanner({ nutritionGoal, scanBmr, sx }) {
         ...sx,
       }}
     >
-      <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'inherit', fontWeight: stale ? 700 : 400 }}>
-        {stale
-          ? 'Your daily calorie target is probably too high.'
-          : `Your body scans say you burn ${fmt(scanBmr.bmr)} calories a day at rest. Your plan uses ${fmt(nutritionGoal.bmr)}.`}
+      <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'inherit' }}>
+        Your target can be more accurate now.
       </Typography>
       <Box component="span" sx={{ display: 'inline-flex', gap: 1 }}>
-        <Button component={RouterLink} to={WIZARD_ROUTE} variant="text" sx={linkSx}>
-          {stale ? 'See why' : 'Update my plan'}
+        <Button component={RouterLink} to={UPDATE_ROUTE} variant="text" sx={linkSx}>
+          Update
         </Button>
-        {/* Where it may be put off, a "Not now" — never an unlabelled ✕.
-            The stale note stays undismissable (see above). */}
-        {!stale && (
-          <Button
-            variant="text"
-            onClick={() => {
-              writeDismissed(key);
-              setDismissedKey(key);
-            }}
-            sx={{ ...linkSx, color: 'text.secondary' }}
-          >
-            Not now
-          </Button>
-        )}
+        {/* Put off with a word, never an unlabelled ✕. */}
+        <Button
+          variant="text"
+          onClick={() => {
+            writeDismissed();
+            setDismissed(true);
+          }}
+          sx={{ ...linkSx, color: 'text.secondary' }}
+        >
+          Not now
+        </Button>
       </Box>
     </Box>
   );

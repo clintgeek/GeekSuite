@@ -294,11 +294,11 @@ describe('the add sheet keeps her words when closed (L18)', () => {
 });
 
 describe('today\'s check-ins', () => {
-  it('reads Weighed ✓ · Log BP + · Meds 1 of 3', async () => {
+  it('reads Weighed ✓ · Blood pressure + · Meds 1 of 3', async () => {
     renderHome(experience());
     const strip = await screen.findByTestId('today-strip');
     expect(within(strip).getByTestId('today-strip-weight')).toHaveAttribute('data-done', 'true');
-    expect(within(strip).getByTestId('today-strip-bp')).toHaveTextContent('Log BP+');
+    expect(within(strip).getByTestId('today-strip-bp')).toHaveTextContent('Blood pressure+');
     expect(within(strip).getByTestId('today-strip-bp')).toHaveAttribute('href', '/blood-pressure?add=1');
     expect(await within(strip).findByTestId('today-strip-meds')).toHaveTextContent('Meds1 of 3');
   });
@@ -455,9 +455,19 @@ describe('your numbers', () => {
     expect(await screen.findByText('117/76')).toBeInTheDocument();
   });
 
-  it('the tiles lead to their pages; steps to the Activity tab of Trends', async () => {
+  it('the tiles lead to their pages; with no watch there is no Steps tile', async () => {
     renderHome(experience());
     const region = await screen.findByRole('region', { name: 'Your numbers' });
+    const hrefs = within(region).getAllByRole('link').map((l) => l.getAttribute('href'));
+    expect(hrefs).toEqual(['/weight', '/blood-pressure']);
+    expect(within(region).queryByText('Steps')).toBeNull();
+  });
+
+  it('a step count from a watch brings the Steps tile, leading to the Activity tab of Trends', async () => {
+    fitnessGeekService.getGarminDaily.mockResolvedValueOnce({ steps: 8421 });
+    renderHome(experience());
+    const region = await screen.findByRole('region', { name: 'Your numbers' });
+    expect(await within(region).findByText('Steps')).toBeInTheDocument();
     const hrefs = within(region).getAllByRole('link').map((l) => l.getAttribute('href'));
     expect(hrefs).toEqual(['/weight', '/blood-pressure', '/trends?tab=activity']);
   });

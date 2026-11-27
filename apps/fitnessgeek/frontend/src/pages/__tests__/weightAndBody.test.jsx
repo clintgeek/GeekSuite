@@ -62,7 +62,9 @@ describe('Weight & body page', () => {
     // button on phones), and the number is on the page even with no goal.
     const entry = await screen.findByTestId('weight-quick-add');
     expect(within(entry).getByLabelText(/today.s weight/i)).toBeInTheDocument();
-    expect(within(entry).getByRole('button', { name: 'Log' })).toBeDisabled();
+    // Log is live even with nothing typed: it is the page's one filled
+    // button, and a tap on it then points at the field (round two).
+    expect(within(entry).getByRole('button', { name: 'Log' })).toBeEnabled();
     expect(screen.getByTestId('weight-now')).toHaveTextContent(/^31\d\.\d lb$/);
     expect(screen.getByTestId('weight-basis')).toHaveTextContent('7-day average');
     // SIMPLE_AND_FULL_PLAN.md item 8: the title used to appear three times
@@ -83,7 +85,10 @@ describe('Weight & body page', () => {
     getScans.mockRejectedValue(new Error('boom'));
     renderPage();
     expect(await screen.findAllByTestId('weight-log-row')).toHaveLength(2);
-    expect(await screen.findByText(/body-composition scans didn.t load/i)).toBeInTheDocument();
+    // One quiet line, not an alert: we can't tell whether she has scans.
+    const line = await screen.findByTestId('body-comp-unknown');
+    expect(line).toHaveTextContent('Couldn’t check for body scans just now.');
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
 

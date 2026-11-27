@@ -8,7 +8,7 @@ import { daysBefore } from '../../utils/experience.js';
 import { mealWord } from '../../utils/plainWords.js';
 import { useToday } from '../../hooks/useToday.js';
 import { sheetMealOnDay } from './composerText.js';
-import { withAmount } from './entries.js';
+import { withAmount, displayName } from './entries.js';
 import { useHouseholdMeals } from './useHouseholdMeals.js';
 import { useFavoriteFoods } from './useFavoriteFoods.js';
 
@@ -19,7 +19,7 @@ import { useFavoriteFoods } from './useFavoriteFoods.js';
  *   - "Same as yesterday's lunch" — every food from yesterday's lunch, at the
  *     servings it was logged with, in one tap. This is what Copy Meal was for
  *     nine times out of ten; Copy Meal itself stays, for any other day.
- *   - "Again" chips — the foods and saved meals this person logs most in this
+ *   - "Had recently" chips (the "Again" chips in the code and the notes) — the foods and saved meals this person logs most in this
  *     meal (utils/againChips.js), each re-logged at its last servings.
  *
  *   - "Same as Chef's dinner" (L7) — for each household member who shares
@@ -112,14 +112,17 @@ export default function QuickPicks({
     // A copy with foods still to add (some failed) is not done: a tap retries them.
     return Boolean(a && a.mealType === mealType && a.date === date && !a.failed?.length);
   };
-  const listOf = (names) => `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`;
+  const listOf = (names) => `${names.slice(0, 3).map(displayName).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`;
 
   const rowHeading = { fontSize: '0.8125rem', fontWeight: 600, color: 'text.secondary', mb: 1.5 };
   const renderChip = (chip, row) => {
     const key = `quick:${chip.key}`;
     const isMeal = chip.kind === 'meal';
     const starred = !isMeal && favoriteIds.has(chip.key.replace(/^id:/, ''));
-    const name = isMeal ? chip.label : withAmount(chip.label, chip.item?.servings);
+    // Drawn in title case when the catalog shouted it, and "½ serving"
+    // rather than "×0.5" (review 2026-11-27). The stored food is untouched.
+    const label = displayName(chip.label);
+    const name = isMeal ? label : withAmount(label, chip.item?.servings);
     const done = !isMeal ? added?.[key] : null;
     const count = Math.round((Number(done?.servings) || 1) * 100) / 100;
     const doneWords = count > 1 ? `${count} added` : 'Added';
@@ -132,13 +135,13 @@ export default function QuickPicks({
             : isMeal ? <MealIcon /> : starred ? <StarIcon data-testid="chip-star" /> : undefined}
           label={pendingKey === key ? 'Adding…' : done ? (
             <>
-              {`${chip.label} · ${doneWords}`}
+              {`${label} · ${doneWords}`}
               <CheckIcon aria-hidden sx={{ fontSize: 18, ml: 0.25, verticalAlign: '-0.2em', color: 'primary.main' }} />
             </>
           ) : name}
           disabled={busy}
           onClick={() => onPick?.([chip.item], key)}
-          aria-label={done ? `Add another ${chip.label} to ${meal}` : row === 'favorite' ? `Add ${name} to ${meal}` : `Add ${name} to ${meal} again`}
+          aria-label={done ? `Add another ${label} to ${meal}` : row === 'favorite' ? `Add ${name} to ${meal}` : `Add ${name} to ${meal} again`}
           // An action pill: the theme's warm outline, not the
           // 1.26:1 divider (visual review B5).
           variant="outlined"
@@ -162,7 +165,7 @@ export default function QuickPicks({
             variant="outlined"
             disabled={busy}
             onClick={() => onMore(key, next, chip.item)}
-            aria-label={`Make it ${next} ${chip.label}`}
+            aria-label={`Make it ${next} ${label}`}
             sx={{ minHeight: 44, borderWidth: 2, fontWeight: 700, fontSize: '0.875rem', px: 1.5, whiteSpace: 'nowrap', flexShrink: 0, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
           >
             Make it {next}
@@ -242,7 +245,7 @@ export default function QuickPicks({
       {chips.length > 0 && (
         <Box>
           <Typography component="h3" sx={rowHeading}>
-            Again
+            Had recently
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }} data-testid="again-chips">
             {chips.map((chip) => renderChip(chip, 'again'))}

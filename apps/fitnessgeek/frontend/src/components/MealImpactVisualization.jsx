@@ -21,6 +21,7 @@ import { clockTime } from '../utils/dates.js';
 import { fmt, grams } from '../utils/plainWords.js';
 import {
   toTimeSeries,
+  chartFloor,
   toDate,
   formatClockTime,
   normalizeIntraday,
@@ -176,7 +177,7 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
 }
 
 const METRICS = {
-  heartRate: { label: 'Heart rate', unit: 'bpm', range: null, explain: null },
+  heartRate: { label: 'Heart rate', unit: 'bpm', range: null, explain: 'Beats a minute, as your watch read them. A small rise after a meal is normal.' },
   stress: { label: 'Stress', unit: '', range: [0, 100], explain: EXPLAIN.stress },
   bodyBattery: { label: 'Body Battery', unit: '', range: [0, 100], explain: EXPLAIN.bodyBattery },
 };
@@ -291,6 +292,8 @@ export default function MealImpactVisualization({ date }) {
   const metric = METRICS[selectedMetric] || METRICS.heartRate;
   const color = theme.palette.primary.main;
   const series = toTimeSeries(intradayData?.[selectedMetric], metric.label, color);
+  // Where the axis starts and the fill stops (it ran over the time labels).
+  const floor = chartFloor(series, metric.range);
   const domain = series.length
     ? { min: series[0].data[0].x, max: series[0].data[series[0].data.length - 1].x }
     : null;
@@ -304,9 +307,8 @@ export default function MealImpactVisualization({ date }) {
           value={selectedMetric}
           exclusive
           onChange={(e, value) => value && setSelectedMetric(value)}
-          size="small"
           aria-label="Which reading to chart"
-          sx={{ '& .MuiToggleButtonGroup-grouped': { minHeight: 44, minWidth: 44, px: 4 } }}
+          sx={{ '& .MuiToggleButtonGroup-grouped': { minHeight: 44, minWidth: 44 } }}
         >
           <ToggleButton value="heartRate">Heart rate</ToggleButton>
           <ToggleButton value="stress">Stress</ToggleButton>
@@ -337,7 +339,7 @@ export default function MealImpactVisualization({ date }) {
                 ariaLabel={`${metric.label} through the day, with a dashed line at each logged meal`}
                 margin={{ top: 8, right: 12, bottom: 28, left: 36 }}
                 xScale={{ type: 'time', format: 'native', useUTC: false }}
-                yScale={{ type: 'linear', min: metric.range ? metric.range[0] : 'auto', max: metric.range ? metric.range[1] : 'auto' }}
+                yScale={{ type: 'linear', min: floor, max: metric.range ? metric.range[1] : 'auto' }}
                 axisBottom={{
                   format: hourTick,
                   tickSize: 0,
@@ -353,6 +355,7 @@ export default function MealImpactVisualization({ date }) {
                 enablePoints={false}
                 enableArea
                 areaOpacity={0.1}
+                areaBaselineValue={floor}
                 markers={mealMarkers}
                 useMesh
                 enableSlices="x"

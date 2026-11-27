@@ -8,8 +8,8 @@ import {
   ToggleButton,
 } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
-import { macroColors } from '../../theme/theme.jsx';
-import { previewMacros, ProteinBasisNote } from './planProvenance.jsx';
+import { macroColors, tonalColors } from '../../theme/theme.jsx';
+import { previewMacros } from './planProvenance.jsx';
 
 /**
  * Preset macro split definitions.
@@ -88,6 +88,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
   // Macros in their own ramp, not the semantic tones (visual review B2):
   // fat was error red, protein success, carbs warning ochre.
   const macro = macroColors(theme.palette.mode);
+  const tonal = tonalColors(theme);
 
   // ── section label style ────────────────────────────────────────────────────
   const labelSx = {
@@ -155,17 +156,20 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
                 label={PRESET_LABELS[key]}
                 variant="outlined"
                 onClick={() => handlePresetChange(key)}
-                // Chosen = the blue fill with its own paper-coloured text:
-                // the Label's one selected look, no tint.
+                // Chosen = the tonal look (tinted ground, its own ink, a blue
+                // edge): solid blue under 13px white text was too close to
+                // the contrast line at night.
+                aria-pressed={isSelected}
                 sx={{
                   borderRadius: 999,
                   borderWidth: 1,
                   minHeight: 36,
                   ...(isSelected && {
-                    bgcolor: theme.palette.primary.main,
+                    bgcolor: tonal.bg,
                     borderColor: theme.palette.primary.main,
-                    color: theme.palette.primary.contrastText,
-                    '&&:hover': { bgcolor: theme.palette.primary.dark },
+                    color: tonal.ink,
+                    fontWeight: 700,
+                    '&&:hover': { bgcolor: tonal.hover },
                   }),
                 }}
               />
@@ -241,7 +245,6 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
                 Protein {gramEquivalents.protein_g}g · Carbs {gramEquivalents.carbs_g}g · Fat {gramEquivalents.fat_g}g
               </Typography>
             )}
-            {preview && <ProteinBasisNote rules={preview.rules} />}
           </>
         ) : (
           <Typography variant="caption" color="text.secondary">

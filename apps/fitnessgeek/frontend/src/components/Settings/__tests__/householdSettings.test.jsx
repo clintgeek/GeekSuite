@@ -114,3 +114,33 @@ describe('HouseholdSettings — failures are said, not drawn as empty', () => {
     expect(await screen.findByText('Heather')).toBeInTheDocument();
   });
 });
+
+// Round two (2026-11-27): a sharing switch that failed stayed put with only a
+// toast; a save that worked said so only in a toast.
+describe('HouseholdSettings — sharing switches answer in place', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('a switch that saves says Saved under it', async () => {
+    settingsService.getHouseholdSettings.mockResolvedValue(HOUSEHOLD);
+    settingsService.updateHouseholdSettings.mockResolvedValue({});
+    render(<HouseholdSettings />);
+    const toggle = await screen.findByRole('checkbox', { name: /share my food logs/i });
+    fireEvent.click(toggle);
+    await waitFor(() => expect(settingsService.updateHouseholdSettings).toHaveBeenCalledWith({ share_food_logs: false }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Saved');
+    expect(toggle).not.toBeChecked();
+  });
+
+  it('a switch that fails stays as it was and says so under it, in plain words', async () => {
+    settingsService.getHouseholdSettings.mockResolvedValue(HOUSEHOLD);
+    settingsService.updateHouseholdSettings.mockRejectedValue(new Error('Network Error'));
+    render(<HouseholdSettings />);
+    const toggle = await screen.findByRole('checkbox', { name: /share my saved meals/i });
+    fireEvent.click(toggle);
+    const line = await screen.findByRole('alert');
+    expect(line.textContent).not.toMatch(/Network Error/);
+    expect(line.textContent.length).toBeGreaterThan(10);
+    expect(toggle).toBeChecked();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+});

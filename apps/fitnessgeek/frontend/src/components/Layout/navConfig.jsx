@@ -42,7 +42,7 @@ export const DESTINATIONS = {
   weight: { id: '/weight', label: 'Weight', to: '/weight', Icon: MonitorWeightIcon, description: 'Log your weight and see the trend' },
   bp: { id: '/blood-pressure', label: 'Blood pressure', to: '/blood-pressure', Icon: MonitorHeartIcon, description: 'Log a reading' },
   meds: { id: '/medications', label: 'Medications', to: '/medications', Icon: MedicationIcon, description: 'Your meds, and today’s doses' },
-  trends: { id: '/trends', label: 'Trends', to: '/trends', Icon: InsightsIcon, description: 'Food, activity and health over time' },
+  trends: { id: '/trends', label: 'Trends', to: '/trends', Icon: InsightsIcon, description: 'How you’re doing over time' },
   saved: { id: '/saved-foods', label: 'Saved foods', to: '/saved-foods', Icon: MenuBookIcon, description: 'Meals and foods you saved' },
   wizard: { id: '/calorie-wizard', label: 'Calorie plan', to: '/calorie-wizard', Icon: CalculateIcon, description: 'Work out a daily calorie target' },
   scan: { id: '/scan-import', label: 'Import a scan', to: '/scan-import', Icon: UploadFileIcon, description: 'Body scans from a smart scale' },
@@ -68,7 +68,7 @@ export const navSections = navSectionsFor();
 export function moreGroupsFor() {
   const D = DESTINATIONS;
   return [
-    { label: 'More', items: [D.bp, D.meds, D.saved, D.wizard, D.scan, D.settings] },
+    { label: 'More', items: [D.trends, D.saved, D.wizard, D.scan, D.settings] },
   ];
 }
 
@@ -106,7 +106,7 @@ export function pageTitle(pathname) {
   return item?.label ?? APP_NAME;
 }
 
-const TAB_IDS = ['/dashboard', '/weight', '/trends'];
+const TAB_IDS = ['/dashboard', '/weight', '/blood-pressure', '/medications'];
 
 /**
  * The bottom tab bar's active tab. Anything reached through More lights More,
@@ -118,12 +118,16 @@ export function bottomNavActiveId(pathname) {
 }
 
 /**
- * Mobile bottom tab bar — Today · Weight · Trends · More. Never
- * Logout/Settings; Settings lives under More.
+ * Mobile bottom tab bar — Today · Weight · Pressure · Meds · More: the four
+ * things done every day each have a tab (2026-11-28; blood pressure and
+ * medications used to sit behind More). The labels are short so five fit a
+ * phone; the pages keep their full names. Trends, Saved foods and Settings
+ * live under More.
  */
 export const bottomNavItems = [
   { id: '/dashboard', label: 'Today', to: '/dashboard', icon: icon(TodayIcon, 24) },
   { id: '/weight', label: 'Weight', to: '/weight', icon: icon(MonitorWeightIcon, 24) },
-  { id: '/trends', label: 'Trends', to: '/trends', icon: icon(InsightsIcon, 24) },
+  { id: '/blood-pressure', label: 'Pressure', to: '/blood-pressure', icon: icon(MonitorHeartIcon, 24) },
+  { id: '/medications', label: 'Meds', to: '/medications', icon: icon(MedicationIcon, 24) },
   { id: '/more', label: 'More', to: '/more', icon: icon(MoreHorizIcon, 24) },
 ];

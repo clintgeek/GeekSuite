@@ -266,8 +266,8 @@ export default function SleepAnalysis({ date }) {
     return (
       <EmptyState
         icon={BedtimeIcon}
-        title="No sleep for this night"
-        copy="Your watch hasn’t sent sleep for this night yet. It shows here after the watch syncs."
+        title="No sleep recorded for this night"
+        copy="If you wore your watch, open the Garmin Connect app on your phone to sync it, then look again. If you didn’t wear it to bed, there is nothing to show for this night."
         data-testid="sleep-empty"
       />
     );

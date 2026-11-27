@@ -67,7 +67,7 @@ vi.mock('@geeksuite/ui', async (importOriginal) => {
 const { settingsService } = await import('../../services/settingsService.js');
 const { userService } = await import('../../services/userService.js');
 const { ExperienceContext } = await import('../../contexts/ExperienceContext.jsx');
-const { default: Settings } = await import('../Settings.jsx');
+const { default: Settings, goalFromPlan } = await import('../Settings.jsx');
 
 const WATCH_ON = { ...SETTINGS, garmin: { enabled: true, username: 'h@example.com' } };
 const withWatch = () => settingsService.getSettings.mockResolvedValue({ data: JSON.parse(JSON.stringify(WATCH_ON)) });
@@ -126,22 +126,52 @@ describe('Settings — saves as it changes (IA-3)', () => {
   it('the sleep apnea switch saves health_alerts alone, at once, and says Saved', async () => {
     withWatch();
     mount();
-    const toggle = await screen.findByRole('checkbox', { name: /Sleep apnea screening suggestion/i });
+    const toggle = await screen.findByRole('checkbox', { name: /overnight breathing looks worth mentioning to a doctor/i });
     expect(toggle).toBeChecked(); // no stored value -> default on
     fireEvent.click(toggle);
     await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalledTimes(1));
     expect(settingsService.updateSettings.mock.calls[0][0]).toEqual({ health_alerts: { sleep_apnea_screening: false } });
-    await waitFor(() => expect(notify).toHaveBeenCalledWith('Saved', expect.anything()));
+    // Said under the switch, not in a toast at the foot of the screen.
+    expect(await within(document.getElementById('health-alerts')).findByRole('status')).toHaveTextContent('Saved');
+    expect(notify).not.toHaveBeenCalledWith('Saved', expect.anything());
+  });
+
+  it('says once, at the top, that there is no Save button to look for', async () => {
+    mount();
+    expect(await screen.findByText('Changes save as you make them.')).toBeInTheDocument();
+  });
+
+  it('nothing on the page says "apnea" or "plain text"', async () => {
+    withWatch();
+    mount();
+    await screen.findByRole('checkbox', { name: /overnight breathing looks worth mentioning to a doctor/i });
+    fireEvent.click(screen.getByTestId('garmin-login-toggle'));
+    expect(await screen.findByText('Your Garmin password is kept encrypted.')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/apnea|plain text/i);
   });
 
   it('a failed save puts the switch back and says so', async () => {
     settingsService.updateSettings.mockRejectedValueOnce(new Error('Network Error'));
     withWatch();
     mount();
-    const toggle = await screen.findByRole('checkbox', { name: /Sleep apnea screening suggestion/i });
+    const toggle = await screen.findByRole('checkbox', { name: /overnight breathing looks worth mentioning to a doctor/i });
     fireEvent.click(toggle);
     await waitFor(() => expect(toggle).toBeChecked());
     expect(notify).toHaveBeenCalledWith(expect.not.stringMatching(/Network Error/), expect.objectContaining({ tone: 'error' }));
+    // And beside the switch: one that only flicks back reads as a mis-tap.
+    const line = within(document.getElementById('health-alerts')).getByRole('alert');
+    expect(line.textContent).not.toMatch(/Network Error/);
+    expect(line.textContent.length).toBeGreaterThan(10);
+  });
+
+  it('a failed Garmin switch goes back and says so beside it', async () => {
+    settingsService.updateSettings.mockRejectedValueOnce(new Error('Network Error'));
+    mount();
+    const toggle = await screen.findByRole('checkbox', { name: /Use my Garmin watch/i });
+    fireEvent.click(toggle);
+    const line = await within(document.getElementById('garmin')).findByRole('alert');
+    expect(line.textContent).not.toMatch(/Network Error/);
+    expect(toggle).not.toBeChecked();
   });
 
   it('the Garmin switch saves garmin.enabled alone — never the login', async () => {
@@ -201,7 +231,7 @@ describe('Settings — saves as it changes (IA-3)', () => {
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Theme' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Dark' }));
     expect(setThemePreference).toHaveBeenCalledWith('dark');
-    expect(notify).toHaveBeenCalledWith('Saved', expect.anything());
+    expect(within(screen.getByTestId('experience-settings')).getByRole('status')).toHaveTextContent('Saved');
     expect(settingsService.updateSettings).not.toHaveBeenCalled();
   });
 
@@ -256,9 +286,48 @@ describe('Settings — About you (IA-2)', () => {
   it('"Your goal" can be changed after the first run', async () => {
     const v = mount();
     const group = await screen.findByRole('radiogroup', { name: 'Your goal' });
-    expect(within(group).getByRole('radio', { name: 'Lose a little weight' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(group).getByRole('radio', { name: 'Lose weight' })).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(within(group).getByRole('radio', { name: 'Just keep track' }));
     await waitFor(() => expect(v.update).toHaveBeenCalledWith({ goal: 'track' }));
+    expect(await within(screen.getByTestId('about-you')).findByRole('status')).toHaveTextContent('Saved');
+  });
+
+  it('a goal that fails to save says so under the choices', async () => {
+    mount({ update: vi.fn(() => Promise.resolve({ ok: false })) });
+    const group = await screen.findByRole('radiogroup', { name: 'Your goal' });
+    fireEvent.click(within(group).getByRole('radio', { name: 'Just keep track' }));
+    expect(await within(screen.getByTestId('about-you')).findByRole('alert')).toHaveTextContent('Couldn’t save that. Try again.');
+  });
+
+  // 2026-11-27 round two: three empty circles over a saved plan to lose weight.
+  it('with no answer saved, "Your goal" shows what the saved plan says, and writes nothing', async () => {
+    settingsService.getSettings.mockResolvedValue({ data: { ...SETTINGS, nutrition_goal: { enabled: true, daily_calorie_target: 1650, weight_change_rate: 1, target_weight: 150 } } });
+    const v = mount({ goal: null });
+    const group = await screen.findByRole('radiogroup', { name: 'Your goal' });
+    await waitFor(() => expect(within(group).getByRole('radio', { name: 'Lose weight' })).toHaveAttribute('aria-checked', 'true'));
+    expect(v.update).not.toHaveBeenCalled();
+    expect(settingsService.updateSettings).not.toHaveBeenCalled();
+    // Tapping the one shown is how it gets saved.
+    fireEvent.click(within(group).getByRole('radio', { name: 'Lose weight' }));
+    await waitFor(() => expect(v.update).toHaveBeenCalledWith({ goal: 'lose' }));
+  });
+
+  it('a plan that holds weight shows "Keep my weight steady"; her own answer always wins; no plan shows nothing', async () => {
+    const hold = { enabled: true, daily_calorie_target: 2000, weight_change_rate: 0 };
+    expect(goalFromPlan(hold)).toBe('maintain');
+    expect(goalFromPlan({ ...hold, weight_change_rate: 1.5 })).toBe('lose');
+    expect(goalFromPlan({ ...hold, weight_change_rate: null, target_weight: 150 })).toBe('lose');
+    expect(goalFromPlan({ ...hold, weight_change_rate: null })).toBeNull();
+    expect(goalFromPlan({ ...hold, enabled: false })).toBeNull();
+    expect(goalFromPlan({ enabled: true, weight_change_rate: 1 })).toBeNull();
+    expect(goalFromPlan(null)).toBeNull();
+
+    settingsService.getSettings.mockResolvedValue({ data: { ...SETTINGS, nutrition_goal: hold } });
+    mount({ goal: 'track' });
+    const group = await screen.findByRole('radiogroup', { name: 'Your goal' });
+    await screen.findByRole('checkbox', { name: /Use my Garmin watch/i });
+    expect(within(group).getByRole('radio', { name: 'Just keep track' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(group).getByRole('radio', { name: 'Keep my weight steady' })).toHaveAttribute('aria-checked', 'false');
   });
 
   it('age saves to the profile on its own, as it changes', async () => {

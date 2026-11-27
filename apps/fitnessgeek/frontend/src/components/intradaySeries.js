@@ -53,6 +53,32 @@ export const toTimeSeries = (rows, id, color) => {
 };
 
 /**
+ * The value the chart's y axis starts at, which is also where its shaded
+ * fill must stop.
+ *
+ * Nivo fills an area down to `areaBaselineValue`, which defaults to 0. On a
+ * measure whose axis does not start at 0 (heart rate, 50 to 140) the fill
+ * therefore ran far below the plot, straight over the time labels. Both
+ * charts pass this one number as the y scale's `min` AND as the baseline, so
+ * the fill ends exactly on the axis.
+ *
+ * A fixed `range` (stress and Body Battery are 0 to 100) wins. Otherwise it
+ * is the lowest reading rounded down to a ten, with a little air under the
+ * line, and never below zero for readings that are not negative.
+ *
+ * @param {Array} series what `toTimeSeries` returned
+ * @param {[number, number]|null} [range]
+ */
+export const chartFloor = (series, range) => {
+  if (Array.isArray(range) && Number.isFinite(range[0])) return range[0];
+  const ys = (series?.[0]?.data || []).map((p) => p?.y).filter(Number.isFinite);
+  if (ys.length === 0) return 0;
+  const lowest = Math.min(...ys);
+  const floor = Math.floor((lowest - 1) / 10) * 10;
+  return lowest >= 0 ? Math.max(0, floor) : floor;
+};
+
+/**
  * The tooltip's time text: "2:05 PM" by default, "Sep 6, 2:05 PM" for the
  * detailed charts. No zero-padded hours (review U-5).
  */
@@ -160,4 +186,4 @@ export const mealsFromLogs = (logs, date) => {
   return { meals, untimed };
 };
 
-export default { toDate, toTimeSeries, formatClockTime, normalizeIntraday, EMPTY_INTRADAY, mealsFromLogs };
+export default { toDate, toTimeSeries, chartFloor, formatClockTime, normalizeIntraday, EMPTY_INTRADAY, mealsFromLogs };

@@ -2,7 +2,7 @@
  * The navigation of the one app (DOCS/ONE_APP_PLAN.md §3, "Fewer places"):
  *   - sidebar: Today · Weight · Blood pressure · Medications · Trends · Saved
  *     foods, the same for everybody (the functions take no mode);
- *   - phone tabs: Today · Weight · Trends · More;
+ *   - phone tabs: Today · Weight · Pressure · Meds · More;
  *   - More: Blood pressure, Medications, Saved foods, Calorie plan, Import a
  *     scan, Settings;
  *   - the pages that folded into Today, Trends and Saved foods have no row,
@@ -30,16 +30,18 @@ describe('the sidebar', () => {
 });
 
 describe('the phone tabs', () => {
-  it('are Today, Weight, Trends, More', () => {
-    expect(bottomNavItems.map((i) => i.label)).toEqual(['Today', 'Weight', 'Trends', 'More']);
-    expect(bottomNavItems.map((i) => i.to)).toEqual(['/dashboard', '/weight', '/trends', '/more']);
+  it('are Today, Weight, Pressure, Meds, More: every daily job has a tab', () => {
+    expect(bottomNavItems.map((i) => i.label)).toEqual(['Today', 'Weight', 'Pressure', 'Meds', 'More']);
+    expect(bottomNavItems.map((i) => i.to)).toEqual(['/dashboard', '/weight', '/blood-pressure', '/medications', '/more']);
   });
 
   it('light their own tab, and More for anything reached through it', () => {
     expect(bottomNavActiveId('/dashboard')).toBe('/dashboard');
     expect(bottomNavActiveId('/weight')).toBe('/weight');
-    expect(bottomNavActiveId('/trends')).toBe('/trends');
-    for (const path of ['/more', '/blood-pressure', '/medications', '/saved-foods', '/calorie-wizard', '/scan-import', '/settings', '/food-search']) {
+    expect(bottomNavActiveId('/blood-pressure')).toBe('/blood-pressure');
+    expect(bottomNavActiveId('/medications')).toBe('/medications');
+    expect(bottomNavActiveId('/trends')).toBe('/more');
+    for (const path of ['/more', '/trends', '/saved-foods', '/calorie-wizard', '/scan-import', '/settings', '/food-search']) {
       expect(bottomNavActiveId(path)).toBe('/more');
     }
   });
@@ -47,7 +49,7 @@ describe('the phone tabs', () => {
 
 describe('More', () => {
   it('lists Blood pressure, Medications, Saved foods, Calorie plan, Import a scan, Settings', () => {
-    expect(labels(moreGroupsFor())).toEqual(['Blood pressure', 'Medications', 'Saved foods', 'Calorie plan', 'Import a scan', 'Settings']);
+    expect(labels(moreGroupsFor())).toEqual(['Trends', 'Saved foods', 'Calorie plan', 'Import a scan', 'Settings']);
     expect(labels(moreGroupsFor('simple'))).toEqual(labels(moreGroupsFor('full')));
   });
 

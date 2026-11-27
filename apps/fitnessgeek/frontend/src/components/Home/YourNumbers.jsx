@@ -61,18 +61,23 @@ export default function YourNumbers({ stats, checkIns, today, titleSx }) {
           spark={bpSpark}
           to="/blood-pressure"
         />
+        {/* Steps come from a watch: no count, no tile (a person without a
+            watch should not see an empty one every day). */}
+        {steps != null && (
         <MetricTile
-          label="Steps"
-          value={steps != null ? steps.toLocaleString('en-US') : '—'}
-          caption={steps != null ? `of ${STEP_MARK.toLocaleString('en-US')} today` : 'No step count yet today'}
-          progress={steps != null ? Math.min(100, (steps / STEP_MARK) * 100) : undefined}
-          progressLabel={steps != null ? `${steps.toLocaleString('en-US')} of ${STEP_MARK.toLocaleString('en-US')} steps` : undefined}
-          to="/trends?tab=activity"
-        />
+            label="Steps"
+            value={steps != null ? steps.toLocaleString('en-US') : '—'}
+            caption={steps != null ? `of ${STEP_MARK.toLocaleString('en-US')} today` : 'No step count yet today'}
+            progress={steps != null ? Math.min(100, (steps / STEP_MARK) * 100) : undefined}
+            progressLabel={steps != null ? `${steps.toLocaleString('en-US')} of ${STEP_MARK.toLocaleString('en-US')} steps` : undefined}
+            to="/trends?tab=activity"
+          />
+        )}
         <MetricTile
           label="Days in a row"
           value={stats.streak.value}
           unit={stats.streak.value === 1 ? 'day' : 'days'}
+          sx={steps == null ? { gridColumn: '1 / -1', minHeight: 0 } : undefined}
         />
       </Box>
     </Box>

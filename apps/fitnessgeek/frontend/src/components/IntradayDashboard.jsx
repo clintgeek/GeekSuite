@@ -16,6 +16,7 @@ import { EXPLAIN, WATCH_DOWN_TEXT, watchOutcome } from './Reports/watchWords.js'
 import { errorMessage } from '../utils/errorMessage.js';
 import {
   toTimeSeries,
+  chartFloor,
   formatClockTime,
   normalizeIntraday,
   EMPTY_INTRADAY,
@@ -45,6 +46,9 @@ function DayChart({ data, label, unit, color, range, height = 168 }) {
   const series = React.useMemo(() => toTimeSeries(data, label, color), [data, label, color]);
 
   if (series.length === 0) return null;
+  // The axis starts here and the fill stops here (see chartFloor): it used
+  // to run down over the time labels on the heart-rate chart.
+  const floor = chartFloor(series, range);
 
   return (
     <Box sx={{ height, mx: -1 }}>
@@ -55,7 +59,7 @@ function DayChart({ data, label, unit, color, range, height = 168 }) {
         ariaLabel={`${label} through the day${unit ? `, in ${unit}` : ''}, ${series[0].data.length} readings`}
         margin={{ top: 8, right: 12, bottom: 28, left: 36 }}
         xScale={{ type: 'time', format: 'native', useUTC: false }}
-        yScale={{ type: 'linear', min: range ? range[0] : 'auto', max: range ? range[1] : 'auto' }}
+        yScale={{ type: 'linear', min: floor, max: range ? range[1] : 'auto' }}
         axisBottom={{
           format: hourTick,
           tickSize: 0,
@@ -71,7 +75,7 @@ function DayChart({ data, label, unit, color, range, height = 168 }) {
         enablePoints={false}
         enableArea
         areaOpacity={0.1}
-        areaBaselineValue={range ? range[0] : undefined}
+        areaBaselineValue={floor}
         useMesh
         enableSlices="x"
         sliceTooltip={({ slice }) => (

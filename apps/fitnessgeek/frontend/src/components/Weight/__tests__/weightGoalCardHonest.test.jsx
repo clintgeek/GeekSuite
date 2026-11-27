@@ -42,7 +42,7 @@ describe('the weight goal card', () => {
 
   it("puts her pace beside the pace the goal's dates need — not the stored 1.0", () => {
     renderCard();
-    expect(screen.getByTestId('weight-pace')).toHaveTextContent('You’re losing 1.3 lb a week. To reach 195 by Dec 1 you’d need 1.6.');
+    expect(screen.getByTestId('weight-pace')).toHaveTextContent('Pace 1.3 lb a week · your plan needs 1.6');
     expect(document.body.textContent).not.toMatch(/Goal: 1\.0/);
   });
 
@@ -60,19 +60,52 @@ describe('the weight goal card', () => {
     expect(screen.getByTestId('weight-basis')).toHaveTextContent('7-day average');
   });
 
-  // The Label: "behind" is a filled tag in warning.main (an amber, not the
-  // Dinner lemon), still never red, and it always carries the words.
-  it('behind plan is said in words, with the warning colour beside it, never red, and without a day count', () => {
+  // Round two: someone down 12 lb read "Behind plan", "Off track" and "well
+  // past your goal date". The card no longer grades her: no status tag, and
+  // the missed date is said once, as information, with a way to move it.
+  it('does not scold: no status tag, and the missed date is said once, plainly', () => {
     renderCard();
-    const chip = screen.getByTestId('weight-status');
-    expect(chip).toHaveTextContent('Behind plan');
-    expect(document.body.textContent).not.toMatch(/days behind/);
-    // The testid sits on the word; the Tag around it is a soft wash with a
-    // dot in the status colour (the words stay in the normal text colour).
-    const dot = chip.parentElement.querySelector('[aria-hidden]');
-    const bg = window.getComputedStyle(dot).backgroundColor;
-    expect(bg).toBe('rgb(154, 82, 0)'); // warning.main #9A5200
-    expect(bg).not.toBe('rgb(201, 42, 42)'); // not error red
+    expect(screen.queryByTestId('weight-status')).toBeNull();
+    const text = document.body.textContent;
+    expect(text).not.toMatch(/Behind plan|Off track|On track|days behind|well past|twice the plan/i);
+    // Truthful: the date will be missed, and it says so, once.
+    expect(text.match(/after your Dec 1 goal date/g)).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Move the date or change the goal' })).toBeInTheDocument();
+  });
+
+  it('on pace, the link is just "Change goal" and nothing says the date is missed', () => {
+    // 1.6 lb a week from the start is what the dates need.
+    const onPace = Array.from({ length: 122 }, (_, i) => ({
+      id: `p${i}`,
+      log_date: new Date(Date.UTC(2026, 5, 18 + i)).toISOString(),
+      weight_value: Math.round((232 - (37 / 166) * i) * 10) / 10,
+    }));
+    renderCard({ weightLogs: onPace, currentWeight: 205.6 });
+    expect(screen.getByTestId('weight-projection')).toHaveTextContent(/right about your goal date\.$/);
+    expect(screen.getByRole('button', { name: 'Change goal' })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/after your/);
+  });
+
+  // The harness's own case: a goal whose pace lands more than two plan
+  // lengths out used to read "At this pace: well past your goal date / the
+  // finish is more than twice the plan's length out".
+  it('a finish a long way past the date is still a month, said kindly', () => {
+    vi.setSystemTime(new Date('2026-11-27T12:00:00-06:00'));
+    try {
+      const goal = { ...GOAL, startDate: '2026-09-19T00:00:00.000Z' };
+      const late = Array.from({ length: 70 }, (_, i) => ({
+        id: `s${i}`,
+        log_date: new Date(Date.UTC(2026, 8, 19 + i)).toISOString(),
+        weight_value: Math.round((232 - (1.3 / 7) * i) * 10) / 10,
+      }));
+      renderCard({ goal, weightLogs: late, currentWeight: 219.9 });
+      const projection = screen.getByTestId('weight-projection');
+      expect(projection).toHaveTextContent(/^At this pace you’d get there around [A-Z][a-z]+ 2027, about \d+ months after your Dec 1 goal date\./);
+      expect(projection).toHaveTextContent('That’s still steady progress.');
+      expect(document.body.textContent).not.toMatch(/well past|twice the plan/);
+    } finally {
+      vi.setSystemTime(new Date('2026-10-17T12:00:00-05:00'));
+    }
   });
 
   it('shows where the program started, as a fact row in ink (A7)', () => {
@@ -85,8 +118,7 @@ describe('the weight goal card', () => {
   it('the projection is in words, against the goal date', () => {
     renderCard();
     const projection = screen.getByTestId('weight-projection');
-    expect(projection).toHaveTextContent(/^At this pace: (early|mid|late) [A-Z][a-z]+( 2027)?/);
-    expect(projection).toHaveTextContent(/about \d+ (weeks?|months?) after your goal date/);
+    expect(projection).toHaveTextContent(/^At this pace you’d get there around (early|mid|late) [A-Z][a-z]+( 2027)?, about \d+ (weeks?|months?) after your Dec 1 goal date\./);
   });
 });
 
@@ -102,7 +134,6 @@ describe('the trend in words (L25)', () => {
     expect(screen.getByTestId('weight-trend-words')).toHaveTextContent('Down 12.1 lb since June');
     expect(screen.getByText('7-day average')).toBeInTheDocument();
     expect(screen.getAllByTestId('weight-basis')).toHaveLength(1);
-    expect(screen.getByTestId('weight-status')).toBeInTheDocument();
     expect(screen.getByTestId('weight-pace')).toBeInTheDocument();
     expect(screen.getByTestId('weight-projection')).toBeInTheDocument();
   });

@@ -123,7 +123,7 @@ const Login = () => {
   return (
     <AuthPage data-testid="login-page">
       <Typography sx={{ mt: 2, color: 'text.secondary', fontSize: '1.0625rem', lineHeight: 1.45 }}>
-        What you eat, your weight and your health, in one place.
+        Sign in to keep your food, weight and health in one place.
       </Typography>
 
       <Box sx={{ width: '100%', mt: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -170,9 +170,6 @@ const Login = () => {
         </Button>
       </Box>
 
-      <Typography sx={{ mt: 6, color: 'text.secondary', fontSize: '0.875rem' }}>
-        One account for every GeekSuite app.
-      </Typography>
     </AuthPage>
   );
 };

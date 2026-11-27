@@ -35,6 +35,11 @@ const TopBar = () => {
       currentApp={APP_NAME}
       sx={{
         '& [data-geek-topbar="title"]': { fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1.2 },
+        // On a phone the tab bar is the navigation: no hamburger and no
+        // nine-dot grid beside it, just the page's name and the account
+        // (2026-11-28: three unlabelled icons in every header). The other
+        // Geek apps are reached from More.
+        '& [data-geek-topbar="menu"], & [data-geek-topbar="switcher"]': { display: { xs: 'none', md: 'inline-flex' } },
       }}
       actions={
         // The day in words, never abbreviated (plan item 8). Hidden on a

@@ -35,7 +35,27 @@ describe('FirstRun', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     fireEvent.click(screen.getByRole('button', { name: 'Maybe later' }));
-    expect(onFinish).toHaveBeenCalledWith({ preferred_name: null, goal: null });
+    // The gentlest goal is already chosen, so nothing had to be decided.
+    expect(onFinish).toHaveBeenCalledWith({ preferred_name: null, goal: 'track' });
+  });
+
+  // Round two: "Next" was live over three empty circles.
+  it('the goal step opens with the gentlest answer chosen, and exactly one', () => {
+    render(<FirstRun mealType="breakfast" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    const checked = screen.getAllByRole('radio').filter((r) => r.getAttribute('aria-checked') === 'true');
+    expect(checked).toHaveLength(1);
+    expect(checked[0]).toHaveAccessibleName(/just keep track/i);
+    expect(screen.getByRole('radio', { name: /^lose weight/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+  });
+
+  it('takes over the screen as a welcome: a labelled full-screen dialog with the app’s name', () => {
+    render(<FirstRun mealType="breakfast" />);
+    const dialog = screen.getByRole('dialog', { name: 'Welcome! What should I call you?' });
+    expect(dialog).toContainElement(screen.getByTestId('first-run'));
+    expect(dialog).toHaveTextContent('FitnessGeek');
+    expect(dialog.className).toMatch(/MuiDialog-paperFullScreen/);
   });
 
   it('Back keeps what was typed', () => {
@@ -84,7 +104,7 @@ describe('FirstRun', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Maybe later' })).not.toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: 'Maybe later' }));
     await waitFor(() => expect(onFinish).toHaveBeenCalledTimes(2));
-    expect(onFinish).toHaveBeenLastCalledWith({ preferred_name: 'Heather', goal: null });
+    expect(onFinish).toHaveBeenLastCalledWith({ preferred_name: 'Heather', goal: 'track' });
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
   });
 

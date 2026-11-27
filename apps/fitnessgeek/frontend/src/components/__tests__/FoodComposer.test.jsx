@@ -273,7 +273,7 @@ describe('one tap logs it', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('"Make it 2": after an add, one tap makes that entry two servings — not a second entry', async () => {
+  it('a second tap on the row makes that entry two servings — not a second entry (the "Make it 2" pill is gone)', async () => {
     // Heather taps "Egg" twice for two eggs (§2a).
     const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['egg-1'], perItem: [['egg-1']] });
     const onUpdateLog = vi.fn().mockResolvedValue(true);
@@ -282,13 +282,23 @@ describe('one tap logs it', () => {
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
 
-    fireEvent.click((await screen.findAllByText('Egg'))[0]);
-    fireEvent.click(await screen.findByRole('button', { name: 'Make it 2 Egg' }));
+    // Review 2026-11-27: one action per row. Before the add there is no
+    // second button at all.
+    await screen.findAllByText('Egg');
+    expect(screen.queryByTestId('amount-button')).toBeNull();
+    expect(screen.queryByRole('button', { name: /make it/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Egg, 72 cal' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add another Egg, 72 cal' }));
     await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('egg-1', { servings: 2 }));
     expect(onLogItems).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/2 added/, { selector: '[data-testid="food-row-subtitle"] span' })).toBeInTheDocument();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Make it 3 Egg' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add another Egg, 72 cal' }));
     await waitFor(() => expect(onUpdateLog).toHaveBeenLastCalledWith('egg-1', { servings: 3 }));
+    // Once added, the one extra control is Amount; never a "Make it N" pill.
+    expect(screen.getByTestId('amount-button')).toHaveTextContent('Amount');
+    expect(screen.queryByRole('button', { name: /make it/i })).toBeNull();
   });
 
   it('a saved meal from suggest logs as a meal (logMeal), never as a food', async () => {
@@ -669,7 +679,7 @@ describe('resultStyle="card" stays open on what landed (Chef, 2026-10-16)', () =
     expect(within(sheet).getByRole('button', { name: /^Smaller · ~/ })).toBeInTheDocument();
     expect(within(sheet).getByRole('button', { name: /^Bigger · ~/ })).toBeInTheDocument();
     fireEvent.change(within(sheet).getByLabelText('Calories'), { target: { value: '300' } });
-    fireEvent.click(within(sheet).getByRole('button', { name: 'Save' }));
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Save 300 cal' }));
 
     await waitFor(() => expect(onSetCalories).toHaveBeenCalledWith('soup', twoThings.logged[0].nutrition, 1, 300));
     await waitFor(() => expect(screen.queryByTestId('fix-sheet')).toBeNull());
@@ -687,6 +697,8 @@ describe('resultStyle="card" stays open on what landed (Chef, 2026-10-16)', () =
 
     fireEvent.click(await screen.findByRole('button', { name: 'Fix Chicken soup, 1 bowl' }));
     const sheet = await screen.findByTestId('fix-sheet');
+    // The describe box is behind a text link: one filled button per view.
+    fireEvent.click(within(sheet).getByRole('button', { name: 'It was something else' }));
     fireEvent.change(within(sheet).getByLabelText('It was actually…'), { target: { value: 'tomato soup' } });
     fireEvent.click(within(sheet).getByRole('button', { name: 'Log this instead' }));
 
@@ -1220,7 +1232,7 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('egg-1', { servings: 2 }));
     expect(onLogItems).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(/2 added/, { selector: '[data-testid="food-row-subtitle"] span' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Make it 3 Egg' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Change the amount of Egg' })).toHaveTextContent('Amount');
     // L4: the toast says the amount.
     expect(await screen.findByText('Added to breakfast ✓ · Egg ×2')).toBeInTheDocument();
     // The ribbon is one entry, not two, named with its amount (B7).
@@ -1550,7 +1562,7 @@ describe('L4 + L6: the result card says amounts, and the meal per row when they 
 describe('L13 + A4 + L14: a result row has room for a long name', () => {
   const long = () => food('Fage Total 0% Greek Yogurt, Plain Nonfat', { brand: 'Fage', serving: { size: 170, unit: 'g' }, nutrition: { calories_per_serving: 190, protein_grams: 18, carbs_grams: 6, fat_grams: 0 } });
 
-  it('the name wraps instead of cutting off, and "190 cal" sits in a 14px subtitle', async () => {
+  it('the name wraps instead of cutting off, and "190 cal" sits right-aligned beside it', async () => {
     suggest.mockResolvedValue([long()]);
     renderBox();
     type('fage');
@@ -1558,28 +1570,57 @@ describe('L13 + A4 + L14: a result row has room for a long name', () => {
     const name = await screen.findByText('Fage Total 0% Greek Yogurt, Plain Nonfat');
     expect(name).not.toHaveStyle({ whiteSpace: 'nowrap' });
     const subtitle = within(screen.getByTestId('food-row')).getByTestId('food-row-subtitle');
-    expect(subtitle).toHaveTextContent(/Fage · .* · 190 cal/);
+    expect(subtitle).toHaveTextContent(/^Fage · /);
     expect(subtitle).toHaveStyle({ fontSize: '0.875rem' });
+    // The calories have their own place at every width (review 2026-11-27).
+    const calories = within(screen.getByTestId('food-row')).getByTestId('food-row-calories');
+    expect(calories).toHaveTextContent(/^190 cal$/);
+    // And the macros are labelled, never "P 18 · C 6 · F 0 g".
+    expect(screen.getByTestId('food-row')).toHaveTextContent('Protein 18g · Carbs 6g · Fat 0g');
+    expect(screen.getByTestId('food-row').textContent).not.toMatch(/P 18 · C 6/);
   });
 
-  it('the amount button says "Amount"', async () => {
+  it('a row is one action until it is added; then its corner says "Amount"', async () => {
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['f-1'], perItem: [['f-1']] });
     suggest.mockResolvedValue([long()]);
-    renderBox();
+    renderBox({ onLogItems, onUpdateLog: vi.fn().mockResolvedValue(true) });
     type('fage');
     await vi.advanceTimersByTimeAsync(200);
+    const row = await screen.findByTestId('food-row');
+    expect(within(row).getAllByRole('button')).toHaveLength(1);
+    expect(row).toHaveTextContent('+ Add');
+    fireEvent.click(within(row).getByRole('button'));
     const button = await screen.findByRole('button', { name: /change the amount of fage/i });
     expect(button).toHaveTextContent('Amount');
+    expect(within(row).getAllByRole('button')).toHaveLength(2);
+    expect(row).not.toHaveTextContent('+ Add');
+  });
+
+  it('a shouted catalog name is drawn in title case; what is logged keeps the stored name', async () => {
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['b-1'], perItem: [['b-1']] });
+    suggest.mockResolvedValue([food('CHOCOLATE PEANUT BUTTER protein bar', { brand: 'ONE', nutrition: { calories_per_serving: 220 } })]);
+    renderBox({ onLogItems });
+    type('protein');
+    await vi.advanceTimersByTimeAsync(200);
+    const row = await screen.findByRole('button', { name: 'Add Chocolate Peanut Butter protein bar, 220 cal' });
+    expect(screen.queryByText(/CHOCOLATE/)).toBeNull();
+    fireEvent.click(row);
+    await waitFor(() => expect(onLogItems).toHaveBeenCalledWith([expect.objectContaining({ name: 'CHOCOLATE PEANUT BUTTER protein bar' })], expect.anything()));
   });
 });
 
 describe('L20: one primary at a time', () => {
-  it('a short name: the rows lead, and Log it steps back to "Just log \'fage\'"', async () => {
+  // Review 2026-11-27: it used to turn into an outlined "Just log 'fage'"
+  // mid-typing, which read as a different button. It stays the same button;
+  // the line under it points at the list.
+  it('a short name: Log it stays the same filled button, and the line under it points at the list', async () => {
     renderBox({ onDescribe: vi.fn() });
     type('fage');
     const button = screen.getByTestId('log-it');
-    expect(button).toHaveTextContent("Just log ‘fage’");
-    expect(button.className).toMatch(/MuiButton-outlined/);
-    expect(button.className).not.toMatch(/MuiButton-contained/);
+    expect(button).toHaveTextContent(/^Log it$/);
+    expect(button.className).toMatch(/MuiButton-contained/);
+    expect(button.className).not.toMatch(/MuiButton-outlined/);
+    expect(screen.getByTestId('composer-status')).toHaveTextContent('Tap the one you had below, or Log it and I’ll work it out.');
   });
 
   it('a sentence: Log it is the filled primary', async () => {
@@ -1736,5 +1777,32 @@ describe('L24: "You’re signed out. Sign in again." comes with a Sign in button
     expect(await screen.findByText('You’re signed out. Sign in again.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(loginRedirect).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Review 2026-11-27: "Scan a barcode" was a text link under everything (and
+ * gone once anything was typed). It is a button beside the mic, always.
+ */
+describe('the barcode button is in the composer, not a link under it', () => {
+  it('opens the scanner the caller gave it, with or without words in the box', async () => {
+    const onBarcodeClick = vi.fn();
+    renderBox({ onBarcodeClick, onDescribe: vi.fn(), mode: 'dialog', showQuickPicks: true });
+    const buttons = screen.getAllByRole('button', { name: 'Scan a barcode' });
+    // One way to do it, not two.
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAttribute('data-testid', 'scan-button');
+    expect(screen.getByTestId('composer-box')).toContainElement(buttons[0]);
+    fireEvent.click(buttons[0]);
+    expect(onBarcodeClick).toHaveBeenCalledTimes(1);
+
+    type('fage');
+    fireEvent.click(screen.getByRole('button', { name: 'Scan a barcode' }));
+    expect(onBarcodeClick).toHaveBeenCalledTimes(2);
+  });
+
+  it('is not offered where no scanner was given', () => {
+    renderBox({ onDescribe: vi.fn() });
+    expect(screen.queryByRole('button', { name: 'Scan a barcode' })).toBeNull();
   });
 });

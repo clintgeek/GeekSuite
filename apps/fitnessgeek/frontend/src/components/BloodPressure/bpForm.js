@@ -15,9 +15,6 @@ export const SYS_BOUNDS = { min: 60, max: 300 };
 export const DIA_BOUNDS = { min: 30, max: 200 };
 export const PULSE_BOUNDS = { min: 30, max: 250 };
 
-/** What a person reads when a reading already sits at that minute (C1). */
-export const DUPLICATE_MESSAGE = 'You already saved a reading at that time.';
-
 /**
  * @returns {{ error: string } | { systolic: number, diastolic: number, pulse: number|null }}
  */

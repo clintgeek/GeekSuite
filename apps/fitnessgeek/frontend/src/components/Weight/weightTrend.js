@@ -148,12 +148,14 @@ function dailyMeans(points) {
  *   heading: 'toward'|'away'|'flat'|'done'|null,
  *   onTrack: boolean|null,        // projected on or before the goal date
  *   tooFar: boolean,              // projected past PROJECTION_MAX_PLAN_MULTIPLE plans
+ *   finishDate: string|null,      // where the slope lands, even when tooFar (for "around April", never a day)
  * }}
  */
 export function programPace(logs = [], goal = null, { today } = {}) {
   const base = {
     phase: 'none', startDate: null, goalDate: null, programDays: 0, trend: [],
     slopePerWeek: null, projectedDate: null, heading: null, onTrack: null, tooFar: false,
+    finishDate: null,
   };
   const startDate = goal && goal.enabled !== false ? utcDateString(goal.startDate) : '';
   const goalDate = startDate ? utcDateString(goal.goalDate) : '';
@@ -198,6 +200,66 @@ export function programPace(logs = [], goal = null, { today } = {}) {
     projectedDate: tooFar ? null : ymdOf(finishDay),
     onTrack: finishDay <= goalDay,
     tooFar,
+    finishDate: ymdOf(finishDay),
+  };
+}
+
+/** A goal date this close after the last weigh-in still belongs on the chart. */
+export const GOAL_NEAR_MIN_DAYS = 14;
+
+/** y on the straight line through `a` and `b` at calendar day `x`. */
+function yAt(a, b, x) {
+  const ax = dayOf(a.x);
+  const bx = dayOf(b.x);
+  if (bx === ax) return a.y;
+  return a.y + ((b.y - a.y) * (dayOf(x) - ax)) / (bx - ax);
+}
+
+/** The part of a two-point guide line inside [from, to], or null when none is. */
+function clipLine(line, from, to) {
+  if (!line || line.length < 2) return null;
+  const [a, b] = line;
+  const start = a.x < from ? from : a.x;
+  const end = b.x > to ? to : b.x;
+  if (start >= end) return null;
+  const round = (n) => Math.round(n * 10) / 10;
+  return [{ x: start, y: round(yAt(a, b, start)) }, { x: end, y: round(yAt(a, b, end)) }];
+}
+
+/**
+ * FIT THE CHART TO THE WEIGH-INS. The goal line used to be drawn from the
+ * goal's start date to its end date whatever had been logged, so a goal set
+ * in August with weigh-ins from late September left the first third of the
+ * chart empty, and a goal date months away squeezed the data into a corner.
+ *
+ * The x-range is now the weigh-ins': first to last, running on to the goal
+ * date only when that is near (within two weeks, or half the span logged so
+ * far, whichever is longer). The goal and "at this pace" lines are clipped to
+ * that range, never recalculated: the same lines, seen through a window that
+ * the data fills.
+ *
+ * @param {ReturnType<typeof buildWeightTrend>} model
+ * @returns {{ goalLine: Array<{x: string, y: number}>|null, projection: object|null, from: string|null, to: string|null }}
+ */
+export function fitToWeighIns(model) {
+  const readings = model?.readings || [];
+  if (!readings.length) return { goalLine: null, projection: null, from: null, to: null };
+  const from = readings[0].x;
+  const last = readings[readings.length - 1].x;
+  const goalEnd = model.goalLine?.[1]?.x || null;
+  const span = dayOf(last) - dayOf(from);
+  // A first weigh-in or two is not a trend to fit to: the plan is the picture.
+  if (span < GOAL_NEAR_MIN_DAYS) {
+    return { goalLine: model.goalLine || null, projection: model.projection || null, from, to: last };
+  }
+  const near = Math.max(GOAL_NEAR_MIN_DAYS, Math.round(span / 2));
+  const to = goalEnd && goalEnd > last && dayOf(goalEnd) - dayOf(last) <= near ? goalEnd : last;
+  const projected = model.projection ? clipLine(model.projection.points, from, to) : null;
+  return {
+    goalLine: clipLine(model.goalLine, from, to),
+    projection: projected ? { ...model.projection, points: projected } : null,
+    from,
+    to,
   };
 }
 

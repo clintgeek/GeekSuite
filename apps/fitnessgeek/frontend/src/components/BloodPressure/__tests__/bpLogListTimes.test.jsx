@@ -79,7 +79,7 @@ describe('BPLogList — edit affordance', () => {
 
     render(<BPLogList logs={[MORNING]} onDelete={() => {}} onEdit={onEdit} />);
 
-    const editButtons = screen.getAllByRole('button', { name: /edit the 118\/76 mmhg reading/i });
+    const editButtons = screen.getAllByRole('button', { name: /edit the 118\/76 reading/i });
     expect(editButtons.length).toBeGreaterThan(0);
 
     await user.click(editButtons[0]);

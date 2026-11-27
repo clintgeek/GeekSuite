@@ -18,7 +18,7 @@ const parseDay = (day) => {
 /** Whole days from `day` back to `today`: 1 is yesterday, -1 tomorrow. */
 export const daysBack = (day, today) => Math.round((parseDay(today) - parseDay(day)) / 86400000);
 
-const weekday = (day) => parseDay(day).toLocaleDateString('en-US', { weekday: 'long' });
+export const weekday = (day) => parseDay(day).toLocaleDateString('en-US', { weekday: 'long' });
 
 /** "Oct 13", with the year only when it isn't this year. */
 export function shortDate(day, today) {

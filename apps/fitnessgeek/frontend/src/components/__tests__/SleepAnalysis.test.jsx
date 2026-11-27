@@ -137,12 +137,12 @@ describe('HRV against a real baseline', () => {
 });
 
 describe('loading, empty and failed are three different things', () => {
-  it('a failed read says so with a retry, and is never "No sleep for this night"', async () => {
+  it('a failed read says so with a retry, and is never "No sleep recorded for this night"', async () => {
     getSleepAnalysis.mockRejectedValueOnce(new Error('Request failed with status code 502'));
     getSleepAnalysis.mockResolvedValue(analysis());
     render(<SleepAnalysis date="2026-09-22" />);
     expect(await screen.findByText('Couldn’t load your sleep')).toBeInTheDocument();
-    expect(screen.queryByText('No sleep for this night')).toBeNull();
+    expect(screen.queryByText('No sleep recorded for this night')).toBeNull();
     expect(screen.queryByText(/status code/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByText('82/100')).toBeInTheDocument();
@@ -152,14 +152,16 @@ describe('loading, empty and failed are three different things', () => {
     getSleepAnalysis.mockResolvedValue({ available: false, reason: 'influx_unavailable', message: 'InfluxDB is unavailable' });
     render(<SleepAnalysis date="2026-09-22" />);
     expect(await screen.findByText('Couldn’t load your sleep')).toBeInTheDocument();
-    expect(screen.queryByText('No sleep for this night')).toBeNull();
+    expect(screen.queryByText('No sleep recorded for this night')).toBeNull();
     expect(document.body.textContent).not.toMatch(/InfluxDB/);
   });
 
   it('a night the watch sent nothing for says so, in the app\'s words, not the server\'s', async () => {
     getSleepAnalysis.mockResolvedValue({ available: false, message: 'No sleep data available for this date' });
     render(<SleepAnalysis date="2026-09-22" />);
-    expect(await screen.findByText('No sleep for this night')).toBeInTheDocument();
+    expect(await screen.findByText('No sleep recorded for this night')).toBeInTheDocument();
+    // And what to do if that is not what she expected.
+    expect(screen.getByText(/open the Garmin Connect app on your phone to sync it/)).toBeInTheDocument();
     expect(screen.queryByText(/No sleep data available/)).toBeNull();
   });
 

@@ -73,6 +73,15 @@ const TIME_CHOICES = [
   { value: 'bedtime', label: 'Bedtime' },
 ];
 // The list's group names, in the same words as the form — ("Midday", never the stored key "afternoon").
+// The drug database writes "Lisinopril 10 MG Oral Tablet". People write
+// "Lisinopril 10 mg tablet". Display only; the rxcui carries the identity.
+const UNIT_WORD = { MG: 'mg', MCG: 'mcg', ML: 'mL', GM: 'g', MEQ: 'mEq', HR: 'hr', UNT: 'units' };
+export const tidyDrugName = (name) => String(name || '')
+  .replace(/\b(MG|MCG|ML|GM|MEQ|HR|UNT)\b/g, (m) => UNIT_WORD[m])
+  .replace(/\bOral (Tablet|Capsule|Solution|Suspension)\b/g, (m, form) => form.toLowerCase())
+  .replace(/\b(Extended Release|Delayed Release|Tablet|Capsule|Solution|Suspension|Injection|Cream|Ointment|Patch|Spray)\b/g, (m) => m.toLowerCase())
+  .trim();
+
 const SLOT_WORD = { daily: 'Once a day', morning: 'Morning', afternoon: 'Midday', evening: 'Evening', bedtime: 'Bedtime' };
 
 const TYPE_ORDER = { rx: 0, otc: 1, supplement: 2 };
@@ -341,7 +350,7 @@ export default function Medications() {
   const selectCandidate = async (c) => {
     setFormError(null);
     setSelected(c);
-    setDisplayName(c?.name || '');
+    setDisplayName(tidyDrugName(c?.name));
     try {
       const d = await medsService.getDetails(c.rxcui);
       // `getDetails()` resolves to { ingredient, strengths, atcClasses, epcClasses, suggested }.
@@ -459,7 +468,7 @@ export default function Medications() {
   }, [displayName, adding, editingMed]);
 
   const pickSuggestion = (c) => {
-    pickedRef.current = c?.name || '';
+    pickedRef.current = tidyDrugName(c?.name);
     setSuggestions([]);
     // Fills the name and keeps the rxcui and details the save path sends.
     selectCandidate(c);
@@ -755,7 +764,7 @@ export default function Medications() {
                       role="listitem"
                       onClick={() => pickSuggestion(c)}
                     >
-                      <Typography sx={{ fontWeight: 600, fontSize: '1rem' }}>{c.name}</Typography>
+                      <Typography sx={{ fontWeight: 600, fontSize: '1rem' }}>{tidyDrugName(c.name)}</Typography>
                     </PickRow>
                   ))}
                 </Stack>
@@ -788,7 +797,11 @@ export default function Medications() {
                   // blue edge, so only Save is a filled button in this dialog.
                   borderRadius: '12px',
                   border: (t) => `1px solid ${t.palette.divider}`,
+                  // Not chosen is quiet in both modes, so chosen stands out.
+                  color: 'text.secondary',
+                  fontWeight: 600,
                   '&.Mui-selected, &.Mui-selected:hover': {
+                    fontWeight: 700,
                     bgcolor: (t) => tonalColors(t).bg,
                     color: (t) => tonalColors(t).ink,
                     borderColor: 'primary.main',
@@ -807,16 +820,14 @@ export default function Medications() {
                   {label}
                 </ToggleButton>
               ))}
-              <ToggleButton
-                value="once"
-                selected={timesOfDay.length === 0}
-                onChange={() => setTimesOfDay([])}
-                color="primary"
-                sx={{ gridColumn: '1 / -1' }}
-              >
-                Once a day
-              </ToggleButton>
             </Box>
+            {/* No time chosen is "once a day, any time": said in words, not
+                as a fifth button that looked like a second Save. */}
+            <Typography data-testid="med-when-hint" sx={{ mt: 2, fontSize: '0.9375rem', color: 'text.secondary' }}>
+              {timesOfDay.length === 0
+                ? 'No set time? Leave these off and it’s once a day.'
+                : `You’ll tick it ${timesOfDay.length === 1 ? 'once' : `${timesOfDay.length} times`} a day.`}
+            </Typography>
           </Box>
 
           {/* Everything the old full editor held, off the way until wanted. */}

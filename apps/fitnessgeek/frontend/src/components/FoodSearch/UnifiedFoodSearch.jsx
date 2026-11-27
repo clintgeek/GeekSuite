@@ -62,11 +62,10 @@ const UnifiedFoodSearch = ({
   busy = false,
   pendingKey = null,
   // `{ [rowKey]: { servings } }`: what this sitting has written per row, so
-  // a row can say "2 added ✓" and offer "Make it 3" (L2).
+  // a row can say "2 added ✓" and offer "Amount" (L2).
   added = null,
   onPick,
   onAdjust,
-  onMore,
   onCreateFood,
 }) => {
   const theme = useTheme();
@@ -259,7 +258,6 @@ const UnifiedFoodSearch = ({
         food={food}
         onTap={(f) => onPick?.(f, key)}
         onAdjust={onAdjust}
-        onMore={onMore}
         added={added?.[key] || null}
         pending={busy && pendingKey === key}
         disabled={busy}

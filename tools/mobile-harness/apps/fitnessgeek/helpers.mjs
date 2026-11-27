@@ -82,6 +82,18 @@ export async function setDetails(page, h, open = true) {
   return toggle;
 }
 
+// The body-composition card keeps its trend, change card and detail behind
+// "More from your scans".
+export const openBodyCompMore = async (page, h) => {
+  const more = await must(page.locator('[data-testid="body-comp-more"]'), '"More from your scans"');
+  await more.scrollIntoViewIfNeeded();
+  if ((await more.getAttribute('aria-expanded')) !== 'true') {
+    // dispatchEvent, not click(): a real click parks the mouse over the button,
+    // and its mouseleave hides a chart tooltip a later tap opens (53e).
+    await more.dispatchEvent('click');
+    await h.settle(700);
+  }
+};
 /** Open a meal's "more" menu on Today; returns the menu. */
 export async function openMealMenu(page, h, meal) {
   // A slow first paint is not a missing menu: wait for the meals, then insist.

@@ -32,7 +32,7 @@
  * imported) so the off-by-one is actually reachable.
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 process.env.TZ = 'America/Chicago';
 
@@ -72,6 +72,8 @@ describe('CopyMealDialog targets the real adjacent calendar day', () => {
     render(
       <CopyMealDialog open currentDate={CURRENT_DATE} onClose={() => {}} onCopyComplete={() => {}} />
     );
+    // The form is behind "Something else" (review 2026-11-27).
+    fireEvent.click(screen.getByTestId('copy-something-else'));
 
     const dateInputs = screen.getAllByLabelText('Day');
     const [fromInput, toInput] = dateInputs;
@@ -81,30 +83,37 @@ describe('CopyMealDialog targets the real adjacent calendar day', () => {
     expect(fromInput.value).toBe(YESTERDAY);
   });
 
-  // UX review L3: no preset lands on tomorrow any more. Each one fills in
-  // "the day before → the day on screen", and only fills the form.
-  it('"Fill in: yesterday\'s dinner → today\'s dinner" reads yesterday, writes the day on screen', () => {
+  // UX review L3: nothing lands on tomorrow any more. The one-tap rows
+  // (review 2026-11-27, they replaced the "Fill in: …" chips) each copy
+  // "the day before → the day on screen".
+  it('the one-tap row for the day before reads yesterday and writes the day on screen', async () => {
+    const { fitnessGeekService } = await import('../../../services/fitnessGeekService.js');
+    fitnessGeekService.copyMeal.mockClear();
     render(
-      <CopyMealDialog open currentDate={CURRENT_DATE} onClose={() => {}} onCopyComplete={() => {}} />
+      <CopyMealDialog
+        open
+        currentDate={CURRENT_DATE}
+        prefill={{ fromDate: YESTERDAY, fromMealType: 'dinner', targetDate: CURRENT_DATE, toMealType: 'dinner' }}
+        onClose={() => {}}
+        onCopyComplete={() => {}}
+      />
     );
 
-    fireEvent.click(screen.getByText(/^Fill in: .*dinner → .*dinner$/));
+    fireEvent.click(screen.getAllByTestId('copy-shortcut')[0]);
 
-    const [fromInput, toInput] = screen.getAllByLabelText('Day');
-    expect(fromInput.value).toBe(YESTERDAY);
-    expect(toInput.value).toBe(CURRENT_DATE);
+    await waitFor(() => expect(fitnessGeekService.copyMeal).toHaveBeenCalledWith(YESTERDAY, CURRENT_DATE, 'dinner', 'dinner', null));
   });
 
-  it('"Fill in: all of …" reads the day before and writes the day on screen, never tomorrow', () => {
+  it('"Everything from …" reads the day before and writes the day on screen, never tomorrow', async () => {
+    const { fitnessGeekService } = await import('../../../services/fitnessGeekService.js');
+    fitnessGeekService.copyMeal.mockClear();
     render(
       <CopyMealDialog open currentDate={CURRENT_DATE} onClose={() => {}} onCopyComplete={() => {}} />
     );
 
-    fireEvent.click(screen.getByText(/^Fill in: all of /));
+    fireEvent.click(screen.getByText(/^Everything from /));
 
-    const [fromInput, toInput] = screen.getAllByLabelText('Day');
-    expect(fromInput.value).toBe(YESTERDAY);
-    expect(toInput.value).toBe(CURRENT_DATE);
-    expect(toInput.value).not.toBe(TOMORROW);
+    await waitFor(() => expect(fitnessGeekService.copyMeal).toHaveBeenCalledWith(YESTERDAY, CURRENT_DATE, null, null, null));
+    expect(fitnessGeekService.copyMeal).not.toHaveBeenCalledWith(expect.anything(), TOMORROW, expect.anything(), expect.anything(), expect.anything());
   });
 });

@@ -106,6 +106,36 @@ describe('QuickAddWeight keeps the dialog open when the save fails', () => {
 // The weigh-in is a card in the page at every width now (2026-11-27), with
 // the dialog behind "Log weight for another day".
 describe('QuickAddWeight card — what can be saved', () => {
+  // Round two: Log was a grey disabled button, and a tap on it (or Enter in
+  // the empty field) did nothing at all.
+  it('a tap on Log with nothing typed gives a gentle hint and puts the cursor in the field', async () => {
+    const user = userEvent.setup();
+    const onAdd = vi.fn().mockResolvedValue(true);
+    render(<QuickAddWeight onAdd={onAdd} unit="lbs" />);
+    const input = screen.getByLabelText(/today.s weight/i);
+    const log = screen.getByRole('button', { name: /^log$/i });
+    expect(log).toBeEnabled();
+    expect(screen.queryByTestId('weight-entry-hint')).toBeNull();
+
+    await user.click(log);
+    expect(screen.getByTestId('weight-entry-hint')).toHaveTextContent('Type your weight first, for example 150.4.');
+    expect(input).toHaveFocus();
+    expect(input).not.toHaveAttribute('aria-invalid', 'true'); // a hint, not an error
+    expect(onAdd).not.toHaveBeenCalled();
+
+    // Typing clears it.
+    await user.type(input, '2');
+    expect(screen.queryByTestId('weight-entry-hint')).toBeNull();
+  });
+
+  it('Enter in the empty field gives the same hint', async () => {
+    const user = userEvent.setup();
+    render(<QuickAddWeight onAdd={vi.fn()} unit="lbs" />);
+    await user.click(screen.getByLabelText(/today.s weight/i));
+    await user.keyboard('{Enter}');
+    expect(screen.getByTestId('weight-entry-hint')).toBeInTheDocument();
+  });
+
   it('a weight that is a typo ("0", "2199") cannot be sent, and the card says why', async () => {
     const user = userEvent.setup();
     const onAdd = vi.fn().mockResolvedValue(true);
@@ -113,15 +143,17 @@ describe('QuickAddWeight card — what can be saved', () => {
     const input = screen.getByLabelText(/today.s weight/i);
     const log = screen.getByRole('button', { name: /^log$/i });
 
+    // Log stays live (it answers a tap instead of swallowing it); what it
+    // must never do is send the typo.
     await user.type(input, '0');
-    expect(log).toBeDisabled();
     expect(screen.getByText('Enter a weight between 0 and 1,000.')).toBeInTheDocument();
     await user.keyboard('{Enter}');
+    await user.click(log);
 
     await user.clear(input);
     await user.type(input, '2199');
-    expect(log).toBeDisabled();
     await user.keyboard('{Enter}');
+    await user.click(log);
     expect(onAdd).not.toHaveBeenCalled();
 
     await user.clear(input);

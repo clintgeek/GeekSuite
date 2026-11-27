@@ -9,6 +9,8 @@ import { useTheme } from '@mui/material/styles';
 import { amountToServings } from '../../utils/recipeMath.js';
 import { convertAmount, formatServing, usLogUnits } from '../../utils/units.js';
 import { useBackToClose } from './useBackToClose.js';
+import { bottomSheetProps } from './bottomSheet.js';
+import { displayName } from './entries.js';
 import { cal, macroLine, mealLabel } from '../../utils/plainWords.js';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -85,13 +87,14 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', editing = null, o
   const amountLabel = unit === 'serving' ? 'Servings' : unit;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+    // A bottom sheet on a phone, so Log it is under the thumb (bottomSheet.js).
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth data-testid="serving-sheet" {...bottomSheetProps}>
       <DialogTitle sx={{ pb: 0.5 }}>
         <Typography component="span" sx={{ display: 'block', fontSize: '1.0625rem', fontWeight: 700 }}>
-          {editing ? `Change ${food.name}` : food.name}
+          {editing ? `Change ${displayName(food.name)}` : displayName(food.name)}
         </Typography>
         {food.brand && (
-          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>{food.brand}</Typography>
+          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>{displayName(food.brand)}</Typography>
         )}
       </DialogTitle>
 
@@ -185,11 +188,12 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', editing = null, o
       </DialogContent>
 
       <DialogActions sx={{ px: 6, pb: 4, gap: 1 }}>
-        <Button onClick={onClose} sx={{ color: 'text.secondary', minHeight: 44 }}>Cancel</Button>
+        <Button onClick={onClose} sx={{ color: 'text.secondary', minHeight: { xs: 52, sm: 44 } }}>Cancel</Button>
         <Button
           variant="contained"
           disabled={!canLog}
-          sx={{ minHeight: 44, minWidth: 96 }}
+          // On a phone the action fills the rest of the row, under the thumb.
+          sx={{ minHeight: { xs: 52, sm: 44 }, minWidth: 96, flex: { xs: 1, sm: 'none' }, fontWeight: 700, boxShadow: 'none' }}
           onClick={() => { if (canLog) onConfirm?.({ ...food, servings: round(servings, 3) }, mealType); }}
         >
           {editing ? 'Save' : 'Log it'}

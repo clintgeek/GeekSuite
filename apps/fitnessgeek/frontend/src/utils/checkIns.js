@@ -79,7 +79,8 @@ export function todayStrip({ weights, bloodPressures, meds, today }) {
     },
     bloodPressures !== null && {
       id: 'bp',
-      label: bp ? 'BP' : 'Log BP',
+      // Never the abbreviation: a new person does not know "BP".
+      label: 'Blood pressure',
       done: bp,
       value: bp ? '✓' : '+',
       spoken: bp ? 'Blood pressure taken today' : 'Log blood pressure. None yet today',

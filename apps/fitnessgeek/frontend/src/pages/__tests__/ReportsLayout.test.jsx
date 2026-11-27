@@ -104,23 +104,31 @@ describe('D-8 — the day ribbon', () => {
     expect(screen.queryByText(/2026-10-1/)).toBeNull();
   });
 
-  it('macros as a line of text, calories with commas and "cal"', async () => {
+  it('macros as three labelled numbers (no P/C/F initials), calories with commas and "cal"', async () => {
     renderReports();
     const cards = await screen.findAllByTestId('day-card');
     // newest first, so the card you see first is whole on a phone
     expect(cards[0]).toHaveTextContent('Fri');
     expect(cards[0]).toHaveTextContent('Oct 16');
     expect(cards[0]).toHaveTextContent('1,805cal');
-    expect(within(cards[0]).getByTestId('day-macros')).toHaveTextContent('P 165 · C 141 · F 70 g');
+    const macros = within(cards[0]).getByTestId('day-macros');
+    expect(macros).toHaveTextContent('165gProtein141gCarbs70gFat');
+    expect(macros).toHaveAccessibleName('165 g protein · 141 g carbs · 70 g fat');
+    expect(screen.queryByText(/\bP \d+ · C \d+/)).toBeNull();
     expect(screen.queryByText(/kcal/)).toBeNull();
   });
 
-  it('a status word on every day; only over days are marked', async () => {
+  it('each day says the fact in plain words ("105 over"); only over days are marked, with a dot and no filled chip', async () => {
     renderReports();
     const cards = await screen.findAllByTestId('day-card');
     // against 1,700: 1805 (a bit over), 1980 (over), 1690, 1700, 1400 (under)
     expect(cards.map((c) => within(c).getByTestId('day-status').textContent))
-      .toEqual(['A bit over', 'Over', 'On target', 'On target', 'Under']);
+      .toEqual(['105 over', '280 over', 'On target', 'On target', '300 under']);
+    // Plain ink on the card itself: no filled chip behind the words.
+    const over = within(cards[1]).getByTestId('day-status');
+    expect(getComputedStyle(over).backgroundColor).toMatch(/^(|transparent|rgba\(0, 0, 0, 0\))$/);
+    expect(over.querySelectorAll('[aria-hidden]')).toHaveLength(1);
+    expect(within(cards[2]).getByTestId('day-status').querySelectorAll('[aria-hidden]')).toHaveLength(0);
     expect(cards.map((c) => c.dataset.over)).toEqual(['true', 'true', 'false', 'false', 'false']);
   });
 });
@@ -194,14 +202,44 @@ describe('D-11 — Notes from the AI', () => {
     expect(within(notes).getByText('Last 30 days')).toBeInTheDocument();
   });
 
-  it('nothing logged: the summary asks for a few days, trends say nothing stands out', async () => {
-    reportsService.getOverview.mockResolvedValue({ success: true, data: { ...overview, daily: [], meals: {}, topFoods: [], days_logged: 0 } });
+  it('nothing logged: ONE friendly empty state, not five empty cards and two "nothing stands out"', async () => {
+    reportsService.getOverview.mockResolvedValue({ success: true, data: { ...overview, averages: { calories: 0, protein: 0 }, daily: [], meals: {}, topFoods: [], days_logged: 0 } });
     insightsService.getWeeklyReport.mockResolvedValue({ type: 'weekly_report', content: 'No data found.', generatedAt: new Date().toISOString() });
     insightsService.getTrendWatch.mockResolvedValue({ type: 'trend_watch', content: 'No data found.', generatedAt: new Date().toISOString() });
     renderReports();
-    expect(await screen.findByTestId('weekly-ai-empty')).toHaveTextContent('Log a few days and I’ll write a summary here.');
-    expect(await screen.findByTestId('trend-ai-empty')).toHaveTextContent('Nothing stands out yet.');
+    const empty = await screen.findByTestId('reports-empty');
+    expect(empty).toHaveTextContent('Nothing logged in the last 7 days');
+    expect(empty).toHaveTextContent('Log a few days and you’ll see how they compare here.');
+    expect(within(empty).getByRole('link', { name: 'Log food' })).toHaveAttribute('href', '/dashboard');
+    // Said once: no second "log a few days", no "nothing stands out", no
+    // zeroed averages, no empty cards, no AI section, nothing to download.
+    expect(screen.getAllByText(/Log a few days/)).toHaveLength(1);
+    expect(screen.queryByText(/Nothing stands out/)).toBeNull();
+    expect(screen.queryByTestId('average-calories')).toBeNull();
+    expect(screen.queryByTestId('meal-breakdown')).toBeNull();
+    expect(screen.queryByTestId('days-on-target')).toBeNull();
+    expect(screen.queryByTestId('reports-ai-notes')).toBeNull();
+    expect(screen.queryByRole('button', { name: /spreadsheet/ })).toBeNull();
     expect(screen.queryByText('No data found.')).toBeNull();
-    expect(screen.queryByTestId('ai-note-footer')).toBeNull();
+    // The range can still be changed from here.
+    expect(screen.getByRole('button', { name: '30 days' })).toBeInTheDocument();
+  });
+
+  it('no card is called "Trends" inside Trends, and "nothing stands out" is never said twice', async () => {
+    insightsService.getTrendWatch.mockResolvedValue({ type: 'trend_watch', content: 'No data found.', generatedAt: new Date().toISOString() });
+    renderReports();
+    await screen.findByText('A steady week.');
+    expect(screen.queryByRole('heading', { name: 'Trends' })).toBeNull();
+    expect(within(screen.getByTestId('trend-ai')).getByRole('heading', { name: 'Patterns' })).toBeInTheDocument();
+    expect(await screen.findByTestId('trend-ai-empty')).toHaveTextContent('No patterns to point out yet. They take a few weeks of logging.');
+    // No highlights: the "What stands out" card is left out, not shown empty.
+    expect(screen.queryByTestId('highlights')).toBeNull();
+    expect(screen.queryByText(/Nothing stands out/)).toBeNull();
+  });
+
+  it('highlights, when there are some, get their card', async () => {
+    reportsService.getTrends.mockResolvedValue({ success: true, data: { highlights: ['Protein is up 12% on last week.'] } });
+    renderReports();
+    expect(within(await screen.findByTestId('highlights')).getByText('Protein is up 12% on last week.')).toBeInTheDocument();
   });
 });

@@ -97,8 +97,12 @@ const settingsScenes = [
   stubbed('61-settings', {
     ...SETTINGS_PAGE,
     async fn(page) {
+      const autosave = (await (await must(page.locator('[data-testid="settings-autosave"]'), 'the autosave line')).innerText()).trim();
+      if (autosave !== 'Changes save as you make them.') throw new Error(`the autosave line reads "${autosave}"`);
       await must(page.locator('[data-testid="experience-settings"]'), 'How it looks');
       await must(page.locator('[data-testid="about-you"]'), 'About you');
+      // The fixture plan is a weight-loss plan.
+      if ((await page.getByRole('radio', { name: /^Lose weight/ }).getAttribute('aria-checked')) !== 'true') throw new Error('"Lose weight" is not the chosen goal');
       const plans = await must(page.locator('[data-testid="settings-plans"]'), 'Plans and imports');
       await must(plans.getByRole('link', { name: /Calorie plan/ }), 'the way to the calorie plan');
       await must(page.locator('[data-testid="settings-devices"]').getByRole('link', { name: /Import a scan/ }), 'the way to Import a scan (under Connected devices)');
@@ -151,6 +155,7 @@ const settingsScenes = [
       await (await must(page.getByRole('button', { name: 'Change Garmin login' }), 'the "Change Garmin login" button')).click();
       await h.settle(500);
       await must(page.getByRole('button', { name: 'Update Garmin login', exact: true }), '"Update Garmin login" (it said "Save", d-fixes)');
+      await must(page.getByText('Your Garmin password is kept encrypted.'), 'the password helper line');
       if (await page.getByRole('button', { name: /^connect garmin$/i }).count()) throw new Error('"Connect Garmin" showing for a saved login');
       if ((await page.getByLabel('Garmin email').inputValue()) !== 'chef@example.com') throw new Error('Garmin email did not fill');
       await scrollToSection(page, h, '#garmin', 80);
@@ -159,7 +164,10 @@ const settingsScenes = [
   // Health alerts: the sleep apnea suggestion switch and its caveat.
   stubbed('61c-settings-alerts', {
     ...SETTINGS_PAGE,
-    async fn(page, h) { await scrollToSection(page, h, '#health-alerts', 80); },
+    async fn(page, h) {
+      await must(page.getByLabel('Tell me if my overnight breathing looks worth mentioning to a doctor'), 'the overnight-breathing switch');
+      await scrollToSection(page, h, '#health-alerts', 80);
+    },
   }),
   // Account at the bottom: who is signed in, and Sign out.
   stubbed('61d-settings-account', {
@@ -315,7 +323,9 @@ const medications = [
       await box.pressSequentially('lisin', { delay: 40 });
       await h.settle(800);
       await must(dialog.getByRole('list', { name: 'Suggestions' }), 'suggestion list');
-      await must(dialog.getByText('Lisinopril 10 MG Oral Tablet'), 'second suggestion');
+      // Names are tidied for display: "Lisinopril 10 MG Oral Tablet" -> "Lisinopril 10 mg tablet".
+      await must(dialog.getByText('Lisinopril 10 mg tablet', { exact: true }), 'second suggestion, tidied');
+      await absent(dialog.getByText('Lisinopril 10 MG Oral Tablet'), 'the raw RxNorm name');
       const more = await must(moreDetails(dialog), '"More details"');
       if ((await more.getAttribute('aria-expanded')) !== 'false') throw new Error('"More details" should start closed');
       await absent(dialog.locator('#med-more-details'), 'Strength / Type / what it’s for, before "More details" is opened');
@@ -331,11 +341,16 @@ const medications = [
       await h.settle(700);
       await absent(dialog.getByRole('list', { name: 'Suggestions' }), 'suggestions for a name RxNorm does not know');
       await absent(dialog.getByText(/nothing found/i), 'a "Nothing found" dead end');
+      // No "Once a day" button: with no time chosen the hint says what that means.
+      await absent(dialog.getByRole('button', { name: 'Once a day', exact: true }), 'a "Once a day" button');
+      const hint = dialog.locator('[data-testid="med-when-hint"]');
+      if ((await (await must(hint, 'the when-hint')).first().innerText()).trim() !== 'No set time? Leave these off and it’s once a day.') throw new Error(`the hint reads "${await hint.first().innerText()}"`);
       for (const slot of ['Morning', 'Bedtime']) {
         const t = dialog.getByRole('button', { name: slot, exact: true });
         await (await must(t, `${slot} toggle`)).click();
         if ((await t.getAttribute('aria-pressed')) !== 'true') throw new Error(`${slot} did not select`);
       }
+      if ((await hint.first().innerText()).trim() !== 'You’ll tick it 2 times a day.') throw new Error(`with two times chosen the hint reads "${await hint.first().innerText()}"`);
       const save = dialog.getByRole('button', { name: /^save$/i });
       await must(save, 'Save');
       if (await save.isDisabled()) throw new Error('Save is off for a typed name');
@@ -370,10 +385,10 @@ const medications = [
       const dialog = await openAdd(page, h);
       await dialog.locator('#simple-med-name').pressSequentially('lisin', { delay: 40 });
       await h.settle(800);
-      await (await must(dialog.getByRole('list', { name: 'Suggestions' }).getByText('Lisinopril 10 MG Oral Tablet'), 'the suggestion')).click();
+      await (await must(dialog.getByRole('list', { name: 'Suggestions' }).getByText('Lisinopril 10 mg tablet', { exact: true }), 'the suggestion')).click();
       await h.settle(900);
       const name = await dialog.locator('#simple-med-name').inputValue();
-      if (!/lisinopril/i.test(name)) throw new Error(`picking a suggestion left the name as "${name}"`);
+      if (name !== 'Lisinopril 10 mg tablet') throw new Error(`picking a suggestion left the name as "${name}", wanted the tidied "Lisinopril 10 mg tablet"`);
       const more = await must(moreDetails(dialog), '"More details"');
       // A pick that comes with strengths or a suggested use opens the details
       // itself, so the strength is not saved unseen.
@@ -464,6 +479,16 @@ const EMPTY_OPS = {
   },
 };
 
+// The CSV export is a quiet text button at the foot of Food, in words.
+const assertDownloadAtFoot = async (page) => {
+  const dl = await must(page.locator('[data-testid="reports-download"]'), 'the download button');
+  if ((await dl.first().innerText()).trim() !== 'Download as a spreadsheet') throw new Error(`the download button reads "${await dl.first().innerText()}"`);
+  if (await page.getByText('Export CSV').count()) throw new Error('"Export CSV" is still on the page');
+  const top = (await dl.first().boundingBox())?.y;
+  const food = (await page.locator('[data-testid="meal-row"]').first().boundingBox())?.y;
+  if (top == null || food == null || top < food) throw new Error('the download is not below the report');
+};
+
 const reports = [
   // Trends › Food from the top: Food is the first section, and the range toggle lives in its header.
   stubbed('66-reports-food', {
@@ -475,6 +500,7 @@ const reports = [
       if (body && body.y < first.y) throw new Error('Body and recovery is above Food');
       await must(page.locator('[data-testid="report-days-logged"]'), 'days logged line');
       await must(page.locator('[data-testid="meal-row"]').first(), 'meal rows');
+      await assertDownloadAtFoot(page);
     },
   }),
   // The day ribbon: first card whole, status words, and the plum edge on the two over days.
@@ -485,12 +511,20 @@ const reports = [
       if ((await cards.count()) < 5) throw new Error(`expected 5 day cards, got ${await cards.count()}`);
       const over = await page.locator('[data-testid="day-card"][data-over="true"]').count();
       if (over !== 2) throw new Error(`expected 2 over days, got ${over}`);
-      // The Label sets a status tag in capitals with CSS, and innerText
-      // reports it that way, so compare whole tags without case. Whole tags:
-      // "over" must not be satisfied by "a bit over".
-      const tags = (await page.locator('[data-testid="day-status"]').allInnerTexts()).map((t) => t.trim().toLowerCase());
-      const words = tags.join('|');
-      for (const w of ['Over', 'A bit over', 'On target']) if (!tags.includes(w.toLowerCase())) throw new Error(`no "${w}" status in: ${words}`);
+      // Each card says how its day sat against the target as a fact: "On
+      // target", "165 over" or "300 under" (no "a bit over" bands).
+      const statusOf = (loc) => loc.locator('[data-testid="day-status"]').allInnerTexts().then((t) => t.map((x) => x.trim()));
+      const tags = await statusOf(page);
+      if (!tags.every((t) => t === 'On target' || /^\d[\d,]* (over|under)$/.test(t))) throw new Error(`unexpected day statuses: ${tags.join('|')}`);
+      if (!tags.includes('On target')) throw new Error(`no "On target" day in: ${tags.join('|')}`);
+      const overTags = await statusOf(page.locator('[data-testid="day-card"][data-over="true"]'));
+      if (overTags.length !== 2 || !overTags.every((t) => /^\d[\d,]* over$/.test(t))) throw new Error(`the two over days should read "N over": ${overTags.join('|')}`);
+      const underTags = tags.filter((t) => /under$/.test(t));
+      if (underTags.some((t) => !/^\d[\d,]* under$/.test(t))) throw new Error(`under days read ${underTags.join('|')}`);
+      // The macros are three labelled numbers, never "P 165 · C 141".
+      const macros = (await cards.first().locator('[data-testid="day-macros"]').innerText()).replace(/\s+/g, ' ').trim();
+      if (!/^\d+g Protein \d+g Carbs \d+g Fat$/.test(macros)) throw new Error(`day macros read "${macros}"`);
+      if (/P \d+ · C \d+/.test(await cards.first().innerText())) throw new Error('a day card still uses P/C/F initials');
       await scrollToSection(page, h, '[data-testid="day-ribbon-range"]', 96);
       const box = await cards.first().boundingBox();
       const vw = page.viewportSize().width;
@@ -502,7 +536,9 @@ const reports = [
     ops: REPORT_OPS, path: '/trends?tab=food',
     async fn(page, h) {
       await must(page.locator('[data-testid="weekly-ai"]'), 'Summary panel');
-      await must(page.locator('[data-testid="trend-ai"]'), 'Trends panel');
+      const second = await must(page.locator('[data-testid="trend-ai"]'), 'the second notes card');
+      const secondTitle = (await second.first().getByRole('heading').first().innerText()).trim();
+      if (secondTitle !== 'Patterns') throw new Error(`the second card is titled "${secondTitle}", wanted "Patterns"`);
       const feet = await page.locator('[data-testid="ai-note-footer"]').allInnerTexts();
       if (feet.length !== 2 || !feet.every((t) => /^Written by AI from your last \d+ days of logs · .*It can be wrong/.test(t))) {
         throw new Error(`footers: ${JSON.stringify(feet)}`);
@@ -510,15 +546,20 @@ const reports = [
       await scrollToSection(page, h, '[data-testid="reports-ai-notes"]', 88);
     },
   }),
-  // Nothing logged: the Summary and Trends say so in their own words, not the model's.
+  // Nothing logged: ONE empty state, in the app's own words, instead of a card each saying so.
   stubbed('66c-reports-empty', {
     ops: EMPTY_OPS, path: '/trends?tab=food',
     async fn(page, h) {
-      const summary = await must(page.locator('[data-testid="weekly-ai-empty"]'), 'Summary empty line');
-      if (!/Log a few days and I.ll write a summary here\./.test(await summary.innerText())) throw new Error('wrong summary empty text');
-      const trends = await must(page.locator('[data-testid="trend-ai-empty"]'), 'Trends empty line');
-      if (!/Nothing stands out yet\./.test(await trends.innerText())) throw new Error('wrong trends empty text');
-      await scrollToSection(page, h, '[data-testid="reports-ai-notes"]', 88);
+      // Said ONCE, in one place: no AI notes, no per-card empties, no averages.
+      for (const gone of ['weekly-ai-empty', 'trend-ai-empty', 'reports-ai-notes']) await absent(page.locator(`[data-testid="${gone}"]`), gone);
+      await absent(page.locator('[data-testid^="average-"]'), 'the average tiles');
+      await absent(page.getByText(/Nothing stands out/), '"Nothing stands out"');
+      const empty = await must(page.locator('[data-testid="reports-empty"]'), 'the one empty state');
+      const text = (await empty.first().innerText()).replace(/\s+/g, ' ');
+      if (!/Nothing logged in the last 7 days/.test(text)) throw new Error(`empty state reads "${text}"`);
+      if (!/Log a few days and you’ll see how they compare here\./.test(text)) throw new Error(`empty state reads "${text}"`);
+      await must(empty.first().getByRole('link', { name: 'Log food' }), 'its "Log food" link');
+      await scrollToSection(page, h, '[data-testid="reports-empty"]', 120);
     },
   }),
   // Body and recovery with Garmin on: the header's window line, then the cards (07s-07u shoot the groups).
@@ -598,11 +639,12 @@ const bloodPressure = [
     ops: BP_OPS, path: '/blood-pressure', wait: 1800,
     async fn(page) {
       const head = await must(page.locator('[data-testid="bp-headline"]'), 'headline');
-      if (!/Your average this week: 128\/79 — a little high \(elevated\)/.test(await head.innerText())) throw new Error(`headline: ${await head.innerText()}`);
+      const words = (await head.innerText()).replace(/\s+/g, ' ').trim();
+      if (!/^Your average this week is a little high\. Your last reading, today 7:42\s?AM, was normal\.$/.test(words)) throw new Error(`headline: ${words}`);
       const last = await must(page.locator('[data-testid="bp-last-reading"]'), 'last reading');
-      if (!/^Last reading 118\/74 · normal · today 7:42\s?AM$/.test((await last.innerText()).replace(/\s+/g, ' '))) throw new Error(`last reading: ${await last.innerText()}`);
+      if (!/Last reading\s*118\/74 · normal · today 7:42\s?AM/.test((await last.innerText()).replace(/\s+/g, ' '))) throw new Error(`last reading: ${await last.innerText()}`);
       const healthy = await must(page.locator('[data-testid="bp-healthy-range"]'), 'healthy range');
-      if (!/1 of 14 readings/.test(await healthy.innerText())) throw new Error(`healthy range: ${await healthy.innerText()}`);
+      if (!/In the normal range 1 of 14 readings\s*·\s*last 30 days/.test((await healthy.innerText()).replace(/\s+/g, ' '))) throw new Error(`healthy range: ${await healthy.innerText()}`);
       // At the very bottom of the page the "Log BP" button covers nothing:
       // the page leaves room under its last card (d-fixes).
       await page.evaluate(() => {
@@ -631,7 +673,7 @@ const bloodPressure = [
       }
     },
   }),
-  // The charts: range toggle above the donut, "Readings by range, last N days", and the plain legend.
+  // The readings by range: the range toggle above, "Readings by range, last N days", and a labelled bar per range (no donut).
   stubbed('67a-bp-donut', {
     ops: BP_OPS, path: '/blood-pressure', wait: 1800,
     async fn(page, h) {
@@ -643,27 +685,18 @@ const bloodPressure = [
       const toggleTop = (await page.locator('[data-testid="bp-range-toggle"]').boundingBox()).y;
       const titleTop = (await title.boundingBox()).y;
       if (toggleTop > titleTop) throw new Error('the range toggle is below the donut');
-      if (page.viewportSize().width < 600) {
-        // A tapped slice's tooltip: whole lines, and gone after a scroll. It
-        // stayed up over the page, one word per line (d-fixes).
-        const donut = await must(page.locator('[data-testid="bp-donut-legend"]').locator('xpath=preceding-sibling::div[@role="img"][1]'), 'the donut');
-        await donut.scrollIntoViewIfNeeded();
-        await h.settle(300);
-        const d = await donut.boundingBox();
-        await page.touchscreen.tap(d.x + d.width * 0.82, d.y + d.height * 0.5);
-        await h.settle(500);
-        const tip = page.locator('[data-testid="bp-donut-tooltip"]');
-        if (await tip.count()) {
-          const t = await tip.boundingBox();
-          h.log(`donut tooltip ${Math.round(t.width)}x${Math.round(t.height)}`);
-          if (t.height > 70) throw new Error(`the donut tooltip wraps: ${Math.round(t.width)}x${Math.round(t.height)}`);
-          await page.mouse.wheel(0, 240);
-          await h.settle(600);
-          if (await tip.count()) throw new Error('the donut tooltip stayed up after a scroll');
-        } else {
-          h.log('donut tooltip: a tap showed none here');
-        }
-      }
+      // Labelled bars, not a donut: every range says its own name and a count
+      // in words, and the colour only agrees with them.
+      const rows = page.locator('[data-testid="bp-range-row"]');
+      const n = await rows.count();
+      if (n < 2) throw new Error(`expected a row per range with readings, saw ${n}`);
+      const texts = (await rows.allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
+      const bad = texts.filter((t) => !/^[A-Za-z][A-Za-z0-9 ,/()-]*\s\d+ readings?$/.test(t));
+      if (bad.length) throw new Error(`range rows without a name and a count in words: ${JSON.stringify(bad)}`);
+      const total = texts.reduce((a2, t) => a2 + Number(/(\d+) readings?$/.exec(t)[1]), 0);
+      if (total !== 14) throw new Error(`the rows count ${total} readings, wanted the 14 in the window: ${JSON.stringify(texts)}`);
+      await absent(page.locator('[data-testid="bp-donut-legend"]').locator('xpath=preceding-sibling::div[@role="img"]'), 'a donut chart');
+      await absent(page.locator('[data-testid="bp-donut-tooltip"]'), 'a donut tooltip');
       await scrollToSection(page, h, '[data-testid="bp-range-toggle"]', 88);
     },
   }),
@@ -677,7 +710,7 @@ const bloodPressure = [
       await must(dialog.locator('[data-testid="thumb-save"]'), 'Save in the footer');
     },
   }),
-  // Same reading saved twice in a minute: the gateway says BP_DUPLICATE, the form says so with "Save it one minute later".
+  // Same reading saved twice in a minute: the gateway says BP_DUPLICATE, and the form names both times with "Save as <time>".
   stubbed('68a-bp-dialog-duplicate', {
     ops: BP_OPS, path: '/blood-pressure', wait: 1800, viewports: ['phone'], dialog: true,
     rest: { '**/graphql': DUPLICATE_ERROR },
@@ -687,8 +720,10 @@ const bloodPressure = [
       await dialog.getByLabel('Bottom number (diastolic)').fill('82');
       await dialog.getByRole('button', { name: /^save$/i }).click();
       await h.settle(1200);
-      await must(dialog.getByText('You already saved a reading at that time.'), 'duplicate message');
-      await must(dialog.getByRole('button', { name: /^save it one minute later$/i }), 'Save it one minute later');
+      const note = await must(dialog.locator('[data-testid="bp-duplicate"]'), 'the duplicate note');
+      const text = (await note.first().innerText()).replace(/\s+/g, ' ');
+      if (!/You already have a reading at .+\. If this is a second one, save it as .+\./.test(text)) throw new Error(`duplicate note reads "${text}"`);
+      await must(dialog.getByRole('button', { name: /^save as /i }), 'the "Save as <time>" button');
     },
   }),
 ];
@@ -705,6 +740,8 @@ settingsScenes.push(
     async fn(page) {
       await must(page.locator('[data-testid="login-page"]'), 'the Login card');
       await must(page.getByText('FitnessGeek').first(), 'the FitnessGeek name');
+      await must(page.getByText('Sign in to keep your food, weight and health in one place.'), 'the tagline');
+      if (await page.getByText(/GeekSuite/).count()) throw new Error('the Login card still names GeekSuite');
       await must(page.getByRole('button', { name: 'Sign in', exact: true }), '"Sign in"');
       await must(page.getByRole('button', { name: 'Create an account', exact: true }), '"Create an account"');
       if (!/\/login$/.test(new URL(page.url()).pathname)) throw new Error(`left /login for ${page.url()}`);

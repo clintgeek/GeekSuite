@@ -147,4 +147,29 @@ describe('WeightTimeline — the line is the average, not the readings', () => {
     const paths = [].concat(avg.props.children);
     expect(paths.map((p) => p.props.d)).toEqual(['M2', 'M2']);
   });
+
+  // Round two: the goal line began at the goal's start (Aug 1) over weigh-ins
+  // that began Sep 19, so a third of the chart was empty; and the legend
+  // graded her ("At this pace · Off track", in amber).
+  it('fits the x-range to the weigh-ins and does not grade the pace', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-27T12:00:00-06:00'));
+    try {
+      const logs = Array.from({ length: 70 }, (_, i) => ({
+        log_date: new Date(Date.UTC(2026, 8, 19 + i)).toISOString(),
+        weight_value: Math.round((232 - (1.3 / 7) * i) * 10) / 10,
+      }));
+      const goal = { enabled: true, startWeight: 232, targetWeight: 195, startDate: '2026-08-01T00:00:00.000Z', goalDate: '2026-12-01T00:00:00.000Z' };
+      const { container } = render(<WeightTimeline weightLogs={logs} goal={goal} />);
+      const xs = capturedProps.data.flatMap((line) => line.data.map((p) => p.x)).sort();
+      expect(xs[0]).toBe('2026-09-19'); // nothing drawn before the first weigh-in
+      expect(xs.at(-1)).toBe('2026-12-01'); // the goal date is near, so it stays in view
+      const goalLine = capturedProps.data.find((line) => line.id === 'Goal');
+      expect(goalLine.data[0].x).toBe('2026-09-19');
+      expect(container.textContent).toContain('At this pace');
+      expect(container.textContent).not.toMatch(/Off track|On track/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

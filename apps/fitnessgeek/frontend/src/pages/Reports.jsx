@@ -8,6 +8,7 @@ import {
   CircularProgress,
   useTheme
 } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 import { GeekErrorState, useToast } from '@geeksuite/ui';
 import Shell from './embeddedShell.jsx';
 import DayRibbon from '../components/Reports/DayRibbon.jsx';
@@ -181,7 +182,12 @@ const AIPanel = ({ title, testId, loading, loadingLabel, error, data, empty, emp
   );
 };
 
-const Reports = ({ embedded = false }) => {
+/**
+ * `watch` is false only when Trends knows this person has no Garmin watch:
+ * the body section then leaves out everything a watch would fill. Undefined
+ * (the default) lets that section decide from its own answer.
+ */
+const Reports = ({ embedded = false, watch }) => {
   const { notify } = useToast();
   const [range, setRange] = useState('7');
   const [loading, setLoading] = useState(true);
@@ -340,6 +346,7 @@ const Reports = ({ embedded = false }) => {
   const rowSx = (i) => ({ py: 2.5, borderTop: i === 0 ? 0 : (t) => `1px solid ${t.palette.divider}` });
   const rule = (t) => `1px solid ${t.palette.divider}`;
   const averageEntries = Object.entries(overview?.averages || {});
+  const highlights = Array.isArray(trends?.highlights) ? trends.highlights.filter(Boolean) : [];
 
   return (
     <Shell embedded={embedded}>
@@ -362,14 +369,12 @@ const Reports = ({ embedded = false }) => {
       >
         {/* No "Food" under the title: the tab above already says Food. */}
         <LabelPanel title={rangeTitle} level={1} titleComponent="h2">
-          {/* The range and Export on one row. `size="small"` renders under
-              the 44px tap floor the mobile harness enforces (MOBILE_UI_PLAN
-              6): the compact look is kept, only the hit area grows. The
-              labels are words ("7 days"), not "7d". Export is a text button:
-              the page's filled blue is not spent on a download. */}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', justifyContent: 'space-between', pb: 3 }}>
+          {/* The range, in words ("7 days", not "7d"). The theme draws the
+              group as one segmented control; only the 44px tap floor is set
+              here. The download lives at the foot of the page: it is not
+              the first thing anyone came for. */}
+          <Box sx={{ pb: 3 }}>
             <ToggleButtonGroup
-              size="small"
               value={range}
               exclusive
               onChange={handleRangeChange}
@@ -377,20 +382,11 @@ const Reports = ({ embedded = false }) => {
               sx={{ '& .MuiToggleButtonGroup-grouped': { minHeight: 44, minWidth: 44 } }}
             >
               {RANGE_OPTIONS.map((option) => (
-                <ToggleButton key={option} value={option} sx={{ px: 3, whiteSpace: 'nowrap' }}>
+                <ToggleButton key={option} value={option} sx={{ whiteSpace: 'nowrap' }}>
                   {`${option} days`}
                 </ToggleButton>
               ))}
             </ToggleButtonGroup>
-            <Button
-              variant="text"
-              startIcon={<DownloadIcon />}
-              onClick={handleExport}
-              disabled={exporting || loading}
-              sx={{ fontWeight: 700, minHeight: 44 }}
-            >
-              Export CSV
-            </Button>
           </Box>
 
           {loading ? (
@@ -403,6 +399,20 @@ const Reports = ({ embedded = false }) => {
               error={error}
               onRetry={fetchReports}
             />
+          ) : nothingLogged ? (
+            /* A new person, or a range with nothing in it: said ONCE, here,
+               instead of five cards each saying they are empty. */
+            <Box data-testid="reports-empty" sx={{ pt: 2, pb: 1 }}>
+              <Typography sx={{ fontWeight: 700, fontSize: '1.0625rem', lineHeight: 1.3 }}>
+                {`Nothing logged in the last ${rangeDays} days`}
+              </Typography>
+              <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', lineHeight: 1.5, mt: 1, mb: 4 }}>
+                Log a few days and you’ll see how they compare here.
+              </Typography>
+              <Button component={RouterLink} to="/dashboard" variant="tonal" sx={{ minHeight: 44 }}>
+                Log food
+              </Button>
+            </Box>
           ) : (
             <>
               {/* Averages divide by the days that have logs (an unlogged day is
@@ -457,7 +467,7 @@ const Reports = ({ embedded = false }) => {
           )}
         </LabelPanel>
 
-        {!loading && !error && (
+        {!loading && !error && !nothingLogged && (
           <>
             <DayRibbon
               daily={overview?.daily || []}
@@ -539,25 +549,25 @@ const Reports = ({ embedded = false }) => {
                 )}
               </LabelPanel>
 
-              {/* What stands out */}
-              <LabelPanel title="What stands out">
-                {trendsFailed ? (
-                  <Typography data-testid="highlights-failed" variant="body2" color="text.secondary">
-                    Couldn’t load this part. The rest of the report is up to date.
-                  </Typography>
-                ) : trends?.highlights?.length ? trends.highlights.map((item, idx) => (
-                  <Box key={idx} sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, ...rowSx(idx) }}>
-                    <TrendingUpIcon fontSize="small" sx={{ color: 'text.secondary', mt: 0.5 }} />
-                    <Typography sx={{ fontSize: '1rem', lineHeight: 1.5 }}>
-                      {item}
+              {/* What stands out: only when there is something to say (or
+                  the read failed, which is said). An empty card saying
+                  "nothing stands out" was one more thing to read past. */}
+              {(trendsFailed || highlights.length > 0) && (
+                <LabelPanel title="What stands out" data-testid="highlights">
+                  {trendsFailed ? (
+                    <Typography data-testid="highlights-failed" variant="body2" color="text.secondary">
+                      Couldn’t load this part. The rest of the report is up to date.
                     </Typography>
-                  </Box>
-                )) : (
-                  <Typography variant="body2" color="text.secondary">
-                    Nothing stands out yet.
-                  </Typography>
-                )}
-              </LabelPanel>
+                  ) : highlights.map((item, idx) => (
+                    <Box key={idx} sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, ...rowSx(idx) }}>
+                      <TrendingUpIcon fontSize="small" sx={{ color: 'text.secondary', mt: 0.5 }} />
+                      <Typography sx={{ fontSize: '1rem', lineHeight: 1.5 }}>
+                        {item}
+                      </Typography>
+                    </Box>
+                  ))}
+                </LabelPanel>
+              )}
             </Box>
           </>
         )}
@@ -566,6 +576,9 @@ const Reports = ({ embedded = false }) => {
       {/* Notes from the AI, for the same range — outside the food report's
           loading and error states, so each panel shows up, loads and fails
           on its own. */}
+      {/* With nothing logged there is nothing to write about, and the one
+          empty state above has already said so. */}
+      {!nothingLogged && (
       <Box component="section" aria-labelledby="ai-notes-heading" data-testid="reports-ai-notes" sx={{ display: 'flex', flexDirection: 'column', gap }}>
         <Box>
           <SectionLabel sx={{ mb: 1 }}>{AI_NOTES_NAME}</SectionLabel>
@@ -585,23 +598,40 @@ const Reports = ({ embedded = false }) => {
             source={lastDaysSource(days)}
           />
           <AIPanel
-            title="Trends"
+            title="Patterns"
             testId="trend-ai"
             loading={trendLoading}
-            loadingLabel="Loading the trends"
+            loadingLabel="Loading the patterns"
             error={trendError}
             data={trendWatch}
             empty={false}
-            emptyText="Nothing stands out yet."
+            emptyText="No patterns to point out yet. They take a few weeks of logging."
             emptyPattern={EMPTY_TRENDS}
             source={lastDaysSource(trendDays)}
           />
         </Box>
       </Box>
+      )}
 
       {/* Body and recovery: its own 90-day window and its own loading, so the
           range toggle and the food report's states never reach it. */}
-      <BodyRecoverySection />
+      <BodyRecoverySection watch={watch} />
+
+      {/* The download, last and quiet: the same days as the range above. */}
+      {!nothingLogged && !error && (
+        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          <Button
+            variant="text"
+            startIcon={<DownloadIcon />}
+            onClick={handleExport}
+            disabled={exporting || loading}
+            data-testid="reports-download"
+            sx={{ minHeight: 44, fontWeight: 600, color: 'text.secondary' }}
+          >
+            {exporting ? 'Preparing your spreadsheet…' : 'Download as a spreadsheet'}
+          </Button>
+        </Box>
+      )}
     </Shell>
   );
 };

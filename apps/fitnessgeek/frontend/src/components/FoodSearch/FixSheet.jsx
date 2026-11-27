@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, TextField, Typography } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, Link, TextField, Typography } from '@mui/material';
+import { useTheme, alpha } from '@mui/material/styles';
 import { useBackToClose } from './useBackToClose.js';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { cal, fmt } from '../../utils/plainWords.js';
 import { describeFailure } from './composerText.js';
 import { newIdempotencyKey } from './idempotency.js';
-import { portionChoices } from './entries.js';
+import { portionChoices, displayName } from './entries.js';
+import { bottomSheetProps } from './bottomSheet.js';
 import SignInButton, { isSignedOutMessage } from './SignInButton.jsx';
 
 /**
@@ -25,6 +26,18 @@ import SignInButton, { isSignedOutMessage } from './SignInButton.jsx';
  *     described into the same meal on the same day FIRST, and only once they
  *     have landed is the old entry deleted — so a failure leaves her with the
  *     entry she had, never with nothing.
+ *
+ * ONE NUMBER, ONE BUTTON (review 2026-11-27). The sheet used to have three
+ * size buttons that wrote at once, a Calories box with its own Save, and
+ * "Log this instead" as a third button; and "Bigger ~300" could look chosen
+ * while Calories said 220. Now the size buttons and the Calories box are the
+ * same number: a size fills the box, typing in the box un-chooses the sizes,
+ * and whichever size matches the box is the one marked (aria-pressed). The one
+ * filled button says what it will do: "Keep 220 cal" when nothing changed,
+ * "Save 150 cal" when it has. "It was something else" is a text link that
+ * swaps the sheet to the describe box, whose one button is "Log this instead".
+ *
+ * A bottom sheet on a phone (bottomSheet.js), a centred window above that.
  */
 
 export default function FixSheet({ item, onClose, fixes }) {
@@ -32,6 +45,8 @@ export default function FixSheet({ item, onClose, fixes }) {
   const open = Boolean(item);
   const [calories, setCaloriesText] = useState('');
   const [actually, setActually] = useState('');
+  // 'size' (the calories) or 'instead' (say it again).
+  const [mode, setMode] = useState('size');
   const [working, setWorking] = useState(null);
   const [error, setError] = useState(null);
   const [attempt, setAttempt] = useState(null);
@@ -40,6 +55,7 @@ export default function FixSheet({ item, onClose, fixes }) {
     if (!item) return;
     setCaloriesText(String(Math.round(Number(item.calories) || 0)));
     setActually('');
+    setMode('size');
     setWorking(null);
     setError(null);
     setAttempt(null);
@@ -49,9 +65,14 @@ export default function FixSheet({ item, onClose, fixes }) {
   useBackToClose(open, onClose);
 
   if (!item) return null;
+  const logged = Math.round(Number(item.calories) || 0);
   const { smaller, bigger } = portionChoices(item);
   const typed = Number.parseFloat(String(calories).replace(',', '.'));
-  const canSave = Number.isFinite(typed) && typed >= 0 && typed <= 10000 && Math.round(typed) !== Math.round(item.calories || 0);
+  const valid = Number.isFinite(typed) && typed >= 0 && typed <= 10000;
+  const target = valid ? Math.round(typed) : null;
+  const changed = valid && target !== logged;
+  const canFixCalories = Boolean(fixes?.setCalories);
+  const canRedescribe = Boolean(fixes?.redescribe);
 
   const run = async (what, fn) => {
     if (working) return;
@@ -67,7 +88,11 @@ export default function FixSheet({ item, onClose, fixes }) {
     }
   };
 
-  const setTo = (target) => run(`cal-${target}`, () => fixes.setCalories(item, target));
+  const save = () => {
+    if (!valid) return;
+    if (!changed) { onClose?.(); return; }
+    run('calories', () => fixes.setCalories(item, target));
+  };
   const sayInstead = () => {
     const text = actually.trim();
     if (!text) return;
@@ -77,91 +102,168 @@ export default function FixSheet({ item, onClose, fixes }) {
     run('actually', () => fixes.redescribe(item, text, key));
   };
 
-  // Pills, like every button in the app (visual review B6). A choice with a
-  // number says it on two lines on purpose — "Smaller" over "~150" — rather
-  // than wrapping wherever the width runs out ("Smaller ·" / "~150").
-  const bigButton = { minHeight: 56, fontSize: '1.0625rem', fontWeight: 700, flex: '1 1 0', px: 1.5, lineHeight: 1.2 };
-  const twoLines = (word, number) => (
-    <Box component="span" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <span>{word}</span>
-      <Box component="span" sx={{ fontSize: '0.9375rem', fontWeight: 700 }}>~{fmt(number)}</Box>
-    </Box>
-  );
+  // A size says its number on a second line on purpose — "Smaller" over
+  // "~150" — rather than wrapping wherever the width runs out.
+  const sizes = [
+    { key: 'right', word: 'About right', value: logged, label: 'About right' },
+    { key: 'smaller', word: 'Smaller', value: smaller, label: `Smaller · ~${fmt(smaller)}` },
+    { key: 'bigger', word: 'Bigger', value: bigger, label: `Bigger · ~${fmt(bigger)}` },
+  ];
+  const sizeButton = (chosen) => ({
+    minHeight: 56,
+    fontSize: '1rem',
+    fontWeight: 700,
+    flex: '1 1 0',
+    px: 1,
+    lineHeight: 1.2,
+    color: 'text.primary',
+    borderWidth: 1.5,
+    borderColor: chosen ? 'primary.main' : (theme.palette.outline || theme.palette.divider),
+    bgcolor: chosen ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.2 : 0.1) : 'transparent',
+    // Hover and focus must not look like "chosen": only `chosen` paints it.
+    '&:hover, &:focus': {
+      borderWidth: 1.5,
+      borderColor: chosen ? 'primary.main' : theme.palette.text.secondary,
+      bgcolor: chosen ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.2 : 0.1) : 'transparent',
+    },
+  });
+  const primaryButton = { minHeight: 52, fontWeight: 700, fontSize: '1.0625rem', boxShadow: 'none' };
+  const linkButton = { minHeight: 44, display: 'inline-flex', alignItems: 'center', fontSize: '1rem', fontWeight: 700 };
+  const name = displayName(item.name);
 
   return (
-    <Dialog open={open} onClose={() => !working && onClose?.()} maxWidth="xs" fullWidth aria-labelledby="fix-sheet-title" data-testid="fix-sheet">
+    <Dialog
+      open={open}
+      onClose={() => !working && onClose?.()}
+      maxWidth="xs"
+      fullWidth
+      aria-labelledby="fix-sheet-title"
+      data-testid="fix-sheet"
+      {...bottomSheetProps}
+    >
       <DialogTitle id="fix-sheet-title" sx={{ pb: 0.5 }}>
-        <Typography component="span" sx={{ display: 'block', fontSize: '1.25rem', fontWeight: 700 }}>
-          Fix {item.name}
+        <Typography component="span" sx={{ display: 'block', fontSize: '1.25rem', fontWeight: 700, overflowWrap: 'anywhere' }}>
+          Fix {name}
         </Typography>
         <Typography component="span" sx={{ display: 'block', fontSize: '1rem', color: 'text.secondary' }}>
-          Logged at {cal(item.calories || 0)}
+          Logged at {cal(logged)}
         </Typography>
       </DialogTitle>
-      <DialogContent sx={{ pb: 3 }}>
-        {/* 4px theme unit: 8px between buttons, 20px between the three ways to fix it. */}
-        <Typography sx={{ fontSize: '1rem', fontWeight: 700, mt: 2, mb: 2 }}>How big was it?</Typography>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Button variant="outlined" sx={bigButton} disabled={Boolean(working)} onClick={() => onClose?.()}>
-            About right
-          </Button>
-          <Button variant="outlined" sx={bigButton} disabled={Boolean(working)} onClick={() => setTo(smaller)} aria-label={`Smaller · ~${fmt(smaller)}`}>
-            {working === `cal-${smaller}` ? <CircularProgress size={20} color="inherit" aria-hidden /> : twoLines('Smaller', smaller)}
-          </Button>
-          <Button variant="outlined" sx={bigButton} disabled={Boolean(working)} onClick={() => setTo(bigger)} aria-label={`Bigger · ~${fmt(bigger)}`}>
-            {working === `cal-${bigger}` ? <CircularProgress size={20} color="inherit" aria-hidden /> : twoLines('Bigger', bigger)}
-          </Button>
-        </Box>
+      <DialogContent sx={{ pb: 4 }}>
+        {mode === 'size' ? (
+          <Box component="form" onSubmit={(e) => { e.preventDefault(); save(); }}>
+            {/* 4px theme unit: 8px between the sizes, 16px between the parts. */}
+            <Typography id="fix-sheet-size" sx={{ fontSize: '1rem', fontWeight: 700, mt: 2, mb: 2 }}>How big was it?</Typography>
+            <Box role="group" aria-labelledby="fix-sheet-size" sx={{ display: 'flex', gap: 2 }}>
+              {sizes.map((size) => {
+                const chosen = valid && target === size.value && (size.key === 'right' || size.value !== logged);
+                return (
+                  <Button
+                    key={size.key}
+                    variant="outlined"
+                    aria-pressed={chosen}
+                    aria-label={size.label}
+                    data-testid={`fix-size-${size.key}`}
+                    disabled={Boolean(working) || !canFixCalories}
+                    onClick={() => { setCaloriesText(String(size.value)); setError(null); }}
+                    sx={sizeButton(chosen)}
+                  >
+                    <Box component="span" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <span>{size.word}</span>
+                      {size.key !== 'right' && (
+                        <Box component="span" sx={{ fontSize: '0.9375rem', fontWeight: 600, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
+                          ~{fmt(size.value)}
+                        </Box>
+                      )}
+                    </Box>
+                  </Button>
+                );
+              })}
+            </Box>
 
-        <Box
-          component="form"
-          onSubmit={(e) => { e.preventDefault(); if (canSave) setTo(Math.round(typed)); }}
-          sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', mt: 5 }}
-        >
-          <TextField
-            label="Calories"
-            value={calories}
-            onChange={(e) => { if (/^\d*[.,]?\d*$/.test(e.target.value.trim())) setCaloriesText(e.target.value.trim()); }}
-            inputProps={{ inputMode: 'decimal', autoComplete: 'off' }}
-            disabled={Boolean(working)}
-            sx={{ flex: 1, '& input': { fontSize: '1.125rem', fontWeight: 700 } }}
-          />
-          <Button type="submit" variant="contained" disabled={!canSave || Boolean(working)} sx={{ minHeight: 56, fontWeight: 700, px: 3 }}>
-            Save
-          </Button>
-        </Box>
+            <TextField
+              fullWidth
+              label="Calories"
+              value={calories}
+              onChange={(e) => { if (/^\d*[.,]?\d*$/.test(e.target.value.trim())) setCaloriesText(e.target.value.trim()); }}
+              error={calories !== '' && !valid}
+              helperText={calories !== '' && !valid ? 'That looks too high. Check the number.' : 'Or type the number if you know it.'}
+              inputProps={{ inputMode: 'decimal', autoComplete: 'off' }}
+              disabled={Boolean(working) || !canFixCalories}
+              sx={{ mt: 4, '& input': { fontSize: '1.125rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' } }}
+            />
 
-        <Box
-          component="form"
-          onSubmit={(e) => { e.preventDefault(); sayInstead(); }}
-          sx={{ mt: 5 }}
-        >
-          <TextField
-            fullWidth
-            label="It was actually…"
-            placeholder="e.g. a small bowl of tomato soup"
-            value={actually}
-            onChange={(e) => setActually(e.target.value)}
-            disabled={Boolean(working)}
-            inputProps={{ enterKeyHint: 'send', autoComplete: 'off' }}
-          />
-          <Button
-            type="submit"
-            variant="outlined"
-            fullWidth
-            disabled={!actually.trim() || Boolean(working)}
-            startIcon={working === 'actually' ? <CircularProgress size={18} color="inherit" aria-hidden /> : null}
-            sx={{ mt: 2, minHeight: 52, fontWeight: 700, fontSize: '1.0625rem', borderWidth: 2, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
-          >
-            {working === 'actually' ? 'Working it out…' : 'Log this instead'}
-          </Button>
-        </Box>
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              data-testid="fix-save"
+              disabled={!valid || Boolean(working)}
+              startIcon={working === 'calories' ? <CircularProgress size={18} color="inherit" aria-hidden /> : null}
+              sx={{ ...primaryButton, mt: 4 }}
+            >
+              {working === 'calories' ? 'Saving…' : changed ? `Save ${cal(target)}` : valid ? `Keep ${cal(logged)}` : 'Save'}
+            </Button>
+
+            {canRedescribe && (
+              <Box sx={{ mt: 2, textAlign: 'center' }}>
+                <Link
+                  component="button"
+                  type="button"
+                  underline="hover"
+                  disabled={Boolean(working)}
+                  onClick={() => { setMode('instead'); setError(null); }}
+                  sx={linkButton}
+                >
+                  It was something else
+                </Link>
+              </Box>
+            )}
+          </Box>
+        ) : (
+          <Box component="form" onSubmit={(e) => { e.preventDefault(); sayInstead(); }}>
+            <TextField
+              fullWidth
+              autoFocus
+              label="It was actually…"
+              placeholder="e.g. a small bowl of tomato soup"
+              helperText={`This takes the place of ${name}.`}
+              value={actually}
+              onChange={(e) => setActually(e.target.value)}
+              disabled={Boolean(working)}
+              inputProps={{ enterKeyHint: 'send', autoComplete: 'off' }}
+              sx={{ mt: 3 }}
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              disabled={!actually.trim() || Boolean(working)}
+              startIcon={working === 'actually' ? <CircularProgress size={18} color="inherit" aria-hidden /> : null}
+              sx={{ ...primaryButton, mt: 4 }}
+            >
+              {working === 'actually' ? 'Working it out…' : 'Log this instead'}
+            </Button>
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Link
+                component="button"
+                type="button"
+                underline="hover"
+                disabled={Boolean(working)}
+                onClick={() => { setMode('size'); setError(null); }}
+                sx={linkButton}
+              >
+                Back to the calories
+              </Link>
+            </Box>
+          </Box>
+        )}
 
         {error && (
           <Alert
             severity="warning"
             action={isSignedOutMessage(error) ? <SignInButton /> : undefined}
-            sx={{ mt: 4, borderRadius: '12px', fontSize: '1rem', color: theme.palette.text.primary, alignItems: 'center' }}
+            sx={{ mt: 3, borderRadius: '12px', fontSize: '1rem', color: theme.palette.text.primary, alignItems: 'center' }}
           >
             {error}
           </Alert>

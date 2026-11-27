@@ -1,10 +1,11 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Box, Button, TextField, Typography, ButtonBase } from '@mui/material';
+import { Box, Button, Dialog, TextField, Typography, ButtonBase } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { trackColor } from '../../theme/theme.jsx';
 import { Surface } from '../primitives';
 import { Check as CheckIcon } from '@mui/icons-material';
 import { mealWord } from '../../utils/plainWords.js';
+import { RingMark } from '../../pages/Login.jsx';
 
 /**
  * The first run, for a person who has never used the app (ONE_APP_PLAN.md
@@ -20,16 +21,27 @@ import { mealWord } from '../../utils/plainWords.js';
  * More. Finishing (or "Maybe later") writes everything in one partial save:
  * `{ preferred_name, goal, first_run_done: true }`.
  *
+ * It is a welcome, not a page of the app: it takes over the whole screen (a
+ * full-screen dialog over the top bar and the tabs, which mean nothing to a
+ * person who hasn't started), with the app's mark above one card. There is no
+ * way to close it except through it, and "Maybe later" on the last step is
+ * always there.
+ *
+ * The goal step opens with the gentlest answer already chosen ("Just keep
+ * track"), so "Next" is never live over three empty circles and still
+ * nothing has to be decided to carry on.
+ *
  * It cannot dead-end: nothing is required, every step has a way back, and
  * the last step's two buttons wait for the save (no second tap, no second
  * save). If the save fails the person is told here and can tap again; the
  * answers stay.
  */
 const GOALS = [
-  { id: 'lose', title: 'Lose a little weight', body: 'See how much is left each day.' },
+  { id: 'lose', title: 'Lose weight', body: 'See how much is left each day.' },
   { id: 'maintain', title: 'Keep my weight steady', body: 'Stay about where I am.' },
   { id: 'track', title: 'Just keep track', body: 'Write down what I eat, no targets.' },
 ];
+const GENTLEST = 'track';
 
 const Step = ({ n, children }) => (
   <Box component="section" aria-labelledby={`first-run-step-${n}`} sx={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -41,7 +53,7 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
   const theme = useTheme();
   const [step, setStep] = useState(1);
   const [name, setName] = useState(suggestedName || '');
-  const [goal, setGoal] = useState(null);
+  const [goal, setGoal] = useState(GENTLEST);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const headingRef = useRef(null);
@@ -83,9 +95,37 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
   );
 
   return (
-    // One card: the step count over a three-part bar, then the step's
-    // question and its answers.
-    <Surface data-testid="first-run" sx={{ maxWidth: 560, width: '100%', mx: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
+    <Dialog
+      open
+      fullScreen
+      aria-labelledby={`first-run-step-${step}`}
+      transitionDuration={0}
+      PaperProps={{
+        elevation: 0,
+        sx: {
+          bgcolor: 'background.default',
+          backgroundImage: 'none',
+          borderRadius: 0,
+          border: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          px: { xs: 4, sm: 6 },
+          pt: 'calc(32px + env(safe-area-inset-top))',
+          pb: 'calc(32px + env(safe-area-inset-bottom))',
+        },
+      }}
+    >
+    {/* Centred when there is room (auto margins, so a tall card still scrolls
+        from its top); from the top on a phone, clear of the keyboard. */}
+    <Box sx={{ width: '100%', maxWidth: 560, my: { xs: 0, sm: 'auto' }, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+      <RingMark size={40} />
+      <Typography sx={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.01em' }}>FitnessGeek</Typography>
+    </Box>
+    {/* One card: the step count over a three-part bar, then the step's
+        question and its answers. */}
+    <Surface data-testid="first-run" sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 5 }}>
       <Box>
         <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', color: 'text.secondary', mb: 2 }}>Step {step} of 3</Typography>
         <Box aria-hidden sx={{ display: 'flex', gap: 1.5 }}>
@@ -158,7 +198,7 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
             })}
           </Box>
           <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', mt: -2 }}>
-            You can change this any time in Settings.
+            Not sure? Leave it as it is. You can change this any time in Settings.
           </Typography>
           <Box sx={{ display: 'flex', gap: 3 }}>
             <Button size="large" variant="tonal" onClick={() => setStep(1)} sx={{ flex: 1, minHeight: 52 }}>Back</Button>
@@ -198,5 +238,7 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
         </Step>
       )}
     </Surface>
+    </Box>
+    </Dialog>
   );
 }

@@ -37,7 +37,7 @@ describe('BPLogList — dangerous reading', () => {
     render(<BPLogList logs={[DANGEROUS_READING]} onDelete={() => {}} />);
 
     expect(
-      screen.getAllByRole('button', { name: /remove the 190\/70 mmhg reading/i }).length
+      screen.getAllByRole('button', { name: /remove the 190\/70 reading/i }).length
     ).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /^(delete|remove)$/i })).toBeNull();
   });
@@ -47,8 +47,13 @@ describe('BPInsights — dangerous reading', () => {
   it('190/70 is reported as Crisis, not Stage 2 Hypertension', () => {
     render(<BPInsights bpLogs={[DANGEROUS_READING]} />);
 
-    // In plain words now (review D-1), with the medical name in brackets.
-    expect(screen.getByTestId('bp-headline')).toHaveTextContent('190/70 — very high (crisis)');
+    // In plain words (review D-1): the number, the tag with the medical name
+    // in brackets, and one sentence.
+    expect(screen.getByTestId('bp-now')).toHaveTextContent('190/70');
+    expect(screen.getByText('Very high (crisis)')).toBeInTheDocument();
+    expect(screen.getByTestId('bp-headline')).toHaveTextContent('No readings in the last 7 days. Your last one, Jun 1, was very high.');
+    // A crisis-range reading keeps a clear, serious line.
+    expect(screen.getByTestId('bp-guidance')).toHaveTextContent(/measure again.*call your doctor today.*call 911/);
     expect(screen.queryByText(/stage 2/i)).toBeNull();
     expect(screen.queryByText(/Hypertensive Crisis/)).toBeNull();
   });
@@ -58,9 +63,10 @@ describe('BPCategoryDistribution — dangerous reading', () => {
   it('190/70 is counted under Crisis, not Stage 2', () => {
     render(<BPCategoryDistribution bpLogs={[DANGEROUS_READING]} />);
 
-    const chart = screen.getByRole('img', { name: /readings by range/i });
-    expect(within(chart.parentElement).getByText(/Very high \(crisis\) \(1\)/)).toBeInTheDocument();
-    expect(screen.queryByText(/stage 2\) \(1\)/i)).toBeNull();
+    const rows = within(screen.getByTestId('bp-donut-legend')).getAllByTestId('bp-range-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Very high (crisis)1 reading');
+    expect(screen.queryByText(/stage 2/i)).toBeNull();
   });
 });
 

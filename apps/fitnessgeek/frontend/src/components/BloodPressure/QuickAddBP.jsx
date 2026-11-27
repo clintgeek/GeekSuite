@@ -3,15 +3,13 @@ import {
   Typography,
   TextField,
   Button,
-  Box,
-  useTheme
+  Box
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
-import { LabelPanel, Tag } from '../primitives';
+import { LabelPanel } from '../primitives';
 import AddBPDialog from './AddBPDialog.jsx';
-import DateField from '../primitives/DateField.jsx';
-import { categorizeBP } from '../../utils/bpUtils.js';
-import { bpStageWords } from '../../utils/plainWords.js';
+import BPWhen from './BPWhen.jsx';
+import BPReadingStatus from './BPReadingStatus.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { useToday } from '../../hooks/useToday.js';
 import {
@@ -22,7 +20,7 @@ import {
   splitInstantToLocal,
   isBPDuplicate,
 } from './bpTimeUtils.js';
-import { validateBPForm, DUPLICATE_MESSAGE } from './bpForm.js';
+import { validateBPForm } from './bpForm.js';
 import BPSaveError from './BPSaveError.jsx';
 
 /**
@@ -34,8 +32,7 @@ import BPSaveError from './BPSaveError.jsx';
  * header): a home cuff is read morning and evening, and the old warning
  * would fire on exactly that normal second entry.
  */
-const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) => {
-  const theme = useTheme();
+const QuickAddBP = ({ onAdd, autoOpen = false, onAutoOpened }) => {
   const [showDialog, setShowDialog] = useState(false);
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
@@ -54,6 +51,8 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
   const [error, setError] = useState('');
   const [duplicate, setDuplicate] = useState(null);
   const [loading, setLoading] = useState(false);
+  // Bumped after each save, so the day choice and the time reveal start fresh.
+  const [seed, setSeed] = useState(0);
 
   // Keep the shown clock current while untouched (a new day, or coming back
   // to the tab); the instant actually saved is taken at Save either way.
@@ -85,10 +84,10 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
       setPickedDate(null);
       setWhenTouched(false);
       setTime(nowLocalTime());
+      setSeed((n) => n + 1);
     } catch (err) {
       if (isBPDuplicate(err)) {
         setDuplicate(payload);
-        setError(DUPLICATE_MESSAGE);
       } else {
         setError(errorMessage(err, 'Couldn’t save that reading. Try again.'));
       }
@@ -128,23 +127,6 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
     await save({ ...duplicate, measured_at: later, date: day });
   };
 
-  const getBPStatus = () => {
-    if (!systolic || !diastolic) return null;
-
-    const sys = parseInt(systolic);
-    const dia = parseInt(diastolic);
-
-    if (isNaN(sys) || isNaN(dia)) return null;
-
-    // The one shared categoriser — same bands, same order, as the saved row
-    // will get once it lands in BPLogList/BPInsights/BPReport. No local
-    // "High Normal" band here; that band never existed in the AHA guidelines
-    // and let the live-typing category disagree with what got saved.
-    const category = categorizeBP(sys, dia, theme.palette.mode);
-    return { status: bpStageWords(category.stage).label, color: category.color };
-  };
-
-  const bpStatus = getBPStatus();
   // As in the dialog (A8): Save waits for a reading it can save, and a
   // finished-looking reading that can't be saved says why.
   const check = validateBPForm({ systolic, diastolic, pulse });
@@ -206,44 +188,27 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
               />
             </Box>
             <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', lineHeight: 1.5, mt: 1.5 }}>
-              The two numbers on your cuff, for example 120 over 80, in {unit}. Pulse is optional.
+              The two numbers on your cuff, for example 120 over 80. Pulse is optional.
             </Typography>
           </Box>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 3 }}>
-            <DateField
-              fullWidth
-              value={date}
-              onChange={setPickedDate}
-              size="medium"
-              max={today}
-              sx={{ minWidth: 0 }}
-            />
-            <TextField
-              fullWidth
-              label="Time"
-              type="time"
-              value={time}
-              onChange={(e) => { setTime(e.target.value); setWhenTouched(true); }}
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ step: 60 }}
-            />
-          </Box>
+          <BPWhen
+            key={seed}
+            date={date}
+            time={time}
+            today={today}
+            timeOpen={whenTouched}
+            onDate={setPickedDate}
+            onTime={(v) => { setTime(v); setWhenTouched(true); }}
+          />
 
-          {/* BP Status indicator */}
-          {bpStatus && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Typography variant="body2">
-                This reading is
-              </Typography>
-              <Tag fill={bpStatus.color}>{bpStatus.status}</Tag>
-            </Box>
-          )}
+          {/* What this reading is, and one calm line about it. */}
+          <BPReadingStatus systolic={systolic} diastolic={diastolic} />
 
           {/* While the dialog is open it shows its own errors. */}
           <BPSaveError
             error={error || liveError}
-            duplicate={Boolean(duplicate)}
+            duplicateAt={duplicate?.measured_at || null}
             onSaveLater={saveOneMinuteLater}
             busy={loading}
           />

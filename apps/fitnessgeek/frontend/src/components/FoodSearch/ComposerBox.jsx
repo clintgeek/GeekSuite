@@ -4,6 +4,7 @@ import { useTheme } from '@mui/material/styles';
 import {
   Clear as ClearIcon,
   Mic as MicIcon,
+  QrCodeScanner as BarcodeIcon,
   Stop as StopIcon,
   HourglassEmpty as ThinkingIcon,
   CloudOff as OfflineIcon,
@@ -30,9 +31,15 @@ import { slashFocusProps } from '@geeksuite/ui';
  *
  * It is the `/` target wherever it appears (suite slash focus, priority 30).
  *
- * ONE PRIMARY AT A TIME (L20). For a short name ("fage") the list is open
- * and its rows are the main way in, so Log it steps back to an outlined
- * "Just log ‘fage’" (`quiet`). For a sentence it is the filled primary.
+ * LOG IT IS ALWAYS THE SAME BUTTON (review 2026-11-27). For a short name
+ * ("fage") it used to turn into an outlined "Just log ‘fage’" while she was
+ * still typing, which read as a different button appearing. It stays the
+ * filled "Log it"; the line under it says the list below is the other way in.
+ *
+ * THE BARCODE IS BESIDE THE MIC (review 2026-11-27). It was a text link under
+ * everything, off the screen once there were chips; someone coming from
+ * another food app looks for the barcode first. Same size and ring as the
+ * mic, named "Scan a barcode", at every width.
  *
  * `micDisabled` turns the mic off without hiding it — offline, where the
  * speech service can't work and used to say the microphone was broken (L18).
@@ -56,8 +63,9 @@ const ComposerBox = ({
   listening = false,
   thinking = false,
   canLog = true,
-  quiet = false,
   micDisabled = false,
+  onBarcodeClick,
+  barcodeDisabled = false,
   disabled = false,
   status = null,
   statusTone = 'muted',
@@ -81,6 +89,24 @@ const ComposerBox = ({
   };
 
   const ink = theme.palette.text.primary;
+  // The round buttons beside the box: the barcode and the mic, one look.
+  const roundButton = {
+    width: 52,
+    height: 52,
+    flexShrink: 0,
+    borderRadius: '50%',
+    border: `1px solid ${theme.palette.outline || theme.palette.divider}`,
+    color: ink,
+    bgcolor: 'transparent',
+    // Off (no signal, or a write in flight) looks off: a divider ring and a
+    // grey glyph.
+    '&.Mui-disabled': {
+      borderColor: theme.palette.divider,
+      color: theme.palette.text.disabled,
+      bgcolor: 'transparent',
+    },
+    '@media (hover: hover)': { '&:hover': { bgcolor: theme.palette.action.hover } },
+  };
   return (
     <Box data-testid="composer-box">
       <Typography
@@ -93,7 +119,7 @@ const ComposerBox = ({
       </Typography>
 
       {/* The box with the mic beside it. */}
-      <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
         <TextField
           fullWidth
           multiline
@@ -148,6 +174,17 @@ const ComposerBox = ({
             },
           }}
         />
+        {onBarcodeClick && (
+          <IconButton
+            onClick={onBarcodeClick}
+            disabled={thinking || disabled || barcodeDisabled}
+            aria-label="Scan a barcode"
+            data-testid="scan-button"
+            sx={roundButton}
+          >
+            <BarcodeIcon sx={{ fontSize: 24 }} />
+          </IconButton>
+        )}
         {onMicClick && (
           <IconButton
             onClick={onMicClick}
@@ -156,12 +193,7 @@ const ComposerBox = ({
             aria-pressed={listening}
             data-testid="speak-button"
             sx={{
-              width: 52,
-              height: 52,
-              flexShrink: 0,
-              // The one round thing on the panel: the mic.
-              borderRadius: '50%',
-              border: `1px solid ${theme.palette.outline || theme.palette.divider}`,
+              ...roundButton,
               color: listening ? theme.palette.primary.contrastText : ink,
               bgcolor: listening ? theme.palette.primary.main : 'transparent',
               // Listening is a filled blue disc with a contrast stop glyph,
@@ -170,12 +202,6 @@ const ComposerBox = ({
               ...(listening ? {
                 '&&': { bgcolor: theme.palette.primary.main, color: theme.palette.primary.contrastText, borderColor: theme.palette.primary.main },
               } : {}),
-              // Off (no signal) looks off: a divider ring and a grey glyph.
-              '&.Mui-disabled': {
-                borderColor: theme.palette.divider,
-                color: theme.palette.text.disabled,
-                bgcolor: 'transparent',
-              },
               '@media (hover: hover)': {
                 '&:hover': { bgcolor: listening ? theme.palette.primary.dark : theme.palette.action.hover },
               },
@@ -190,7 +216,7 @@ const ComposerBox = ({
       {mealPicker && <Box sx={{ mt: 2.5 }}>{mealPicker}</Box>}
 
       <Button
-        variant={quiet && !thinking ? 'outlined' : 'contained'}
+        variant="contained"
         size="large"
         onClick={() => { if (!thinking && canLog) onSubmit?.(); }}
         disabled={!canLog && !thinking}
@@ -212,11 +238,10 @@ const ComposerBox = ({
           fontSize: '1.0625rem',
           fontWeight: 700,
           boxShadow: 'none',
-          ...(quiet && !thinking ? { borderWidth: 2, '&:hover': { borderWidth: 2 } } : {}),
           ...(thinking ? { pointerEvents: 'none' } : {}),
         }}
       >
-        {thinking ? 'Working it out…' : quiet && value?.trim() ? `Just log ‘${value.trim()}’` : 'Log it'}
+        {thinking ? 'Working it out…' : 'Log it'}
       </Button>
 
       {/* Always rendered, always at least one line tall: see the note above. */}

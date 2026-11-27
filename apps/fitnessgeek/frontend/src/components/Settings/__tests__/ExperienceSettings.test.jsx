@@ -4,7 +4,7 @@
  * Full to choose, and nothing on the panel says either word.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { GeekToastProvider } from '@geeksuite/ui';
 import { ExperienceContext } from '../../../contexts/ExperienceContext.jsx';
 import ExperienceSettings from '../ExperienceSettings.jsx';
@@ -48,13 +48,17 @@ describe('ExperienceSettings', () => {
     mount(value({ largerText: true }));
     expect(screen.getByRole('checkbox', { name: 'Larger text' })).toBeChecked();
     await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'Larger text' })); });
-    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    expect(await within(screen.getByTestId('experience-settings')).findByRole('status')).toHaveTextContent('Saved');
   });
 
   it('a failed save says so', async () => {
     mount(value({ setLargerText: vi.fn(() => Promise.resolve({ ok: false })) }));
     await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'Larger text' })); });
-    expect(await screen.findByText('Couldn’t save that. Try again.')).toBeInTheDocument();
+    // Under the switch, where she is looking (the switch going back alone
+    // reads as a mis-tap), as well as the toast.
+    const panel = screen.getByTestId('experience-settings');
+    expect(await within(panel).findByRole('alert')).toHaveTextContent('Couldn’t save that. Try again.');
+    expect(within(panel).queryByRole('status')).toBeNull();
   });
 
   it('holds the theme picker the page hands it', () => {

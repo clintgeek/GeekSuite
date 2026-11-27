@@ -3,7 +3,8 @@ import { Box, ButtonBase, Typography } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { ChevronRight as ChevronIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
-import { moreGroupsFor } from '../components/Layout/navConfig.jsx';
+import { GeekAppSwitcher } from '@geeksuite/ui';
+import { APP_NAME, moreGroupsFor } from '../components/Layout/navConfig.jsx';
 import { LabelPanel, Page } from '../components/primitives';
 
 /**
@@ -83,6 +84,15 @@ export default function More() {
           </Box>
         </LabelPanel>
       ))}
+      {/* The other Geek apps. On a phone the header no longer carries the
+          nine-dot grid, so it lives here, with words beside it. */}
+      <Box
+        data-testid="more-other-apps"
+        sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', justifyContent: 'space-between', gap: 3, px: 4, minHeight: 56 }}
+      >
+        <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary' }}>Your other Geek apps</Typography>
+        <GeekAppSwitcher currentApp={APP_NAME} />
+      </Box>
     </Page>
   );
 }

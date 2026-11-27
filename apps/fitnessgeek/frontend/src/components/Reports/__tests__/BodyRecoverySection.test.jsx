@@ -78,7 +78,7 @@ beforeEach(() => {
   });
 });
 
-const renderSection = () => render(<MemoryRouter><BodyRecoverySection /></MemoryRouter>);
+const renderSection = (props = {}) => render(<MemoryRouter><BodyRecoverySection {...props} /></MemoryRouter>);
 
 describe('Body & recovery', () => {
   it('labels itself as the last 90 days, with no apology for the range toggle (D-5)', async () => {
@@ -168,21 +168,54 @@ describe('Body & recovery', () => {
     expect(screen.queryByText(/spo2|pulse ox|breathing|respiration/i)).toBeNull();
   });
 
-  it('without Influx (200 not_enabled, what the endpoint now sends): the quiet line, not the outage message', async () => {
+  it('no watch (200 not_enabled, what the endpoint sends): nothing about a watch at all, the body cards stay', async () => {
     influx.getTrends.mockResolvedValue({ available: false, reason: 'not_enabled', days: [], fitnessAge: null, activeKcal30: null });
     renderSection();
-    const notice = await screen.findByTestId('garmin-not-connected');
-    expect(notice).toHaveTextContent('Connect a Garmin watch to see heart rate, sleep and activity trends here.');
-    expect(within(notice).getByRole('link', { name: 'Connect Garmin' })).toHaveAttribute('href', '/settings#garmin');
+    expect(await screen.findByTestId('trend-weight')).toBeInTheDocument();
+    expect(screen.getByTestId('trend-bp')).toBeInTheDocument();
+    // No "connect" card here: Trends says it once, at the foot of the page.
+    expect(screen.queryByTestId('garmin-not-connected')).toBeNull();
+    expect(screen.queryByText(/Garmin|watch/i)).toBeNull();
     expect(screen.queryByText(/aren't available right now/)).toBeNull();
+    expect(screen.queryByText('Heart and recovery')).toBeNull();
+    expect(screen.queryByTestId('trend-restingHR')).toBeNull();
+    // The heading does not promise "recovery" it has no cards for, and the
+    // lone group is not labelled "Body" under "Your body".
+    expect(screen.getByRole('heading', { name: 'Your body, last 90 days' })).toBeInTheDocument();
+    expect(screen.queryByText('Body', { exact: true })).toBeNull();
   });
 
-  it('without Influx (403): the body cards stay, and one quiet line replaces the Garmin cards', async () => {
+  it('no watch (403): the same', async () => {
     influx.getTrends.mockRejectedValue(Object.assign(new Error('Forbidden'), { response: { status: 403 } }));
     renderSection();
-    expect(await screen.findByTestId('garmin-not-connected')).toHaveTextContent(/Connect a Garmin watch to see/);
+    expect(await screen.findByTestId('trend-weight')).toBeInTheDocument();
+    expect(screen.queryByTestId('garmin-not-connected')).toBeNull();
     expect(screen.queryByTestId('trend-restingHR')).toBeNull();
-    expect(screen.getByTestId('trend-weight')).toBeInTheDocument();
+    expect(screen.getByTestId('trend-bp')).toBeInTheDocument();
+  });
+
+  it('watch={false} from Trends: no watch cards and no skeletons for them, even before the trends route answers', async () => {
+    influx.getTrends.mockReturnValue(new Promise(() => {}));
+    renderSection({ watch: false });
+    expect(screen.getByRole('heading', { name: 'Your body, last 90 days' })).toBeInTheDocument();
+    expect(screen.queryByText('Heart and recovery')).toBeNull();
+    expect(screen.queryByText('Activity')).toBeNull();
+  });
+
+  it('with a watch the heading and the three groups are as before', async () => {
+    renderSection();
+    await screen.findByTestId('trend-restingHR');
+    expect(screen.getByRole('heading', { name: 'Body and recovery, last 90 days' })).toBeInTheDocument();
+    expect(screen.getByText('Heart and recovery')).toBeInTheDocument();
+    expect(screen.getByText('Body', { exact: true })).toBeInTheDocument();
+  });
+
+  it('never sent a scan: the body-composition card (a smart-scale feature) is left out', async () => {
+    bodyComp.getSummary.mockResolvedValue({ success: true, data: { total_scans: 0, current: null } });
+    renderSection();
+    await screen.findByTestId('trend-weight');
+    expect(screen.queryByText('Body composition')).toBeNull();
+    expect(screen.queryByText('No scans yet.')).toBeNull();
     expect(screen.getByTestId('trend-bp')).toBeInTheDocument();
   });
 

@@ -31,6 +31,7 @@ import { LabelPanel, Tag } from '../primitives';
 import { settingsService } from '../../services/settingsService';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { SWITCH_ROW } from './switchRow.js';
+import SaveNote, { SavedWords, useSaveNote } from './SaveNote.jsx';
 
 const HouseholdSettings = () => {
   const { notify } = useToast();
@@ -42,6 +43,8 @@ const HouseholdSettings = () => {
   // Said inside the open dialog, where she is looking (the toast is behind it).
   const [dialogError, setDialogError] = useState(null);
   const [nameError, setNameError] = useState(false);
+  // "Saved", or why not, beside the switch or box that was changed.
+  const note = useSaveNote();
 
   // Household data
   const [householdData, setHouseholdData] = useState(null);
@@ -157,16 +160,22 @@ const HouseholdSettings = () => {
   const handleUpdateSharing = async (field, value) => {
     try {
       setSaving(true);
+      note.clear();
       await settingsService.updateHouseholdSettings({ [field]: value });
-      setHouseholdData(prev => ({ ...prev, [field]: value || null }));
-      // Every setting on the page saves as it changes, with the same quiet
-      // word (UX review IA-3).
-      notify('Saved', { tone: 'success', duration: 2000 });
+      // An emptied name is "no name"; a switch turned off is `false`, kept as
+      // it is. (`value || null` turned an off switch into null, which the
+      // switch reads as "on by default": it flicked back on after saving off.)
+      setHouseholdData(prev => ({ ...prev, [field]: typeof value === 'boolean' ? value : (value || null) }));
+      // Every setting on the page saves as it changes, and says so in place.
+      note.saved(field);
     } catch (err) {
-      notify(errorMessage(err, 'Couldn’t save that. Try again.'), { tone: 'error' });
+      const message = errorMessage(err, 'Couldn’t save that. Try again.');
+      notify(message, { tone: 'error' });
       // The typed name stays in the box, with the failure said under it;
       // leaving the box again retries (it used to snap back to the old name).
       if (field === 'name') setNameError(true);
+      // A switch stays where it was, and the line under it says why.
+      else note.failed(field, message);
     } finally {
       setSaving(false);
     }
@@ -257,7 +266,7 @@ const HouseholdSettings = () => {
                 placeholder="Like Crocker"
                 inputProps={{ maxLength: 40 }}
                 error={nameError}
-                helperText={nameError ? 'Couldn’t save that. Try again.' : 'Everyone in the household sees this name.'}
+                helperText={nameError ? 'Couldn’t save that. Try again.' : note.isSaved('name') ? <SavedWords /> : 'Everyone in the household sees this name.'}
               />
             </Box>
 
@@ -321,6 +330,7 @@ const HouseholdSettings = () => {
                   </Box>
                 }
               />
+              <SaveNote note={note} for="share_food_logs" sx={{ mt: 0, mb: 1 }} />
               <FormControlLabel
                 labelPlacement="start"
                 sx={SWITCH_ROW}
@@ -338,6 +348,7 @@ const HouseholdSettings = () => {
                   </Box>
                 }
               />
+              <SaveNote note={note} for="share_meals" sx={{ mt: 0 }} />
             </Box>
 
             <Divider sx={{ mb: 3 }} />

@@ -83,3 +83,23 @@ describe('My meals: the states of the read', () => {
     expect(screen.queryByText('My meals')).toBeNull();
   });
 });
+
+/**
+ * Review 2026-11-27: delete confirmations used a filled red button. A
+ * destructive confirm is text in the error colour, like Remove in Edit entry.
+ */
+describe('My meals: deleting', () => {
+  it('the confirm is text in the error colour, never a filled red button, and still deletes', async () => {
+    const { fitnessGeekService } = await import('../../services/fitnessGeekService.js');
+    fitnessGeekService.deleteMeal.mockResolvedValue({});
+    getMeals.mockResolvedValue([{ id: 'm1', name: 'Taco night', food_items: [] }]);
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete Taco night' }));
+    expect(await screen.findByText('Delete this meal?')).toBeInTheDocument();
+    const confirm = screen.getByRole('button', { name: 'Delete' });
+    expect(confirm.className).toMatch(/MuiButton-textError/);
+    expect(confirm.className).not.toMatch(/MuiButton-contained/);
+    fireEvent.click(confirm);
+    expect(fitnessGeekService.deleteMeal).toHaveBeenCalledWith('m1');
+  });
+});

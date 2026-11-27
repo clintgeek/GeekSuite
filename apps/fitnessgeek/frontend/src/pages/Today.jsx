@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, Typography, useMediaQuery } from '@mui/material';
 import { Add as AddIcon, People as PeopleIcon } from '@mui/icons-material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import { Link as RouterLink, useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 
@@ -367,12 +367,15 @@ const Today = () => {
         <PlanAccuracyBanner
           nutritionGoal={plan.nutritionGoal}
           scanBmr={plan.scanBmr}
+          // Never on a day that failed to load: one problem at a time.
+          suppress={Boolean(loadProblem)}
           sx={{
             mt: 4,
             px: 3,
             py: 1,
             borderRadius: '12px',
-            bgcolor: alpha(theme.palette.warning.main, theme.palette.mode === 'dark' ? 0.16 : 0.08),
+            // A calm note, not a warning.
+            bgcolor: 'action.hover',
             color: 'text.primary',
           }}
         />

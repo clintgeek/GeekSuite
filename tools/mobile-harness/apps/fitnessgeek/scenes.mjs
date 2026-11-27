@@ -8,7 +8,7 @@
 import { json } from '../../lib/net.mjs';
 import { OPS, FOODS, FOOD_LOGS, MEDS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithPlan, experienceOf, DESCRIBED_SOUP } from './fixtures.mjs';
 import {
-  must, withPageOps, scrollToSection, SPEECH_STUB, foodRoutes, dropFoodRoutes, setDetails, openMealMenu,
+  must, withPageOps, scrollToSection, SPEECH_STUB, foodRoutes, dropFoodRoutes, setDetails, openMealMenu, openBodyCompMore,
   soupSuggest, fageSuggest, fageDeep, composerScene, typeInto, SOUP, YESTERDAY,
 } from './helpers.mjs';
 
@@ -49,6 +49,23 @@ const SCAN_PLAN = {
 const count = (locator) => locator.count();
 const absent = async (locator, what) => {
   if (await count(locator)) throw new Error(`still on the page: ${what}`);
+};
+// The phone's chrome: five tabs, in order, and a top bar with no hamburger and
+// no nine-dot app switcher (both are display:none below md; the switcher lives
+// on More).
+const TABS = ['Today', 'Weight', 'Pressure', 'Meds', 'More'];
+const assertPhoneNav = async (page) => {
+  const nav = await must(page.locator('[data-geek-bottom-nav]'), 'the bottom tab bar');
+  const tabs = await nav.locator('[data-geek-bottom-nav-item]').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
+  if (tabs.join(' · ') !== TABS.join(' · ')) throw new Error(`the bottom tabs read ${tabs.join(' · ')}, wanted ${TABS.join(' · ')}`);
+  for (const which of ['menu', 'switcher']) {
+    const shown = await page.locator(`[data-geek-topbar="${which}"]`).evaluateAll((els) => els.filter((el) => {
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+    }).length);
+    if (shown) throw new Error(`the phone top bar shows its ${which} button`);
+  }
 };
 const landedOn = (page, path, query = {}) => {
   const url = new URL(page.url());
@@ -121,7 +138,8 @@ const openScanner = async (page, h) => {
   const add = await must(page.getByRole('button', { name: /^add to breakfast$/i }).first(), 'Breakfast’s "Add"');
   await add.click();
   await h.settle(900);
-  await (await must(page.getByRole('button', { name: 'Scan a barcode' }), 'the "Scan a barcode" link')).click();
+  // A round barcode button beside the mic (the text link under the box is gone).
+  await (await must(page.locator('[data-testid="scan-button"]'), 'the "Scan a barcode" button')).click();
   await h.settle(900);
   return must(page.getByRole('dialog', { name: 'Scan a barcode' }), 'the scanner');
 };
@@ -187,6 +205,8 @@ export const scenes = [
       }
       await must(page.locator('[data-testid="today-strip"]'), 'the check-in pills');
       await must(page.locator('[data-testid="meal-cards"]'), 'the meals card');
+      // On a phone: five tabs in order, and a top bar with no hamburger or app switcher.
+      if (h.isPhone) await assertPhoneNav(page);
     },
   },
   {
@@ -350,6 +370,12 @@ export const scenes = [
       await (await must(menu.getByRole('menuitem', { name: 'Copy from another day' }), 'Copy from another day')).click();
       await h.settle(800);
       const dialog = await must(page.getByRole('dialog'), 'the copy dialog');
+      // It opens on one-tap rows; the form is behind "Something else".
+      await must(dialog.locator('[data-testid="copy-shortcuts"]'), 'the one-tap copy rows');
+      await must(dialog.locator('[data-testid="copy-shortcut"]').filter({ hasText: /^Yesterday’s breakfast/ }), '"Yesterday’s breakfast"');
+      await absent(dialog.locator('[data-testid="copy-summary"]'), 'the copy summary before "Something else"');
+      await (await must(dialog.locator('[data-testid="copy-something-else"]'), '"Something else"')).click();
+      await h.settle(500);
       await must(dialog.locator('[data-testid="copy-summary"]'), 'the copy summary sentence');
     },
     teardown: (page, h) => h.esc(400),
@@ -380,6 +406,7 @@ export const scenes = [
     wait: 1800,
     async setup(page, h) {
       await scrollToSection(page, h, '#body-composition');
+      await openBodyCompMore(page, h);
       await scrollToSection(page, h, 'text=Line: 7-day average · dots: each scan', 120);
     },
   },
@@ -614,6 +641,7 @@ export const scenes = [
     }, async () => {
       await page.goto(h.base + '/weight', { waitUntil: 'networkidle' });
       await h.settle(1800);
+      await openBodyCompMore(page, h);
       await must(page.getByText(/Your first comparison appears around/).first(), 'change card "appears around" state');
       await scrollToSection(page, h, '#body-composition');
     }),
@@ -655,6 +683,10 @@ export const scenes = [
       await (await must(page.locator('[data-testid="plan-working-toggle"]'), 'How this was worked out')).click();
       await h.settle(500);
       await must(page.locator('[data-testid="bmr-source"][data-source="scan"]'), 'scan BMR source note');
+      // How protein was set belongs in the opened working, not in the macro preview.
+      const basis = (await (await must(page.locator('[data-testid="plan-working-toggle"]').locator('xpath=..').locator('[data-testid="protein-basis"]'), 'the protein basis, inside "How this was worked out"')).innerText()).trim();
+      if (basis !== 'Protein: 1 gram for each pound of lean body mass, 141 lb.') throw new Error(`the protein basis reads "${basis}"`);
+      await absent(page.locator('[data-testid="macro-preview"] [data-testid="protein-basis"]'), 'the protein basis inside the macro preview');
       await scrollToSection(page, h, 'text=What you burn', 96);
     }),
     teardown: (page) => page.unroute('**/graphql'),
@@ -685,7 +717,9 @@ export const scenes = [
       }
       await (await must(page.getByRole('button', { name: /^see my target$/i }).first(), 'See my target')).click();
       await h.settle(900);
-      await must(page.locator('[data-testid="plan-comparison"]'), 'old-vs-new card');
+      const comparison = await must(page.locator('[data-testid="plan-comparison"]'), 'old-vs-new card');
+      await must(comparison.getByRole('heading', { name: 'The old target beside the new one' }), 'its heading');
+      await must(comparison.getByText('Your details have changed since this was worked out. Nothing changes until you save.'), 'its caption');
       await scrollToSection(page, h, '[data-testid="plan-comparison"]', 120);
     }),
     teardown: (page) => page.unroute('**/graphql'),
@@ -703,8 +737,14 @@ export const scenes = [
       try {
         await page.goto(h.base + '/trends?tab=food', { waitUntil: 'networkidle' });
         await h.settle(1800);
-        await must(page.locator('[data-testid="garmin-not-connected"]'), 'not-connected line');
+        // Without a watch there is nothing to say "not connected" about: the
+        // Garmin groups are simply not drawn, and the heading says what is.
+        await must(page.getByRole('heading', { name: 'Your body, last 90 days' }), 'the heading "Your body, last 90 days"');
         await must(page.locator('[data-testid="trend-weight"]'), 'weight card still shown');
+        await absent(page.locator('[data-testid="garmin-not-connected"]'), 'the "not connected" line');
+        await absent(page.locator('[data-testid="trend-restingHR"]'), 'the resting heart rate card');
+        await absent(page.getByText('Heart and recovery'), 'the "Heart and recovery" group');
+        await absent(page.getByRole('link', { name: /connect garmin/i }), 'a "Connect Garmin" link');
         await scrollToSection(page, h, '#body-recovery', 88);
       } catch (err) {
         await page.unroute('**/api/influx/trends*');
@@ -801,22 +841,28 @@ scenes.push(
     },
   },
   {
-    // More: everything the phone's tabs don't hold — six links, one list, no
-    // group headings, the same for everybody.
+    // More: everything the phone's tabs don't hold — five links, one list, no
+    // group headings, the same for everybody — and, on a phone, the way to the other apps.
     name: '24-more',
     goto: '/more',
     wait: 1400,
     async setup(page, h) {
       const more = await must(page.locator('[data-testid="more-page"]'), 'More page');
       const links = (await more.getByRole('link').evaluateAll((els) => els.map((el) => `${el.getAttribute('href')}|${el.querySelector('p')?.textContent?.trim()}`)));
-      const want = ['/blood-pressure|Blood pressure', '/medications|Medications', '/saved-foods|Saved foods', '/calorie-wizard|Calorie plan', '/scan-import|Import a scan', '/settings|Settings'];
+      // Blood pressure and Medications are tabs now; More is the five that are not.
+      const want = ['/trends|Trends', '/saved-foods|Saved foods', '/calorie-wizard|Calorie plan', '/scan-import|Import a scan', '/settings|Settings'];
       if (links.join(' · ') !== want.join(' · ')) throw new Error(`More lists ${links.join(' · ')}`);
       await absent(more.locator('h2, h3'), 'a group heading on More');
       await absent(more.getByText(/needs|simple|full view/i), 'a mode-era line on More');
+      const apps = page.locator('[data-testid="more-other-apps"]');
       if (h.isPhone) {
-        // The phone's tabs: Today · Weight · Trends · More.
-        const tabs = await (await must(page.locator('[data-geek-bottom-nav]'), 'the bottom tab bar')).locator('[data-geek-bottom-nav-item]').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
-        if (tabs.join(' · ') !== 'Today · Weight · Trends · More') throw new Error(`the bottom tabs read ${tabs.join(' · ')}`);
+        // The phone's header no longer holds the app switcher; it lives here.
+        const box = await (await must(apps, 'the "Your other Geek apps" row')).boundingBox();
+        if (!box || box.width < 1 || box.height < 1) throw new Error('"Your other Geek apps" is not drawn on a phone');
+        await must(apps.getByText('Your other Geek apps'), 'its words');
+        await assertPhoneNav(page);
+      } else if ((await apps.count()) && (await apps.first().isVisible())) {
+        throw new Error('"Your other Geek apps" shows beside the desktop header, which has its own switcher');
       }
     },
   },
@@ -885,14 +931,14 @@ scenes.push(
       await must(sheet.getByText('190 cal').first(), '"190 cal"');
     },
   }),
-  // …and after the first add, the pill is "Make it 2".
+  // …and after the first add, the corner offers "Amount".
   composerScene('29a-composer-short-query-added', {
     routes: { suggest: fageSuggest, deep: fageDeep },
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'fage', h, 1200);
       await (await must(sheet.getByRole('button', { name: /^Add Greek Yogurt, Plain Whole Milk/ }).first(), 'the yogurt row')).click();
       await h.settle(900);
-      await must(sheet.getByRole('button', { name: /^Make it 2/ }), '"Make it 2"');
+      await must(sheet.getByRole('button', { name: /^Change the amount of Greek Yogurt/ }), '"Change the amount of Greek Yogurt…"');
     },
   }),
   // Thinking, past eight seconds: "Still working".

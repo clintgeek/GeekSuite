@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { Box, Button, Typography } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
 import { Surface, SectionLabel, DisplayHeading, SurfaceSkeleton } from '../primitives';
 import { useBodyRecoveryTrends } from '../../hooks/useBodyRecoveryTrends.js';
 import { formatSpan } from '../BodyComposition/bodyCompFormat.js';
@@ -28,9 +27,11 @@ const grid = {
   gap: { xs: 3, md: 4 },
 };
 
+// Without a label (the body cards alone, under "Your body") the group is a
+// plain block: a "Body" label under a "Your body" heading says it twice.
 const Group = ({ label, children }) => (
-  <Box component="section" aria-label={label} sx={{ mb: 6, '&:last-of-type': { mb: 0 } }}>
-    <SectionLabel sx={{ mb: 2.5 }}>{label}</SectionLabel>
+  <Box component={label ? 'section' : 'div'} aria-label={label} sx={{ mb: 6, '&:last-of-type': { mb: 0 } }}>
+    {label && <SectionLabel sx={{ mb: 2.5 }}>{label}</SectionLabel>}
     {children}
   </Box>
 );
@@ -67,12 +68,18 @@ const SourceNotice = ({ children, action, testId }) => (
  * "Sep 11–17" above cards comparing with Sep 16–22.
  *
  * Four sources (Garmin trends, body-comp summary, weights, BP), each landing
- * or failing on its own. A user without the Influx connection (a 403) sees
- * the body cards and one line, with a way to connect Garmin.
+ * or failing on its own.
+ *
+ * A person with no watch (`watch` false from Trends, or the trends route
+ * answering "not enabled") sees the body cards and NOTHING about a watch: no
+ * empty heart-rate cards, no "connect" card. Trends says it once, in one
+ * quiet line at the foot of the page. Likewise the body-composition card is
+ * left out for someone who has never sent a scan: it is a smart-scale
+ * feature, and "No scans yet" only tells them about a thing they don't own.
  *
  * Not shown, by decision (plan D3): SpO2 and breathing.
  */
-const BodyRecoverySection = () => {
+const BodyRecoverySection = ({ watch }) => {
   const { loading, end, garmin, weight, bodyComp, bp, reload } = useBodyRecoveryTrends();
 
   const cards = useMemo(
@@ -87,20 +94,15 @@ const BodyRecoverySection = () => {
   const garminPending = garmin.status === 'loading';
   const span = formatSpan(compareWindow.from, compareWindow.to);
 
+  // No watch: known from Trends, or from the trends route itself.
+  const noWatch = watch === false || garmin.status === 'not_connected';
+  // A smart-scale card only for someone who has sent a scan (a failed read
+  // still says so: it is never drawn as "no scans").
+  const hasScans = bodyComp.status !== 'ok' || !!bodyComp.summary?.total_scans;
+
   let garminNotice = null;
-  if (garmin.status === 'not_connected') {
-    garminNotice = (
-      <SourceNotice
-        testId="garmin-not-connected"
-        action={(
-          <Button component={RouterLink} to="/settings#garmin" variant="tonal" sx={{ minHeight: 44 }}>
-            Connect Garmin
-          </Button>
-        )}
-      >
-        Connect a Garmin watch to see heart rate, sleep and activity trends here.
-      </SourceNotice>
-    );
+  if (noWatch) {
+    garminNotice = null;
   } else if (garmin.status === 'unavailable' || garmin.status === 'error') {
     garminNotice = (
       <SourceNotice
@@ -121,7 +123,9 @@ const BodyRecoverySection = () => {
   return (
     <Box component="section" aria-labelledby="body-recovery-heading" id="body-recovery">
       <Box sx={{ mb: 4 }}>
-        <DisplayHeading size="card" id="body-recovery-heading">Body and recovery, last 90 days</DisplayHeading>
+        <DisplayHeading size="card" id="body-recovery-heading">
+          {noWatch ? 'Your body, last 90 days' : 'Body and recovery, last 90 days'}
+        </DisplayHeading>
         <Typography data-testid="body-recovery-window" sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.55, mt: 1.5, maxWidth: 720 }}>
           {compareWindow.planned
             ? `Each number is a 7-day average, compared with the same week a month ago (${span}).`
@@ -129,7 +133,7 @@ const BodyRecoverySection = () => {
         </Typography>
       </Box>
 
-      {garminNotice ? (
+      {noWatch ? null : garminNotice ? (
         <Box sx={{ mb: 6 }}>{garminNotice}</Box>
       ) : (
         <>
@@ -156,15 +160,15 @@ const BodyRecoverySection = () => {
         </>
       )}
 
-      <Group label="Body">
+      <Group label={noWatch ? undefined : 'Body'}>
         {loading && weight.status === 'loading' ? <Skeletons n={3} /> : (
           <Box sx={grid}>
             {weight.status === 'ok'
               ? <WeightCard model={weightM} end={end} />
               : <SourceNotice testId="weight-error">Weight didn’t load.</SourceNotice>}
-            {bodyComp.status === 'ok'
+            {hasScans && (bodyComp.status === 'ok'
               ? <BodyCompCard summary={bodyComp.summary} />
-              : <SourceNotice testId="body-comp-error">Body composition didn’t load.</SourceNotice>}
+              : <SourceNotice testId="body-comp-error">Body composition didn’t load.</SourceNotice>)}
             {bp.status === 'ok'
               ? <BPCard model={bpM} />
               : <SourceNotice testId="bp-error">Blood pressure didn’t load.</SourceNotice>}

@@ -51,8 +51,8 @@ export const BP_STAGES = Object.freeze({
  * and/or higher than 120" — strictly greater, which is why 180/120 is Stage 2
  * and 181/121 is Crisis.
  *
- * Colours come from the theme (see BP_TONES): Normal = success, Elevated =
- * warning, Stage 1 / Stage 2 / Crisis = error, Unknown = muted ink. `tone` names
+ * Colours come from the theme (see BP_TONES): Normal = success, Elevated and
+ * Stage 1 = warning, Stage 2 / Crisis = error, Unknown = muted ink. `tone` names
  * the job; `color` is that tone in the given mode, so a caller passes
  * `theme.palette.mode` and never draws a day colour at night.
  *
@@ -64,18 +64,22 @@ export const BP_STAGES = Object.freeze({
 /**
  * The tones come from the theme's own palette (no literal colours here), so a
  * change to `success` / `warning` / `error` in theme/theme.jsx reaches every
- * screen that draws a reading. One small set (THEME_REVIEW_2026-11 item 7):
- * Normal = success, A little high (Elevated) = warning, High (Stage 1, Stage 2,
- * Crisis) = error. `tomato` stays a tone NAME for Stage 1 (BPInsights keys its
- * wording on `error` vs the rest) but is drawn in the error colour. Always pair
- * the colour with the plain word.
+ * screen that draws a reading. One small set: Normal = success, A little high
+ * (Elevated) and High (Stage 1) = warning, High (Stage 2) and Crisis = error.
+ *
+ * Stage 1 was drawn in the error red (THEME_REVIEW_2026-11 item 7) until the
+ * round-two review: 128/82 is a number to mention to a doctor if it stays
+ * there, and red with no advice beside it read as an alarm. `tomato` stays
+ * the tone NAME for Stage 1 (callers tell it from Stage 2 by name) and is
+ * drawn in the warning colour. The bands and thresholds are untouched. Always
+ * pair the colour with the plain word.
  */
 const toneSet = (mode) => {
   const p = createFitnessTheme(mode).palette;
   return {
     success: p.success.main,
     warning: p.warning.main,
-    tomato: p.error.main,
+    tomato: p.warning.main,
     error: p.error.main,
     muted: p.text.muted,
   };
@@ -134,6 +138,34 @@ export const categorizeBP = (systolic, diastolic, mode = 'light') => {
     return result(BP_STAGES.ELEVATED, 'warning');
   }
   return result(BP_STAGES.NORMAL, 'success');
+};
+
+/**
+ * One calm line of general guidance for a reading's category: what a person
+ * might do with the number, never a diagnosis. Nothing for a normal reading
+ * (the tag says it) or one that cannot be read. The crisis line is the AHA's
+ * own advice for a home reading above 180/120: rest, measure again, and who to
+ * call.
+ *
+ * @param {string} stage one of BP_STAGES
+ * @returns {{ text: string, serious: boolean }|null}
+ */
+export const bpGuidance = (stage) => {
+  switch (stage) {
+    case BP_STAGES.ELEVATED:
+      return { text: 'A little above normal. Nothing urgent; it’s worth keeping an eye on.', serious: false };
+    case BP_STAGES.STAGE_1:
+      return { text: 'Worth mentioning to your doctor if it stays here.', serious: false };
+    case BP_STAGES.STAGE_2:
+      return { text: 'Worth talking to your doctor about, especially if you see this often.', serious: false };
+    case BP_STAGES.CRISIS:
+      return {
+        text: 'This is very high. Sit quietly for five minutes and measure again. If it is still this high, call your doctor today. If you also have chest pain, trouble breathing, numbness or weakness, or trouble speaking or seeing, call 911.',
+        serious: true,
+      };
+    default:
+      return null;
+  }
 };
 
 /**

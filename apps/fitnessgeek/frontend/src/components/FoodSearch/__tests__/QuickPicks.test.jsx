@@ -108,3 +108,43 @@ describe('QuickPicks', () => {
     expect(container.querySelector('[data-testid="same-as-household"]')).toBeNull();
   });
 });
+
+/**
+ * Review 2026-11-27, "chip oddities": "Blueberries ×0.5", an ALL-CAPS product
+ * name, and a bare "Again" heading.
+ */
+describe('QuickPicks: chips in plain words', () => {
+  const withExtra = (fn) => {
+    const before = logs.length;
+    add('berries', 'Blueberries', 'breakfast', '2026-09-26', 0.5);
+    add('berries', 'Blueberries', 'breakfast', '2026-09-24', 0.5);
+    add('bar', 'CHOCOLATE PEANUT BUTTER protein bar', 'breakfast', '2026-09-25');
+    add('bar', 'CHOCOLATE PEANUT BUTTER protein bar', 'breakfast', '2026-09-23');
+    try { fn(); } finally { logs.length = before; }
+  };
+
+  it('the heading says "Had recently", not "Again"', () => {
+    render(<QuickPicks date="2026-09-27" mealType="lunch" onPick={vi.fn()} />);
+    expect(screen.getByRole('heading', { name: 'Had recently' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Again' })).toBeNull();
+  });
+
+  it('half a serving reads "½ serving", never "×0.5" — and logs the half', () => withExtra(() => {
+    const onPick = vi.fn();
+    render(<QuickPicks date="2026-09-27" mealType="breakfast" onPick={onPick} />);
+    const chip = screen.getByRole('button', { name: 'Add Blueberries, ½ serving to breakfast again' });
+    expect(chip).toHaveTextContent('Blueberries, ½ serving');
+    expect(document.body.textContent).not.toMatch(/×0\.5/);
+    fireEvent.click(chip);
+    expect(onPick.mock.calls[0][0][0]).toMatchObject({ name: 'Blueberries', servings: 0.5 });
+  }));
+
+  it('a shouted name is drawn in title case; the food that is logged keeps its stored name', () => withExtra(() => {
+    const onPick = vi.fn();
+    render(<QuickPicks date="2026-09-27" mealType="breakfast" onPick={onPick} />);
+    const chip = screen.getByRole('button', { name: 'Add Chocolate Peanut Butter protein bar to breakfast again' });
+    expect(document.body.textContent).not.toMatch(/CHOCOLATE/);
+    fireEvent.click(chip);
+    expect(onPick.mock.calls[0][0][0].name).toBe('CHOCOLATE PEANUT BUTTER protein bar');
+  }));
+});

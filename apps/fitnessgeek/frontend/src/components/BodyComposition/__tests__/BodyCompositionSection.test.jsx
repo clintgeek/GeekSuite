@@ -47,6 +47,10 @@ const LATER = {
   },
 };
 
+const openMore = async (user) => {
+  await user.click(screen.getByRole('button', { name: 'More from your scans' }));
+};
+
 const renderSection = (props) => render(
   <MemoryRouter>
     <BodyCompositionSection loading={false} error="" scansError="" scans={[]} {...props} />
@@ -58,11 +62,41 @@ describe('summary card', () => {
     renderSection({ summary: EARLY });
     expect(screen.getByText(/Average of 8 scans · Sep 15–22 · latest scan Sep 22/)).toBeInTheDocument();
     expect(screen.getByText('44.2')).toBeInTheDocument();
-    for (const label of ['Fat mass', 'Lean mass', 'Skeletal muscle', 'Body water', 'Belly fat score (visceral fat)', 'Calories at rest (BMR)']) {
+  });
+
+  // Round two: the open card was a lab report ("Skeletal muscle", "Belly fat
+  // score (visceral fat)", "Calories at rest (BMR)", a fat/lean table).
+  it('at rest it is one tidy summary in plain words, with the rest behind a tap', () => {
+    renderSection({ summary: LATER });
+    const summary = screen.getByTestId('body-comp-summary');
+    expect(summary).toHaveTextContent('Body fat');
+    expect(summary).toHaveTextContent('Muscle 98.1 lb');
+    // Commas at 1,000 and above (review U-3).
+    expect(summary).toHaveTextContent('Calories your body burns at rest 2,107');
+    expect(document.body.textContent).not.toMatch(/Skeletal|visceral|BMR|Fat mass|Lean|Body water|Belly fat/);
+    // The change and the chart are not on the page (nor fetched) until asked for.
+    expect(screen.queryByText('Change')).toBeNull();
+    expect(screen.queryByTestId('trend')).toBeNull();
+    expect(screen.getByRole('button', { name: 'More from your scans' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('"More from your scans" opens the rest, still in plain labels', async () => {
+    const user = userEvent.setup();
+    renderSection({ summary: EARLY });
+    await openMore(user);
+    for (const label of ['Fat', 'Lean mass', 'Body water', 'Belly fat score']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
-    // Commas at 1,000 and above (review U-3): calories at rest read "2,107".
-    expect(screen.getByText('2,107')).toBeInTheDocument();
+    expect(screen.getByText('Everything that isn’t fat')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/Skeletal|visceral|BMR/);
+    expect(await screen.findByTestId('trend')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('opens already expanded when asked to (the link from Import a scan)', async () => {
+    renderSection({ summary: EARLY, defaultOpen: true });
+    expect(screen.getByText('Belly fat score')).toBeInTheDocument();
+    expect(await screen.findByTestId('trend')).toBeInTheDocument();
   });
 
   it('does not show the stored-but-hidden fields (D7)', () => {
@@ -70,27 +104,27 @@ describe('summary card', () => {
     expect(screen.queryByText(/bone|protein|subcutaneous|segment|arm|leg|trunk/i)).toBeNull();
   });
 
-  it('explains why these are averages on request', async () => {
+  it('explains why these are averages, with the rest', async () => {
     const user = userEvent.setup();
     renderSection({ summary: EARLY });
-    const btn = screen.getByRole('button', { name: /why these are averages/i });
-    expect(btn).toHaveAttribute('aria-expanded', 'false');
-    await user.click(btn);
-    expect(btn).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.queryByText(/one scan can swing a percent or two/i)).toBeNull();
+    await openMore(user);
     expect(screen.getByText(/one scan can swing a percent or two/i)).toBeVisible();
   });
 });
 
 describe('change card', () => {
-  it('before the comparison exists: says when, and shows no number', () => {
+  it('before the comparison exists: says when, and shows no number', async () => {
     renderSection({ summary: EARLY });
+    await openMore(userEvent.setup());
     const card = screen.getByText('Change').closest('div').parentElement;
     expect(within(card).getByText('Your first comparison appears around Oct 4.')).toBeInTheDocument();
     expect(card.textContent).not.toMatch(/\d+\.\d\s*lb|[−+-]\d/);
   });
 
-  it('once it exists: the reading, the three deltas, and both windows named', () => {
+  it('once it exists: the reading, the three deltas, and both windows named', async () => {
     renderSection({ summary: LATER });
+    await openMore(userEvent.setup());
     expect(screen.getByText("Of the 8.0 lb you’ve lost, about 7.0 lb was fat and 1.0 lb lean.")).toBeInTheDocument();
     const card = screen.getByText('Change').closest('div').parentElement;
     expect(card.textContent).toContain('−7.0');
@@ -120,22 +154,29 @@ describe('states', () => {
 
   it('a retry in flight keeps the failure on screen', () => {
     renderSection({ summary: null, loading: true, error: 'x', onRetry: () => {} });
-    expect(screen.getByRole('alert')).toHaveTextContent(/didn.t load/i);
+    expect(screen.getByTestId('body-comp-unknown')).toHaveTextContent(/couldn.t check for body scans/i);
     expect(screen.getByRole('button', { name: /trying/i })).toBeDisabled();
   });
 
-  it('error: says so in one line and offers a retry', async () => {
+  // For someone who may have no scans at all, a failed read is one quiet
+  // line: not an alert, no card, no heading. It is still never "no scans".
+  it('error: says so in one quiet line and offers a retry', async () => {
     const onRetry = vi.fn();
     const user = userEvent.setup();
     renderSection({ summary: null, error: 'Body composition could not be loaded.', onRetry });
-    expect(screen.getByRole('alert')).toHaveTextContent(/didn.t load/i);
+    expect(screen.getByTestId('body-comp-unknown')).toHaveTextContent('Couldn’t check for body scans just now.');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('heading')).toBeNull();
+    expect(document.querySelector('[data-fg-panel]')).toBeNull();
+    expect(screen.queryByTestId('body-comp-invite')).toBeNull();
     await user.click(screen.getByRole('button', { name: /try again/i }));
     expect(onRetry).toHaveBeenCalled();
   });
 
-  it('a failed scan history keeps the cards and replaces only the chart', () => {
+  it('a failed scan history keeps the cards and replaces only the chart', async () => {
     renderSection({ summary: EARLY, scansError: 'The scan history could not be loaded.' });
     expect(screen.getByText(/Average of 8 scans/)).toBeInTheDocument();
+    await openMore(userEvent.setup());
     expect(screen.queryByTestId('trend')).toBeNull();
     expect(screen.getByText(/couldn.t load its scan history/)).toBeInTheDocument();
   });
@@ -144,6 +185,7 @@ describe('states', () => {
     const onRetry = vi.fn();
     const user = userEvent.setup();
     renderSection({ summary: EARLY, scansError: 'x', onRetry });
+    await openMore(user);
     await user.click(screen.getByRole('button', { name: /try again/i }));
     expect(onRetry).toHaveBeenCalled();
   });

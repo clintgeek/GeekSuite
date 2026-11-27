@@ -9,7 +9,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 
 process.env.TZ = 'America/Chicago';
-const { default: BPInsights } = await import('../BPInsights.jsx');
+const { default: BPInsights, bpSummarySentence } = await import('../BPInsights.jsx');
 const { readingWhen } = await import('../bpTimeUtils.js');
 const { default: BPCategoryDistribution } = await import('../BPCategoryDistribution.jsx');
 
@@ -31,7 +31,27 @@ describe('BPInsights headline', () => {
 
   it("leads with the week's average and its category, in plain words", () => {
     render(<BPInsights bpLogs={LOGS} />);
-    expect(screen.getByTestId('bp-headline')).toHaveTextContent('Your average this week: 128/79 — a little high (elevated)');
+    expect(screen.getByTestId('bp-now')).toHaveTextContent('128/79');
+    expect(screen.getByText('A little high')).toBeInTheDocument();
+    // ONE sentence squares the week with the latest reading (round two): the
+    // card used to say "A little high", then "Last reading… normal", and
+    // leave the person to work out which was true.
+    expect(screen.getByTestId('bp-headline')).toHaveTextContent(/^Your average this week is a little high\. Your last reading, today 7:42\sAM, was normal\.$/);
+  });
+
+  it('says "so was your last reading" when the two agree, and names the gap when the week is empty', () => {
+    expect(bpSummarySentence({ weekStage: 'Elevated', lastStage: 'Elevated', lastWhen: 'yesterday 6:30 PM' }))
+      .toBe('Your average this week is a little high. So was your last reading, yesterday 6:30 PM.');
+    expect(bpSummarySentence({ weekStage: null, lastStage: 'Stage 1', lastWhen: 'Oct 3' }))
+      .toBe('No readings in the last 7 days. Your last one, Oct 3, was high.');
+  });
+
+  it('a little high or stage 1 gets one calm line of guidance; a normal week gets none', () => {
+    const { unmount } = render(<BPInsights bpLogs={LOGS} />);
+    expect(screen.getByTestId('bp-guidance')).toHaveTextContent('A little above normal. Nothing urgent; it’s worth keeping an eye on.');
+    unmount();
+    render(<BPInsights bpLogs={LOGS.map((l) => ({ ...l, systolic: 112, diastolic: 72 }))} />);
+    expect(screen.queryByTestId('bp-guidance')).toBeNull();
   });
 
   it('then the last reading, its category and when', () => {
@@ -43,8 +63,15 @@ describe('BPInsights headline', () => {
 
   it('the healthy range is a count, not a percent', () => {
     render(<BPInsights bpLogs={LOGS} />);
-    expect(screen.getByTestId('bp-healthy-range')).toHaveTextContent('Healthy range 1 of 14 readings');
+    // …and it is the same 30 days as the average in the row above it.
+    expect(screen.getByTestId('bp-healthy-range')).toHaveTextContent('In the normal range 1 of 14 readings · last 30 days');
     expect(document.body.textContent).not.toMatch(/7%/);
+  });
+
+  it('counts normal readings over the last 30 days, not every reading ever', () => {
+    const old = Array.from({ length: 5 }, (_, i) => ({ id: `o${i}`, systolic: 110, diastolic: 70, log_date: `2026-06-0${i + 1}T00:00:00.000Z`, measured_at: `2026-06-0${i + 1}T13:00:00.000Z` }));
+    render(<BPInsights bpLogs={[...LOGS, ...old]} />);
+    expect(screen.getByTestId('bp-healthy-range')).toHaveTextContent('1 of 14 readings · last 30 days');
   });
 
   it('A5: the heart is not basil when the week is a little high, and the 7-day figure is said once', () => {
@@ -70,8 +97,10 @@ describe('the donut', () => {
   it('names its window and speaks plainly', () => {
     render(<BPCategoryDistribution bpLogs={LOGS} windowLabel="last 30 days" />);
     expect(screen.getByTestId('bp-donut-title')).toHaveTextContent('Readings by range, last 30 days');
-    const legend = screen.getByTestId('bp-donut-legend');
-    expect(legend.textContent).toBe('Normal (1)A little high (7)High (stage 1) (6)');
+    // Labelled bars (round two): every range says its own name and count,
+    // in view, with no colour to decode.
+    const rows = within(screen.getByTestId('bp-donut-legend')).getAllByTestId('bp-range-row');
+    expect(rows.map((r) => r.textContent)).toEqual(['Normal1 reading', 'A little high7 readings', 'High (stage 1)6 readings']);
   });
 });
 
@@ -98,5 +127,7 @@ describe('the BP page order', () => {
     const toggle = await screen.findByTestId('bp-range-toggle');
     expect(await screen.findByTestId('bp-donut-title', {}, { timeout: 5000 })).toHaveTextContent('Readings by range, last 30 days');
     expect(within(toggle).getByRole('button', { pressed: true })).toHaveAccessibleName('30 days');
+    // Whole words on the buttons themselves, never "7d" (shared decision).
+    expect(within(toggle).getAllByRole('button').map((b) => b.textContent)).toEqual(['7 days', '30 days', '1 year', 'All']);
   });
 });

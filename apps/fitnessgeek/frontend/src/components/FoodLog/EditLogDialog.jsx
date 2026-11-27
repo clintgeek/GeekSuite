@@ -9,7 +9,7 @@ import {
   Select,
   MenuItem,
   Chip,
-  Slider,
+  IconButton,
   Collapse
 } from '@mui/material';
 import NutritionInputs from './NutritionInputs.jsx';
@@ -25,14 +25,18 @@ import {
   DeleteOutline as RemoveIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon,
-  ExpandMore as ExpandIcon
+  ExpandMore as ExpandIcon,
+  Remove as MinusIcon,
+  Add as PlusIcon
 } from '@mui/icons-material';
+import { displayName } from '../FoodSearch/entries.js';
 
 const PARTIAL_NUMBER = /^\d*[.,]?\d*$/;
 const toNumber = (raw) => Number.parseFloat(String(raw ?? '').replace(',', '.'));
 const round = (v, p = 1) => Math.round((Number(v) || 0) * 10 ** p) / 10 ** p;
 const MAX_CALORIES = 10000;
 const MACROS = ['protein_grams', 'carbs_grams', 'fat_grams'];
+const SERVING_STEP = 0.25;
 
 /**
  * Edit one logged entry: how much, which meal, which day, and — the one that
@@ -54,6 +58,13 @@ const MACROS = ['protein_grams', 'carbs_grams', 'fat_grams'];
  * keyboard up, the only button she could see was ✕, which reads as cancel.
  * "Remove" lives here too (`onRemove`), because the rows have no trash icon
  * any more (L15); the page shows the usual "Removed X" toast with Undo.
+ *
+ * CALORIES AND SERVINGS, AND HOW THEY RELATE (review 2026-11-27). There was a
+ * slider for servings beside a Servings box, under a Calories box, and nothing
+ * said which drove which. The slider is gone: servings is the same − / + and
+ * number the serving sheet uses. Each field says its part in one line —
+ * Calories is the total and can be typed if she knows it; more or fewer
+ * servings changes that total.
  *
  * So does the favorite star, for the same reason (ONE_APP_PLAN.md): the
  * dialog reads whether this food is a favorite when it opens and toggles it
@@ -202,6 +213,13 @@ const EditLogDialog = ({
     setServings(next);
   };
 
+  /** − / +: a quarter serving at a time, never below a quarter. */
+  const stepServings = (delta) => {
+    const current = toNumber(servings);
+    const next = Math.max(SERVING_STEP, round((Number.isFinite(current) ? current : 0) + delta, 2));
+    changeServings(String(next));
+  };
+
   // Typing the total keeps the per-serving box in step, for show; what goes
   // out is decided by `calorieSource`.
   const changeTotal = (next) => {
@@ -272,12 +290,12 @@ const EditLogDialog = ({
             <Box sx={{ mb: 5, pb: 2, borderBottom: (t) => `1px solid ${t.palette.divider}` }}>
               {food_item?.name && (
                 <Typography component="h3" sx={{ m: 0, fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' }}>
-                  {food_item.name}
+                  {displayName(food_item.name)}
                 </Typography>
               )}
               {food_item?.brand && (
                 <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', overflowWrap: 'anywhere' }}>
-                  {food_item.brand}
+                  {displayName(food_item.brand)}
                 </Typography>
               )}
               {(favoriteFoodId || onRemove) && (
@@ -332,35 +350,45 @@ const EditLogDialog = ({
                 if (PARTIAL_NUMBER.test(next)) changeTotal(next);
               }}
               error={calorieSource === 'total' ? totalCalories !== '' && !totalOk : !perServingOk}
-              helperText={calorieSource === 'total' && totalCalories !== '' && !totalOk ? 'That looks too high. Check the number.' : 'For this whole entry.'}
+              helperText={calorieSource === 'total' && totalCalories !== '' && !totalOk ? 'That looks too high. Check the number.' : 'The total for this entry. Type it here if you know it.'}
               inputProps={{ inputMode: 'decimal', autoComplete: 'off' }}
               sx={{ mb: 4 }}
             />
 
-          {/* Servings */}
+          {/* Servings: the serving sheet's − / + and number. */}
           <Box sx={{ mb: 4 }}>
-            <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>Servings</Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Slider
-                value={parseFloat(servings) || 1}
-                onChange={(e, val) => changeServings(String(val))}
-                min={0.25}
-                max={10}
-                step={0.25}
-                aria-label="Servings"
-                sx={{ flex: 1 }}
-              />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <IconButton
+                onClick={() => stepServings(-SERVING_STEP)}
+                disabled={loading || !servingsOk || servingsCount <= SERVING_STEP}
+                aria-label="Fewer servings"
+                sx={{ width: 48, height: 48, flexShrink: 0, border: (t) => `1px solid ${t.palette.outline || t.palette.divider}` }}
+              >
+                <MinusIcon />
+              </IconButton>
               <TextField
-                size="small"
+                label="Servings"
                 value={servings}
                 onChange={(e) => {
                   const next = e.target.value.trim();
                   if (PARTIAL_NUMBER.test(next)) changeServings(next);
                 }}
-                inputProps={{ inputMode: 'decimal', autoComplete: 'off', 'aria-label': 'Servings' }}
-                sx={{ width: 100 }}
+                error={servings !== '' && !servingsOk}
+                inputProps={{ inputMode: 'decimal', autoComplete: 'off', style: { textAlign: 'center', fontWeight: 700 } }}
+                sx={{ flex: 1, minWidth: 0 }}
               />
+              <IconButton
+                onClick={() => stepServings(SERVING_STEP)}
+                disabled={loading}
+                aria-label="More servings"
+                sx={{ width: 48, height: 48, flexShrink: 0, border: (t) => `1px solid ${t.palette.outline || t.palette.divider}` }}
+              >
+                <PlusIcon />
+              </IconButton>
             </Box>
+            <Typography data-testid="edit-log-servings-help" sx={{ mt: 1, mx: 3.5, fontSize: '0.75rem', lineHeight: 1.66, color: 'text.secondary' }}>
+              More or fewer servings changes the calories above.
+            </Typography>
           </Box>
 
           {/* Day — moves the entry. */}

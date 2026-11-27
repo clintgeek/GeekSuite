@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Box,
   TextField,
@@ -9,7 +9,7 @@ import { MonitorWeight as WeightIcon } from '@mui/icons-material';
 import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import { localDateString, utcDateString } from '@geeksuite/utils';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
-import DateField from '../primitives/DateField.jsx';
+import DayChoice from './DayChoice.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 import Surface from '../primitives/Surface.jsx';
@@ -54,11 +54,21 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
   // This dialog had no error state at all, unlike AddBPDialog. Combined with
   // closing on failure, a failed weight save gave the user nothing to look at.
   const [error, setError] = useState('');
+  // A tap on Log (or Enter) with nothing typed used to do nothing at all: the
+  // button was disabled, and a disabled button swallows the tap. Now it is
+  // answered: the field takes focus and says what it is waiting for.
+  const [nudge, setNudge] = useState(false);
+  const cardField = useRef(null);
+  // Remounts the dialog's day choice each time it opens, so "Another day"
+  // doesn't stay open from the last use.
+  const [opened, setOpened] = useState(0);
   const fullScreen = useGeekDialogFullScreen();
 
   const openDialog = () => {
     setDate(localDateString());
     setError('');
+    setNudge(false);
+    setOpened((n) => n + 1);
     setOpen(true);
   };
 
@@ -76,7 +86,14 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
     if (loading) return;
     const day = fromCard ? localDateString() : date;
     const amount = parseFloat(value);
-    if (!day || !Number.isFinite(amount) || amount <= 0 || amount >= 1000) return;
+    if (!day || !Number.isFinite(amount) || amount <= 0 || amount >= 1000) {
+      if (fromCard) {
+        setNudge(true);
+        cardField.current?.focus?.();
+      }
+      return;
+    }
+    setNudge(false);
 
     setLoading(true);
     setError('');
@@ -132,18 +149,23 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
     }
   };
   const handleCardKeyDown = (e) => {
-    if (e.key === 'Enter' && valid) {
+    if (e.key === 'Enter') {
       handleSubmit({ fromCard: true });
     }
   };
+  // Nothing typed and Log tapped: a gentle line, not an error.
+  const nudgeNote = nudge && value === '' ? 'Type your weight first, for example 150.4.' : null;
 
   const closeDialog = () => { setError(''); setOpen(false); };
 
   return (
     <>
-      {/* The weigh-in, first on the page at every width: one number and Log.
-          It used to be a floating button on phones, which sat on top of the
-          page's own text; a card in the flow covers nothing. */}
+      {/* The weigh-in, first on the page at every width and the page's one
+          filled button: one number and Log. It used to be a floating button
+          on phones, which sat on top of the page's own text; a card in the
+          flow covers nothing. Log stays live with the field empty (a tap then
+          points at the field), so it reads as the thing to do here, like the
+          solid button that leads the other pages. */}
       <Surface
         component="section"
         aria-label="Weigh in"
@@ -164,11 +186,13 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
             label="Today’s weight"
             type="number"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => { setValue(e.target.value); setNudge(false); }}
             onKeyDown={handleCardKeyDown}
+            inputRef={cardField}
             sx={{ flex: 1, minWidth: 0 }}
             inputProps={{
               inputMode: 'decimal',
+              enterKeyHint: 'done',
               step: "0.1",
               min: "0",
               max: "1000"
@@ -177,14 +201,15 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
               endAdornment: unitWord
             }}
             error={Boolean(invalidNote) && !open}
-            helperText={open ? undefined : (invalidNote || cardNote || undefined)}
-            FormHelperTextProps={{ 'data-testid': 'weight-replace-note-card' }}
+            helperText={open ? undefined : (invalidNote || nudgeNote || cardNote || undefined)}
+            FormHelperTextProps={{ 'data-testid': nudgeNote && !invalidNote ? 'weight-entry-hint' : 'weight-replace-note-card', role: nudgeNote && !invalidNote ? 'status' : undefined }}
           />
           <Button
             variant="contained"
+            size="large"
             onClick={() => handleSubmit({ fromCard: true })}
-            disabled={!valid || loading}
-            sx={{ minHeight: 56, minWidth: 96, flexShrink: 0 }}
+            disabled={loading}
+            sx={{ minHeight: 56, minWidth: 96, flexShrink: 0, fontSize: '1rem' }}
           >
             {loading && !open ? 'Saving…' : cardNote ? 'Replace' : 'Log'}
           </Button>
@@ -251,7 +276,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
             FormHelperTextProps={dialogNote && !invalidNote ? { 'data-testid': 'weight-replace-note' } : undefined}
             autoFocus
           />
-          <DateField fullWidth value={date} onChange={setDate} max={todayYmd} />
+          <DayChoice key={opened} value={date} onChange={setDate} today={todayYmd} />
         </Box>
       </PremiumDialog>
     </>

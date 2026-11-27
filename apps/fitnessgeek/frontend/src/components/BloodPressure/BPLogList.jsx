@@ -12,7 +12,10 @@ import { LabelPanel, ListRow, Tag } from '../primitives';
 /** Rows shown before "Show all": the list is a record, not the page. */
 export const INITIAL_ROWS = 10;
 
-const BPLogList = ({ logs: rawLogs, onDelete, onEdit, unit = "mmHg" }) => {
+// `unit` is still accepted (the page passes it) but no longer printed: the
+// entry fields carry "mmHg" as their suffix, and repeating it on every row
+// of a list of blood-pressure readings said nothing (round-two review).
+const BPLogList = ({ logs: rawLogs, onDelete, onEdit }) => {
   const theme = useTheme();
   const [showAll, setShowAll] = useState(false);
   // A null row or one missing a number (a partial record) is skipped, not a crash.
@@ -71,7 +74,7 @@ const BPLogList = ({ logs: rawLogs, onDelete, onEdit, unit = "mmHg" }) => {
       <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
         {visible.map((log, index) => {
           const bpStatus = categorizeBP(log.systolic, log.diastolic, theme.palette.mode);
-          const readingLabel = `${log.systolic}/${log.diastolic} ${unit} reading from ${formatDate(log.log_date)}`;
+          const readingLabel = `${log.systolic}/${log.diastolic} reading from ${formatDate(log.log_date)}`;
           const deleteLabel = `Remove the ${readingLabel}`;
           const editLabel = `Edit the ${readingLabel}`;
           // An instant, unlike `log_date` — rendered in the viewer's own
@@ -85,19 +88,18 @@ const BPLogList = ({ logs: rawLogs, onDelete, onEdit, unit = "mmHg" }) => {
                 <Box sx={{ display: 'flex', alignItems: 'center', columnGap: 2, rowGap: 0.5, flexWrap: 'wrap' }}>
                   <Typography component="span" sx={{ fontWeight: 700, fontSize: '1.0625rem', fontVariantNumeric: 'tabular-nums' }}>
                     {log.systolic}/{log.diastolic}
-                    <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 500, color: 'text.secondary' }}> {unit}</Box>
                   </Typography>
                   <Tag fill={bpStatus.color}>{bpStageWords(bpStatus.stage).label}</Tag>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', columnGap: 2, flexWrap: 'wrap', mt: 0.5 }}>
                   {Number(log.pulse) > 0 && (
                     <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
-                      ♥ {log.pulse} bpm
+                      Pulse {log.pulse}
                     </Typography>
                   )}
                   <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>
                     {formatDate(log.log_date)}
-                    {timeLabel && ` • ${timeLabel}`}
+                    {timeLabel && ` · ${timeLabel}`}
                   </Typography>
                 </Box>
               </Box>

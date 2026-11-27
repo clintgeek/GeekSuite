@@ -159,7 +159,6 @@ export function PlanHeadline({ plan, mode = 'standard', keto = null, macros = nu
           <Typography sx={{ color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
             {macroLine({ protein: macros.grams.protein_g, carbs: macros.grams.carbs_g, fat: macros.grams.fat_g })}
           </Typography>
-          <ProteinBasisNote rules={macros.rules} />
         </Box>
       )}
 
@@ -181,7 +180,7 @@ export function PlanHeadline({ plan, mode = 'standard', keto = null, macros = nu
 }
 
 /** "How this was worked out": the numbers behind the target. */
-export function PlanWorking({ plan, scanLoadFailed = false }) {
+export function PlanWorking({ plan, scanLoadFailed = false, proteinRules = null, note = null }) {
   if (!plan) return null;
   const valid = Boolean(plan.rules?.calculationValid);
   const safe = plan.dailyCalories >= 1200;
@@ -220,7 +219,14 @@ export function PlanWorking({ plan, scanLoadFailed = false }) {
               : 'Never below 1,200 calories a day'}
           </Typography>
         </Box>
+        {/* The arithmetic lives here, in words, and nowhere above the fold. */}
+        <ProteinBasisNote rules={proteinRules} sx={{ mt: 3 }} />
       </Box>
+      {note && (
+        <Typography variant="body2" data-testid="plan-working-note" sx={{ color: 'text.secondary', gridColumn: '1 / -1' }}>
+          {note}
+        </Typography>
+      )}
     </Box>
   );
 }

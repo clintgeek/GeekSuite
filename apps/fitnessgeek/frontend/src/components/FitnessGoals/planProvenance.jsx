@@ -88,7 +88,7 @@ export function PlanComparison({ saved, next }) {
     <Box data-testid="plan-comparison">
       <Rule weight="medium" />
       <Typography component="h3" sx={{ fontWeight: 700, fontSize: '1.0625rem', py: 0.75, color: 'text.primary' }}>
-        Your saved plan → this plan
+        The old target beside the new one
       </Typography>
       <Row label="Daily target" before={saved.dailyCalories} after={next.dailyCalories} />
       {showAverage && (
@@ -97,7 +97,7 @@ export function PlanComparison({ saved, next }) {
       <Row label="Calories at rest" before={saved.bmr} after={next.bmr} />
       <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
         {saved.stale
-          ? 'Your saved plan was worked out before a mistake in the maths was fixed. Nothing changes until you save.'
+          ? 'Your details have changed since this was worked out. Nothing changes until you save.'
           : 'Nothing changes until you save.'}
       </Typography>
     </Box>
@@ -114,13 +114,19 @@ export function previewMacros(ngDraft, { leanMassLb = null, calories } = {}) {
   return { rules, grams: macrosForCalories(calories, rules) };
 }
 
-/** One short line when protein is set from lean mass; nothing otherwise. */
-export function ProteinBasisNote({ rules }) {
+const gramWords = (per) => (Number(per) === 1 ? '1 gram' : `${fmtLb(per) ?? per} grams`);
+
+/**
+ * How protein was set, in words, when it comes from lean mass; nothing
+ * otherwise. Only ever inside "How this was worked out": the read-back above
+ * it gives the grams and no arithmetic.
+ */
+export function ProteinBasisNote({ rules, sx }) {
   if (rules?.protein_basis !== 'lean_mass') return null;
-  const per = Number(rules.protein_g_per_lb_lean);
+  const lean = Number(rules.lean_mass_lb);
   return (
-    <Typography variant="caption" data-testid="protein-basis" sx={{ color: 'text.secondary', display: 'block' }}>
-      Protein is set from your lean mass: {fmtLb(per) ?? per} g per lb × {fmtLb(rules.lean_mass_lb)} lb.
+    <Typography variant="body2" data-testid="protein-basis" sx={{ color: 'text.secondary', ...sx }}>
+      {`Protein: ${gramWords(rules.protein_g_per_lb_lean)} for each pound of lean body mass${Number.isFinite(lean) && lean > 0 ? `, ${Math.round(lean)} lb` : ''}.`}
     </Typography>
   );
 }

@@ -1,16 +1,17 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
-import { LabelPanel, Tag } from '../primitives';
+import { LabelPanel } from '../primitives';
 
 /**
  * DayRibbon — horizontal-scroll ribbon of day cards for Reports.
  *
- * Each day is a small card: the day and date, the calories, one line of
- * macros in words ("P 165 · C 141 · F 70 g") and, when there's a target, a
- * status Tag. Rounded cards with a hairline edge; an over day's Tag takes the
- * warning tone, the others the neutral wash. The word carries the meaning (UX
- * review 2026-10-17, D-8).
+ * Each day is a small card: the day and date, the calories, protein, carbs
+ * and fat as three small labelled numbers (never "P 165 · C 141 · F 70 g":
+ * initials are a code a new person has to crack) and, when there's a target,
+ * how the day sat against it in plain words: "On target", "105 over",
+ * "300 under". The over days get a small amber dot and nothing louder: a
+ * filled amber chip on a day you ate a little more read as a telling-off.
  *
  * Newest day first. The ribbon used to start scrolled to its right-hand end,
  * which on a phone left the first visible card cut in half at the left edge
@@ -32,22 +33,28 @@ const formatDate = (dateStr) => {
 const commas = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
 
 /**
- * How a day's calories sit against the target, in a word. Null without a
- * target. `over` marks the two over states — the only ones that get colour.
+ * How a day's calories sit against the target. Null without a target.
+ * `label` is the band in a word; `text` is what the card says: the fact, as
+ * a number ("105 over", "300 under"), or "On target". `over` marks the two
+ * over bands, the only ones that get a coloured dot.
  */
 export function dayStatus(calories, target) {
   if (!target) return null;
   const pct = calories / target;
-  if (pct < 0.85) return { label: 'Under', over: false };
-  if (pct <= 1.05) return { label: 'On target', over: false };
-  if (pct <= 1.15) return { label: 'A bit over', over: true };
-  return { label: 'Over', over: true };
+  const diff = commas(Math.abs(calories - target));
+  if (pct < 0.85) return { label: 'Under', text: `${diff} under`, over: false };
+  if (pct <= 1.05) return { label: 'On target', text: 'On target', over: false };
+  if (pct <= 1.15) return { label: 'A bit over', text: `${diff} over`, over: true };
+  return { label: 'Over', text: `${diff} over`, over: true };
 }
 
-/** "P 165 · C 141 · F 70 g" */
+const grams = (day, k) => Math.round(Number(day?.[k]) || 0);
+const MACROS = [['protein', 'Protein'], ['carbs', 'Carbs'], ['fat', 'Fat']];
+
+/** "165 g protein · 141 g carbs · 70 g fat": the day's macros as a sentence
+ * (what a screen reader hears for the three small columns). */
 export function macroLine(day) {
-  const g = (k) => Math.round(Number(day?.[k]) || 0);
-  return `P ${g('protein')} · C ${g('carbs')} · F ${g('fat')} g`;
+  return MACROS.map(([k, name]) => `${grams(day, k)} g ${name.toLowerCase()}`).join(' · ');
 }
 
 const DayCard = ({ day, calorieTarget }) => {
@@ -67,8 +74,7 @@ const DayCard = ({ day, calorieTarget }) => {
       sx={{
         listStyle: 'none',
         position: 'relative',
-        // Wide enough that "P 165 · C 141 · F 70 g" stays on one line (it
-        // wrapped, leaving "70 g" alone on a second), and stretching to fill
+        // Wide enough for the three macro columns, and stretching to fill
         // the row when there are only a few days, so a desktop has no empty
         // third of a card row.
         flex: { xs: '0 0 172px', sm: '1 0 176px' },
@@ -89,7 +95,7 @@ const DayCard = ({ day, calorieTarget }) => {
         </Typography>
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 2.5 }}>
         <Typography
           component="span"
           sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '1.75rem', fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em', color: ink }}
@@ -101,16 +107,51 @@ const DayCard = ({ day, calorieTarget }) => {
         </Typography>
       </Box>
 
-      <Typography data-testid="day-macros" sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.8125rem', color: muted, lineHeight: 1.4, whiteSpace: 'nowrap' }}>
-        {macroLine(day)}
-      </Typography>
+      {/* Three small columns: the number over its name. */}
+      <Box
+        data-testid="day-macros"
+        role="group"
+        aria-label={macroLine(day)}
+        sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', columnGap: 2 }}
+      >
+        {MACROS.map(([k, name]) => (
+          <Box key={k} aria-hidden sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.875rem', fontWeight: 600, color: ink, lineHeight: 1.3 }}>
+              {`${grams(day, k)}g`}
+            </Typography>
+            <Typography sx={{ fontSize: '0.75rem', color: muted, lineHeight: 1.3 }}>
+              {name}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
 
       {status && (
-        <Box component="span" data-testid="day-status" sx={{ display: 'block', mt: 2 }}>
-          <Tag tone={status.over ? 'warning' : undefined}>
-            {status.label}
-          </Tag>
-        </Box>
+        <Typography
+          component="span"
+          data-testid="day-status"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            mt: 2.5,
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            lineHeight: 1.4,
+            color: ink,
+            fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {status.over && (
+            <Box
+              component="span"
+              aria-hidden
+              sx={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, bgcolor: 'warning.main' }}
+            />
+          )}
+          {status.text}
+        </Typography>
       )}
     </Box>
   );

@@ -10,11 +10,11 @@ import { MemoryRouter } from 'react-router-dom';
 import More from '../More.jsx';
 
 describe('More', () => {
-  it('lists the six places the tabs do not hold, in order, as links', () => {
+  it('lists the five places the tabs do not hold, in order, as links', () => {
     render(<MemoryRouter><More /></MemoryRouter>);
     const links = screen.getAllByRole('link');
     expect(links.map((l) => l.getAttribute('href'))).toEqual([
-      '/blood-pressure', '/medications', '/saved-foods', '/calorie-wizard', '/scan-import', '/settings',
+      '/trends', '/saved-foods', '/calorie-wizard', '/scan-import', '/settings',
     ]);
     expect(screen.getByRole('link', { name: /Saved foods/ })).toHaveTextContent('Meals and foods you saved');
   });

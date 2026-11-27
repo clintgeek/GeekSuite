@@ -35,7 +35,7 @@ import { isBPDuplicate } from '../components/BloodPressure/bpTimeUtils.js';
 const BPChartNivo = lazy(() => import('../components/BloodPressure/BPChartNivo.jsx'));
 const BPCategoryDistribution = lazy(() => import('../components/BloodPressure/BPCategoryDistribution.jsx'));
 
-// The donut's title names the window the range toggle chose.
+// The "Readings by range" card's title names the window the range toggle chose.
 const RANGE_WORDS = { '7': 'last 7 days', '30': 'last 30 days', '365': 'last year', all: 'all time' };
 const BPHRChart = lazy(() => import('../components/BloodPressure/BPHRChart.jsx'));
 const BPReport = lazy(() => import('../components/BloodPressure/BPReport.jsx'));
@@ -225,8 +225,8 @@ const BloodPressure = () => {
       // C1). This used to test `error.message` for "already been recorded" —
       // text the gateway never sent, so the duplicate case fell through to
       // the generic toast. The form that made the reading shows the error
-      // inline (with "Save it one minute later" for a duplicate), so no
-      // second toast here.
+      // inline (and for a duplicate offers to save it a minute later, naming
+      // both times), so no second toast here.
       logger.error(isBPDuplicate(error) ? 'BP reading collided with an existing one' : 'Error adding BP reading:', error);
       // Re-throw, like handleSaveEditBP below. Without this the dialog closed
       // and blanked the form on every failure while a 3-second toast was the
@@ -393,7 +393,6 @@ const BloodPressure = () => {
           <Box sx={{ order: 1 }}>
             <QuickAddBP
               onAdd={handleAddBP}
-              unit="mmHg"
               autoOpen={autoOpenAdd}
               onAutoOpened={clearAddParam}
             />
@@ -401,7 +400,8 @@ const BloodPressure = () => {
 
           {hasLogs && (
             <>
-              {/* The answer next: the week's average, in words (review D-1). */}
+              {/* The answer next: the week's average, and one sentence that
+                  squares it with the latest reading (review D-1). */}
               <Box sx={{ order: 2 }}>
                 <BPInsights bpLogs={bpLogs} />
               </Box>
@@ -410,7 +410,6 @@ const BloodPressure = () => {
                   logs={bpLogs}
                   onDelete={handleDeleteBP}
                   onEdit={handleEditBP}
-                  unit="mmHg"
                 />
               </Box>
             </>
@@ -433,7 +432,12 @@ const BloodPressure = () => {
               {/* Time range and "View report" in one row. The range toggle
                   sits ABOVE the donut and the trend it governs, and the
                   donut's title names the window (review D-1). */}
-              <Box sx={{ order: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+              <Box sx={{ order: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 3 }}>
+                {/* Whole words ("7 days", never "7d"). On a phone the control
+                    takes the full row and its four segments share it, so the
+                    words fit at 390px without wrapping; if a larger text size
+                    ever makes them too wide it scrolls sideways inside its own
+                    track rather than pushing the page. */}
                 <ToggleButtonGroup
                   size="small"
                   value={timeRangeState}
@@ -442,18 +446,21 @@ const BloodPressure = () => {
                   data-testid="bp-range-toggle"
                   onChange={(_e, v) => { if (v) handleTimeRangeChange(v); }}
                   sx={{
+                    width: { xs: '100%', sm: 'auto' },
+                    overflowX: 'auto',
                     '& .MuiToggleButton-root': {
+                      flex: { xs: '1 0 auto', sm: '0 0 auto' },
                       minHeight: { xs: 44, sm: 34 },
-                      minWidth: { xs: 56, sm: 44 },
                       fontSize: '0.8125rem',
+                      whiteSpace: 'nowrap',
                       // A touch tablet is not a mouse: keep the 44px target.
-                      '@media (pointer: coarse)': { minHeight: 44, minWidth: 56 },
+                      '@media (pointer: coarse)': { minHeight: 44 },
                     },
                   }}
                 >
-                  <ToggleButton value="7" aria-label="7 days">7d</ToggleButton>
-                  <ToggleButton value="30" aria-label="30 days">30d</ToggleButton>
-                  <ToggleButton value="365" aria-label="1 year">1y</ToggleButton>
+                  <ToggleButton value="7">7 days</ToggleButton>
+                  <ToggleButton value="30">30 days</ToggleButton>
+                  <ToggleButton value="365">1 year</ToggleButton>
                   <ToggleButton value="all">All</ToggleButton>
                 </ToggleButtonGroup>
                 {/* Second rank: the page's one filled button is the entry. */}
