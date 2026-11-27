@@ -333,7 +333,11 @@ const FoodLogItem = ({
         sx={{
           display: 'flex',
           alignItems: 'flex-start',
-          gap: { xs: 1.5, sm: 2 },
+          // Phones: the three actions drop to their own line under the text
+          // (they were squeezing the macro line into an orphaned "g").
+          flexWrap: { xs: 'wrap', sm: 'nowrap' },
+          columnGap: { xs: 1.5, sm: 2 },
+          rowGap: { xs: 0.5, sm: 0 },
           p: { xs: 2, sm: 2.5 },
           backgroundColor: theme.palette.background.paper,
           border: `1px solid ${theme.palette.divider}`,
@@ -394,6 +398,16 @@ const FoodLogItem = ({
           </Typography>
         )}
 
+        {/* Meta: on a phone the calorie chip, macro line and servings chip
+            are one wrapping line, each a whole unit (never broken inside).
+            On sm+ this wrapper is a plain block and the two rows stack. */}
+        <Box sx={{
+          display: { xs: 'flex', sm: 'block' },
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          columnGap: 1,
+          rowGap: 0.5
+        }}>
         {/* Nutrition Info - Condensed on narrow screens */}
         <Box sx={{
           display: { xs: 'none', sm: 'flex' },
@@ -424,10 +438,7 @@ const FoodLogItem = ({
         </Box>
         {/* Mobile condensed nutrition display */}
         <Box sx={{
-          display: { xs: 'flex', sm: 'none' },
-          gap: 0.5,
-          alignItems: 'center',
-          mb: 1
+          display: { xs: 'contents', sm: 'none' }
         }}>
           <Chip
             label={`${totalCalories.toLocaleString('en-US')} cal`}
@@ -439,7 +450,8 @@ const FoodLogItem = ({
             sx={{
               color: theme.palette.text.secondary,
               fontSize: '0.75rem',
-              fontWeight: 500
+              fontWeight: 500,
+              whiteSpace: 'nowrap'
             }}
           >
             {macroLine({ protein: totalProtein, carbs: totalCarbs, fat: totalFat }, { dense: true })}
@@ -451,7 +463,8 @@ const FoodLogItem = ({
                 color: theme.palette.warning.main,
                 fontSize: '0.75rem',
                 fontWeight: 700,
-                fontFamily: 'inherit'
+                fontFamily: 'inherit',
+                whiteSpace: 'nowrap'
               }}
             >
               · {totalNetCarbs}g net carbs{isMissingFiber ? '*' : ''}
@@ -468,6 +481,7 @@ const FoodLogItem = ({
             variant="tag"
             sx={{ '& .MuiChip-label': { px: 1.25 } }}
           />
+        </Box>
         </Box>
 
         {/* Notes */}
@@ -491,7 +505,17 @@ const FoodLogItem = ({
 
       {/* Action Buttons */}
       {showActions && (
-        <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
+        <Box sx={{
+          display: 'flex',
+          gap: 0.75,
+          flexShrink: 0,
+          // Phones: own line, right-aligned, 44px targets.
+          flexBasis: { xs: '100%', sm: 'auto' },
+          justifyContent: { xs: 'flex-end', sm: 'flex-start' },
+          // Phones only. No reset from sm up: a zero there overrode the theme's
+          // 44px touch floor on a landscape tablet.
+          '@media (max-width:599.95px)': { '& .MuiIconButton-root': { minWidth: 44, minHeight: 44 } }
+        }}>
           {/* One outlined icon set in the secondary ink (visual review B7).
               A favourite's star is lemon's deep ink (5.49:1), and Remove
               turns error red only under a finger or pointer, not at rest. */}

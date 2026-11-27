@@ -115,3 +115,15 @@ describe('a favourite that did not save says so', () => {
     expect(screen.getByRole('button', { name: /add to favorites/i })).toBeInTheDocument();
   });
 });
+
+describe('the macro line never breaks inside itself', () => {
+  it('keeps "P 12 · C 1 · F 10 g" on one line, and the three actions stay named buttons', () => {
+    renderItem({ log: LOG, isFavorite: false });
+    const macros = screen.getAllByText('P 12 · C 1 · F 10 g');
+    expect(macros.length).toBeGreaterThan(0);
+    macros.forEach((el) => expect(getComputedStyle(el).whiteSpace).toBe('nowrap'));
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add to favorites/i })).toBeInTheDocument();
+  });
+});
