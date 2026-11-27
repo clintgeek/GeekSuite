@@ -60,8 +60,8 @@ const fmt = (n) => Math.round(Number(n)).toLocaleString('en-US');
  * plainly. Formula talk belongs in the calorie plan, which shows the old and
  * new targets side by side before anything changes.
  *
- * The Label (THEME_REVIEW_2026-11): this is a footnote at the foot of the
- * Today's Facts panel, not a banner above it — a muted sentence with its
+ * This is a quiet note at the foot of Home's nutrition card, not a banner
+ * above it — a muted sentence with its
  * action as a blue text link, so it never pushes the meals below the fold.
  * The stale note still announces itself (role="alert"); the scan offer is a
  * status, and may be put off with "Not now".

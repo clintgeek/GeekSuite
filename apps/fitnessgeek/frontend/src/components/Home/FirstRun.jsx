@@ -50,7 +50,7 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
       ref={headingRef}
       tabIndex={-1}
       component="h1"
-      sx={{ fontSize: { xs: '1.875rem', sm: '2.25rem' }, fontWeight: 900, lineHeight: 1.15, outline: 'none' }}
+      sx={{ fontSize: { xs: '1.875rem', sm: '2.25rem' }, fontWeight: 700, lineHeight: 1.15, outline: 'none' }}
     >
       {text}
     </Typography>
@@ -106,7 +106,8 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
                     gap: 2,
                     p: 2,
                     minHeight: 72,
-                    border: `2px solid ${chosen ? theme.palette.primary.main : theme.palette.text.primary}`,
+                    border: `2px solid ${chosen ? theme.palette.primary.main : theme.palette.divider}`,
+                    borderRadius: '12px',
                     bgcolor: chosen ? alpha(theme.palette.primary.main, 0.08) : theme.palette.background.paper,
                     '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
                   }}

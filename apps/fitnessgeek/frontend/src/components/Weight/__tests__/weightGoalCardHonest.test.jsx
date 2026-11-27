@@ -60,15 +60,17 @@ describe('the weight goal card (Full)', () => {
 
   // The Label: "behind" is a filled tag in warning.main (an amber, not the
   // Dinner lemon), still never red, and it always carries the words.
-  it('behind plan is said in words, in the warning fill, never red, and without a day count', () => {
+  it('behind plan is said in words, with the warning colour beside it, never red, and without a day count', () => {
     renderCard();
     const chip = screen.getByTestId('weight-status');
     expect(chip).toHaveTextContent('Behind plan');
     expect(document.body.textContent).not.toMatch(/days behind/);
-    // The testid sits on the word; the fill is on the Tag around it.
-    const bg = window.getComputedStyle(chip.parentElement).backgroundColor;
+    // The testid sits on the word; the Tag around it is a soft wash with a
+    // dot in the status colour (the words stay in the normal text colour).
+    const dot = chip.parentElement.querySelector('[aria-hidden]');
+    const bg = window.getComputedStyle(dot).backgroundColor;
     expect(bg).toBe('rgb(154, 82, 0)'); // warning.main #9A5200
-    expect(bg).not.toBe('rgb(246, 201, 69)'); // not the Dinner lemon
+    expect(bg).not.toBe('rgb(201, 42, 42)'); // not error red
   });
 
   it('shows where the program started, as a fact row in ink (A7)', () => {

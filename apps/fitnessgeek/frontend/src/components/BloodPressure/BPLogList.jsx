@@ -75,11 +75,11 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
             <ListRow component="li" key={log.id || log._id} first={index === 0} sx={{ gap: 1, py: 0.5 }}>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                  <Typography component="span" sx={{ fontWeight: 800, fontSize: '1.125rem' }}>
+                  <Typography component="span" sx={{ fontWeight: 700, fontSize: '1.125rem' }}>
                     {log.systolic}/{log.diastolic}
                     <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 700 }}> {unit}</Box>
                   </Typography>
-                  <Tag sx={{ bgcolor: bpStatus.color }}>{bpStageWords(bpStatus.stage).label}</Tag>
+                  <Tag fill={bpStatus.color}>{bpStageWords(bpStatus.stage).label}</Tag>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', columnGap: 1.5, flexWrap: 'wrap', mt: 0.25 }}>
                   {log.pulse && (

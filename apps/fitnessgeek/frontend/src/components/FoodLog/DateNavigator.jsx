@@ -54,7 +54,7 @@ const DateNavigator = ({
             component="h2"
             sx={{
               m: 0,
-              fontWeight: 900,
+              fontWeight: 700,
               lineHeight: 1.1,
               fontSize: { xs: '1.5rem', sm: '1.75rem' },
               textAlign: 'center'

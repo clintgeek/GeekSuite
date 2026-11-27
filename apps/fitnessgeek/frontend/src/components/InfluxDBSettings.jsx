@@ -181,7 +181,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
     <Box>
       <Stack spacing={2.25}>
         {/* Header */}
-        <Typography variant="h5" sx={{ fontWeight: 900 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>
           <StorageIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
           Where your Garmin data comes from
         </Typography>

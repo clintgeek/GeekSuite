@@ -5,13 +5,13 @@ import { useTheme, alpha } from '@mui/material/styles';
 /**
  * Surface — the single card primitive for FitnessGeek.
  *
- * The Label (theme/theme.jsx): a panel is a white box with a 2px ink border
- * and square corners. Nothing has a shadow and nothing lifts on hover.
+ * Daylight (theme/theme.jsx): a card is white paper with 16px corners, a
+ * hairline edge and the faintest shadow. Nothing lifts on hover.
  *
  * Variants:
- *  - "card"    : a label panel (2px ink border)
- *  - "inset"   : a subordinate block INSIDE a panel: no border, a faint wash.
- *                Never nest a "card" in a "card"; use rules (Label.jsx) first.
+ *  - "card"    : the card
+ *  - "inset"   : a subordinate block INSIDE a card: no border, a faint wash.
+ *                Never nest a "card" in a "card"; use spacing or a hairline.
  *  - "ticket"  : kept as a name for older call sites; draws as "card"
  *  - "ghost"   : dashed border (empty states, placeholders)
  */
@@ -32,17 +32,15 @@ const Surface = React.forwardRef(function Surface(
   const isDark = theme.palette.mode === 'dark';
   const ink = theme.palette.text.primary;
   const canvas = theme.palette.background.paper;
-  // Night cards need a firmer edge than the divider to lift off the walnut
-  // (review A10); the theme's `cardBorder` is the divider in the morning.
   const edge = theme.palette.cardBorder || theme.palette.divider;
 
   const base = {
     position: 'relative',
-    borderRadius: 0,
+    borderRadius: '16px',
     backgroundColor: canvas,
-    border: `2px solid ${edge}`,
-    boxShadow: 'none',
-    padding: padded ? { xs: 1.5, sm: 2 } : 0,
+    border: `1px solid ${edge}`,
+    boxShadow: theme.palette.cardShadow || 'none',
+    padding: padded ? { xs: 4, sm: 5 } : 0,
     transition: 'background-color 150ms ease, border-color 150ms ease',
   };
 
@@ -51,11 +49,14 @@ const Surface = React.forwardRef(function Surface(
     inset: {
       backgroundColor: alpha(ink, isDark ? 0.06 : 0.04),
       border: 'none',
+      boxShadow: 'none',
+      borderRadius: '12px',
     },
     ticket: {},
     ghost: {
-      border: `2px dashed ${alpha(ink, 0.35)}`,
+      border: `1.5px dashed ${alpha(ink, 0.3)}`,
       backgroundColor: 'transparent',
+      boxShadow: 'none',
     },
   };
 

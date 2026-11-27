@@ -5,7 +5,7 @@ import { useTheme } from '@mui/material/styles';
 /**
  * SectionLabel — the small heading over a group of things.
  *
- * The Label: heavy Archivo, sentence case, tight line. A label is a word to
+ * Daylight: bold Figtree, sentence case, tight line. A label is a word to
  * read, not a stamp, and has no ornament.
  *
  * Variants:
@@ -39,7 +39,7 @@ const SectionLabel = ({
           sx={{
             width: 6,
             height: 6,
-            borderRadius: 0,
+            borderRadius: 999,
             backgroundColor: dot === true ? theme.palette.primary.main : dot,
             flexShrink: 0,
           }}
@@ -50,7 +50,7 @@ const SectionLabel = ({
         sx={{
           fontFamily: "inherit",
           fontSize: '0.9375rem',
-          fontWeight: 800,
+          fontWeight: 700,
           letterSpacing: '-0.005em',
           color,
           lineHeight: 1.2,

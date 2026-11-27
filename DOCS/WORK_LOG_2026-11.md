@@ -974,3 +974,31 @@ Chef picked A. Review and item list: `apps/fitnessgeek/DOCS/THEME_REVIEW_2026-11
 - Verified: unit suite 1,050 / 1,050; contrast 658 / 658; full harness on phone, desktop and tablet with a11y
   enforcing, then the failing scenes re-run clean after fixes.
 - Open: on a phone the facts panel fills Full Home's first screen, so meals start one scroll down.
+
+## 2026-11-26: FitnessGeek "Daylight" (The Label backed out)
+
+Chef, hours after The Label went live: "I'm not loving it. Let's back that bit out and try this instead", with a
+written spec, saved verbatim as `apps/fitnessgeek/DOCS/DASHBOARD_REDESIGN_SPEC.md` (build notes at its end).
+
+- ONE commit so it can be reverted. The Label's skin is gone; its structure stayed (page container, two-column
+  desktop, PWA shell, touch floors), so this is not a `git revert` of `89e05acf`.
+- The look: soft grey ground, white cards with a hairline and a faint shadow, 16px corners, Figtree, one blue.
+  Each macro has its own colour (teal protein, amber carbs, rose fat); meals are small dots; the sidebar is
+  light by day instead of a dark board.
+- Home, to the spec: a nutrition card (calorie ring, the answer in words, a bar each for calories and macros),
+  meals as one grouped list, health tiles for weight, blood pressure, steps and streak (sparklines, a worded
+  BP status, each a link), and the AI notes card. Phone order: nutrition, "What did you eat?", health, meals,
+  notes. Simple keeps its own shape, button first.
+- New primitives: `Ring`, `MetricTile`; `Tag` takes `tone` or `fill` and is a soft wash with a dot. The
+  `Label*` / `Fact*` names were kept for ~300 call sites; only what they draw changed.
+- The page container now has a 16px phone gutter and 16–20px between cards (was 8px and 7–9px).
+- Card titles "Body Facts" and "Pressure Facts" are now "Your weight" and "Your blood pressure".
+- PWA wrapper: new ring icon on blue, theme-color and manifest on the new grounds, offline page restyled.
+- One dependency added: `@fontsource/figtree`. `@fontsource/archivo` is now unused and still installed.
+- Landmines: the suite spacing unit is 4px, so a card written with `p: 2` is 8px (I got this wrong first);
+  a component that reads `theme.palette.tonal` crashes under a bare MUI theme in tests, so use
+  `tonalColors(theme)` / `trackColor(theme)`; a tag with a solid `bgcolor` fails contrast once its text is no
+  longer paper-coloured (34 axe findings), so colour goes in through `tone` / `fill`.
+- Verified: unit suite 1,050 / 1,050; contrast 664 / 664; PWA audit clean; harness on phone, desktop and
+  tablet with a11y enforcing, 1,166 scenes, 0 violations, 0 a11y, 0 page errors. Not yet on a real device.
+

@@ -1,57 +1,54 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import Surface from './Surface.jsx';
+import { trackColor } from '../../theme/theme.jsx';
 
 /**
- * The Label's grammar (theme/theme.jsx, DOCS/THEME_REVIEW_2026-11.md).
+ * The card grammar (theme/theme.jsx, "Daylight"). The names date from "The
+ * Label" and are kept for their ~300 call sites; what they draw is now soft:
  *
- * A Nutrition Facts panel is built from five things, and so is every screen
- * here: a bordered panel with a heavy title, ink rules in three weights, a
- * headline amount, rows of "name amount … percent", and a small inverse tag.
- * Hierarchy comes from the rules and the type weight, never from nesting
- * boxes in boxes.
+ *   LabelPanel   a card with a quiet title row
+ *   Rule         a hairline between sections (every weight draws the same)
+ *   FactHeadline the card's one big number
+ *   FactRow      "name amount (of target) [tag] … percent"
+ *   Tag          a small rounded status tag
+ *   LabelBar     a rounded progress bar
+ *   ListRow      a row in a list, with a hairline above
  *
- *   <LabelPanel title="Today’s Facts" meta={<>4 meals logged</>} metaRight={<>Target <b>2,340</b> cal</>}>
- *     <FactHeadline caption="Amount left today" name="Calories" value="660" />
- *     <LabelBar value={72} label="1,680 of 2,340 calories eaten" />
- *     <Rule weight="medium" />
- *     <FactColumnHead>% of daily target</FactColumnHead>
- *     <FactRow name="Protein" amount="113 g" of="of 156" percent="72%" />
- *     <FactRow name="Fat" amount="99 g" of="of 78" percent="127%" tag="21 over" />
- *   </LabelPanel>
+ * Hierarchy comes from spacing and type size, never from boxes in boxes.
  */
 
-const RULE = { thick: 10, medium: 5, thin: 1 };
-
-/** An ink rule. `thick` under a panel's header block, `medium` between
- * sections, `thin` between rows. */
+/** A hairline between sections. `thick` and `medium` are kept as names and
+ * add a little air; nothing draws a heavy rule any more. */
 export function Rule({ weight = 'thin', sx }) {
+  const air = weight === 'thin' ? 0 : 0.5;
   return (
     <Box
       aria-hidden
-      sx={{ borderTop: (t) => `${RULE[weight] ?? 1}px solid ${t.palette.text.primary}`, ...sx }}
+      sx={{ borderTop: (t) => `1px solid ${t.palette.divider}`, mt: air, ...sx }}
     />
   );
 }
 
-/** A label panel: 2px ink border, a heavy title, an optional meta line, then
- * the thick rule. `level` picks the title size: 1 for the page's one main
- * panel, 2 for the rest. `action` sits right of a level-2 title. */
+/** A card with a title row. `level` 1 is the page's main card (a slightly
+ * larger title), 2 the rest. `meta` / `metaRight` are a quiet line under the
+ * title; `action` sits right of it. */
 export function LabelPanel({ title, titleId, level = 2, meta, metaRight, action, children, sx, titleComponent, ...rest }) {
   const big = level === 1;
   return (
-    <Surface sx={{ p: { xs: 1.5, sm: 2 }, ...sx }} {...rest}>
+    <Surface sx={sx} {...rest}>
       {title && (
-        <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, minHeight: 28 }}>
           <Typography
             component={titleComponent || (big ? 'h2' : 'h3')}
             id={titleId}
             sx={{
               m: 0,
-              fontWeight: 900,
-              lineHeight: 1,
+              fontWeight: 700,
+              lineHeight: 1.25,
               letterSpacing: '-0.01em',
-              fontSize: big ? { xs: '2.25rem', sm: '2.5rem' } : '1.375rem',
+              fontSize: big ? '1.25rem' : '1.0625rem',
               minWidth: 0,
             }}
           >
@@ -66,10 +63,8 @@ export function LabelPanel({ title, titleId, level = 2, meta, metaRight, action,
             display: 'flex',
             justifyContent: 'space-between',
             gap: 1.5,
-            mt: 0.75,
-            pt: 0.75,
-            pb: 0.5,
-            borderTop: (t) => `1px solid ${t.palette.text.primary}`,
+            mt: 0.25,
+            color: 'text.secondary',
             fontSize: '0.9375rem',
           }}
         >
@@ -77,7 +72,7 @@ export function LabelPanel({ title, titleId, level = 2, meta, metaRight, action,
           <span>{metaRight}</span>
         </Box>
       )}
-      {title && <Rule weight={big ? 'thick' : 'medium'} sx={{ mt: meta || metaRight ? 0 : 0.5 }} />}
+      {title && <Box aria-hidden sx={{ height: 12 }} />}
       {children}
     </Surface>
   );
@@ -89,13 +84,13 @@ export function FactHeadline({ caption, name, value, unit }) {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 1.5, pt: 0.5 }}>
       <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        {caption && <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700 }}>{caption}</Typography>}
-        <Typography sx={{ fontWeight: 900, fontSize: '1.75rem', lineHeight: 1.05 }}>{name}</Typography>
+        {caption && <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>{caption}</Typography>}
+        <Typography sx={{ fontWeight: 600, fontSize: '1.125rem', lineHeight: 1.2 }}>{name}</Typography>
       </Box>
-      <Typography component="div" sx={{ fontWeight: 900, fontSize: { xs: '3.5rem', sm: '4rem' }, lineHeight: 0.95, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+      <Typography component="div" sx={{ fontWeight: 700, fontSize: { xs: '2.5rem', sm: '2.75rem' }, lineHeight: 1, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
         {value}
         {unit && (
-          <Box component="span" sx={{ fontSize: '1.125rem', fontWeight: 700, letterSpacing: 0 }}>
+          <Box component="span" sx={{ fontSize: '1rem', fontWeight: 500, letterSpacing: 0, color: 'text.secondary' }}>
             {' '}{unit}
           </Box>
         )}
@@ -104,17 +99,17 @@ export function FactHeadline({ caption, name, value, unit }) {
   );
 }
 
-/** A square progress bar. `segments` ([{ value, color }], values in percent)
+/** A rounded progress bar. `segments` ([{ value, color }], values in percent)
  * draws a split bar, e.g. the day's calories by meal; otherwise one fill in
  * the app's blue. Always give it a `label`: it is an image to a screen reader. */
-export function LabelBar({ value = 0, segments, label, height = 12, sx }) {
+export function LabelBar({ value = 0, segments, label, height = 8, sx }) {
   const parts = segments || [{ value, color: 'primary.main' }];
   let used = 0;
   return (
     <Box
       role="img"
       aria-label={label}
-      sx={{ height, my: 1, display: 'flex', bgcolor: (t) => t.palette.track, overflow: 'hidden', ...sx }}
+      sx={{ height, my: 1, display: 'flex', bgcolor: (t) => trackColor(t), overflow: 'hidden', borderRadius: 999, ...sx }}
     >
       {parts.map((part, i) => {
         const width = Math.max(0, Math.min(100 - used, Number(part.value) || 0));
@@ -128,33 +123,51 @@ export function LabelBar({ value = 0, segments, label, height = 12, sx }) {
 /** The right-aligned column heading above a run of FactRows. */
 export function FactColumnHead({ children }) {
   return (
-    <Typography sx={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 700, pt: 0.375, pb: 0.25 }}>
+    <Typography sx={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 500, color: 'text.secondary', pt: 0.375, pb: 0.25 }}>
       {children}
     </Typography>
   );
 }
 
-/** A small inverse tag: ink fill, paper text ("21 OVER", "BEHIND PLAN"). */
-export function Tag({ children, sx, ...rest }) {
+/** A small rounded status tag ("21 over", "Behind plan"): a neutral wash by
+ * default. Pass `tone` ("warning" | "error" | "success" | "info") when the
+ * tag is a status, or `fill` (any colour, or a palette path like
+ * "error.main") when the colour comes from data, e.g. a blood-pressure
+ * stage. Either way the tag is a soft wash of that colour with a dot of it,
+ * and the words stay in the normal text colour: the words carry the meaning,
+ * the colour only agrees. */
+export function Tag({ children, tone, fill, sx, ...rest }) {
+  const resolve = (t) => {
+    if (fill) {
+      const [group, shade] = String(fill).split('.');
+      return t.palette[group]?.[shade] || fill;
+    }
+    return (tone && t.palette[tone]?.main) || null;
+  };
   return (
     <Box
       component="span"
       {...rest}
       sx={{
-        display: 'inline-block',
-        bgcolor: 'text.primary',
-        color: 'background.paper',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 1.25,
+        bgcolor: (t) => alpha(resolve(t) || t.palette.text.primary, t.palette.mode === 'dark' ? 0.2 : 0.1),
+        color: 'text.primary',
         fontSize: '0.75rem',
-        fontWeight: 700,
-        lineHeight: 1.3,
-        px: 0.75,
-        py: 0.25,
-        textTransform: 'uppercase',
-        letterSpacing: '0.02em',
+        fontWeight: 600,
+        lineHeight: 1.4,
+        px: 2,
+        py: 0.5,
+        borderRadius: 999,
         whiteSpace: 'nowrap',
+        verticalAlign: 'middle',
         ...sx,
       }}
     >
+      {(fill || tone) && (
+        <Box component="span" aria-hidden sx={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, bgcolor: (t) => resolve(t) }} />
+      )}
       {children}
     </Box>
   );
@@ -162,7 +175,7 @@ export function Tag({ children, sx, ...rest }) {
 
 /** One label row: **name** amount (of target) [tag] ……… percent / trailing.
  * `first` drops the hairline above it (directly under a Rule). */
-export function FactRow({ name, amount, of, tag, percent, trailing, first = false, sx }) {
+export function FactRow({ name, amount, of, tag, tagTone, percent, trailing, first = false, sx }) {
   return (
     <Box
       sx={{
@@ -170,20 +183,20 @@ export function FactRow({ name, amount, of, tag, percent, trailing, first = fals
         justifyContent: 'space-between',
         alignItems: 'baseline',
         gap: 1.5,
-        py: 0.875,
-        borderTop: first ? 0 : (t) => `1px solid ${t.palette.text.primary}`,
+        py: 2,
+        borderTop: first ? 0 : (t) => `1px solid ${t.palette.divider}`,
         fontSize: '1rem',
         ...sx,
       }}
     >
       <Box component="span" sx={{ minWidth: 0 }}>
-        <Box component="b" sx={{ fontWeight: 700 }}>{name}</Box>
+        <Box component="b" sx={{ fontWeight: 600 }}>{name}</Box>
         {amount != null && <> {amount}</>}
         {of && <Box component="span" sx={{ color: 'text.secondary' }}> {of}</Box>}
-        {tag && <Tag sx={{ ml: 0.75 }}>{tag}</Tag>}
+        {tag && <Tag tone={tagTone} sx={{ ml: 1.5 }}>{tag}</Tag>}
       </Box>
       {(percent != null || trailing) && (
-        <Box component="span" sx={{ fontWeight: percent != null ? 700 : 400, whiteSpace: 'nowrap', textAlign: 'right' }}>
+        <Box component="span" sx={{ fontWeight: percent != null ? 600 : 400, whiteSpace: 'nowrap', textAlign: 'right' }}>
           {percent ?? trailing}
         </Box>
       )}
@@ -192,7 +205,7 @@ export function FactRow({ name, amount, of, tag, percent, trailing, first = fals
 }
 
 /** A row inside a list panel (a food in a meal, a reading, a dose): a
- * hairline in the muted divider colour, lighter than a FactRow's ink rule. */
+ * hairline above each row but the first. */
 export function ListRow({ children, first = false, sx, ...rest }) {
   return (
     <Box

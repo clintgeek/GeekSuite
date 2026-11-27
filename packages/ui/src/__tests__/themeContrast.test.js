@@ -304,8 +304,8 @@ describe.each(cases)('$app / $mode', ({ app, mode, theme }) => {
  * re-runs its pair here.
  */
 /**
- * FitnessGeek's Market Morning pairs that live outside the palette matrix:
- * each meal's ink on its produce fill (the "+ Add" pill, the Food log avatar)
+ * FitnessGeek's pairs that live outside the palette matrix:
+ * each meal's ink on its meal fill (a mark, the Food log avatar)
  * and its secondary text on its card tint, the macro ramp as bars against the
  * progress track and as words on paper, the track itself, and the tonal
  * button (theme.jsx, review 2026-10-16 A1/A2/B1/B2).
@@ -352,12 +352,19 @@ const GROUND_PAIRS = [
   ['todogeek chrome: "BJ" mark / accent (12px)', todoChrome.logoAccent, todoChrome.bg, 4.5],
   ['todogeek chrome: reminders-on toggle (hovered)', todoChrome.accent, flatten(todoChrome.accentBg, todoChrome.bgHover), 4.5],
   // FitnessGeek sidebar: the chalkboard, in both app modes.
-  ['fitnessgeek chrome: row / section caption', fitnessChrome.MUTED, fitnessChrome.CHROME_BG, 4.5],
-  ['fitnessgeek chrome: wordmark / row ink', fitnessChrome.INK, fitnessChrome.CHROME_BG, 4.5],
-  ['fitnessgeek chrome: lemon accent', fitnessChrome.ACCENT, fitnessChrome.CHROME_BG, 3],
-  ['fitnessgeek chrome: hovered row', fitnessChrome.INK, flatten(fitnessChrome.HOVER_BG, fitnessChrome.CHROME_BG), 4.5],
-  ['fitnessgeek chrome: active row', fitnessChrome.INK, flatten(fitnessChrome.ACTIVE_BG, fitnessChrome.CHROME_BG), 4.5],
-  ['fitnessgeek chrome: caption on active row', fitnessChrome.MUTED, flatten(fitnessChrome.ACTIVE_BG, fitnessChrome.CHROME_BG), 4.5],
+  // FitnessGeek sidebar: its own ground per app mode (chrome.js).
+  ...['light', 'dark'].flatMap((mode) => {
+    const c = fitnessChrome.CHROME[mode];
+    const active = flatten(c.ACTIVE_BG, c.CHROME_BG);
+    return [
+      [`fitnessgeek chrome/${mode}: row / section caption`, c.MUTED, c.CHROME_BG, 4.5],
+      [`fitnessgeek chrome/${mode}: wordmark / row ink`, c.INK, c.CHROME_BG, 4.5],
+      [`fitnessgeek chrome/${mode}: active icon`, c.ACCENT, active, 3],
+      [`fitnessgeek chrome/${mode}: hovered row`, c.INK, flatten(c.HOVER_BG, c.CHROME_BG), 4.5],
+      [`fitnessgeek chrome/${mode}: active row`, c.ACTIVE_INK, active, 4.5],
+      [`fitnessgeek chrome/${mode}: caption on active row`, c.MUTED, active, 4.5],
+    ];
+  }),
   ...fitnessGroundPairs(),
   // TodoGeek components on their own grounds.
   ['todogeek/light quick-add prompt: text.muted on parchment.warm', todoLight.palette.text.muted, '#F4EFE8', 4.5],

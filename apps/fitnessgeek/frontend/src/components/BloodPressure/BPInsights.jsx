@@ -114,7 +114,7 @@ const BPInsights = ({ bpLogs = [] }) => {
 
   if (!insights) {
     return (
-      <LabelPanel level={1} title="Pressure Facts">
+      <LabelPanel level={1} title="Your blood pressure">
         <Box sx={{ pt: 1.5 }}>
           <Typography sx={{ fontWeight: 700, fontSize: '1.0625rem', mb: 0.5 }}>
             No readings yet
@@ -174,7 +174,7 @@ const BPInsights = ({ bpLogs = [] }) => {
   return (
     <LabelPanel
       level={1}
-      title="Pressure Facts"
+      title="Your blood pressure"
       meta={insights.weekCategory ? 'Last 7 days' : 'Last reading'}
       metaRight={<>{insights.totalReadings} {insights.totalReadings === 1 ? 'reading' : 'readings'}</>}
     >
@@ -186,7 +186,7 @@ const BPInsights = ({ bpLogs = [] }) => {
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pt: 1, pb: 0.5, flexWrap: 'wrap' }}>
         <HeartIcon data-testid="bp-heart" data-tone={headTone} aria-hidden sx={{ fontSize: 22, color: headColor }} />
-        <Tag sx={{ bgcolor: headColor, fontSize: '0.8125rem' }}>{headWords.label}</Tag>
+        <Tag fill={headColor} sx={{ fontSize: '0.8125rem' }}>{headWords.label}</Tag>
       </Box>
       <Typography component="h3" data-testid="bp-headline" sx={{ fontWeight: 600, fontSize: '1rem', lineHeight: 1.4, pb: 0.75 }}>
         {headline}

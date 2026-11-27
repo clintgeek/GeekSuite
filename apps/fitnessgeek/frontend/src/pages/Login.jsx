@@ -21,10 +21,10 @@ const Login = () => {
       onLogin={handleLogin}
       loading={loading}
       error={error}
-      // FitnessGeek branding: The Label's ink and blue
+      // FitnessGeek branding: ink and blue
       logoColor="text.primary"
       logoSuffixColor="primary.main"
-      // A cool wash: the label's blue and a trace of ink, from theme tokens
+      // A cool wash: blue and a trace of ink, from theme tokens
       // so night mode gets its own blue
       inkColors={[
         alpha(theme.palette.primary.main, 0.1),

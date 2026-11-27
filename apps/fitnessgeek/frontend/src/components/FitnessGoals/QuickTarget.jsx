@@ -64,12 +64,13 @@ function BigChoice({ selected, onClick, title, body, testId }) {
         justifyContent: 'flex-start',
         textAlign: 'left',
         gap: 1.5,
-        p: 2,
+        // 1px more padding when unselected so the 2px chosen edge doesn't shift layout.
+        p: selected ? 2 : 'calc(8px + 1px)',
         minHeight: 64,
         width: '100%',
-        // The Label: a square choice with an ink edge; the chosen one takes
-        // the blue edge and a filled blue mark, not a tint.
-        border: `2px solid ${selected ? theme.palette.primary.main : theme.palette.text.primary}`,
+        borderRadius: '12px',
+        // A hairline option; the chosen one takes a 2px blue edge.
+        border: selected ? `2px solid ${theme.palette.primary.main}` : `1px solid ${theme.palette.divider}`,
         bgcolor: 'background.paper',
         '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
       }}
@@ -80,7 +81,7 @@ function BigChoice({ selected, onClick, title, body, testId }) {
           width: 28, height: 28, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
           bgcolor: selected ? 'primary.main' : 'transparent',
           color: 'primary.contrastText',
-          border: selected ? 'none' : `2px solid ${theme.palette.text.primary}`,
+          border: selected ? 'none' : `2px solid ${theme.palette.text.secondary}`,
         }}
       >
         {selected && <CheckIcon sx={{ fontSize: 20 }} />}
@@ -316,7 +317,7 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
 
       {!maintain && (
         <Box>
-          <Typography id="quick-speed-label" component="h2" sx={{ fontWeight: 900, fontSize: '1.25rem', mb: 1.25 }}>How fast?</Typography>
+          <Typography id="quick-speed-label" component="h2" sx={{ fontWeight: 700, fontSize: '1.25rem', mb: 1.25 }}>How fast?</Typography>
           <Box role="radiogroup" aria-labelledby="quick-speed-label" sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
             {SPEEDS.map((s) => (
               <BigChoice
@@ -337,7 +338,7 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
           data-testid="quick-result"
         >
           <Rule weight="medium" sx={{ mb: 1.5 }} />
-          <Typography sx={{ fontSize: '1.375rem', fontWeight: 900, color: 'text.primary', lineHeight: 1.3 }}>
+          <Typography sx={{ fontSize: '1.375rem', fontWeight: 700, color: 'text.primary', lineHeight: 1.3 }}>
             {`Your daily target: ${cal(plan.dailyCalories)} calories.`}
           </Typography>
           <Typography sx={{ fontSize: '1.0625rem', color: 'text.primary', mt: 0.5 }}>{outcome}</Typography>

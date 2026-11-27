@@ -58,8 +58,8 @@ const shiftDay = (iso, by) => {
   return dayString(date);
 };
 
-/** The day, as a header on the grey ground: previous / next around a heavy
- * "Today" (or the date in words) with the date as a small-caps eyebrow, then
+/** The day, as a header on the grey ground: previous / next around a bold
+ * "Today" (or the date in words) with the date as a small eyebrow, then
  * the Yesterday / Today shortcuts and the native picker for any other day. */
 function DayHeader({ selectedDate, onChange }) {
   const today = localDateString();
@@ -84,7 +84,7 @@ function DayHeader({ selectedDate, onChange }) {
           <ChevronLeftIcon />
         </IconButton>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
-          <Typography component="h2" sx={{ m: 0, fontWeight: 900, lineHeight: 1.1, fontSize: { xs: '1.5rem', sm: '1.75rem' }, textAlign: 'center' }}>
+          <Typography component="h2" sx={{ m: 0, fontWeight: 700, lineHeight: 1.1, fontSize: { xs: '1.5rem', sm: '1.75rem' }, textAlign: 'center' }}>
             {title}
           </Typography>
           {eyebrow && (
@@ -123,14 +123,13 @@ function DayHeader({ selectedDate, onChange }) {
   );
 }
 
-// Square text tabs with a 4px blue underline on the selected one.
+// Text tabs: a hairline under the row, a blue indicator on the selected one.
 const tabsSx = {
-  borderBottom: (t) => `2px solid ${t.palette.text.primary}`,
+  borderBottom: (t) => `1px solid ${t.palette.divider}`,
   minHeight: 48,
-  '& .MuiTabs-indicator': { height: 4, bgcolor: 'primary.main' },
+  '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0', bgcolor: 'primary.main' },
   '& .MuiTab-root': {
     minHeight: 48,
-    borderRadius: 0,
     textTransform: 'none',
     fontWeight: 700,
     fontSize: '1rem',

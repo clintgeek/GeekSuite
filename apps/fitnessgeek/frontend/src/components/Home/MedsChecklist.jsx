@@ -28,7 +28,7 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
     <Box component="section" aria-labelledby="meds-checklist-title" data-testid="meds-checklist">
       {/* A level-2 label title: heavy words, the count right, a medium rule. */}
       <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2 }}>
-        <Typography id="meds-checklist-title" component="h2" sx={{ fontSize: '1.375rem', fontWeight: 900, lineHeight: 1.1 }}>
+        <Typography id="meds-checklist-title" component="h2" sx={{ fontSize: '1.375rem', fontWeight: 700, lineHeight: 1.1 }}>
           {title}
         </Typography>
         {total > 0 && !unknown && (
@@ -83,13 +83,13 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
                 sx={{
                   width: 40,
                   height: 40,
-                  borderRadius: '4px',
+                  borderRadius: '10px',
                   flexShrink: 0,
                   display: 'grid',
                   placeItems: 'center',
                   bgcolor: item.taken ? blue : 'transparent',
                   color: theme.palette.primary.contrastText,
-                  border: item.taken ? `2.5px solid ${blue}` : `2.5px solid ${theme.palette.text.primary}`,
+                  border: item.taken ? `2px solid ${blue}` : `2px solid ${theme.palette.text.secondary}`,
                 }}
               >
                 {item.taken && <CheckIcon sx={{ fontSize: 28 }} />}

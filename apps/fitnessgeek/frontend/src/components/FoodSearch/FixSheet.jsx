@@ -91,7 +91,7 @@ export default function FixSheet({ item, onClose, fixes }) {
   return (
     <Dialog open={open} onClose={() => !working && onClose?.()} maxWidth="xs" fullWidth aria-labelledby="fix-sheet-title" data-testid="fix-sheet">
       <DialogTitle id="fix-sheet-title" sx={{ pb: 0.5 }}>
-        <Typography component="span" sx={{ display: 'block', fontSize: '1.25rem', fontWeight: 900 }}>
+        <Typography component="span" sx={{ display: 'block', fontSize: '1.25rem', fontWeight: 700 }}>
           Fix {item.name}
         </Typography>
         <Typography component="span" sx={{ display: 'block', fontSize: '1rem', color: 'text.secondary' }}>
@@ -160,7 +160,7 @@ export default function FixSheet({ item, onClose, fixes }) {
           <Alert
             severity="warning"
             action={isSignedOutMessage(error) ? <SignInButton /> : undefined}
-            sx={{ mt: 2, borderRadius: 0, fontSize: '1rem', color: theme.palette.text.primary, alignItems: 'center' }}
+            sx={{ mt: 2, borderRadius: '12px', fontSize: '1rem', color: theme.palette.text.primary, alignItems: 'center' }}
           >
             {error}
           </Alert>

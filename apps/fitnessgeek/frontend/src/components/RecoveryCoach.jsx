@@ -71,7 +71,7 @@ function RecommendationCard({ recommendation }) {
           {recommendation.message}
         </Typography>
       </Stack>
-      <Box sx={{ mt: 1.25, pt: 1, borderTop: (t) => `1px solid ${t.palette.text.primary}` }}>
+      <Box sx={{ mt: 1.25, pt: 1, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
         <strong>Try this:</strong> {recommendation.action}
       </Box>
     </LabelPanel>
@@ -139,7 +139,7 @@ export default function RecoveryCoach({ date }) {
             than wired to a fake destination; re-add it once there's a real
             AI analysis surface to send the recovery context to. */}
         <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="h5" sx={{ fontWeight: 900 }}>Recovery notes from the AI</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>Recovery notes from the AI</Typography>
         </Stack>
 
         {/* Readiness Score */}
@@ -163,7 +163,7 @@ export default function RecoveryCoach({ date }) {
         {/* Recommendations */}
         {recommendations.length > 0 ? (
           <>
-            <Typography variant="h6" sx={{ fontWeight: 900 }}>For you today</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>For you today</Typography>
             {recommendations.map((rec, idx) => (
               <RecommendationCard key={idx} recommendation={rec} />
             ))}

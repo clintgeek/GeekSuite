@@ -5,8 +5,7 @@ import { useTheme } from '@mui/material/styles';
 import { readableOn } from '@geeksuite/ui';
 
 /**
- * StatCard — one number on a label panel, as a fact row (The Label,
- * THEME_REVIEW_2026-11): **Weight** ……… 318.2 lb, with a muted caption
+ * StatCard — one number inside a card, as a row: **Weight** ……… 318.2 lb, with a muted caption
  * under it. It used to be a little bordered tile with a tinted icon; inside
  * Home's "Your numbers" panel that was a box inside a box, so it is a row now
  * and the panel draws the border. The name is kept for its call sites.
@@ -46,7 +45,7 @@ export default function StatCard({
     <Box
       sx={{
         py: 1,
-        borderTop: first ? 0 : `1px solid ${theme.palette.text.primary}`,
+        borderTop: first ? 0 : `1px solid ${theme.palette.divider}`,
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 1.5 }}>
@@ -62,7 +61,7 @@ export default function StatCard({
               <span>{trendValue}</span>
             </Box>
           )}
-          <Typography component="span" sx={{ fontSize: '1.375rem', fontWeight: 900, lineHeight: 1.1, color: 'text.primary' }}>
+          <Typography component="span" sx={{ fontSize: '1.375rem', fontWeight: 700, lineHeight: 1.1, color: 'text.primary' }}>
             {shown}
           </Typography>
           {unit && (

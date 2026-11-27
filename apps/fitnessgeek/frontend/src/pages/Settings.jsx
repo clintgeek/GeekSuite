@@ -88,12 +88,12 @@ function GoalChoice({ selected, onClick, title }) {
       sx={{
         justifyContent: 'flex-start',
         gap: 1.5,
-        px: 2,
+        px: selected ? 2 : 'calc(8px + 1px)',
         minHeight: 56,
         width: '100%',
-        borderRadius: 0,
+        borderRadius: '12px',
         // The chosen one: a 2px blue border and a blue tick, no tinted fill.
-        border: `2px solid ${selected ? theme.palette.primary.main : theme.palette.divider}`,
+        border: selected ? `2px solid ${theme.palette.primary.main}` : `1px solid ${theme.palette.divider}`,
         bgcolor: 'background.paper',
         '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
       }}
@@ -595,7 +595,7 @@ const Settings = () => {
             aria-expanded={moreOpen}
             aria-controls="more-settings"
             endIcon={<ExpandIcon sx={{ transform: moreOpen ? 'rotate(180deg)' : 'none', transition: 'transform 150ms' }} />}
-            sx={{ minHeight: 56, fontSize: '1.0625rem', fontWeight: 700, justifyContent: 'space-between', px: 2.5, border: '2px solid', borderColor: 'text.primary', color: 'text.primary' }}
+            sx={{ minHeight: 56, fontSize: '1.0625rem', fontWeight: 700, justifyContent: 'space-between', px: 2.5, border: '1px solid', borderColor: 'divider', borderRadius: '12px', color: 'text.primary' }}
           >
             More settings
           </Button>

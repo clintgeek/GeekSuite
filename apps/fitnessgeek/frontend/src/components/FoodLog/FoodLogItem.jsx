@@ -106,7 +106,7 @@ const FoodLogItem = ({
           minHeight: 56,
           py: 1.25,
           textAlign: 'left',
-          borderRadius: 0,
+          borderRadius: '12px',
           borderTop: first ? 0 : `1px solid ${theme.palette.divider}`,
           '&:focus-visible': { outline: `3px solid ${theme.palette.text.primary}`, outlineOffset: 2 },
           '@media (hover: hover)': { '&:hover': { backgroundColor: theme.palette.action.hover } },

@@ -91,12 +91,13 @@ export default function ExperienceSettings({ children, id }) {
                 alignItems: 'flex-start',
                 textAlign: 'left',
                 gap: 1.5,
-                p: 2,
+                // 1px more padding when unselected so the 2px chosen edge doesn't shift layout.
+                p: on ? 2 : 'calc(8px + 1px)',
                 minHeight: 88,
                 // Two bordered options: the chosen one gets a 2px blue border
                 // and a blue tick, no tinted fill.
-                borderRadius: 0,
-                border: `2px solid ${on ? theme.palette.primary.main : theme.palette.divider}`,
+                borderRadius: '12px',
+                border: on ? `2px solid ${theme.palette.primary.main}` : `1px solid ${theme.palette.divider}`,
                 bgcolor: 'background.paper',
                 '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
               }}
@@ -113,7 +114,7 @@ export default function ExperienceSettings({ children, id }) {
                 {on && <CheckIcon sx={{ fontSize: 20 }} />}
               </Box>
               <Box>
-                <Typography sx={{ fontSize: '1.1875rem', fontWeight: 800, color: 'text.primary' }}>{m.title}</Typography>
+                <Typography sx={{ fontSize: '1.1875rem', fontWeight: 700, color: 'text.primary' }}>{m.title}</Typography>
                 <Typography sx={{ fontSize: '1rem', color: 'text.secondary', lineHeight: 1.4 }}>{m.body}</Typography>
               </Box>
             </ButtonBase>
@@ -126,7 +127,7 @@ export default function ExperienceSettings({ children, id }) {
         sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, minHeight: 56, cursor: 'pointer' }}
       >
         <Box>
-          <Typography sx={{ fontSize: '1.125rem', fontWeight: 800 }}>Larger text</Typography>
+          <Typography sx={{ fontSize: '1.125rem', fontWeight: 700 }}>Larger text</Typography>
           <Typography sx={{ fontSize: '1rem', color: 'text.secondary' }}>Makes every word in the app bigger.</Typography>
         </Box>
         <Switch

@@ -17,14 +17,14 @@ export default function Page({ narrow = false, fab = false, children, sx, ...res
     <Box
       sx={{
         width: '100%',
-        maxWidth: narrow ? 720 : 1080,
+        maxWidth: narrow ? 760 : 1160,
         mx: 'auto',
-        px: { xs: 2, sm: 3, md: 4 },
-        pt: { xs: 2, sm: 3 },
-        pb: fab ? { xs: clear, sm: clear, md: 4 } : { xs: 3, md: 4 },
+        px: { xs: 4, sm: 6, md: 8 },
+        pt: { xs: 4, sm: 6 },
+        pb: fab ? { xs: clear, sm: clear, md: 8 } : { xs: 6, md: 8 },
         display: 'flex',
         flexDirection: 'column',
-        gap: { xs: 1.75, md: 2.25 },
+        gap: { xs: 4, md: 5 },
         ...sx,
       }}
       {...rest}

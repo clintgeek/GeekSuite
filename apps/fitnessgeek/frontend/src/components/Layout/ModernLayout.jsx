@@ -2,7 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useMediaQuery, useTheme } from '@mui/material';
 import { GeekShell, GeekAppFrame, GeekBottomNav, GeekToastProvider, geekLayout } from '@geeksuite/ui';
 import { bottomNavActiveId, bottomNavItems } from './navConfig.jsx';
-import { CHROME_BG } from './chrome.js';
+import { chromeFor } from './chrome.js';
 import Sidebar from './Sidebar.jsx';
 import TopBar from './TopBar.jsx';
 
@@ -39,9 +39,8 @@ export default function ModernLayout() {
 
   return (
     <GeekShell
-      // The Label's sidebar is ink in both modes; pin the mobile drawer
-      // paper to it too.
-      navSx={{ bgcolor: CHROME_BG }}
+      // The sidebar's own ground, on the mobile drawer paper too.
+      navSx={{ bgcolor: chromeFor(theme.palette.mode).CHROME_BG }}
       nav={<Sidebar />}
       topBar={<TopBar />}
       bottomNav={

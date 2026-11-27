@@ -25,7 +25,7 @@ import {
  * library this app now ships. Same shape — a filled, smoothed 2px line with
  * no axes and a hover readout of "HH:MM / value".
  *
- * The Label: one colour system. The measured line is the app's blue; the
+ * One colour system. The measured line is the app's blue; the
  * fill under it is a 10% tint of the same blue; nothing else is coloured.
  */
 function SparklineChart({ data, color, height = 60, showGradient = true }) {
@@ -67,7 +67,9 @@ function SparklineChart({ data, color, height = 60, showGradient = true }) {
         tooltip={({ point }) => (
           <Box sx={{
             backgroundColor: theme.palette.background.paper,
-            border: `2px solid ${theme.palette.text.primary}`,
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: '10px',
+            boxShadow: '0 8px 24px rgba(16, 24, 40, 0.12)',
             px: 1.25,
             py: 0.75,
           }}>
@@ -194,7 +196,9 @@ function DetailedChart({ data, label, color, yAxisLabel, height = 200 }) {
         sliceTooltip={({ slice }) => (
           <Box sx={{
             backgroundColor: theme.palette.background.paper,
-            border: `2px solid ${theme.palette.text.primary}`,
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: '10px',
+            boxShadow: '0 8px 24px rgba(16, 24, 40, 0.12)',
             px: 1.5,
             py: 1,
           }}>
@@ -278,7 +282,7 @@ export default function IntradayDashboard({
 
   return (
     <Box>
-      {/* Summary Cards: three label panels; one across from md up */}
+      {/* Summary Cards: three cards; one across from md up */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr))' }, gap: { xs: 1.75, md: 2.25 }, mb: 2.25 }}>
         <MetricCardWithChart
           label="Heart rate"

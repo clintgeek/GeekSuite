@@ -19,12 +19,15 @@ import {
   Nightlight as EveningIcon,
   Psychology as CoachIcon,
   TrendingUp as TrendsIcon,
-  Chat as ChatIcon
+  Chat as ChatIcon,
+  AutoAwesome as NotesIcon
 } from '@mui/icons-material';
 import { insightsService } from '../../services/insightsService.js';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { AINoteFooter, AI_NOTES_NAME, lastDaysSource } from '../Reports/aiNotes.jsx';
 import { LabelPanel, Rule } from '../primitives';
+import { tonalColors } from '../../theme/theme.jsx';
+
 
 /**
  * The sentence the backend sends with `ok: false`. Kept here as the local
@@ -52,6 +55,7 @@ export function noteSource(insight) {
 
 const AIInsightsCard = () => {
   const theme = useTheme();
+  const tonal = tonalColors(theme);
   const isDark = theme.palette.mode === 'dark';
 
   const [loading, setLoading] = useState(false);
@@ -226,8 +230,9 @@ const AIInsightsCard = () => {
 
   const accentColor = theme.palette.primary.main;
 
-  // A level-2 label panel (The Label): the title, refresh and show/hide on
-  // the right, the four chips, then the notes under a rule when opened.
+  // A card that belongs to the dashboard, not a chat widget: a small tinted
+  // mark beside the title, refresh and show/hide on the right, the four
+  // chips, then the notes under a hairline when opened.
   const iconButtonSx = { width: 44, height: 44 };
   const actions = (
     <Box sx={{ display: 'flex', gap: 0.25, mr: -1, my: -1 }}>
@@ -251,14 +256,36 @@ const AIInsightsCard = () => {
   );
 
   return (
-    <LabelPanel title={AI_NOTES_NAME} titleComponent="h2" action={actions}>
+    <LabelPanel
+      titleComponent="h2"
+      action={actions}
+      title={(
+        <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 2.5 }}>
+          <Box
+            component="span"
+            aria-hidden
+            sx={{
+              width: 28,
+              height: 28,
+              borderRadius: '9px',
+              display: 'inline-grid',
+              placeItems: 'center',
+              bgcolor: tonal.bg,
+              color: tonal.ink,
+            }}
+          >
+            <NotesIcon sx={{ fontSize: 16 }} />
+          </Box>
+          {AI_NOTES_NAME}
+        </Box>
+      )}
+    >
         {/* The chips: 44px tall wherever a finger is the pointer or the
             screen is phone/tablet sized; 32px only for a mouse from md up. */}
         <Box sx={{
           display: 'flex',
           flexWrap: 'wrap',
-          gap: 0.75,
-          pt: 1.25,
+          gap: 1.5,
           pb: 0.5,
         }}>
           {tabs.map((tab) => {
@@ -272,19 +299,19 @@ const AIInsightsCard = () => {
                 onClick={() => { setActiveTab(tab.id); setExpanded(true); }}
                 size="small"
                 sx={{
-                  fontWeight: 700,
+                  fontWeight: 600,
                   fontSize: '0.875rem',
                   height: { xs: 44, md: 32 },
                   px: 0.5,
                   '@media (pointer: coarse)': { height: 44 },
-                  backgroundColor: isActive ? alpha(accentColor, isDark ? 0.15 : 0.08) : 'transparent',
-                  color: isActive ? accentColor : theme.palette.text.primary,
-                  border: `1.5px solid ${isActive ? accentColor : theme.palette.text.primary}`,
+                  backgroundColor: isActive ? tonal.bg : 'transparent',
+                  color: isActive ? tonal.ink : theme.palette.text.primary,
+                  border: `1px solid ${isActive ? 'transparent' : theme.palette.divider}`,
                   '& .MuiChip-icon': { color: 'inherit' },
                   '&:hover': {
                     backgroundColor: isActive
-                      ? alpha(accentColor, isDark ? 0.2 : 0.12)
-                      : alpha(theme.palette.text.primary, isDark ? 0.05 : 0.03),
+                      ? tonal.hover
+                      : alpha(theme.palette.text.primary, isDark ? 0.08 : 0.04),
                   },
                 }}
               />
@@ -293,7 +320,7 @@ const AIInsightsCard = () => {
         </Box>
 
         <Collapse in={expanded}>
-          <Rule weight="thin" sx={{ mt: 1 }} />
+          <Rule weight="thin" sx={{ mt: 3 }} />
 
           {/* Content Area */}
           <Box sx={{ pt: 1.5, pb: 0.5, minHeight: 60 }}>
@@ -321,10 +348,12 @@ const AIInsightsCard = () => {
                           maxWidth: '85%',
                           px: 1.5,
                           py: 1,
-                          // A reply is a quoted block (an ink edge on the
-                          // left); her question sits right with a blue edge.
-                          borderLeft: msg.role === 'user' ? 0 : `3px solid ${theme.palette.text.primary}`,
-                          borderRight: msg.role === 'user' ? `3px solid ${accentColor}` : 0,
+                          // A reply is a grey bubble on the left; the
+                          // question is a tinted one on the right.
+                          borderRadius: '12px',
+                          bgcolor: msg.role === 'user'
+                            ? tonal.bg
+                            : alpha(theme.palette.text.primary, isDark ? 0.08 : 0.05),
                         }}
                       >
                         <Typography sx={{

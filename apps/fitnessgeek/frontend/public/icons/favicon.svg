@@ -1,17 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- FitnessGeek tab icon: the label mark, heavier and simpler for 16-32px. -->
-  <rect x="18" y="18" width="476" height="476" fill="#FFFFFF" stroke="#111318" stroke-width="36"/>
-  <!-- F -->
-  <rect x="96" y="92" width="62" height="190" fill="#111318"/>
-  <rect x="96" y="92" width="150" height="58" fill="#111318"/>
-  <rect x="96" y="172" width="112" height="50" fill="#111318"/>
-  <!-- G -->
-  <rect x="266" y="92" width="150" height="58" fill="#111318"/>
-  <rect x="266" y="92" width="62" height="190" fill="#111318"/>
-  <rect x="266" y="224" width="150" height="58" fill="#111318"/>
-  <rect x="354" y="176" width="62" height="106" fill="#111318"/>
-  <rect x="326" y="176" width="90" height="46" fill="#111318"/>
-  <!-- rule and bar -->
-  <rect x="96" y="312" width="320" height="28" fill="#111318"/>
-  <rect x="96" y="364" width="130" height="48" fill="#1F3FD1"/>
+  <!-- FitnessGeek tab icon: the day's ring on the app's blue, heavy enough for 16-32px. -->
+  <rect width="512" height="512" rx="112" fill="#3B5BDB"/>
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#FFFFFF" stroke-opacity="0.3" stroke-width="72"/>
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#FFFFFF" stroke-width="72" stroke-linecap="round" stroke-dasharray="633.3 879.6" transform="rotate(-90 256 256)"/>
 </svg>

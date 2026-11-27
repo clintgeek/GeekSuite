@@ -446,7 +446,7 @@ const CalorieGoalWizard = () => {
       {/* Step 1: Profile */}
       {!hasExistingGoal && activeStep === 1 && (
         <Surface>
-          <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
+          <Typography component="h2" sx={{ fontWeight: 700, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
             About you
           </Typography>
           <Rule weight="medium" sx={{ mb: 2 }} />
@@ -578,7 +578,7 @@ const CalorieGoalWizard = () => {
       {/* Step 2: Goal Setting */}
       {!hasExistingGoal && activeStep === 2 && (
         <Surface>
-          <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
+          <Typography component="h2" sx={{ fontWeight: 700, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
             Set your weight goal
           </Typography>
           <Rule weight="medium" sx={{ mb: 2 }} />
@@ -627,7 +627,7 @@ const CalorieGoalWizard = () => {
             <Box sx={{ mb: 3 }}>
               <Rule weight="medium" />
               <Box>
-                <Typography component="h3" sx={{ fontWeight: 900, fontSize: '1.0625rem', py: 0.75 }}>
+                <Typography component="h3" sx={{ fontWeight: 700, fontSize: '1.0625rem', py: 0.75 }}>
                   At a glance
                 </Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
@@ -734,7 +734,7 @@ const CalorieGoalWizard = () => {
       {/* Step 3a: Keto Existing Summary (shown when hasExistingGoal and mode=keto) */}
       {hasExistingGoal && mode === 'keto' && plan && activeStep >= 3 && (
         <Box>
-          <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
+          <Typography component="h2" sx={{ fontWeight: 700, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
             Your keto plan
           </Typography>
           <Rule weight="medium" sx={{ mb: 2 }} />
@@ -798,7 +798,7 @@ const CalorieGoalWizard = () => {
       {/* Step 3a: Calorie Plan or Existing Summary (standard mode) */}
       {(mode === 'standard' || (hasExistingGoal && mode !== 'keto')) && plan && activeStep >= 3 && (
         <Box>
-          <Typography component="h2" sx={{ fontWeight: 900, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
+          <Typography component="h2" sx={{ fontWeight: 700, fontSize: '1.375rem', lineHeight: 1, mb: 1 }}>
             Your calorie plan
           </Typography>
           <Rule weight="medium" sx={{ mb: 2 }} />
@@ -843,7 +843,7 @@ const CalorieGoalWizard = () => {
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(4, minmax(0, 1fr))', sm: 'repeat(7, minmax(0, 1fr))' }, gap: 1 }}>
                 {plan.schedule.map((d) => (
-                  <Box key={d.day} sx={{ textAlign: 'center', pt: 0.5, pb: 0.5, borderTop: (t) => `1px solid ${t.palette.text.primary}` }}>
+                  <Box key={d.day} sx={{ textAlign: 'center', pt: 0.5, pb: 0.5, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>{d.day}</Typography>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{fmt(d.calories)}</Typography>
                   </Box>
@@ -876,7 +876,7 @@ const CalorieGoalWizard = () => {
             <Box>
               <Box>
                 <Rule weight="medium" />
-                <Typography component="h3" sx={{ fontWeight: 900, fontSize: '1.0625rem', py: 0.75 }}>
+                <Typography component="h3" sx={{ fontWeight: 700, fontSize: '1.0625rem', py: 0.75 }}>
                   Under your daily burn
                 </Typography>
                 <Box sx={{ mb: 2 }}>

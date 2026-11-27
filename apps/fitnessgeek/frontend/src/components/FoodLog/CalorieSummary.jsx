@@ -57,7 +57,7 @@ const CalorieSummary = ({
       <Surface sx={{ py: 1, ...sx }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 1.5 }}>
           <Typography component="span" sx={{ minWidth: 0 }}>
-            <Box component="span" sx={{ fontSize: '1.625rem', fontWeight: 900, lineHeight: 1 }}>{consumed}</Box>
+            <Box component="span" sx={{ fontSize: '1.625rem', fontWeight: 700, lineHeight: 1 }}>{consumed}</Box>
             <Box component="span" sx={{ fontSize: '0.875rem' }}> / {netCarbLimit}g net carbs</Box>
           </Typography>
           <Typography component="span" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{carbsLeft}g left</Typography>
@@ -89,7 +89,7 @@ const CalorieSummary = ({
     <Surface sx={{ py: 1, ...sx }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 1.5 }}>
         <Typography component="span" sx={{ minWidth: 0 }}>
-          <Box component="span" sx={{ fontSize: '1.625rem', fontWeight: 900, lineHeight: 1 }}>{fmt(calories)}</Box>
+          <Box component="span" sx={{ fontSize: '1.625rem', fontWeight: 700, lineHeight: 1 }}>{fmt(calories)}</Box>
           <Box component="span" sx={{ fontSize: '0.875rem' }}>
             {' '}of {effectiveGoal.toLocaleString('en-US')} cal{usingRda ? ' (typical day)' : ''}
           </Box>

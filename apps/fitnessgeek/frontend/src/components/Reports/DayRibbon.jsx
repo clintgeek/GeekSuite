@@ -8,8 +8,8 @@ import { LabelPanel, Tag } from '../primitives';
  *
  * Each day is a small card: the day and date, the calories, one line of
  * macros in words ("P 165 · C 141 · F 70 g") and, when there's a target, a
- * status Tag. The Label: square cards with a 1px ink edge; an over day's Tag is
- * filled ink, the others are outlined. The word carries the meaning (UX
+ * status Tag. Rounded cards with a hairline edge; an over day's Tag takes the
+ * warning tone, the others the neutral wash. The word carries the meaning (UX
  * review 2026-10-17, D-8).
  *
  * Newest day first. The ribbon used to start scrolled to its right-hand end,
@@ -69,14 +69,14 @@ const DayCard = ({ day, calorieTarget }) => {
         position: 'relative',
         flexShrink: 0,
         width: { xs: 140, sm: 152 },
-        borderRadius: 0,
+        borderRadius: '12px',
         backgroundColor: theme.palette.background.paper,
-        border: `1px solid ${ink}`,
+        border: `1px solid ${theme.palette.divider}`,
         p: { xs: 1.5, sm: 1.75 },
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75, mb: 1 }}>
-        <Typography sx={{ fontSize: '1.125rem', fontWeight: 800, color: ink, lineHeight: 1 }}>
+        <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, color: ink, lineHeight: 1 }}>
           {dayOfWeek}
         </Typography>
         <Typography sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.75rem', fontWeight: 600, color: muted }}>
@@ -87,7 +87,7 @@ const DayCard = ({ day, calorieTarget }) => {
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, mb: 0.75 }}>
         <Typography
           component="span"
-          sx={{ fontVariantNumeric: 'tabular-nums', fontSize: { xs: '1.75rem', sm: '2rem' }, fontWeight: 900, lineHeight: 1, letterSpacing: '-0.02em', color: ink }}
+          sx={{ fontVariantNumeric: 'tabular-nums', fontSize: { xs: '1.75rem', sm: '2rem' }, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em', color: ink }}
         >
           {commas(calories)}
         </Typography>
@@ -102,11 +102,7 @@ const DayCard = ({ day, calorieTarget }) => {
 
       {status && (
         <Box component="span" data-testid="day-status" sx={{ display: 'block', mt: 0.75 }}>
-          <Tag
-            sx={status.over
-              ? {}
-              : { bgcolor: 'transparent', color: 'text.primary', boxShadow: `inset 0 0 0 1px ${ink}` }}
-          >
+          <Tag tone={status.over ? 'warning' : undefined}>
             {status.label}
           </Tag>
         </Box>
@@ -155,7 +151,7 @@ const DayRibbon = ({ daily = [], calorieTarget, rangeLabel }) => {
           '&::-webkit-scrollbar': { height: 6 },
           '&::-webkit-scrollbar-thumb': {
             background: alpha(theme.palette.text.primary, 0.3),
-            borderRadius: 0,
+            borderRadius: 999,
           },
           '& > *': { scrollSnapAlign: 'start' },
         }}

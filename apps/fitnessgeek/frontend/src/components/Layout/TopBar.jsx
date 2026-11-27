@@ -33,11 +33,8 @@ const TopBar = () => {
       themeMode={themeMode}
       onThemeToggle={toggleTheme}
       currentApp={APP_NAME}
-      // The Label: a 2px ink rule under the bar (not the theme's hairline) and
-      // the title set heavy.
       sx={{
-        borderBottom: (t) => `2px solid ${t.palette.text.primary}`,
-        '& [data-geek-topbar="title"]': { fontWeight: 900, letterSpacing: '-0.01em', lineHeight: 1.1 },
+        '& [data-geek-topbar="title"]': { fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1.2 },
       }}
       actions={
         // The day in words, never abbreviated (plan item 8). Hidden on a
@@ -45,7 +42,7 @@ const TopBar = () => {
         <Typography
           sx={{
             fontSize: '1rem',
-            fontWeight: 700,
+            fontWeight: 500,
             color: 'text.secondary',
             whiteSpace: 'nowrap',
             display: { xs: 'none', md: 'block' },

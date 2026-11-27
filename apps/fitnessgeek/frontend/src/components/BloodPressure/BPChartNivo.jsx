@@ -12,11 +12,11 @@ import { LabelPanel, buildChartTheme } from '../primitives';
 /**
  * BPChartNivo — systolic + diastolic line chart with reference lines.
  *
- * The Label: a level-2 panel; systolic in ink and diastolic in the blue (both
+ * A card; systolic in ink and diastolic in the blue (both
  * 3px, so neither borrows a status colour), the reference lines in the one
  * small status set (normal = success, a little high = warning, high = error;
- * dashed, with the word in the legend), a hairline grid, and a square tooltip
- * with a 2px ink border.
+ * dashed, with the word in the legend), a hairline grid, and a rounded tooltip
+ * with a hairline edge.
  */
 const BPChartNivo = ({ data, unit = 'mmHg' }) => {
   const theme = useTheme();
@@ -217,9 +217,9 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                   background: theme.palette.background.paper,
                   px: 1.75,
                   py: 1.25,
-                  borderRadius: 0,
-                  border: `2px solid ${ink}`,
-                  boxShadow: 'none',
+                  borderRadius: '10px',
+                  border: `1px solid ${theme.palette.divider}`,
+                  boxShadow: '0 8px 24px rgba(16, 24, 40, 0.12)',
                   minWidth: 150,
                 }}
               >

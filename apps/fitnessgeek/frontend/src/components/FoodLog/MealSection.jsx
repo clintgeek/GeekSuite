@@ -88,7 +88,7 @@ const MealSection = ({
           <Box
             component="span"
             aria-hidden
-            sx={{ display: 'inline-block', width: 12, height: 12, bgcolor: look.badge, mr: 1, verticalAlign: 'baseline' }}
+            sx={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', bgcolor: look.badge, mr: 1, verticalAlign: 'baseline' }}
           />
           {title}
         </>

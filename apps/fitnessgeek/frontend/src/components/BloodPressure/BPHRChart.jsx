@@ -122,10 +122,10 @@ const BPHRChart = ({ data = [], title = 'Heart rate today' }) => {
                 <Box sx={{
                   backgroundColor: theme.palette.background.paper,
                   color: theme.palette.text.primary,
-                  border: `2px solid ${theme.palette.text.primary}`,
-                  borderRadius: 0,
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '10px',
                   padding: '8px 12px',
-                  boxShadow: 'none',
+                  boxShadow: '0 8px 24px rgba(16, 24, 40, 0.12)',
                 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                     {labels[slice.points[0].data.x] ?? ''}

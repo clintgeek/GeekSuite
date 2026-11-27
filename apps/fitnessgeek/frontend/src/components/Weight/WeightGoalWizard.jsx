@@ -301,8 +301,8 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
                 gap: 1,
                 mb: 2,
                 '& .MuiToggleButtonGroup-grouped': {
-                  border: `2px solid ${theme.palette.text.primary}`,
-                  borderRadius: 1,
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '12px',
                   margin: 0,
                   '&.Mui-selected': {
                     backgroundColor: theme.palette.primary.main,
@@ -341,7 +341,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             {selectedRate && (
               <Box sx={{ mb: 3 }}>
                 {/* A safety read: too fast is the error colour, in words. */}
-                <Tag sx={{ bgcolor: selectedRate.safe ? 'success.main' : 'error.main', fontSize: '0.8125rem' }}>
+                <Tag tone={selectedRate.safe ? 'success' : 'error'} sx={{ fontSize: '0.8125rem' }}>
                   {selectedRate.description}
                 </Tag>
                 {!selectedRate.safe && (
@@ -359,7 +359,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
         {/* Goal Summary */}
         {goalDate && weightDifference > 0 && (
           <Box>
-            <Typography component="h4" sx={{ mb: 1, fontWeight: 900, fontSize: '1.125rem', color: theme.palette.text.primary }}>
+            <Typography component="h4" sx={{ mb: 1, fontWeight: 700, fontSize: '1.125rem', color: theme.palette.text.primary }}>
               Your goal in short
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>

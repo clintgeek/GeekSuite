@@ -11,7 +11,7 @@ const Figure = ({ label, value, unit, decimals = 1, note }) => {
   if (fmt(value, decimals) === null) return null;
   return (
     // A fact: a hairline above, the name, then the amount. No box.
-    <Box sx={{ minWidth: 0, borderTop: (t) => `1px solid ${t.palette.text.primary}`, pt: 0.75, pb: 0.5 }}>
+    <Box sx={{ minWidth: 0, borderTop: (t) => `1px solid ${t.palette.divider}`, pt: 0.75, pb: 0.5 }}>
       <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700, mb: 0.25 }}>
         {label}
       </Typography>

@@ -16,9 +16,10 @@ export default function JustAddedStrip({ items, heard, onUndo, onDone, onFix, bu
       sx={{
         position: 'relative',
         zIndex: 1,
+        px: 1.5,
         py: 1,
-        borderTop: `2px solid ${primary}`,
-        borderBottom: `2px solid ${primary}`,
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: '12px',
       }}
     >
       <Typography sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontSize: '1rem', fontWeight: 700, color: 'text.primary', mb: 0.5 }}>

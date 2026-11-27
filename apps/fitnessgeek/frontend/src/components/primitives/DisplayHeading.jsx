@@ -26,7 +26,7 @@ const SIZE_MAP = {
 };
 
 /**
- * DisplayHeading — the heavy Archivo title type (The Label).
+ * DisplayHeading — the bold Figtree title type.
  *
  * Use for editorial headings: page titles, surface titles, anywhere you want
  * the plain "human" voice.
@@ -50,7 +50,7 @@ const DisplayHeading = ({
       component={asComponent}
       sx={{
         fontFamily: "inherit",
-        fontWeight: 900,
+        fontWeight: 700,
         color: color || theme.palette.text.primary,
         ...sizeStyles,
         ...sx,

@@ -7,6 +7,7 @@ Simple face is designed around **Heather** (Chef, 2026-09-27).*
 > **2026-11-26:** the "Market Morning" identity described below was replaced by **"The Label"**
 > (`THEME_REVIEW_2026-11.md`). Simple and Full, the navigation and the logging flows stand as written; the
 > look, the fonts, the colours and the plate ring do not.
+> **Later that day:** The Label was itself replaced by **"Daylight"** (`DASHBOARD_REDESIGN_SPEC.md`).
 
 ## What the data says (production, last 30 days)
 

@@ -209,7 +209,7 @@ const FoodResultRow = ({
           minHeight: dense ? 56 : 60,
           px: 1.5,
           py: 1,
-          borderRadius: 0, 
+          borderRadius: '12px',
           cursor: pending ? 'progress' : inert ? 'default' : 'pointer',
           '&:focus-visible': { outline: `2px solid ${primary}`, outlineOffset: 2 },
         }}
@@ -338,7 +338,7 @@ const FoodResultRow = ({
             display: 'flex',
             flexDirection: 'column',
             gap: 0.25,
-            borderRadius: 0, 
+            borderRadius: '12px',
             color: theme.palette.text.secondary,
             opacity: inert ? 0.6 : 1,
             '&:focus-visible': { outline: `2px solid ${primary}`, outlineOffset: 2 },

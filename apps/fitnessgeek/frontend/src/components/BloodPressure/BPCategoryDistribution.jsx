@@ -101,7 +101,7 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
             cornerRadius={0}
             activeOuterRadiusOffset={8}
             colors={d => d.data.color}
-            // Square slices parted by a paper line, like the label's rules.
+            // Slices parted by a paper line.
             borderWidth={2}
             borderColor={theme.palette.background.paper}
             enableArcLinkLabels={false}
@@ -125,10 +125,10 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
                 <Box data-testid="bp-donut-tooltip" sx={{
                   whiteSpace: 'nowrap',
                   backgroundColor: theme.palette.background.paper,
-                  border: `2px solid ${theme.palette.text.primary}`,
-                  borderRadius: 0,
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '10px',
                   padding: '8px 12px',
-                  boxShadow: 'none'
+                  boxShadow: '0 8px 24px rgba(16, 24, 40, 0.12)'
                 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
                     {datum.label}

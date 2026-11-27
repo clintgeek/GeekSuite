@@ -324,7 +324,7 @@ const Reports = () => {
   const rangeTitle = aiNotesTitle(days);
 
   const grid2 = { display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 1.75, md: 2.25 }, alignItems: 'start' };
-  const rule = (t) => `1px solid ${t.palette.text.primary}`;
+  const rule = (t) => `1px solid ${t.palette.divider}`;
   const averageEntries = Object.entries(overview?.averages || {});
 
   return (
@@ -397,7 +397,7 @@ const Reports = () => {
                   headline numbers in a 2 / 3 / 6 column grid, parted by rules
                   (the left rule of each first column and the top rule of the
                   first row are clipped by the wrapper). */}
-              <Box sx={{ overflow: 'hidden', borderTop: (t) => `5px solid ${t.palette.text.primary}`, mt: 0 }}>
+              <Box sx={{ overflow: 'hidden', borderTop: (t) => `1px solid ${t.palette.divider}`, mt: 0 }}>
                 <Box
                   sx={{
                     display: 'grid',
@@ -421,7 +421,7 @@ const Reports = () => {
                           fontSize: { xs: '1.75rem', sm: '2rem' },
                           lineHeight: 1,
                           letterSpacing: '-0.02em',
-                          fontWeight: 900,
+                          fontWeight: 700,
                           color: 'text.primary',
                         }}
                       >

@@ -139,8 +139,8 @@ const ComposerBox = ({
               px: 1.5,
               color: theme.palette.text.primary,
               backgroundColor: theme.palette.background.paper,
-              '& fieldset': { borderColor: ink, borderWidth: 1.5 },
-              '&:hover fieldset': { borderColor: ink },
+              '& fieldset': { borderColor: theme.palette.outline || theme.palette.divider, borderWidth: 1 },
+              '&:hover fieldset': { borderColor: theme.palette.text.secondary },
               '&.Mui-focused fieldset': { borderColor: theme.palette.primary.main, borderWidth: 2 },
             },
             '& .MuiInputBase-input': {
@@ -161,7 +161,7 @@ const ComposerBox = ({
               flexShrink: 0,
               // The one round thing on the panel: the mic.
               borderRadius: '50%',
-              border: `1.5px solid ${ink}`,
+              border: `1px solid ${theme.palette.outline || theme.palette.divider}`,
               color: listening ? theme.palette.primary.contrastText : ink,
               bgcolor: listening ? theme.palette.primary.main : 'transparent',
               // Listening is a filled blue disc with a contrast stop glyph,

@@ -12,6 +12,7 @@ import {
   Button,
   Chip,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   EditOutlined as EditIcon,
   DeleteOutline as DeleteIcon,
@@ -342,16 +343,16 @@ const MyMeals = () => {
               disabled={logging}
               sx={{
                 height: 44,
-                borderRadius: 0,
+                borderRadius: 999,
                 fontWeight: 700,
                 borderWidth: 1.5,
-                borderColor: 'text.primary',
+                borderColor: (t) => t.palette.outline || t.palette.divider,
                 color: 'text.primary',
                 '& .MuiChip-label': { px: 1.75 },
                 ...(meal === logMealType ? {
-                  bgcolor: 'text.primary',
-                  color: 'background.paper',
-                  '&&:hover, &&:focus': { bgcolor: 'text.primary' },
+                  bgcolor: (t) => alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.2 : 0.1),
+                  borderColor: 'primary.main',
+                  '&&:hover, &&:focus': { bgcolor: (t) => alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.28 : 0.16) },
                 } : {}),
               }}
             />

@@ -341,7 +341,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
                 <Typography variant="body2">
                   This reading is
                 </Typography>
-                <Tag sx={{ bgcolor: bpStatus.color }}>{bpStatus.status}</Tag>
+                <Tag fill={bpStatus.color}>{bpStatus.status}</Tag>
               </Box>
             )}
 

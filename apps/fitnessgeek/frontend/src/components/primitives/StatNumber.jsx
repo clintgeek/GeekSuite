@@ -42,30 +42,30 @@ const SIZE_MAP = {
     fontSize: { xs: '3rem', sm: '3.75rem', md: '4.25rem' },
     lineHeight: 0.95,
     letterSpacing: '-0.035em',
-    fontWeight: 900,
+    fontWeight: 700,
   },
   display: {
     fontSize: { xs: '1.75rem', sm: '2rem' },
     lineHeight: 1,
     letterSpacing: '-0.02em',
-    fontWeight: 900,
+    fontWeight: 700,
   },
   body: {
     fontSize: '1rem',
     lineHeight: 1.1,
     letterSpacing: '-0.01em',
-    fontWeight: 800,
+    fontWeight: 700,
   },
   small: {
     fontSize: '0.8125rem',
     lineHeight: 1.2,
     letterSpacing: 0,
-    fontWeight: 800,
+    fontWeight: 700,
   },
 };
 
 /**
- * StatNumber — heavy Archivo numerals, tabular figures.
+ * StatNumber — bold Figtree numerals, tabular figures.
  *
  * Every metric number in the app should use this. It:
  *  - Applies font-variant-numeric: tabular-nums (digits don't jitter)

@@ -123,14 +123,14 @@ const WeightProgress = ({
     // Simple with no goal still leads with the trend, once there is one.
     const looseTrend = simple && noGoal ? trendSince(weightLogs, null) : null;
     const trendLine = looseTrend ? (
-      <Typography component="h3" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 800, lineHeight: 1.2, my: 1.5, textAlign: 'left' }}>
+      <Typography component="h3" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 700, lineHeight: 1.2, my: 1.5, textAlign: 'left' }}>
         {trendWords(looseTrend, unitWord(unit))}
       </Typography>
     ) : null;
     if (noGoal && firstRunGoal === 'lose' && onEditGoal) {
       // One sentence, one button. No heading announcing what's missing.
       return (
-        <LabelPanel level={1} title="Body Facts">
+        <LabelPanel level={1} title="Your weight">
           {trendLine}
           <Typography sx={{ color: 'text.primary', fontSize: '1.0625rem', lineHeight: 1.5, mt: trendLine ? 0 : 1.5, mb: 2 }}>
             You said you&rsquo;d like to lose a little. Set a goal and this page will show how it&rsquo;s going.
@@ -147,7 +147,7 @@ const WeightProgress = ({
       );
     }
     return (
-      <LabelPanel level={1} title="Body Facts">
+      <LabelPanel level={1} title="Your weight">
         {trendLine}
         <Typography sx={{ fontWeight: 700, fontSize: '1.0625rem', mt: 1.5, mb: 0.5 }}>
           {needsWeighIn ? 'Weigh in to see your progress' : 'No weight goal yet'}
@@ -201,7 +201,7 @@ const WeightProgress = ({
   return (
     <LabelPanel
       level={1}
-      title="Body Facts"
+      title="Your weight"
       meta="7-day average"
       metaRight={
         <>
@@ -213,7 +213,7 @@ const WeightProgress = ({
           not the goal maths. */}
       {trend && (
         <Box sx={{ py: 1.25 }}>
-          <Typography component="h3" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 800, lineHeight: 1.2 }}>
+          <Typography component="h3" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 700, lineHeight: 1.2 }}>
             {trendWords(trend, u)}
           </Typography>
           <Typography sx={{ mt: 0.5, fontSize: '1rem', color: 'text.secondary' }}>{basis}</Typography>
@@ -249,7 +249,7 @@ const WeightProgress = ({
             amount={
               <>
                 {rateText}
-                <Tag sx={{ ml: 0.75, bgcolor: status.bg }}>
+                <Tag fill={status.bg} sx={{ ml: 1.5 }}>
                   <span data-testid="weight-status">{status.label}</span>
                 </Tag>
               </>

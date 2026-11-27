@@ -124,7 +124,7 @@ const BodyCompTrend = ({ scans = [] }) => {
 
   return (
     <Box sx={{ pt: 1 }}>
-      <Typography component="h4" sx={{ fontWeight: 900, fontSize: '1.0625rem', lineHeight: 1.2, mb: 0.5 }}>Fat and lean mass over time</Typography>
+      <Typography component="h4" sx={{ fontWeight: 700, fontSize: '1.0625rem', lineHeight: 1.2, mb: 0.5 }}>Fat and lean mass over time</Typography>
       <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', mb: 2 }}>
         Line: 7-day average · dots: each scan
       </Typography>

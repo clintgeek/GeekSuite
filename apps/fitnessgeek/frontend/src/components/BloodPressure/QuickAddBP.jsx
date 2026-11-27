@@ -254,7 +254,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
                 <Typography variant="body2">
                   This reading is
                 </Typography>
-                <Tag sx={{ bgcolor: bpStatus.color }}>{bpStatus.status}</Tag>
+                <Tag fill={bpStatus.color}>{bpStatus.status}</Tag>
               </Box>
             )}
 

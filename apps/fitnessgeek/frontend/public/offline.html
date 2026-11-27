@@ -3,37 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ECEEF2">
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0E0F12">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F4F5F7">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0F1115">
   <title>FitnessGeek — Offline</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    /* The Label: a grey ground, a white panel with a 2px ink border, a heavy
-       grotesque title over a thick rule, and one blue button. The webfont may
-       not be cached offline, so the stack falls back to system grotesques. */
+    /* Daylight: a soft grey ground, a white rounded card, one blue button.
+       The webfont may not be cached offline, so the stack is system fonts. */
     :root {
       color-scheme: light dark;
-      --ground: #ECEEF2;
+      --ground: #F4F5F7;
       --panel: #FFFFFF;
-      --ink: #111318;
-      --muted: #3D414B;
-      --blue: #1F3FD1;
-      --blue-hover: #1630A8;
+      --edge: #E2E5EA;
+      --ink: #1B1F27;
+      --muted: #4A5160;
+      --blue: #3B5BDB;
+      --blue-hover: #2F4AC0;
       --blue-text: #FFFFFF;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 6px rgba(16, 24, 40, 0.04);
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --ground: #0E0F12;
-        --panel: #17181C;
-        --ink: #F2F2EE;
-        --muted: #C4C7CF;
-        --blue: #8FA6FF;
-        --blue-hover: #B3C2FF;
-        --blue-text: #0E0F12;
+        --ground: #0F1115;
+        --panel: #191C22;
+        --edge: #2B3039;
+        --ink: #ECEEF2;
+        --muted: #B9BFCA;
+        --blue: #91A7FF;
+        --blue-hover: #BAC8FF;
+        --blue-text: #0F1115;
+        --shadow: none;
       }
     }
     body {
-      font-family: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-family: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
       display: flex; align-items: center; justify-content: center;
       min-height: 100vh; min-height: 100dvh;
       background: var(--ground); color: var(--ink);
@@ -45,20 +48,20 @@
     }
     .panel {
       width: 100%; max-width: 420px;
-      background: var(--panel); border: 2px solid var(--ink);
-      padding: 1.25rem;
+      background: var(--panel); border: 1px solid var(--edge); border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 1.5rem;
     }
     h1 {
-      font-weight: 900; font-size: 2.25rem; line-height: 1; letter-spacing: -0.01em;
-      padding-bottom: 0.5rem; border-bottom: 10px solid var(--ink);
-      margin-bottom: 1rem;
+      font-weight: 700; font-size: 1.5rem; line-height: 1.2; letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
     }
     p { font-size: 1rem; line-height: 1.5; color: var(--muted); margin-bottom: 1.25rem; }
     button {
       display: block; width: 100%;
-      background: var(--blue); color: var(--blue-text); border: none; border-radius: 4px;
+      background: var(--blue); color: var(--blue-text); border: none; border-radius: 12px;
       padding: 0.75rem 2rem; min-height: 52px; min-width: 44px;
-      font-size: 1.0625rem; font-weight: 800; cursor: pointer; font-family: inherit;
+      font-size: 1.0625rem; font-weight: 600; cursor: pointer; font-family: inherit;
     }
     button:hover { background: var(--blue-hover); }
     button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }

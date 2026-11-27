@@ -43,10 +43,10 @@ function ChartTooltip({ chartRef, marginLeft = 0, x = 0, title, rows = [] }) {
         background: theme.palette.background.paper,
         px: 1.5,
         py: 1,
-        // The Label: a square panel with a 2px ink border, no shadow.
-        borderRadius: 0,
-        border: `2px solid ${theme.palette.text.primary}`,
-        boxShadow: 'none',
+        // A floating card: hairline edge, soft shadow.
+        borderRadius: '10px',
+        border: `1px solid ${theme.palette.divider}`,
+        boxShadow: '0 8px 24px rgba(16, 24, 40, 0.12)',
         minWidth: 168,
         whiteSpace: 'nowrap',
       }}

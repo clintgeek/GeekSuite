@@ -84,7 +84,7 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
               sx={{ gap: 1, py: 0.5 }}
             >
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography component="span" sx={{ fontWeight: 800, fontSize: '1.125rem' }}>
+                <Typography component="span" sx={{ fontWeight: 700, fontSize: '1.125rem' }}>
                   {weight}
                   <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 700 }}> {u}</Box>
                 </Typography>

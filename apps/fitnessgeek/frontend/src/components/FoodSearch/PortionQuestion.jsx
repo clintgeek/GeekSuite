@@ -51,8 +51,8 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
         mb: 1.5,
         px: 1.5,
         py: 1.25,
-        borderTop: `1px solid ${theme.palette.text.primary}`,
-        borderBottom: `1px solid ${theme.palette.text.primary}`
+        borderTop: `1px solid ${theme.palette.divider}`,
+        borderBottom: `1px solid ${theme.palette.divider}`
       }}
     >
       <Typography sx={{ fontSize: '1rem', color: theme.palette.text.primary, fontWeight: 700 }}>

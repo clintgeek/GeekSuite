@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import { GeekDialog, useGeekDialogFullScreen } from '@geeksuite/ui';
 import SectionLabel from './SectionLabel.jsx';
 import DisplayHeading from './DisplayHeading.jsx';
@@ -10,8 +10,8 @@ import DisplayHeading from './DisplayHeading.jsx';
  *
  * Now a thin skin over `GeekDialog` (MOBILE_UI_PLAN.md §2): the primitive owns
  * the rule — full-screen below `sm`, header of close ✕ / title / primary
- * action — and this wrapper owns the identity: the eyebrow, the heavy title, and the ink rules
- * above and below the body. It used
+ * action — and this wrapper owns the identity: the eyebrow, the bold title, and a hairline
+ * under the header and above the actions. It used
  * to fake full-screen with `xs` margins and a `100vh` cap, which left an
  * unscrollable page behind a card on a phone.
  *
@@ -19,8 +19,8 @@ import DisplayHeading from './DisplayHeading.jsx';
  * primitive's `data-geek-dialog` hooks rather than by re-implementing MUI's
  * `Dialog`, so the mobile rule is inherited, not copied.
  *
- * The Label: square corners, a 2px ink border, a heavy title over a medium
- * (5px) ink rule, and a thin ink rule above the actions row. No shadow.
+ * Daylight: 16px paper corners (top corners only when full-screen), a bold
+ * title over a divider hairline, and a hairline above the actions row.
  *
  * Props (all of the original API, plus the two mobile-header slots):
  *   open, onClose, maxWidth, fullWidth — passed through to GeekDialog
@@ -76,8 +76,8 @@ const PremiumDialog = ({
   const fullScreen = useGeekDialogFullScreen();
 
   const ink = theme.palette.text.primary;
-  const mediumRule = `5px solid ${ink}`;
-  const thinRule = `1px solid ${ink}`;
+  const mediumRule = `1px solid ${theme.palette.divider}`;
+  const thinRule = `1px solid ${theme.palette.divider}`;
 
   const titleNode = (title || eyebrow || Icon || subtitle) ? (
     <Box
@@ -95,9 +95,9 @@ const PremiumDialog = ({
           sx={{
             width: { xs: 34, sm: 40 },
             height: { xs: 34, sm: 40 },
-            borderRadius: 0,
-            backgroundColor: ink,
-            color: theme.palette.background.paper,
+            borderRadius: '10px',
+            backgroundColor: alpha(ink, theme.palette.mode === 'dark' ? 0.12 : 0.06),
+            color: ink,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -156,13 +156,12 @@ const PremiumDialog = ({
         ...contentSx,
       }}
       sx={{
-        borderRadius: 0,
-        border: `2px solid ${ink}`,
+        borderRadius: fullScreen ? '16px 16px 0 0' : '16px',
+        border: `1px solid ${theme.palette.divider}`,
         backgroundColor: theme.palette.background.paper,
         backgroundImage: 'none',
         boxShadow: 'none',
-        // The ink rule under the title is the identity; the primitive draws a
-        // hairline divider.
+        // Hairline under the header, matching the primitive's divider.
         '& [data-geek-dialog="header"]': { borderBottom: mediumRule },
         '& [data-geek-dialog="title"]': { overflow: 'visible' },
         '& .MuiDialogTitle-root[data-geek-dialog="title"]': {

@@ -105,7 +105,7 @@ function ValidationCheckRow({ check, first }) {
         {check.ok ? (
           <Box component="span" sx={{ color: 'success.main', fontWeight: 700 }}>match</Box>
         ) : (
-          <Tag sx={{ bgcolor: 'error.main' }}>{`off by ${Math.abs(check.delta).toFixed(2)}`}</Tag>
+          <Tag tone="error">{`off by ${Math.abs(check.delta).toFixed(2)}`}</Tag>
         )}
       </Typography>
     </Box>
@@ -189,7 +189,7 @@ function ValidationDetail({ validation }) {
   const ordered = [...runChecks].sort((a, b) => Number(a.ok) - Number(b.ok));
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', textAlign: 'left', mt: 1, borderTop: (t) => `1px solid ${t.palette.text.primary}` }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', textAlign: 'left', mt: 1, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
       {ordered.map((check, i) => (
         <ValidationCheckRow key={check.key} check={check} first={i === 0} />
       ))}

@@ -358,7 +358,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
         </Box>
 
         {/* What will happen, in words */}
-        <Box sx={{ mt: 3, pt: 1.5, borderTop: (t) => `5px solid ${t.palette.text.primary}` }}>
+        <Box sx={{ mt: 3, pt: 1.5, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
           <Typography
             data-testid="copy-summary"
             role="status"

@@ -1,20 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- FitnessGeek, The Label: a white label panel with a thick ink border on
-       the grey ground; "FG" set like a label title over one thick rule and a
-       short blue bar. Pure shapes, no font. Master for icon-192/512.png. -->
-  <rect width="512" height="512" fill="#ECEEF2"/>
-  <rect x="68" y="68" width="376" height="376" fill="#FFFFFF" stroke="#111318" stroke-width="24"/>
-    <!-- F -->
-    <rect x="114" y="108" width="46" height="190" fill="#111318"/>
-    <rect x="114" y="108" width="130" height="46" fill="#111318"/>
-    <rect x="114" y="184" width="100" height="40" fill="#111318"/>
-    <!-- G -->
-    <rect x="268" y="108" width="130" height="46" fill="#111318"/>
-    <rect x="268" y="108" width="46" height="190" fill="#111318"/>
-    <rect x="268" y="252" width="130" height="46" fill="#111318"/>
-    <rect x="352" y="198" width="46" height="100" fill="#111318"/>
-    <rect x="330" y="198" width="68" height="38" fill="#111318"/>
-    <!-- the thick rule and the short blue bar -->
-    <rect x="114" y="320" width="284" height="22" fill="#111318"/>
-    <rect x="114" y="366" width="110" height="32" fill="#1F3FD1"/>
+  <!-- FitnessGeek: the day's progress ring (72% of the way round) on the app's blue. -->
+  <rect width="512" height="512" rx="112" fill="#3B5BDB"/>
+  <circle cx="256" cy="256" r="136" fill="none" stroke="#FFFFFF" stroke-opacity="0.3" stroke-width="52"/>
+  <circle cx="256" cy="256" r="136" fill="none" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round" stroke-dasharray="615.2 854.5" transform="rotate(-90 256 256)"/>
 </svg>

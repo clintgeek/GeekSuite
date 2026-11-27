@@ -90,7 +90,7 @@ export function PlanComparison({ saved, next }) {
       sx={{ mb: 3 }}
     >
       <Rule weight="medium" />
-      <Typography component="h3" sx={{ fontWeight: 900, fontSize: '1.0625rem', py: 0.75, color: 'text.primary' }}>
+      <Typography component="h3" sx={{ fontWeight: 700, fontSize: '1.0625rem', py: 0.75, color: 'text.primary' }}>
         Your saved plan → this plan
       </Typography>
       <Row label="Daily target" before={saved.dailyCalories} after={next.dailyCalories} />
@@ -138,20 +138,20 @@ export function MetabolismCard({ plan, scanLoadFailed = false }) {
   return (
     <Box data-testid="metabolism-card">
       <Rule weight="medium" />
-      <Typography component="h3" sx={{ fontWeight: 900, fontSize: '1.0625rem', py: 0.75 }}>
+      <Typography component="h3" sx={{ fontWeight: 700, fontSize: '1.0625rem', py: 0.75 }}>
         What you burn
       </Typography>
       <Box sx={{ pb: 1.5 }}>
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>Calories at rest (BMR)</Typography>
-        <Typography sx={{ fontWeight: 800 }}>{Number(plan.bmr).toLocaleString('en-US')} cal a day</Typography>
+        <Typography sx={{ fontWeight: 700 }}>{Number(plan.bmr).toLocaleString('en-US')} cal a day</Typography>
         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
           What your body burns doing nothing at all
         </Typography>
         <BmrSourceNote source={plan.bmrSource} leanMassLb={plan.leanMassLb} scans={plan.bmrScans} scanLoadFailed={scanLoadFailed} />
       </Box>
-      <Box sx={{ borderTop: (t) => `1px solid ${t.palette.text.primary}`, pt: 1 }}>
+      <Box sx={{ borderTop: (t) => `1px solid ${t.palette.divider}`, pt: 1 }}>
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>Calories you burn in a day (TDEE)</Typography>
-        <Typography sx={{ fontWeight: 800 }}>{Number(plan.tdee).toLocaleString('en-US')} cal a day</Typography>
+        <Typography sx={{ fontWeight: 700 }}>{Number(plan.tdee).toLocaleString('en-US')} cal a day</Typography>
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {plan.activityLevel === MEASURED_ACTIVITY
             ? 'Your calories at rest plus the activity your watch measured (30-day average)'

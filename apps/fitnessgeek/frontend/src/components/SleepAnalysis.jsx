@@ -38,19 +38,20 @@ const sentenceWord = (word) => (typeof word === 'string' && word
   : word);
 const HRV_WORDS = { HIGH: 'High', BALANCED: 'Balanced', LOW: 'Low', UNBALANCED: 'Unbalanced' };
 
-/** An accordion drawn as a label panel: 2px ink border, square, no shadow. */
+/** An accordion drawn as a card: hairline edge, 16px corners, no shadow. */
 const accordionSx = {
   mb: 1,
-  border: (t) => `2px solid ${t.palette.text.primary}`,
-  borderRadius: 0,
+  border: (t) => `1px solid ${t.palette.divider}`,
+  borderRadius: '16px',
+  overflow: 'hidden',
   boxShadow: 'none',
   backgroundImage: 'none',
   '&:before': { display: 'none' },
   '&.Mui-expanded': { margin: '0 0 8px' },
   '& .MuiAccordionSummary-root': { minHeight: 56 },
-  '& .MuiAccordionDetails-root': { borderTop: (t) => `1px solid ${t.palette.text.primary}`, pt: 2 },
+  '& .MuiAccordionDetails-root': { borderTop: (t) => `1px solid ${t.palette.divider}`, pt: 2 },
 };
-const accordionTitleSx = { fontWeight: 900, fontSize: '1.125rem', lineHeight: 1.2 };
+const accordionTitleSx = { fontWeight: 700, fontSize: '1.125rem', lineHeight: 1.2 };
 
 /** A small status mark beside a label; the label is the words. */
 const StatusMark = ({ color }) => (
@@ -77,7 +78,7 @@ function MetricCard({ label, value, unit, color = 'default', trend = null, highe
       <Box
         sx={{
           height: '100%',
-          borderTop: (t) => `1px solid ${t.palette.text.primary}`,
+          borderTop: (t) => `1px solid ${t.palette.divider}`,
           pt: 1,
           pb: 0.5,
         }}
@@ -89,7 +90,7 @@ function MetricCard({ label, value, unit, color = 'default', trend = null, highe
           </Typography>
         </Stack>
         <Stack direction="row" spacing={1} alignItems="baseline">
-          <Typography component="div" sx={{ fontWeight: 900, fontSize: '2rem', lineHeight: 1, letterSpacing: '-0.02em' }}>
+          <Typography component="div" sx={{ fontWeight: 700, fontSize: '2rem', lineHeight: 1, letterSpacing: '-0.02em' }}>
             {value}
           </Typography>
           {unit && (

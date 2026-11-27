@@ -170,7 +170,7 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', editing = null, o
             display: 'flex',
             justifyContent: 'space-between',
             pt: 1,
-            borderTop: `5px solid ${theme.palette.text.primary}`,
+            borderTop: `1px solid ${theme.palette.divider}`,
             fontFamily: "inherit"
           }}
         >

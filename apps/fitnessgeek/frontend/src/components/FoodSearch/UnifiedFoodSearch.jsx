@@ -221,7 +221,7 @@ const UnifiedFoodSearch = ({
       sx={{
         width: '100%',
         justifyContent: 'flex-start',
-        borderRadius: 0, 
+        borderRadius: '12px',
         // 44px is the suite's tap floor; the heading's own margins do not count.
         minHeight: 48,
         mt: 1,
@@ -313,7 +313,7 @@ const UnifiedFoodSearch = ({
         minHeight: 56,
         px: 1.5,
         mt: 1,
-        borderRadius: 0, 
+        borderRadius: '12px',
         border: `1px dashed ${alpha(ink, 0.25)}`,
         '@media (hover: hover)': { '&:hover': { backgroundColor: theme.palette.action.hover } },
         '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
@@ -371,7 +371,7 @@ const UnifiedFoodSearch = ({
         loadingDeep ? (
           <Box>
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} variant="rectangular" height={56} sx={{ borderRadius: 0, mb: 1 }} />
+              <Skeleton key={i} variant="rectangular" height={56} sx={{ mb: 1 }} />
             ))}
           </Box>
         ) : (

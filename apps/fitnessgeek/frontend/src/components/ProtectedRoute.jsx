@@ -40,7 +40,7 @@ function ConnectionLine({ onRetry }) {
         {CANT_REACH}
       </Typography>
       {onRetry && (
-        <Button size="small" onClick={onRetry} sx={{ minHeight: 32, fontWeight: 800, textTransform: 'none' }}>
+        <Button size="small" onClick={onRetry} sx={{ minHeight: 32, fontWeight: 700, textTransform: 'none' }}>
           Try now
         </Button>
       )}
@@ -90,7 +90,7 @@ const ProtectedRoute = ({ children }) => {
         <CircularProgress size={32} />
         <Typography sx={{ fontSize: '1.125rem', fontWeight: 700 }}>{CANT_REACH}</Typography>
         {retry && (
-          <Button variant="contained" onClick={retry} sx={{ minHeight: 48, borderRadius: 999, fontWeight: 800 }}>
+          <Button variant="contained" onClick={retry} sx={{ minHeight: 48, borderRadius: 999, fontWeight: 700 }}>
             Try now
           </Button>
         )}

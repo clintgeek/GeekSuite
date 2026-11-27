@@ -62,21 +62,22 @@ const ModeSelector = ({ value, onChange }) => {
               position: 'relative',
               flex: 1,
               minHeight: 44,
-              p: 2,
+              // 1px more padding when unselected so the 2px chosen edge doesn't shift layout.
+              p: isSelected ? 2 : 'calc(8px + 1px)',
               cursor: 'pointer',
-              // The Label: a square panel with an ink edge; the chosen one
-              // wears the blue edge and a filled blue square, not a tint.
-              border: `2px solid ${isSelected ? accentColor : theme.palette.text.primary}`,
+              borderRadius: '12px',
+              // A hairline card; the chosen one wears a 2px accent edge.
+              border: isSelected ? `2px solid ${accentColor}` : `1px solid ${theme.palette.divider}`,
               bgcolor: 'background.paper',
               userSelect: 'none',
               '&:focus-visible': { outline: `3px solid ${accentColor}`, outlineOffset: 2 },
             }}
           >
-            {/* Selection indicator: a filled square, only when selected */}
+            {/* Selection indicator: a filled dot, only when selected */}
             {isSelected && (
               <Box
                 aria-hidden
-                sx={{ position: 'absolute', top: 12, right: 12, width: 12, height: 12, bgcolor: accentColor }}
+                sx={{ position: 'absolute', top: 12, right: 12, width: 12, height: 12, borderRadius: '6px', bgcolor: accentColor }}
               />
             )}
 
@@ -84,7 +85,7 @@ const ModeSelector = ({ value, onChange }) => {
               component="div"
               sx={{
                 fontSize: '1.5rem',
-                fontWeight: 900,
+                fontWeight: 700,
                 lineHeight: 1.1,
                 mb: 0.75,
                 color: isSelected ? accentColor : 'text.primary',
@@ -97,7 +98,7 @@ const ModeSelector = ({ value, onChange }) => {
               {subtitle}
             </Typography>
 
-            <Box sx={{ borderTop: `1px solid ${theme.palette.text.primary}`, pt: 1 }}>
+            <Box sx={{ borderTop: `1px solid ${theme.palette.divider}`, pt: 1 }}>
               <Typography sx={{ fontSize: '0.9375rem', fontWeight: 700 }}>{typical}</Typography>
               <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
                 typical

@@ -6,14 +6,14 @@ import Surface from './Surface';
 // heavy one-line title is reproduced as `titleSx`.
 const TITLE_SX = {
   fontFamily: "inherit",
-  fontWeight: 900,
+  fontWeight: 700,
   fontSize: { xs: '1.25rem', sm: '1.5rem' },
   lineHeight: 1.1,
   letterSpacing: '-0.01em',
 };
 
 /**
- * EmptyState — The Label's empty state: a dashed 2px panel, one heavy line,
+ * EmptyState — Daylight empty state: a dashed ghost panel, one bold line,
  * one normal sentence, the action.
  *
  * Thin wrapper over `@geeksuite/ui`'s `GeekEmptyState` (TODO_ORDER #15 fan-out):

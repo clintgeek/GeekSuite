@@ -121,7 +121,7 @@ const Weight = () => {
           : 'Your weight and what it’s made of, averaged so one water day doesn’t move the needle.'}
       </Typography>
 
-      {/* Phone: one column, in order. From md: Body Facts (about 400px) left
+      {/* Phone: one column, in order. From md: the summary card (about 400px) left
           with the Trend chart wide on the right, then body composition and
           the log in two columns below. */}
       <Box

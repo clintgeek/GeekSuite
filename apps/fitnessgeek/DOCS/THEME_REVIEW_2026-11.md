@@ -1,6 +1,6 @@
 # FitnessGeek — theme and layout review
 
-*Written 2026-11-26. **Status: review only, nothing built.** Chef: "Fitnessgeek currently
+*Written 2026-11-26. **Status: built, then the look was replaced (see Progress).** Chef: "Fitnessgeek currently
 looks themed after a 1990s Subway store. It will be used constantly on phones, often on
 desktop, and occasionally on tablet." The open decision is the identity direction (item 1).*
 
@@ -12,6 +12,10 @@ desktop, and occasionally on tablet." The open decision is the identity directio
   the identity on every screen, the stale PWA shell, type weights, flattened nesting, one status colour set,
   Health and Activity brought in, the main action made the strongest thing on Home, the one page container,
   and two-column desktop layouts. Mockups: https://claude.ai/artifact/WXfSyTwNHjhWH76KwzJEDg
+- **2026-11-26, backed out the same day:** Chef, after seeing it live: "I'm not loving it." The Label's skin
+  (ink borders, square corners, heavy type) was replaced by **"Daylight"**, built to
+  `DASHBOARD_REDESIGN_SPEC.md`. The structural gains of that commit stayed (page container, two-column
+  desktop, PWA shell, touch floors). Direction A below is history, not the live look.
 - **Corrections to the review found while fixing:** the sidebar has 13 destinations, not 14, and it has no
   user chip / Settings / Sign out at all (FitnessGeek passes no footer). The Food log's calendar icon was
   decorative; it never opened a picker.

@@ -70,21 +70,22 @@ export default function QuickPicks({
   const meal = mealWord(mealType);
   const previous = daysBefore(date, 1);
   const sameAs = `Same as ${sheetMealOnDay(meal, previous, today, date)}`;
-  // "Same as …" rows: a 2px blue border on the paper (you can press it), no
-  // tint, square, compact enough to leave room for the day's meals.
+  // "Same as …" rows: a tinted blue block (you can press it), compact
+  // enough to leave room for the day's meals.
   const bigButton = {
     justifyContent: 'flex-start',
     minHeight: 52,
     py: 0.5,
     px: 1.5,
-    borderWidth: 2,
-    borderColor: 'primary.main',
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderRadius: '12px',
     color: 'text.primary',
-    bgcolor: 'transparent',
+    bgcolor: (t) => t.palette.tonal?.bg || 'transparent',
     textAlign: 'left',
     fontSize: '1rem',
     fontWeight: 700,
-    '@media (hover: hover)': { '&:hover': { borderWidth: 2, borderColor: 'primary.main', bgcolor: theme.palette.action.hover } },
+    '@media (hover: hover)': { '&:hover': { borderWidth: 1, borderColor: 'transparent', bgcolor: theme.palette.tonal?.hover || theme.palette.action.hover } },
   };
   // Done (UX review 2026-11, B3): after one tap the card says "Added" with a
   // check and keeps its food list; the box ignores a second tap.
@@ -164,7 +165,7 @@ export default function QuickPicks({
 
       {chips.length > 0 && (
         <Box>
-          <Typography component="h3" sx={{ fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary', mb: 0.5 }}>
+          <Typography component="h3" sx={{ fontSize: '0.8125rem', fontWeight: 600, color: 'text.secondary', mb: 1 }}>
             Again
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }} data-testid="again-chips">
@@ -196,11 +197,11 @@ export default function QuickPicks({
                     variant="outlined"
                     sx={{
                       height: 44,
-                      borderRadius: 0,
+                      borderRadius: 999,
                       fontSize: '0.875rem',
                       bgcolor: theme.palette.background.paper,
                       borderWidth: 1.5,
-                      borderColor: 'text.primary',
+                      borderColor: (t) => t.palette.outline || t.palette.divider,
                       color: 'text.primary',
                       maxWidth: '100%',
                       '& .MuiChip-label': { px: 1.25, fontSize: '0.875rem', fontWeight: 700 },

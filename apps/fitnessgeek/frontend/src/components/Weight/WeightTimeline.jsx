@@ -233,7 +233,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                     stroke="none"
                   />
                 )),
-            // The square end marker: where the average is now.
+            // The end marker: where the average is now.
             ({ series }) => {
               const avg = series.find(({ id }) => id === SERIES.trend);
               const end = avg?.data?.[avg.data.length - 1]?.position;

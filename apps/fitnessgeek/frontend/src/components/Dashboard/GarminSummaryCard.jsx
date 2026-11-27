@@ -25,7 +25,7 @@ const GarminSummaryCard = ({ steps, activeCalories, sleepMinutes, restingHR, fet
         <FactRow key={row.name} first={i === 0} name={row.name} trailing={row.value} />
       ))}
       {(timeText || lastSyncAt) && (
-        <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', pt: 0.75, borderTop: (t) => `1px solid ${t.palette.text.primary}` }}>
+        <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', pt: 0.75, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
           {timeText && <>Updated {timeText}</>}
           {timeText && lastSyncAt && ' · '}
           {lastSyncAt && <>Last synced {shortDay(lastSyncAt)}</>}

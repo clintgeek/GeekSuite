@@ -117,10 +117,11 @@ const renderHome = (value) => render(
 beforeEach(() => { vi.clearAllMocks(); todayValue = TODAY; forgetDrafts(); });
 
 describe('Home answers in words', () => {
-  it('"You have 660 calories left today", with a plate that says the same', async () => {
+  it('"You have 660 calories left today", with a bar that says how much is eaten', async () => {
     renderHome(experience());
     expect(await screen.findByTestId('calories-sentence')).toHaveTextContent('You have 660 calories left today');
-    expect(screen.getByRole('img', { name: /You have 660 calories left today\. 1,680 eaten of 2,340/ })).toBeInTheDocument();
+    // The ring is decoration; the Eaten bar carries the same in words.
+    expect(screen.getByRole('img', { name: 'Eaten: 1,680 of 2,340 cal' })).toBeInTheDocument();
     // No day-of-year counter, no receipt number.
     expect(document.body.textContent).not.toMatch(/\d+\/36[56]|NO\./);
   });
@@ -294,14 +295,18 @@ describe('Simple Home: Add first (review Phase 2.13)', () => {
     expect(screen.queryByTestId('what-did-you-eat')).toBeNull();
   });
 
-  it('A1: Full\'s "What did you eat?" is the page\'s filled button, above the facts panel, and opens the sheet on this hour\'s meal', async () => {
+  it('A1: Full\'s "What did you eat?" is the page\'s filled button, directly under the nutrition card on a phone, and opens the sheet on this hour\'s meal', async () => {
     renderHome(experience());
     const button = await screen.findByTestId('full-add-food');
     expect(button).toHaveTextContent('What did you eat?');
-    // The Label: the page's main action is its one filled blue button.
+    // The page's main action is its one filled blue button.
     expect(button.className).toMatch(/MuiButton-contained/);
+    // Phone order (DASHBOARD_REDESIGN_SPEC §5): nutrition, then food logging,
+    // then the meals.
     const hero = screen.getByTestId('home-hero');
-    expect(button.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const meals = screen.getByTestId('meal-cards');
+    expect(hero.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(button.compareDocumentPosition(meals) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     await act(async () => { fireEvent.click(button); });
     const sheet = await screen.findByRole('dialog');
     const meal = mealTypeForHour(new Date().getHours());
@@ -317,8 +322,8 @@ describe('Simple Home: Add first (review Phase 2.13)', () => {
   it("Full's headline is the amount left (660), said once more in words, not a third time (review D-14)", async () => {
     renderHome(experience());
     await screen.findByTestId('calories-sentence');
-    // The Label: "Amount left today · Calories · 660", huge; the sentence
-    // under it repeats it once in normal weight; the 72% is the Eaten row's.
+    // 660 sits in the ring; the sentence beside it says it once more in
+    // words; the 72% is the Eaten row's.
     expect(screen.getByTestId('plate-number')).toHaveTextContent(/^660$/);
     expect(screen.getByText('Amount left today')).toBeInTheDocument();
     expect(document.body.textContent.match(/660/g)).toHaveLength(2);

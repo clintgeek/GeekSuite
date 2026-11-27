@@ -50,7 +50,7 @@ export const APPS = {
   thinggeek: { dir: 'apps/thinggeek/frontend/public', bg: '#15120F' },
   newsgeek: { dir: 'apps/newsgeek/frontend/public', bg: '#F4F0E6' },
   geekday: { dir: 'apps/geekday/frontend/public', bg: '#22324A' },
-  fitnessgeek: { dir: 'apps/fitnessgeek/frontend/public', bg: '#ECEEF2' },
+  fitnessgeek: { dir: 'apps/fitnessgeek/frontend/public', bg: '#3B5BDB' },
   flockgeek: { dir: 'apps/flockgeek/frontend/public', bg: '#0f0f0d' },
   startgeek: { dir: 'apps/startgeek/public', bg: '#0a0d12' },
 };

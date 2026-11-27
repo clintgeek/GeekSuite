@@ -42,7 +42,7 @@ const BodyCompChangeCard = ({ summary }) => {
       <Box>
         <Rule weight="medium" sx={{ mt: 2 }} />
         <Box sx={{ pt: 1 }}>
-          <Typography component="h4" sx={{ fontWeight: 900, fontSize: '1.0625rem', lineHeight: 1.2 }}>Change</Typography>
+          <Typography component="h4" sx={{ fontWeight: 700, fontSize: '1.0625rem', lineHeight: 1.2 }}>Change</Typography>
         </Box>
         <Typography sx={{ color: 'text.primary', fontSize: '1rem', fontWeight: 600, lineHeight: 1.4, pt: 0.5 }}>
           {when
@@ -65,7 +65,7 @@ const BodyCompChangeCard = ({ summary }) => {
     <Box>
       <Rule weight="medium" sx={{ mt: 2 }} />
       <Box sx={{ pt: 1 }}>
-        <Typography component="h4" sx={{ fontWeight: 900, fontSize: '1.0625rem', lineHeight: 1.2 }}>Change</Typography>
+        <Typography component="h4" sx={{ fontWeight: 700, fontSize: '1.0625rem', lineHeight: 1.2 }}>Change</Typography>
       </Box>
       {reading && (
         <Typography sx={{ color: 'text.primary', fontSize: '1rem', fontWeight: 600, lineHeight: 1.45, pt: 0.5 }}>

@@ -223,12 +223,12 @@ const HouseholdSettings = () => {
 
             {/* Household Code */}
             {/* A rule and a row, not a box inside the panel. */}
-            <Box sx={{ mb: 3, py: 1.5, borderTop: (t) => `1px solid ${t.palette.text.primary}`, borderBottom: (t) => `1px solid ${t.palette.text.primary}` }}>
+            <Box sx={{ mb: 3, py: 1.5, borderTop: (t) => `1px solid ${t.palette.divider}`, borderBottom: (t) => `1px solid ${t.palette.divider}` }}>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                 Household code
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>
                   {householdData.household_id}
                 </Typography>
                 {/*
@@ -260,7 +260,7 @@ const HouseholdSettings = () => {
             <Divider sx={{ my: 2 }} />
 
             {/* Your Sharing Settings */}
-            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 800 }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 700 }}>
               What you share
             </Typography>
             <Box sx={{ mb: 3 }}>
@@ -303,7 +303,7 @@ const HouseholdSettings = () => {
             <Divider sx={{ my: 2 }} />
 
             {/* Household Members */}
-            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 800 }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 700 }}>
               Who’s in it
             </Typography>
             {householdData.members?.length > 0 ? (
@@ -420,7 +420,7 @@ const HouseholdSettings = () => {
             onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
             placeholder="Like 7D9169DE1A8F"
             sx={{ mb: 2 }}
-            inputProps={{ style: { fontWeight: 800, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' } }}
+            inputProps={{ style: { fontWeight: 700, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' } }}
           />
           <TextField
             fullWidth

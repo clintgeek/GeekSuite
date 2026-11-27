@@ -375,7 +375,7 @@ const BloodPressure = () => {
         />
       ) : (
         <>
-          {/* Phone: one column, in order. From md: Pressure Facts (about
+          {/* Phone: one column, in order. From md: the summary card (about
               400px) left; the range toggle and the charts it governs wide on
               the right. */}
           <Box

@@ -189,7 +189,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
                 sx={{
                   width: `${fat_pct}%`,
                   bgcolor: macro.fat,
-                  // Ink segments parted by a paper line (the macros are all ink).
+                  // Segments parted by a paper line.
                   borderRight: `2px solid ${theme.palette.background.paper}`,
                   transition: 'width 200ms ease-out',
                 }}

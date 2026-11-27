@@ -862,7 +862,7 @@ export default function Medications() {
           {/* Simple names the groups in the form's words and skips empty ones. */}
           {MED_GROUPS.filter(g => (g.key !== 'daily' && !isSimple) || myMeds.some(g.match)).map(({ key: slot, label, match }) => (
             <Box key={slot}>
-              <Typography component="h4" sx={{ fontWeight: 900, fontSize: '1.0625rem', lineHeight: 1.2, pb: 0.5, borderBottom: (t) => `2px solid ${t.palette.text.primary}` }}>
+              <Typography component="h4" sx={{ fontWeight: 700, fontSize: '1.0625rem', lineHeight: 1.2, pb: 0.5, borderBottom: (t) => `1px solid ${t.palette.divider}` }}>
                 {SLOT_WORD[slot] || label}
               </Typography>
               <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
@@ -1014,8 +1014,9 @@ export default function Medications() {
                     textTransform: 'none',
                     fontSize: '1.0625rem',
                     fontWeight: 700,
-                    // Square, 2px ink edge; chosen = the blue fill.
-                    border: (t) => `2px solid ${t.palette.text.primary}`,
+                    // Rounded, hairline edge; chosen = the blue fill.
+                    borderRadius: '12px',
+                    border: (t) => `1px solid ${t.palette.divider}`,
                     '&.Mui-selected, &.Mui-selected:hover': {
                       bgcolor: 'primary.main',
                       color: 'primary.contrastText',

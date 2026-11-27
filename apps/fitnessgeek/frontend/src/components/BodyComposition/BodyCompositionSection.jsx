@@ -12,8 +12,8 @@ const BodyCompTrend = lazy(() => import('./BodyCompTrend.jsx'));
 /**
  * The body-composition half of "Weight & body" (FITNESSGEEK_BODY_DATA_PLAN D6).
  *
- * One level-2 label panel: the figures as rows (two columns on a phone),
- * ink rules between the summary, the change and the trend — no boxes inside
+ * One card: the figures as rows (two columns on a phone),
+ * hairlines between the summary, the change and the trend — no boxes inside
  * the panel.
  *
  * It owns its own loading, error and empty states so that nothing here can
@@ -63,7 +63,7 @@ const BodyCompositionSection = ({ summary, scans = [], loading, error, scansErro
   } else if (!summary?.total_scans) {
     body = (
       <Box sx={{ pt: 1.5 }}>
-        <Typography sx={{ fontWeight: 800, fontSize: '1.25rem', lineHeight: 1.2 }}>No scans yet</Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: '1.25rem', lineHeight: 1.2 }}>No scans yet</Typography>
         <Typography sx={{ color: 'text.secondary', mt: 0.5, mb: 1.5 }}>
           Scans arrive on their own when your scale&rsquo;s export lands in the Nextcloud folder, or you can import one yourself.
         </Typography>

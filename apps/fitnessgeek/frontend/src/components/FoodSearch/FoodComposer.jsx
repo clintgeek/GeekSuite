@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Alert, Box, Button, Chip, Typography } from '@mui/material';
 import { QrCodeScanner as BarcodeIcon, CheckCircle as AddedIcon, Undo as UndoIcon, Check as CheckIcon } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import { useToast } from '@geeksuite/ui';
 import ComposerBox from './ComposerBox.jsx';
 import UnifiedFoodSearch from './UnifiedFoodSearch.jsx';
@@ -880,8 +880,8 @@ const FoodComposer = ({
   const adjustingAdded = adjusting ? addedByKey[identityOf(adjusting)] : null;
   const adjustingPrior = adjustingAdded?.logIds?.length === 1 ? adjustingAdded : null;
 
-  // Four square chips; the chosen one is ink with paper text (the grammar's
-  // "selected"), not a second blue competing with Log it.
+  // Four pill chips; the chosen one gets a soft blue wash and a blue edge
+  // so "selected" reads without a filled block.
   const mealPicker = onMealTypeChange ? (
     <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }} role="group" aria-label="Which meal">
       {['breakfast', 'lunch', 'dinner', 'snack'].map((m) => (
@@ -894,17 +894,17 @@ const FoodComposer = ({
           variant="outlined"
           sx={{
             height: 44,
-            borderRadius: 0,
+            borderRadius: 999,
             fontWeight: 700,
             fontSize: '0.875rem',
             borderWidth: 1.5,
-            borderColor: 'text.primary',
+            borderColor: (t) => t.palette.outline || t.palette.divider,
             color: 'text.primary',
             '& .MuiChip-label': { px: 1.5 },
             ...(m === mealType ? {
-              bgcolor: 'text.primary',
-              color: 'background.paper',
-              '&&:hover, &&:focus': { bgcolor: 'text.primary' },
+              bgcolor: (t) => alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.2 : 0.1),
+              borderColor: 'primary.main',
+              '&&:hover, &&:focus': { bgcolor: (t) => alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.28 : 0.16) },
             } : {}),
           }}
         />
@@ -923,8 +923,8 @@ const FoodComposer = ({
       : sheetMealOnDay(mealWord(result.mealType), result.date, today, day);
     return (
       <Box className={className} data-testid="result-card" sx={{ pb: 1 }}>
-        <Box sx={{ borderTop: `5px solid ${theme.palette.text.primary}`, pt: 1.5 }}>
-          <Typography component="h3" role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.375rem', fontWeight: 900, color: 'text.primary', mb: 0.5 }}>
+        <Box sx={{ borderTop: `1px solid ${theme.palette.divider}`, pt: 1.5 }}>
+          <Typography component="h3" role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.375rem', fontWeight: 700, color: 'text.primary', mb: 0.5 }}>
             <AddedIcon sx={{ color: theme.palette.primary.main, fontSize: 28 }} aria-hidden />
             Added to {where}
           </Typography>
@@ -1013,8 +1013,8 @@ const FoodComposer = ({
             mb: 2,
             px: 1.5,
             py: 1.5,
-            borderTop: `2px solid ${theme.palette.primary.main}`,
-            borderBottom: `2px solid ${theme.palette.primary.main}`,
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: '12px',
           }}
         >
           <Box
@@ -1070,7 +1070,7 @@ const FoodComposer = ({
           sx={{
             mb: 2,
             py: 1.5,
-            borderTop: `2px solid ${theme.palette.primary.main}`,
+            borderTop: `1px solid ${theme.palette.divider}`,
           }}
         >
           <Typography id="composer-day-question" sx={{ fontSize: '1.0625rem', fontWeight: 700, color: 'text.primary', mb: 1 }}>

@@ -31,7 +31,7 @@ const whenWords = (instant) => {
 /** "7h 4m" from minutes. */
 const hm = (minutes = 0) => `${minutes >= 60 ? `${Math.floor(minutes / 60)}h ` : ''}${minutes % 60}m`;
 
-/** A run of headline numbers separated by ink rules: a name over a heavy
+/** A run of headline numbers separated by hairlines: a name over a
  * number, no box around each. `cols` is the column count from `sm` up; a
  * phone gets two. */
 const StatGrid = ({ children, cols = 4 }) => (
@@ -54,7 +54,7 @@ const Headline = ({ label, value, unit, index = 0, cols = 4 }) => (
       pr: 1.5,
       pl: { xs: index % 2 ? 1.5 : 0, sm: index % cols ? 1.5 : 0 },
       borderTop: (t) => (index >= 2 ? `1px solid ${t.palette.divider}` : 0),
-      borderLeft: (t) => ({ xs: index % 2 ? `1px solid ${t.palette.text.primary}` : 0, sm: index % cols ? `1px solid ${t.palette.text.primary}` : 0 }),
+      borderLeft: (t) => ({ xs: index % 2 ? `1px solid ${t.palette.divider}` : 0, sm: index % cols ? `1px solid ${t.palette.divider}` : 0 }),
       minWidth: 0,
     }}
   >
@@ -107,7 +107,7 @@ const ActivityCard = ({ activity, first }) => {
         )}
       </Box>
       {activity.calories != null && (
-        <Typography sx={{ fontWeight: 800, whiteSpace: 'nowrap', flexShrink: 0 }}>
+        <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
           {`${fmt(activity.calories)} cal`}
         </Typography>
       )}

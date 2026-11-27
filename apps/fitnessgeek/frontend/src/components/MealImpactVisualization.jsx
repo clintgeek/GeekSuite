@@ -135,7 +135,7 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
   const DeltaTag = ({ children, metric, change }) => {
     const status = getImpactColor(change, metric);
     return (
-      <Tag sx={status === 'default' ? undefined : { bgcolor: `${status}.main`, color: `${status}.contrastText` }}>
+      <Tag tone={status === 'default' ? undefined : status}>
         {children}
       </Tag>
     );
@@ -433,7 +433,9 @@ export default function MealImpactVisualization({ date }) {
                   sliceTooltip={({ slice }) => (
                     <Box sx={{
                       backgroundColor: theme.palette.background.paper,
-                      border: `2px solid ${theme.palette.text.primary}`,
+                      border: `1px solid ${theme.palette.divider}`,
+                      borderRadius: '10px',
+                      boxShadow: '0 8px 24px rgba(16, 24, 40, 0.12)',
                       px: 1.5,
                       py: 1,
                     }}>
@@ -463,7 +465,7 @@ export default function MealImpactVisualization({ date }) {
       </LabelPanel>
 
       {/* Individual Meal Impact Cards: one panel per meal, two across from md */}
-      <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 900 }}>Meal by meal</Typography>
+      <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 700 }}>Meal by meal</Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: { xs: 1.75, md: 2.25 } }}>
         {mealImpacts.map((impact, idx) => (
           <MealImpactCard

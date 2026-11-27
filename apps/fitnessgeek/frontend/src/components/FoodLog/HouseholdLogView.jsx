@@ -223,7 +223,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                         const totalCals = calculateMealCalories(logs);
 
                         return (
-                          <Box key={mealType} sx={{ mb: 2, pt: 1, borderTop: (t) => `5px solid ${t.palette.text.primary}` }}>
+                          <Box key={mealType} sx={{ mb: 2, pt: 1, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
                             <Box>
                               <Box sx={{
                                 display: 'flex',
@@ -235,7 +235,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                                   <Box
                                     component="span"
                                     aria-hidden
-                                    sx={{ width: 12, height: 12, bgcolor: (t) => (t.palette.produce?.[mealType] || mealColors(mealType, t.palette.mode)).fill }}
+                                    sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: (t) => (t.palette.produce?.[mealType] || mealColors(mealType, t.palette.mode)).fill }}
                                   />
                                   <Typography variant="subtitle1" fontWeight={900}>
                                     {mealLabel(mealType)}

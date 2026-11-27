@@ -198,7 +198,7 @@ const EditLogDialog = ({
               gap: 2,
               mb: 3,
               pb: 2,
-              borderBottom: (t) => `5px solid ${t.palette.text.primary}`
+              borderBottom: (t) => `1px solid ${t.palette.divider}`
             }}>
               <FoodIcon sx={{ fontSize: 32, color: 'primary.main' }} />
               <Box sx={{ flex: 1 }}>

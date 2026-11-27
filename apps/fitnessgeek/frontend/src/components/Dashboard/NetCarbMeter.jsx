@@ -3,7 +3,7 @@ import { FactRow } from '../primitives';
 import { ketoStatus } from '../../utils/ketoMath';
 
 /**
- * NetCarbMeter — keto mode's net-carb line on the Today's Facts label.
+ * NetCarbMeter — keto mode's net-carb line in Home's nutrition card.
  *
  * One fact row: **Net carbs** 12 g of 20 ……… 60%. Close to or over the cap
  * says so in words, in the row's inverse tag (no colour carries it alone).
