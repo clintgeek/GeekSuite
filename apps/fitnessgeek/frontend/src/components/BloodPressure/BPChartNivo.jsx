@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Typography,
@@ -8,6 +8,38 @@ import {
 import { ResponsiveLine } from '@nivo/line';
 import { displayCalendarDate } from '@geeksuite/utils';
 import { LabelPanel, buildChartTheme } from '../primitives';
+
+const MARGIN = { top: 12, right: 28, bottom: 40, left: 36 };
+/** Room one date label needs ("Nov 25" at 11px, and air beside it). */
+export const TICK_MIN_GAP = 56;
+/** The plot width assumed until the chart has been measured: a phone's. */
+const UNMEASURED_WIDTH = 240;
+
+/**
+ * Which dates get a label, so two labels never touch at any width.
+ *
+ * The x scale is a POINT scale: the dates sit evenly across the plot, one per
+ * day that has a reading. The old picker chose a count from the span of days
+ * alone, never the width, and then always appended the last date, which is
+ * how "Nov 25" and "Nov 27" came to be printed on top of each other on a
+ * desktop (review, round three). This one works from the width: a fixed step,
+ * big enough that neighbours are at least `minGap` apart, counted back from
+ * the newest date, so the newest is always labelled and nothing is appended.
+ *
+ * @param {string[]} dates the x values in order (repeats allowed)
+ * @param {number} plotWidth the plot's inner width in px
+ * @param {number} [minGap]
+ * @returns {string[]}
+ */
+export function thinTicks(dates, plotWidth, minGap = TICK_MIN_GAP) {
+  const unique = [...new Set(Array.isArray(dates) ? dates : [])];
+  if (unique.length <= 1) return unique;
+  const between = (plotWidth > 0 ? plotWidth : UNMEASURED_WIDTH) / (unique.length - 1);
+  const step = Math.max(1, Math.ceil(minGap / between));
+  const out = [];
+  for (let i = unique.length - 1; i >= 0; i -= step) out.unshift(unique[i]);
+  return out;
+}
 
 /**
  * BPChartNivo — systolic + diastolic line chart with reference lines.
@@ -27,30 +59,24 @@ const BPChartNivo = ({ data }) => {
   const diastolicColor = theme.palette.primary.main;
   const chartTheme = useMemo(() => buildChartTheme(theme), [theme]);
 
-  // Smart tick frequency based on data span
-  const getOptimalTickValues = (dataPoints) => {
-    if (!dataPoints || dataPoints.length === 0) return [];
-    const totalPoints = dataPoints.length;
-    const firstDate = new Date(dataPoints[0].fullDate);
-    const lastDate = new Date(dataPoints[dataPoints.length - 1].fullDate);
-    const daysSpan = Math.ceil((lastDate - firstDate) / (1000 * 60 * 60 * 24));
-    let optimalLabels;
-    if (daysSpan <= 7) optimalLabels = Math.min(totalPoints, 7);
-    else if (daysSpan <= 30) optimalLabels = Math.min(Math.ceil(totalPoints / 3), 8);
-    else if (daysSpan <= 90) optimalLabels = Math.min(Math.ceil(totalPoints / 5), 10);
-    else if (daysSpan <= 365) optimalLabels = Math.min(Math.ceil(totalPoints / 10), 12);
-    else optimalLabels = Math.min(Math.ceil(totalPoints / 20), 15);
-    optimalLabels = Math.max(2, Math.min(optimalLabels, totalPoints));
-    const step = Math.max(1, Math.floor(totalPoints / optimalLabels));
-    const tickValues = [];
-    for (let i = 0; i < totalPoints; i += step) tickValues.push(dataPoints[i].date);
-    const last = dataPoints[dataPoints.length - 1].date;
-    if (tickValues[tickValues.length - 1] !== last) tickValues.push(last);
-    return tickValues;
-  };
+  // The chart's own width, for the date labels (`thinTicks`).
+  const chartRef = useRef(null);
+  const [chartWidth, setChartWidth] = useState(0);
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return undefined;
+    const measure = () => setChartWidth(el.getBoundingClientRect?.().width || 0);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // The box only exists once there is data to draw.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(data && data.length)]);
 
-  const { chartData, optimalTickValues } = useMemo(() => {
-    if (!data || data.length === 0) return { chartData: [], optimalTickValues: [] };
+  const { chartData, dates } = useMemo(() => {
+    if (!data || data.length === 0) return { chartData: [], dates: [] };
 
     const sortedData = [...data]
       .filter((item) => {
@@ -108,9 +134,14 @@ const BPChartNivo = ({ data }) => {
 
     return {
       chartData: lines,
-      optimalTickValues: getOptimalTickValues(sortedData),
+      dates: sortedData.map((item) => item.date),
     };
   }, [data, systolicColor, diastolicColor, theme]);
+
+  const tickValues = useMemo(
+    () => thinTicks(dates, chartWidth ? chartWidth - MARGIN.left - MARGIN.right : 0),
+    [dates, chartWidth],
+  );
 
   if (chartData.length === 0) {
     return (
@@ -159,13 +190,13 @@ const BPChartNivo = ({ data }) => {
         <LegendItem color={theme.palette.error.main} label="High (stage 1) · 140" isDashed />
       </Box>
 
-      <Box sx={{ height: isMobile ? 240 : 300 }}>
+      <Box ref={chartRef} sx={{ height: isMobile ? 240 : 300 }}>
         <ResponsiveLine
           data={chartData}
           theme={chartTheme}
           role="img"
           ariaLabel="Systolic and diastolic blood pressure over time"
-          margin={{ top: 12, right: 16, bottom: 40, left: 36 }}
+          margin={MARGIN}
           xScale={{ type: 'point' }}
           yScale={{ type: 'linear', min: 60, max: 180, stacked: false }}
           axisTop={null}
@@ -173,8 +204,10 @@ const BPChartNivo = ({ data }) => {
           axisBottom={{
             tickSize: 0,
             tickPadding: 10,
-            tickRotation: isMobile ? -30 : 0,
-            tickValues: optimalTickValues,
+            // Level at every width: thinned labels have room, and slanted
+            // ones were harder to read.
+            tickRotation: 0,
+            tickValues,
           }}
           axisLeft={{
             tickSize: 0,

@@ -36,12 +36,33 @@ describe('BPInsights headline', () => {
     // ONE sentence squares the week with the latest reading (round two): the
     // card used to say "A little high", then "Last reading… normal", and
     // leave the person to work out which was true.
-    expect(screen.getByTestId('bp-headline')).toHaveTextContent(/^Your average this week is a little high\. Your last reading, today 7:42\sAM, was normal\.$/);
+    expect(screen.getByTestId('bp-headline')).toHaveTextContent(/^Your average for the last 7 days is a little high\. Your last reading, today 7:42\sAM, was normal\.$/);
+  });
+
+  // Round three: 126/79 stood unlabelled over "this week" and a row called
+  // "30-day average". The number is named right above itself, and the
+  // sentence and rows use the same words for the same windows.
+  it('names the big number right above it, in the words the sentence and rows use', () => {
+    render(<BPInsights bpLogs={LOGS} />);
+    const label = screen.getByTestId('bp-now-label');
+    expect(label).toHaveTextContent(/^Average, last 7 days$/);
+    expect(label.compareDocumentPosition(screen.getByTestId('bp-now')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(label.parentElement).toBe(screen.getByTestId('bp-now').parentElement);
+    expect(screen.getByText('Average, last 30 days')).toBeInTheDocument();
+    expect(screen.getByText('Trend, last 30 days')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/this week|30-day/i);
+  });
+
+  it('with no readings in the last 7 days the big number is the last reading, and says so', () => {
+    const old = [{ id: 'o', systolic: 121, diastolic: 79, log_date: '2026-09-01T00:00:00.000Z', measured_at: '2026-09-01T13:00:00.000Z' }];
+    render(<BPInsights bpLogs={old} />);
+    expect(screen.getByTestId('bp-now-label')).toHaveTextContent(/^Last reading$/);
+    expect(screen.getByTestId('bp-now')).toHaveTextContent('121/79');
   });
 
   it('says "so was your last reading" when the two agree, and names the gap when the week is empty', () => {
     expect(bpSummarySentence({ weekStage: 'Elevated', lastStage: 'Elevated', lastWhen: 'yesterday 6:30 PM' }))
-      .toBe('Your average this week is a little high. So was your last reading, yesterday 6:30 PM.');
+      .toBe('Your average for the last 7 days is a little high. So was your last reading, yesterday 6:30 PM.');
     expect(bpSummarySentence({ weekStage: null, lastStage: 'Stage 1', lastWhen: 'Oct 3' }))
       .toBe('No readings in the last 7 days. Your last one, Oct 3, was high.');
   });

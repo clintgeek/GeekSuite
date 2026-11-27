@@ -211,9 +211,9 @@ export const scenes = [
       await must(sheet.getByRole('button', { name: 'Change the amount of Egg' }), '"Change the amount of Egg"');
       // One entry with two servings, named with its amount (UX review 2026-11, B7).
       await must(sheet.getByTestId('session-ribbon').filter({ hasText: 'Egg ×2 added to breakfast' }).filter({ hasText: '144 cal' }), 'the ribbon "Egg ×2 added to breakfast · 144 cal"');
-      // Two toasts are up now: stacked, both on screen, neither over Done.
-      const done = rect(await sheet.getByTestId('session-done').boundingBox());
-      await assertToastsClear(page, h, { min: 2, avoid: done });
+      // A row tap raises no toast any more: the ribbon says it.
+      await h.settle(400);
+      if (await page.locator('[data-geek-toast]').count()) throw new Error('a toast appeared after a row tap');
       await dismissToasts(page, h);
     },
   }),
@@ -283,20 +283,16 @@ export const scenes = [
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
       await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
-      const snack = await must(page.locator('.MuiSnackbar-root'), 'the "Added" toast');
+      // No toast follows a row tap; the ribbon is the whole answer, and Done is topmost.
+      await h.settle(400);
+      if (await page.locator('.MuiSnackbar-root, [data-geek-toast]').count()) throw new Error('a toast appeared after a row tap');
       const done = await must(sheet.getByTestId('session-done'), 'the ribbon Done');
-      const sb = rect(await snack.first().boundingBox());
-      const db = rect(await done.boundingBox());
       const topmost = await done.evaluate((el) => {
         const r = el.getBoundingClientRect();
         const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
         return top === el || el.contains(top) ? 'Done' : `${top?.tagName}.${String(top?.className).slice(0, 40)}`;
       });
-      h.log(`toast ${JSON.stringify(sb)} · Done ${JSON.stringify(db)} · overlap=${intersects(sb, db)} · on top at Done's centre: ${topmost}`);
-      // The toast used to sit over Done for ten seconds on a phone (d-fixes):
-      // the ribbon registers itself, and the toasts rise above it.
       if (topmost !== 'Done') throw new Error(`Done is covered: on top at its centre is ${topmost}`);
-      await assertToastsClear(page, h, { avoid: db });
     },
   }),
   // Ten seconds later, the toast gone: only the ribbon is left.
@@ -305,8 +301,8 @@ export const scenes = [
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
       await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
-      await h.settle(10800);
-      if (await page.locator('.MuiSnackbar-root').count()) throw new Error('the toast should be gone after ten seconds');
+      await h.settle(1500);
+      if (await page.locator('.MuiSnackbar-root').count()) throw new Error('a toast is up after a row tap');
       await must(sheet.getByTestId('session-ribbon'), 'the ribbon');
     },
   }),
@@ -396,19 +392,11 @@ export const scenes = [
     fn: async (page, h, sheet) => {
       await (await must(sheet.getByTestId('same-as-household'), 'the household pick')).click();
       await h.settle(1000);
-      // The toast stays at the page root (portalling it into the sheet was
-      // pulled: it hopped as the sheet closed). It must be visible, carry no
-      // second Undo, and sit clear of the ribbon's Done.
-      const toastEl = await must(page.locator('[data-geek-toast]').first(), 'the toast');
-      if (await page.locator('[data-geek-toast] button', { hasText: 'Undo' }).count()) throw new Error('the toast carries a second Undo; the ribbon has the one');
+      // No toast on a household copy: the card and the ribbon say it.
+      if (await page.locator('[data-geek-toast]').count()) throw new Error('a toast appeared after the household copy');
       await must(sheet.getByTestId('same-as-household').filter({ hasText: 'Added' }), 'the pick in its "Added" state');
       const ribbon = await must(sheet.getByTestId('session-ribbon').filter({ hasText: /\d+ foods added to dinner/ }), 'the ribbon counting foods');
       await must(ribbon.getByRole('button', { name: /^Undo$/ }), 'the ribbon Undo');
-      const t = await toastEl.boundingBox();
-      const r = await ribbon.boundingBox();
-      if (t && r && t.y + t.height > r.y + 1 && t.y < r.y + r.height - 1) {
-        throw new Error(`the toast overlaps the ribbon: toast ${Math.round(t.y)}-${Math.round(t.y + t.height)} ribbon ${Math.round(r.y)}-${Math.round(r.y + r.height)}`);
-      }
     },
   }),
 
@@ -562,7 +550,7 @@ export const scenes = [
       await (await must(sheet.getByRole('button', { name: /^Change the amount of Egg$/ }), 'Egg amount button')).click();
       await h.settle(700);
       const dlg = await must(page.getByRole('dialog').last(), 'the serving sheet');
-      await must(dlg.getByRole('heading', { name: 'Change Egg' }).or(dlg.getByText('Change Egg', { exact: true })), 'the title "Change Egg"');
+      await must(dlg.getByRole('heading', { name: 'How much Egg?' }).or(dlg.getByText('How much Egg?', { exact: true })), 'the title "How much Egg?"');
       await must(dlg.getByRole('button', { name: 'Save', exact: true }), 'Save');
       await must(dlg.getByRole('button', { name: 'Servings' }), 'the Servings toggle');
     },
@@ -723,7 +711,7 @@ export const tail = [
     await startListening(page, h, sheet);
     await page.evaluate(() => { const r = window.__fakeMic.rec; r.onerror({ error: 'not-allowed' }); r.onend(); });
     await h.settle(500);
-    await must(sheet.getByTestId('mic-error').getByText(/needs your microphone/), 'the denied message');
+    await must(sheet.getByTestId('mic-error').getByText('Allow the microphone for FitnessGeek in your phone’s settings, or just type it.'), 'the denied message');
   }),
   // Said aloud: the words go through describe-and-log, the sheet closes, and
   // the "Just added" strip on that meal says what was heard.

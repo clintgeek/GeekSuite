@@ -56,6 +56,8 @@ describe('the ring caption and the card title', () => {
     expect(ringCaption({ hasGoal: true, over: true, day: PAST, today: TODAY })).toBe('Over target');
     expect(ringCaption({ hasGoal: false, over: false, day: PAST, today: TODAY })).toBe('Eaten');
     expect(leftTitle(TODAY, TODAY)).toBe('What’s left today');
+    // No target: nothing is "left"; the number is what was eaten.
+    expect(leftTitle(TODAY, TODAY, false)).toBe('Eaten today');
     expect(leftTitle(PAST, TODAY)).toBe('Calories for this day');
   });
 });

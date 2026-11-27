@@ -78,10 +78,10 @@ describe('Today — body data', () => {
     expect(screen.queryByTestId('plan-accuracy-banner')).toBeNull();
   });
 
-  it('captions the protein target "from lean mass" only when derivedMacros says so', async () => {
+  it('captions the protein target "from your body scans" only when derivedMacros says so', async () => {
     setup();
     await openDetails();
-    expect(await screen.findByTestId('macro-note-protein')).toHaveTextContent('from lean mass');
+    expect(await screen.findByTestId('macro-note-protein')).toHaveTextContent('from your body scans');
   });
 
   it('no protein caption on the goal-weight rule', async () => {

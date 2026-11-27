@@ -207,7 +207,7 @@ function useFlushOnLeave(flush) {
 }
 
 /** "About you": the experience answers (their own store) and the profile. */
-function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved, planGoal = null }) {
+function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved, planGoal = null, hasPlan = false }) {
   const { notify } = useToast();
   const { preferredName, goal, update } = useExperience();
   const note = useSaveNote();
@@ -285,6 +285,13 @@ function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved, planG
           />
         ))}
       </Box>
+      {/* "Just keep track" over a saved plan: say what happens to the plan,
+          rather than leave the two disagreeing in silence. */}
+      {shownGoal === 'track' && hasPlan && (
+        <Typography data-testid="goal-plan-note" sx={{ color: 'text.secondary', fontSize: '0.9375rem', mt: 3 }}>
+          Your calorie plan stays as it is. Remove it from Calorie plan if you don’t want a target.
+        </Typography>
+      )}
       <SaveNote note={note} for="goal" sx={{ mt: 2 }} />
       <Box sx={{ height: 24 }} />
 
@@ -390,6 +397,8 @@ const Settings = () => {
   const { themePreference, setThemePreference } = useAppTheme();
   const { user, logout } = useAuth() || {};
   const { notify } = useToast();
+  const { goal: experienceGoal } = useExperience();
+  const justTracking = experienceGoal === 'track';
 
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -562,6 +571,10 @@ const Settings = () => {
 
   const garminLogin = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4, pt: 2 }}>
+      {/* Why this app asks for another company's password, before it asks. */}
+      <Typography data-testid="garmin-why" sx={{ color: 'text.secondary', fontSize: '0.9375rem' }}>
+        FitnessGeek signs in to Garmin for you to read your steps, sleep and heart rate. Garmin has no other way to share them with an app like this.
+      </Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 4 }}>
         <TextField
           fullWidth
@@ -684,15 +697,17 @@ const Settings = () => {
         onRetryProfile={loadProfile}
         onProfileSaved={(patch) => setProfile((prev) => ({ ...prev, ...patch }))}
         planGoal={goalFromPlan(settings?.nutrition_goal)}
+        hasPlan={savedTarget > 0}
       />
 
       {/* The calorie plan has no row in the navigation; this is one way to it. */}
       <LabelPanel title="Calorie plan" titleComponent="h2" id="plans" data-testid="settings-plans">
         <LinkRow
           to="/calorie-wizard"
-          title={savedTarget > 0 ? `${fmt(savedTarget)} calories a day` : 'Set a daily calorie target'}
-          body={savedTarget > 0 ? 'See how it was worked out, or change it' : 'A few questions, then one number to eat to'}
-          aria-label={savedTarget > 0 ? `Calorie plan: ${fmt(savedTarget)} calories a day` : 'Calorie plan: set a daily calorie target'}
+          // A person who chose "Just keep track" is not asked to set a target.
+          title={savedTarget > 0 ? `${fmt(savedTarget)} calories a day` : justTracking ? 'No daily target' : 'Set a daily calorie target'}
+          body={savedTarget > 0 ? 'See how it was worked out, or change it' : justTracking ? 'You’re just keeping track. You can set one here any time.' : 'A few questions, then one number to eat to'}
+          aria-label={savedTarget > 0 ? `Calorie plan: ${fmt(savedTarget)} calories a day` : justTracking ? 'Calorie plan: no daily target' : 'Calorie plan: set a daily calorie target'}
         />
       </LabelPanel>
 

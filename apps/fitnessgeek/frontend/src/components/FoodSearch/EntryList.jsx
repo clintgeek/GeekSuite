@@ -40,10 +40,10 @@ export default function EntryList({ items = [], onFix, busy = false, showMeal = 
               variant="outlined"
               onClick={() => onFix(item)}
               disabled={busy}
-              aria-label={`Fix ${item.name}`}
-              sx={{ minHeight: 44, minWidth: 64, fontWeight: 700, fontSize: '0.9375rem', flexShrink: 0 }}
+              aria-label={`Change ${item.name}`}
+              sx={{ minHeight: 44, minWidth: 64, px: 2, fontWeight: 700, fontSize: '0.9375rem', flexShrink: 0 }}
             >
-              Fix
+              Change
             </Button>
           )}
         </Box>

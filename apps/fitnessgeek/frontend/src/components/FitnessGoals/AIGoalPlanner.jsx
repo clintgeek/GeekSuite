@@ -25,14 +25,14 @@ import {
   planTarget, weekenderSuggestion, MEASURED_ACTIVITY, RATE_OPTIONS, usableMeasuredActivity,
 } from './planMath.js';
 import { parseHeightToInches, buildCaloriePlan, nutritionGoalPayload } from './calorieCalc.js';
-import { Disclosure, PlanHeadline, PlanWorking } from './PlanResult.jsx';
+import { Disclosure, PlanExtras, PlanHeadline, PlanWeek, PlanWorking } from './PlanResult.jsx';
 
 /**
  * The calorie plan (/calorie-wizard).
  *
  * A few plain questions, one at a time — what you weigh, where you want to
- * get to, how fast, how active — then "Your daily target is N calories" and
- * one Save. Everything a normal person would not know (how the week is
+ * get to, how fast, how active — then "Your daily target: N calories", one
+ * line of what it means, and one Save. Everything a normal person would not know (how the week is
  * spread, keto and its split, the numbers behind the target) sits behind a
  * tap on the last screen.
  *
@@ -629,11 +629,13 @@ const CalorieGoalWizard = () => {
             plan={savedPlan}
             mode={savedMode}
             keto={savedGoal.keto || DEFAULT_KETO}
-            macros={savedMacros}
             endDate={savedGoal.estimated_end_date}
             headingRef={headingRef}
           />
+          {/* The week, the grams and the working: there for the asking. */}
           <Disclosure label="How this was worked out" testId="plan-working-toggle">
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <PlanExtras plan={savedPlan} macros={savedMacros} />
             <PlanWorking
               plan={savedPlan}
               proteinRules={savedRules}
@@ -643,6 +645,7 @@ const CalorieGoalWizard = () => {
                   ? 'The weight, height and age this was worked out from weren’t kept. A new target uses your details as they are today.'
                   : null}
             />
+            </Box>
           </Disclosure>
 
           {removal === 'idle' ? (
@@ -688,14 +691,21 @@ const CalorieGoalWizard = () => {
       <Page narrow data-testid="plan-page">
         <Surface data-testid="plan-result" sx={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           <Box aria-live="polite">
-            <PlanHeadline plan={draft} mode={mode} keto={ketoConfig} macros={draftMacros} endDate={draftEnd} headingRef={headingRef} />
+            {/* One number, what it means, and what it replaces. Nothing else
+                until she asks: the week, the grams, old beside new and the
+                working are behind the two rows below, both closed. */}
+            <PlanHeadline
+              plan={draft}
+              mode={mode}
+              keto={ketoConfig}
+              endDate={draftEnd}
+              previous={savedSnapshot?.dailyCalories ?? null}
+              headingRef={headingRef}
+            />
           </Box>
 
-          {/* Saved vs new: only while replacing a plan. */}
-          <PlanComparison saved={savedSnapshot} next={draft} />
-
           <Box>
-            <Disclosure label="Adjust the details" testId="plan-details-toggle" defaultOpen={mode === 'keto'}>
+            <Disclosure label="Adjust the details" testId="plan-details-toggle">
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <Box>
                   <Typography id="plan-type-label" sx={{ fontWeight: 600, mb: 2 }}>Through the week</Typography>
@@ -711,6 +721,8 @@ const CalorieGoalWizard = () => {
                       />
                     ))}
                   </Choices>
+                  {/* What that choice does to the week, right under it. */}
+                  <Box sx={{ mt: 4 }}><PlanWeek plan={draft} /></Box>
                 </Box>
                 <Box>
                   <Typography id="plan-mode-label" sx={{ fontWeight: 600, mb: 2 }}>What you count</Typography>
@@ -731,7 +743,12 @@ const CalorieGoalWizard = () => {
               </Box>
             </Disclosure>
             <Disclosure label="How this was worked out" testId="plan-working-toggle">
-              <PlanWorking plan={draft} proteinRules={draftRules} scanLoadFailed={Boolean(details?.scanLoadFailed)} />
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <PlanExtras plan={draft} macros={draftMacros} week={false} />
+                {/* Saved vs new, line by line: only while replacing a plan. */}
+                <PlanComparison saved={savedSnapshot} next={draft} />
+                <PlanWorking plan={draft} proteinRules={draftRules} scanLoadFailed={Boolean(details?.scanLoadFailed)} />
+              </Box>
             </Disclosure>
             <Box sx={{ borderTop: (t) => `1px solid ${t.palette.divider}` }} aria-hidden />
           </Box>

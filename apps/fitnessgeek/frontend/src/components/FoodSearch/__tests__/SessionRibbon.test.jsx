@@ -57,3 +57,25 @@ describe('SessionRibbon', () => {
     expect(screen.getByTestId('session-ribbon')).toHaveTextContent('3 foods added to dinner');
   });
 });
+
+// Review 2026-11-27, round three: "Greek Yogurt, Pla…" — one item's name was
+// cut mid-word on a single line while the line under it wrapped freely.
+describe('SessionRibbon: a long name wraps before it is cut', () => {
+  it('the name may take a second line, breaking at a word, and only then is clamped', () => {
+    render(
+      <SessionRibbon
+        where="lunch"
+        onDone={() => {}}
+        onUndoLast={() => {}}
+        items={[{ name: 'Greek Yogurt, Plain Whole Milk', servings: 1, nutrition: { calories_per_serving: 190 }, logIds: ['f1'] }]}
+      />
+    );
+    const what = screen.getByTestId('ribbon-what');
+    expect(what).toHaveTextContent('Greek Yogurt, Plain Whole Milk');
+    const style = getComputedStyle(what);
+    expect(style.whiteSpace).not.toBe('nowrap');
+    expect(style.textOverflow).not.toBe('ellipsis');
+    expect(style.webkitLineClamp || style.getPropertyValue('-webkit-line-clamp')).toBe('2');
+    expect(style.wordBreak).not.toBe('break-all');
+  });
+});

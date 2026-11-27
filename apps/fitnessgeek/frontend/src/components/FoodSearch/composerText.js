@@ -205,3 +205,7 @@ export function describeFailure(err) {
   }
   return { kind: 'retry', message: RETRY_MESSAGE };
 }
+
+// The microphone was refused. She is in an installed app on a phone: there is
+// no "browser" whose settings she could open (review 2026-11-27, round three).
+export const MIC_BLOCKED_MESSAGE = 'Allow the microphone for FitnessGeek in your phone’s settings, or just type it.';

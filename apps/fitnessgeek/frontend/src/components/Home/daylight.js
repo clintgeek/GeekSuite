@@ -9,7 +9,7 @@
 const PHASES = {
   morning: {
     light: { wash: '#FFE8D4', glyph: '#D9480F' },
-    dark: { wash: '#33261F', glyph: '#FFA94D' },
+    dark: { wash: '#2F2636', glyph: '#FFA94D' },
   },
   midday: {
     light: { wash: '#DDEBFF', glyph: '#E67700' },
@@ -17,7 +17,7 @@ const PHASES = {
   },
   evening: {
     light: { wash: '#FFDFD0', glyph: '#C2410C' },
-    dark: { wash: '#35232B', glyph: '#FF9A6B' },
+    dark: { wash: '#2E2238', glyph: '#FF9A6B' },
   },
   night: {
     light: { wash: '#E5E1FB', glyph: '#5F3DC4' },

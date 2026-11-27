@@ -122,6 +122,37 @@ describe('WeightLogList', () => {
     expect(alert).not.toHaveTextContent(/status code/i);
   });
 
+  // Round three: a pencil and a bin on every row was twenty icons on a
+  // screen of ten weights. The row itself is the button.
+  it('the row is one button with a clear name, and carries no icons', () => {
+    render(<WeightLogList logs={LOGS} onDelete={() => {}} onUpdate={vi.fn()} />);
+    const rows = screen.getAllByTestId('weight-log-row');
+    rows.forEach((row) => {
+      expect(within(row).getAllByRole('button')).toHaveLength(1);
+      expect(row.querySelector('svg')).toBeNull();
+    });
+    expect(within(rows[0]).getByRole('button')).toHaveAccessibleName('Edit the 316.4 lb weigh-in from Sep 21');
+    expect(screen.queryByLabelText(/remove the/i)).toBeNull();
+    expect(screen.getByTestId('weight-log-hint')).toHaveTextContent('Tap a weigh-in to change or delete it.');
+  });
+
+  it('opens from the keyboard, and Delete in the dialog removes that weigh-in', async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(<WeightLogList logs={LOGS} onDelete={onDelete} onUpdate={vi.fn()} />);
+
+    const row = screen.getByRole('button', { name: /edit the 316\.4/i });
+    row.focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    expect(onDelete).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Delete this weigh-in' }));
+
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onDelete).toHaveBeenCalledWith('w2');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
   it('warns that a re-import replaces an edited scale value', async () => {
     const user = userEvent.setup();
     render(<WeightLogList logs={LOGS} onDelete={() => {}} onUpdate={vi.fn()} />);

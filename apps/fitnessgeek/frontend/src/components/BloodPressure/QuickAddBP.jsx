@@ -21,7 +21,7 @@ import {
   isBPDuplicate,
 } from './bpTimeUtils.js';
 import { validateBPForm } from './bpForm.js';
-import BPSaveError from './BPSaveError.jsx';
+import BPSaveError, { SAVE_SECOND_READING } from './BPSaveError.jsx';
 
 /**
  * QuickAddBP — the entry at the top of the Blood pressure page: one filled
@@ -49,7 +49,10 @@ const QuickAddBP = ({ onAdd, autoOpen = false, onAutoOpened }) => {
   const [whenTouched, setWhenTouched] = useState(false);
   const date = pickedDate ?? today;
   const [error, setError] = useState('');
+  // The payload that collided. While set, the card's one button saves THAT
+  // payload as a second reading, so any edit to the form drops it.
   const [duplicate, setDuplicate] = useState(null);
+  const edited = () => setDuplicate(null);
   const [loading, setLoading] = useState(false);
   // Bumped after each save, so the day choice and the time reveal start fresh.
   const [seed, setSeed] = useState(0);
@@ -99,6 +102,7 @@ const QuickAddBP = ({ onAdd, autoOpen = false, onAutoOpened }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
+    if (duplicate) { await saveOneMinuteLater(); return; }
     setError('');
 
     const checked = validateBPForm({ systolic, diastolic, pulse });
@@ -169,21 +173,21 @@ const QuickAddBP = ({ onAdd, autoOpen = false, onAutoOpened }) => {
                 label="Top"
                 type="number"
                 value={systolic}
-                onChange={(e) => setSystolic(e.target.value)}
+                onChange={(e) => { setSystolic(e.target.value); edited(); }}
                 inputProps={{ ...numberField, 'aria-label': 'Top number (systolic)' }}
               />
               <TextField
                 label="Bottom"
                 type="number"
                 value={diastolic}
-                onChange={(e) => setDiastolic(e.target.value)}
+                onChange={(e) => { setDiastolic(e.target.value); edited(); }}
                 inputProps={{ ...numberField, 'aria-label': 'Bottom number (diastolic)' }}
               />
               <TextField
                 label="Pulse"
                 type="number"
                 value={pulse}
-                onChange={(e) => setPulse(e.target.value)}
+                onChange={(e) => { setPulse(e.target.value); edited(); }}
                 inputProps={{ ...numberField, 'aria-label': 'Pulse (optional)' }}
               />
             </Box>
@@ -198,8 +202,8 @@ const QuickAddBP = ({ onAdd, autoOpen = false, onAutoOpened }) => {
             time={time}
             today={today}
             timeOpen={whenTouched}
-            onDate={setPickedDate}
-            onTime={(v) => { setTime(v); setWhenTouched(true); }}
+            onDate={(v) => { setPickedDate(v); edited(); }}
+            onTime={(v) => { setTime(v); setWhenTouched(true); edited(); }}
           />
 
           {/* What this reading is, and one calm line about it. */}
@@ -209,8 +213,6 @@ const QuickAddBP = ({ onAdd, autoOpen = false, onAutoOpened }) => {
           <BPSaveError
             error={error || liveError}
             duplicateAt={duplicate?.measured_at || null}
-            onSaveLater={saveOneMinuteLater}
-            busy={loading}
           />
 
           <Button
@@ -221,7 +223,7 @@ const QuickAddBP = ({ onAdd, autoOpen = false, onAutoOpened }) => {
             disabled={loading || Boolean(check.error)}
             sx={{ minHeight: 48 }}
           >
-            {loading ? 'Saving…' : 'Log'}
+            {loading ? 'Saving…' : duplicate ? SAVE_SECOND_READING : 'Log'}
           </Button>
         </Box>
       </LabelPanel>

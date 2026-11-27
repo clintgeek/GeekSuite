@@ -7,8 +7,8 @@ import { weekenderHasRoom } from './planMath.js';
 import { fmt, macroLine } from '../../utils/plainWords.js';
 
 /**
- * How a calorie plan is read back to the person: one sentence with the
- * number, one about what it does, and everything else behind a tap. Used for
+ * How a calorie plan is read back to the person: one big number, one line
+ * about what it does, and everything else behind a tap. Used for
  * the plan about to be saved and for the plan already saved, so the two can
  * never describe the same plan differently.
  */
@@ -107,19 +107,21 @@ function Week({ schedule }) {
 }
 
 /**
- * The top of the card: the target, what it does, and the few things worth
- * saying without being asked (a target held up by the safety floor, a
- * weekend boost with no room, the week when its days differ).
+ * The top of the card, and all of it that shows without a tap: ONE number,
+ * one line about what it does and, when it replaces a target, one line with
+ * the old one. (A keto plan also keeps its carb cap here: it is part of the
+ * target.) The week, the grams and the safety notes are `PlanExtras` and
+ * `PlanWeek`, behind the disclosures.
  *
  * @param {Object} plan      buildCaloriePlan's result, or the saved plan in the same shape
  * @param {string} mode      'standard' | 'keto'
  * @param {Object} keto      the keto settings, when mode is 'keto'
- * @param {Object} macros    previewMacros' result for a standard plan, or null
  * @param {string|Date} endDate when the plan reaches its goal weight, if known
+ * @param {number} previous  the saved daily target this one would replace, if any
  */
-export function PlanHeadline({ plan, mode = 'standard', keto = null, macros = null, endDate = null, headingRef }) {
+export function PlanHeadline({ plan, mode = 'standard', keto = null, endDate = null, previous = null, headingRef }) {
   if (!plan) return null;
-  const weekender = plan.planType === 'weekender';
+  const was = Number(previous) > 0 ? Math.round(Number(previous)) : null;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box>
@@ -128,20 +130,26 @@ export function PlanHeadline({ plan, mode = 'standard', keto = null, macros = nu
           ref={headingRef}
           tabIndex={-1}
           data-testid="plan-headline"
-          sx={{ fontSize: '1.5rem', fontWeight: 700, lineHeight: 1.25, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', outline: 'none' }}
+          sx={{ m: 0, outline: 'none', fontVariantNumeric: 'tabular-nums' }}
         >
-          {`Your daily target is ${fmt(plan.dailyCalories)} calories`}
+          <Box component="span" sx={{ display: 'block', fontSize: '1rem', fontWeight: 600, color: 'text.secondary' }}>
+            {'Your daily target: '}
+          </Box>
+          <Box component="span" sx={{ display: 'block', fontSize: '2rem', fontWeight: 700, lineHeight: 1.2, letterSpacing: '-0.02em', mt: 0.5 }}>
+            {`${fmt(plan.dailyCalories)} calories`}
+          </Box>
         </Typography>
-        <Typography data-testid="plan-outcome" sx={{ fontSize: '1.0625rem', color: 'text.secondary', mt: 1 }}>
+        <Typography data-testid="plan-outcome" sx={{ fontSize: '1.0625rem', color: 'text.secondary', mt: 2 }}>
           {outcomeWords(plan, { endDate })}
         </Typography>
+        {was !== null && (
+          <Typography data-testid="plan-previous" sx={{ fontSize: '1.0625rem', color: 'text.secondary', mt: 1, fontVariantNumeric: 'tabular-nums' }}>
+            {was === Math.round(plan.dailyCalories)
+              ? 'The same as your target now.'
+              : `It was ${fmt(was)}. Nothing changes until you save.`}
+          </Typography>
+        )}
       </Box>
-
-      {plan.floored && (
-        <Typography variant="body2" data-testid="plan-floor-note" sx={{ color: 'text.secondary' }}>
-          {`Your target is at the safety floor (${fmt(plan.rules?.minSafeCalories)} cal, 80% of your calories at rest), so this plan loses about ${plan.weightChangeRate} lb a week, not ${plan.requestedRate}. The timeline uses ${plan.weightChangeRate}.`}
-        </Typography>
-      )}
 
       {mode === 'keto' && keto && (
         <Typography data-testid="plan-keto-line" sx={{ color: 'text.primary' }}>
@@ -153,28 +161,68 @@ export function PlanHeadline({ plan, mode = 'standard', keto = null, macros = nu
           </Box>
         </Typography>
       )}
+    </Box>
+  );
+}
 
-      {macros && (
-        <Box data-testid="macro-preview">
-          <Typography sx={{ color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
-            {macroLine({ protein: macros.grams.protein_g, carbs: macros.grams.carbs_g, fat: macros.grams.fat_g })}
-          </Typography>
-        </Box>
-      )}
-
-      {!isUniform(plan.schedule) && <Week schedule={plan.schedule} />}
-      {weekender && !weekenderHasRoom(plan.schedule) && (
+/**
+ * The week when its days differ, and what is worth saying about how it is
+ * spread (a weekend boost with no room, a week that adjusts). Nothing at all
+ * for a plan that is the same every day.
+ */
+export function PlanWeek({ plan }) {
+  if (!plan) return null;
+  const week = !isUniform(plan.schedule);
+  const noRoom = plan.planType === 'weekender' && !weekenderHasRoom(plan.schedule);
+  const auto = Boolean(plan.rules?.autoAdjust);
+  if (!week && !noRoom && !auto) return null;
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {week && <Week schedule={plan.schedule} />}
+      {noRoom && (
         <Typography variant="body2" data-testid="plan-weekender-note" sx={{ color: 'text.secondary' }}>
           {plan.weekenderSuggestion
             ? `No room for a weekend boost at this rate: every day is already at the floor. At ${plan.weekenderSuggestion.rate} lb a week you’d eat ${fmt(plan.weekenderSuggestion.weekday)} on other days and ${fmt(plan.weekenderSuggestion.weekend)} on Fri and Sat.`
             : 'No room for a weekend boost: every day is already at the safety floor, even at the slowest rate.'}
         </Typography>
       )}
-      {plan.rules?.autoAdjust && (
+      {auto && (
         <Typography variant="body2" data-testid="plan-auto-note" sx={{ color: 'text.secondary' }}>
           {`If you go over on a day, the rest of the week adjusts to make up for it, never below ${fmt(plan.rules.minSafeCalories)} calories.`}
         </Typography>
       )}
+    </Box>
+  );
+}
+
+/**
+ * What used to sit under the headline and now waits behind "How this was
+ * worked out": a target held up by the safety floor, the grams of protein,
+ * carbs and fat, and (with `week`) the week.
+ *
+ * @param {Object} macros  previewMacros' result for a standard plan, or null
+ * @param {boolean} week   false where the week is already shown elsewhere
+ */
+export function PlanExtras({ plan, macros = null, week = true }) {
+  if (!plan) return null;
+  const weekPart = week ? <PlanWeek plan={plan} /> : null;
+  if (!plan.floored && !macros && !weekPart) return null;
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {plan.floored && (
+        <Typography variant="body2" data-testid="plan-floor-note" sx={{ color: 'text.secondary' }}>
+          {`Your target is at the safety floor (${fmt(plan.rules?.minSafeCalories)} cal, 80% of your calories at rest), so this plan loses about ${plan.weightChangeRate} lb a week, not ${plan.requestedRate}. The timeline uses ${plan.weightChangeRate}.`}
+        </Typography>
+      )}
+      {macros && (
+        <Box data-testid="macro-preview">
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>Each day, about</Typography>
+          <Typography sx={{ color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
+            {macroLine({ protein: macros.grams.protein_g, carbs: macros.grams.carbs_g, fat: macros.grams.fat_g })}
+          </Typography>
+        </Box>
+      )}
+      {weekPart}
     </Box>
   );
 }

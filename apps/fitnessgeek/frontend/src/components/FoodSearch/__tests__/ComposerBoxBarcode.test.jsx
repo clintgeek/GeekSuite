@@ -23,11 +23,21 @@ describe('ComposerBox: the barcode button', () => {
     renderBox({ onBarcodeClick, onMicClick: vi.fn() });
     const scan = screen.getByRole('button', { name: 'Scan a barcode' });
     const mic = screen.getByRole('button', { name: 'Say what you ate' });
-    expect(scan.parentElement).toBe(mic.parentElement);
+    // Each sits over its one-word caption, in the same row.
+    expect(scan.parentElement.parentElement).toBe(mic.parentElement.parentElement);
+    expect(scan.parentElement).toHaveTextContent(/^Scan$/);
+    expect(mic.parentElement).toHaveTextContent(/^Speak$/);
+    for (const caption of [screen.getByText('Scan'), screen.getByText('Speak')]) {
+      expect(parseFloat(getComputedStyle(caption).fontSize)).toBeGreaterThanOrEqual(0.75);
+      expect(caption).toHaveAttribute('aria-hidden', 'true');
+    }
+    // Bars, not a QR frame.
+    expect(scan.querySelector('[data-testid="QrCodeScannerIcon"]')).toBeNull();
+    expect(scan.querySelector('svg')).not.toBeNull();
     for (const side of ['width', 'height', 'borderRadius']) {
       expect(getComputedStyle(scan)[side]).toBe(getComputedStyle(mic)[side]);
     }
-    expect(getComputedStyle(scan).width).toBe('52px');
+    expect(getComputedStyle(scan).width).toBe('48px');
     fireEvent.click(scan);
     expect(onBarcodeClick).toHaveBeenCalledTimes(1);
   });

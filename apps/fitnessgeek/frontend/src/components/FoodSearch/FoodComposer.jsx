@@ -34,6 +34,7 @@ import {
   OFFLINE_COMPOSER_MESSAGE,
   OFFLINE_UNSAVED_MESSAGE,
   STILL_WORKING_MESSAGE,
+  MIC_BLOCKED_MESSAGE,
 } from './composerText.js';
 
 /**
@@ -187,7 +188,17 @@ const FoodComposer = ({
   // Log ids whose Undo is already offered somewhere else (the strip, or a
   // describe's own toast): the sitting's closing toast leaves them out.
   const undoElsewhere = useRef(new Set());
-  const sayAdded = useCallback((message, tone = 'success') => {
+  //
+  // ONE CONFIRMATION PER ADD (review 2026-11-27, round three). One tap used
+  // to answer three times: a green toast, the ribbon, and "Added" on the row,
+  // the toast lying over the list (or over the amount sheet's Meal field).
+  // A tapped row says "Added" itself and the ribbon says what and where, so
+  // a row never toasts; nor does anything in the add sheet, where a toast
+  // would sit on an open dialog. The toast is for a chip tapped on the page
+  // composer, where no row is there to change. Failures always speak.
+  const chipToasts = mode !== 'dialog';
+  const sayAdded = useCallback((message, tone = 'success', quiet = false) => {
+    if (quiet) return;
     addedToast.current = notify(message, { tone });
   }, [notify]);
   const { isOnline } = useOnlineStatus();
@@ -323,7 +334,7 @@ const FoodComposer = ({
     });
   }, []);
 
-  const logFoods = useCallback(async (items, meal, key = null, { asOne = false } = {}) => {
+  const logFoods = useCallback(async (items, meal, key = null, { asOne = false, quiet = true } = {}) => {
     if (!items?.length || !onLogItems) return null;
     if (!beginWrite(key)) return null;
     // Another add is the next action: the "Just added" strip has done its job.
@@ -353,7 +364,7 @@ const FoodComposer = ({
         }
         // "Egg ×2", not "Egg", when it wasn't one (L4).
         const what = items.length === 1 ? withAmount(items[0].name, items[0].type === 'household-meal' ? 1 : items[0].servings) : `${ok} foods`;
-        sayAdded(addedMessage(meal || mealType, what), result?.fail ? 'warning' : 'success');
+        sayAdded(addedMessage(meal || mealType, what), result?.fail ? 'warning' : 'success', quiet);
         forgetDraft();
       }
       if (result?.fail) {
@@ -383,7 +394,7 @@ const FoodComposer = ({
    * row or chip (L2). `asTap` is the second tap, which says what is now in
    * the log and offers the Undo that takes back the whole entry.
    */
-  const setServings = useCallback(async (key, count, { asTap = false } = {}) => {
+  const setServings = useCallback(async (key, count, { asTap = false, quiet = true } = {}) => {
     const prior = priorFor(key);
     if (!prior || !onUpdateLog) return;
     if (!beginWrite(key)) return;
@@ -396,8 +407,8 @@ const FoodComposer = ({
         item.logIds?.includes(logId) ? { ...item, servings: count } : item
       )));
       if (asTap) {
-        sayAdded(addedMessage(prior.mealType, withAmount(prior.name, count)));
-      } else {
+        sayAdded(addedMessage(prior.mealType, withAmount(prior.name, count)), 'success', quiet);
+      } else if (!quiet) {
         notify(`Changed to ${count} ✓ · ${prior.name}`, { tone: 'success' });
       }
     } catch (err) {
@@ -433,7 +444,7 @@ const FoodComposer = ({
         setSession((prev) => prev.map((item) => (
           item.logIds?.includes(logId) ? { ...item, servings: count, mealType: target } : item
         )));
-        notify(`Changed ✓ · ${withAmount(prior.name, count)}`, { tone: 'success' });
+        // No toast: the row says "Added ×3" and the ribbon counts it.
       } catch (err) {
         sayError(err, "Couldn’t change that. Try again.");
       } finally {
@@ -466,20 +477,20 @@ const FoodComposer = ({
     }));
     if (!removed) sayError(null, `Couldn’t remove the earlier ${prior.name}. Delete it from the log.`);
     return true;
-  }, [onUpdateLog, onUndo, beginWrite, endWrite, notify, sayError, forgetDeleted, logFoods, day]);
+  }, [onUpdateLog, onUndo, beginWrite, endWrite, sayError, forgetDeleted, logFoods, day]);
 
   /**
    * A row or a chip: the first tap writes an entry; the next tap on the same
    * one, in this sitting, makes it one more serving (L2).
    */
-  const pickOne = useCallback(async (item, key) => {
+  const pickOne = useCallback(async (item, key, { quiet = true } = {}) => {
     const single = item && item.type !== 'meal' && item.kind !== 'meal' && item.type !== 'household-meal';
     const prior = single && onUpdateLog ? priorFor(key) : null;
     if (prior) {
-      await setServings(key, Math.round((Number(prior.servings) || 1) + 1), { asTap: true });
+      await setServings(key, Math.round((Number(prior.servings) || 1) + 1), { asTap: true, quiet });
       return;
     }
-    const written = await logFoods([item], mealType, key);
+    const written = await logFoods([item], mealType, key, { quiet });
     const ids = written?.perItem?.[0] || written?.logIds || [];
     if (single && key && (written?.ok ?? 0) > 0 && ids.length === 1) {
       setAddedByKey((prev) => ({
@@ -504,17 +515,19 @@ const FoodComposer = ({
    */
   const handleQuick = useCallback(async (items, key) => {
     const whole = items?.length > 1 || items?.[0]?.type === 'household-meal';
-    if (!whole) return pickOne(items?.[0], key);
+    // A chip on the page has no row to say "Added": it gets the toast.
+    const quiet = !chipToasts;
+    if (!whole) return pickOne(items?.[0], key, { quiet });
     const found = key ? addedRef.current[key] : null;
     const prior = found && found.mealType === mealType && found.date === day ? found : null;
     if (prior && !prior.failed?.length) {
-      notify(`Already added to ${mealWord(mealType)} ✓`, { tone: 'info' });
+      if (!quiet) notify(`Already added to ${mealWord(mealType)} ✓`, { tone: 'info' });
       return null;
     }
     // A copy that partly failed is not "Added": the next tap writes only the
     // foods that didn't land, which is what "Try again" promised.
     const toWrite = prior ? prior.failed : items;
-    const written = await logFoods(toWrite, mealType, key, { asOne: true });
+    const written = await logFoods(toWrite, mealType, key, { asOne: true, quiet });
     const perItem = written?.perItem
       || toWrite.map((_, i) => (written?.logIds?.[i] ? [written.logIds[i]] : []));
     const ids = perItem.flat().filter(Boolean);
@@ -530,10 +543,10 @@ const FoodComposer = ({
       });
     }
     return written;
-  }, [pickOne, logFoods, mealType, day, notify]);
+  }, [pickOne, logFoods, mealType, day, notify, chipToasts]);
 
   /** The row's or chip's "Make it N". */
-  const handleMore = useCallback((key, count) => setServings(key, count), [setServings]);
+  const handleMore = useCallback((key, count) => setServings(key, count, { quiet: !chipToasts }), [setServings, chipToasts]);
 
   // ── Describe-and-log ─────────────────────────────────────────────────
   /**
@@ -1064,7 +1077,7 @@ const FoodComposer = ({
 
       {speech.errorText && (
         <Alert severity="info" onClose={speech.clearError} sx={{ mb: 1.5, fontSize: '1rem' }} data-testid="mic-error">
-          {speech.errorText}
+          {speech.error === 'denied' ? MIC_BLOCKED_MESSAGE : speech.errorText}
         </Alert>
       )}
 

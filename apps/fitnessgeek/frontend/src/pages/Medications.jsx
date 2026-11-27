@@ -3,7 +3,6 @@ import { Box, Typography, TextField, Button, ButtonBase, Chip, Stack, IconButton
 import { useToast, useGeekDialogFullScreen } from '@geeksuite/ui';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import EditIcon from '@mui/icons-material/EditOutlined';
-import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import MedicationIcon from '@mui/icons-material/Medication';
 import AddIcon from '@mui/icons-material/Add';
@@ -32,11 +31,19 @@ function PickRow({ onClick, children, ...rest }) {
     <ButtonBase
       onClick={onClick}
       sx={{
-        display: 'block',
+        // A row that looks like something to press: the name, then a
+        // chevron at the right.
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 2,
         width: '100%',
         textAlign: 'left',
-        minHeight: 44,
+        minHeight: 48,
         py: 1,
+        px: 2,
+        borderRadius: '8px',
+        '&::after': { content: '"›"', fontSize: '1.25rem', lineHeight: 1, color: 'text.secondary' },
         borderTop: (t) => `1px solid ${t.palette.divider}`,
         '&:first-of-type': { borderTop: 0 },
         '&:focus-visible': { outline: (t) => `3px solid ${t.palette.primary.main}`, outlineOffset: 2 },
@@ -725,7 +732,6 @@ export default function Medications() {
           save: (
             <Button
               variant="contained"
-              startIcon={<SaveIcon />}
               onClick={editingMed ? updateMedication : saveMedication}
               disabled={Boolean(busy) || !displayName.trim()}
             >
@@ -792,7 +798,6 @@ export default function Medications() {
                   minHeight: 56,
                   textTransform: 'none',
                   fontSize: '1.0625rem',
-                  fontWeight: 700,
                   // Rounded, hairline edge; chosen = the soft blue wash with a
                   // blue edge, so only Save is a filled button in this dialog.
                   borderRadius: '12px',

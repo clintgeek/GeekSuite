@@ -37,5 +37,12 @@ export function ringCaption({ hasGoal, over, day, today }) {
   return isToday ? 'Amount left today' : 'Amount left';
 }
 
-/** The card's title. */
-export const leftTitle = (day, today) => (!day || day === today ? 'What’s left today' : 'Calories for this day');
+/**
+ * The card's title. With no target there is nothing "left": the ring's
+ * number is what was eaten, and the title says so (an empty day used to read
+ * "What's left today: 0 calories").
+ */
+export const leftTitle = (day, today, hasGoal = true) => {
+  if (!day || day === today) return hasGoal ? 'What’s left today' : 'Eaten today';
+  return 'Calories for this day';
+};

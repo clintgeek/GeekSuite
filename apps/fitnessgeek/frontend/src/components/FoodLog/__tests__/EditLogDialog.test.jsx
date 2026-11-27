@@ -38,6 +38,7 @@ describe('EditLogDialog disambiguates the per-serving fields', () => {
     id: 'log1',
     servings: 2,
     meal_type: 'dinner',
+    log_date: '2026-10-15T00:00:00.000Z',
     food_item: { name: 'Lasagna', nutrition: { calories_per_serving: 440, protein_grams: 20, carbs_grams: 30, fat_grams: 15 } }
   };
 
@@ -50,7 +51,7 @@ describe('EditLogDialog disambiguates the per-serving fields', () => {
     // The entry's total comes first; the per-serving fields sit behind a disclosure.
     expect(screen.getByLabelText('Calories')).toHaveValue('880');
     expect(screen.queryByLabelText('Calories (per serving)')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Per serving and nutrition' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
 
     // The per-serving input, explicitly qualified...
     expect(screen.getByLabelText('Calories (per serving)')).toBeInTheDocument();
@@ -85,7 +86,7 @@ describe('EditLogDialog: calories, macros and the day', () => {
     return onSave;
   };
   // Everything the total hides sits behind one disclosure, closed.
-  const openDetail = () => fireEvent.click(screen.getByRole('button', { name: 'Per serving and nutrition' }));
+  const openDetail = () => fireEvent.click(screen.getByRole('button', { name: 'More options' }));
   const save = () => fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
   it('asks for one Calories number for the whole entry first, sent as the per-serving override', () => {
@@ -94,7 +95,7 @@ describe('EditLogDialog: calories, macros and the day', () => {
     expect(calories).toHaveValue('440');
     expect(calories).toHaveAttribute('inputmode', 'decimal');
     expect(screen.queryByLabelText(/protein/i)).toBeNull();
-    expect(screen.getByRole('button', { name: 'Per serving and nutrition' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'More options' })).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.change(calories, { target: { value: '300' } });
     save();
@@ -154,6 +155,10 @@ describe('EditLogDialog: calories, macros and the day', () => {
 
   it('moves the entry to another day', () => {
     const onSave = open(SOUP);
+    // Day is behind "More options": the dialog opens on calories, servings, meal.
+    expect(screen.queryByLabelText('Day')).toBeNull();
+    expect(screen.queryByLabelText('Notes (optional)')).toBeNull();
+    openDetail();
     const dayField = screen.getByLabelText('Day');
     expect(dayField).toHaveValue('2026-10-15');
     fireEvent.change(dayField, { target: { value: '2026-10-14' } });

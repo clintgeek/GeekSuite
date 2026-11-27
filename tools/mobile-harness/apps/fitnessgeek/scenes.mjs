@@ -228,7 +228,7 @@ export const scenes = [
       await must(strip.getByText('72%', { exact: true }), 'Eaten at 72%');
       for (const row of ['Protein', 'Carbs', 'Fat']) await must(strip.getByText(row, { exact: true }), `the ${row} row`);
       const note = (await (await must(strip.locator('[data-testid="macro-note-protein"]'), 'where the protein target came from')).innerText()).trim();
-      if (!/from lean mass$/.test(note)) throw new Error(`the protein note reads "${note}"`);
+      if (!/from your body scans$/.test(note)) throw new Error(`the protein note reads "${note}"`);
       const allowance = (await (await must(details.locator('[data-testid="activity-allowance"]'), 'the activity add-back sentence')).innerText()).trim();
       if (allowance !== 'Includes 240 extra for today’s activity.') throw new Error(`the allowance reads "${allowance}"`);
       const editor = await must(details.locator('#calorie-goal-panel[data-testid="day-target-editor"]'), 'the day target editor');
@@ -295,7 +295,7 @@ export const scenes = [
   },
   {
     // The scanner with the camera running: the guide box over the picture,
-    // the one line of help, and "Take a photo instead". Exactly one camera
+    // the one line of help, and "Take a photo". Exactly one camera
     // stream was opened to get here.
     name: '03b-scanner-camera',
     viewports: ['phone'],
@@ -306,7 +306,8 @@ export const scenes = [
       const dialog = await openScanner(page, h);
       await dialog.locator('[data-testid="scanner-guide"][data-state="scanning"]').waitFor({ timeout: 10000 });
       await must(dialog.getByText('Hold the barcode inside the box. If it’s blurry, move back a little.'), 'the line of help');
-      await must(dialog.getByRole('button', { name: 'Take a photo instead' }), '"Take a photo instead"');
+      await must(dialog.getByRole('button', { name: 'Take a photo' }), '"Take a photo"');
+      await must(dialog.getByRole('button', { name: 'Type the number' }), '"Type the number"');
       const opens = await page.evaluate(() => window.__fakeCameraOpens);
       if (opens !== 1) throw new Error(`the scanner opened the camera ${opens} times, not once`);
       const playing = await dialog.locator('video').evaluate((v) => v.videoWidth > 0 && !v.paused && v.srcObject?.active === true);
@@ -332,7 +333,7 @@ export const scenes = [
       const dialog = await openScanner(page, h);
       // "Got it" is on screen only for as long as the lookup takes; what it
       // leaves behind is the answer.
-      await dialog.getByText(/That barcode isn’t in the food databases/).waitFor({ timeout: 15000 });
+      await dialog.getByText(/I couldn’t find that barcode/).waitFor({ timeout: 15000 });
       if (!asked.includes('4006381333931')) throw new Error(`the scanner looked up ${JSON.stringify(asked)}, not the barcode in the picture`);
       await must(dialog.getByRole('button', { name: 'Start camera' }), '"Start camera", to try another');
       // The decoder is the app's own file: a .wasm was fetched, and from here.
@@ -355,7 +356,7 @@ export const scenes = [
       const dialog = await openScanner(page, h);
       await dialog.getByPlaceholder('8–14 digits').waitFor({ timeout: 10000 });
       await must(dialog.getByRole('alert'), 'why the camera is not being used');
-      await must(dialog.getByRole('button', { name: 'Take a photo instead' }), '"Take a photo instead"');
+      await must(dialog.getByRole('button', { name: 'Take a photo' }), '"Take a photo"');
     }),
     teardown: closeScanner,
   },
@@ -383,7 +384,13 @@ export const scenes = [
   // Weight & body (FITNESSGEEK_BODY_DATA_PLAN D6), top: goal progress and the
   // smoothed weight trend. The body section and the log are further down, so
   // they get their own scrolled scenes — a screenshot is one viewport tall.
-  { name: '05-weight', goto: '/weight', wait: 1600 },
+  {
+    name: '05-weight', goto: '/weight', wait: 1600,
+    async setup(page) {
+      const latest = await must(page.locator('[data-testid="weight-latest"]'), 'the latest weigh-in line');
+      if (!/^\w+.*\d+(\.\d)? lb$/.test((await latest.first().innerText()).replace(/\s+/g, ' ').trim())) throw new Error('weight-latest is not like "Today: 218.7 lb"');
+    },
+  },
   {
     // The weight chart itself: a 7-day-average line over faint reading dots.
     name: '05a-weight-trend',
@@ -717,6 +724,13 @@ export const scenes = [
       }
       await (await must(page.getByRole('button', { name: /^see my target$/i }).first(), 'See my target')).click();
       await h.settle(900);
+      const headline = (await (await must(page.locator('[data-testid="plan-headline"]'), 'the plan headline')).innerText()).replace(/\s+/g, ' ').trim();
+      if (!/^Your daily target: [\d,]+ calories$/.test(headline)) throw new Error(`the headline reads "${headline}"`);
+      const prev = (await (await must(page.locator('[data-testid="plan-previous"]'), 'the previous-target line')).innerText()).trim();
+      if (!/^It was 1,950\. Nothing changes until you save\.$/.test(prev)) throw new Error(`the previous-target line reads "${prev}"`);
+      // The old-vs-new table lives inside the closed "How this was worked out".
+      await (await must(page.locator('[data-testid="plan-working-toggle"]').first(), 'the "How this was worked out" disclosure')).click();
+      await h.settle(500);
       const comparison = await must(page.locator('[data-testid="plan-comparison"]'), 'old-vs-new card');
       await must(comparison.getByRole('heading', { name: 'The old target beside the new one' }), 'its heading');
       await must(comparison.getByText('Your details have changed since this was worked out. Nothing changes until you save.'), 'its caption');
@@ -841,7 +855,7 @@ scenes.push(
     },
   },
   {
-    // More: everything the phone's tabs don't hold — five links, one list, no
+    // More: everything the phone's tabs don't hold — four links, one list, no
     // group headings, the same for everybody — and, on a phone, the way to the other apps.
     name: '24-more',
     goto: '/more',
@@ -849,9 +863,10 @@ scenes.push(
     async setup(page, h) {
       const more = await must(page.locator('[data-testid="more-page"]'), 'More page');
       const links = (await more.getByRole('link').evaluateAll((els) => els.map((el) => `${el.getAttribute('href')}|${el.querySelector('p')?.textContent?.trim()}`)));
-      // Blood pressure and Medications are tabs now; More is the five that are not.
-      const want = ['/trends|Trends', '/saved-foods|Saved foods', '/calorie-wizard|Calorie plan', '/scan-import|Import a scan', '/settings|Settings'];
+      // Blood pressure and Medications are tabs now; More is the four that are not.
+      const want = ['/trends|Trends', '/saved-foods|Saved foods', '/calorie-wizard|Calorie plan', '/settings|Settings'];
       if (links.join(' · ') !== want.join(' · ')) throw new Error(`More lists ${links.join(' · ')}`);
+      await absent(more.getByText('Import a scan'), 'Import a scan on More');
       await absent(more.locator('h2, h3'), 'a group heading on More');
       await absent(more.getByText(/needs|simple|full view/i), 'a mode-era line on More');
       const apps = page.locator('[data-testid="more-other-apps"]');
@@ -981,9 +996,9 @@ scenes.push(
       await h.settle(1600);
       if (await page.getByRole('dialog').count()) throw new Error('the add sheet should have closed after a describe');
       const strip = await must(page.locator('[data-testid="meal-card-lunch"] [data-testid="just-added"]'), '"Just added" on lunch');
-      await (await must(strip.getByRole('button', { name: 'Fix Chicken soup, 1 bowl' }), 'Fix')).click();
+      await (await must(strip.getByRole('button', { name: 'Change Chicken soup, 1 bowl' }), 'Change')).click();
       await h.settle(700);
-      await must(page.locator('[data-testid="fix-sheet"]'), 'Fix sheet');
+      await must(page.locator('[data-testid="fix-sheet"]'), 'Change sheet');
     },
   }),
   // The sheet closes, and the meal carries "Just added" with what landed,

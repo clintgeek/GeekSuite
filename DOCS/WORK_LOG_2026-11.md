@@ -1179,3 +1179,22 @@ Changes made in answer (Sage's decisions):
   overnight-breathing switch. First run is a full-screen welcome.
 - Kept on purpose: QuickTarget (folding it into the step flow would change four behaviours); the 7-day/30-day
   CSV export (now "Download as a spreadsheet", at the bottom).
+
+### Round three, 2026-11-28 (after a second blind review: looks 7, ease 6.5, trust 6)
+
+The second reviewer saw a different set of mostly small problems. Fixed:
+- An empty day with no target read "What's left today: 0 calories"; the card is now "Eaten today".
+- A duplicate blood-pressure reading had two save buttons; it is one ("Save as a second reading").
+- One add fired a toast, a ribbon and an "Added" mark; in the add sheet it is now the row and the ribbon only.
+- Scan and Speak have captions; the scanner opens on the camera with two quiet links, not tabs and a button.
+- The weight card labels its 7-day average and shows the latest weigh-in under it; weight rows are one button.
+- The BP headline says what it is ("Average, last 7 days") and the rows use the same words.
+- The calorie plan ends on one number and Save; the week table, macros and comparison are behind disclosures.
+- The plan note says what it found in one line with two real buttons; it names one number, never two.
+- Edit entry shows name, favourite, Calories, Servings, Meal; the rest is under "More options".
+- "Macros and details" is "Protein, carbs and fat"; "Fix" is "Change"; camera and microphone messages no
+  longer say "browser settings"; Import a scan left More (Settings and the Weight page have it).
+- Garmin login says why it is asked for.
+
+Not done, for Chef: today's weigh-in as the headline number in place of the 7-day average (the goal maths rests
+on the average by an earlier decision); natural serving units ("2 eggs"); a proper Garmin sign-in.

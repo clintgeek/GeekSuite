@@ -99,3 +99,11 @@ describe('Fix sheet: one filled button', () => {
     expect(screen.getByText('That looks too high. Check the number.')).toBeInTheDocument();
   });
 });
+
+describe('Fix sheet: it is called "Change" (review 2026-11-27, round three)', () => {
+  it('the title reads "Change <name>", matching the button that opened it', () => {
+    open();
+    expect(screen.getByRole('dialog', { name: /^Change Chicken soup, 1 bowl/ })).toBeInTheDocument();
+    expect(screen.queryByText(/^Fix /)).toBeNull();
+  });
+});

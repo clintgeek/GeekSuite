@@ -12,6 +12,7 @@ import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DayChoice from './DayChoice.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
+import { FieldUnit, unitFieldSx } from '../BloodPressure/fieldUnit.jsx';
 import Surface from '../primitives/Surface.jsx';
 
 const SAVE_FAILED = "Couldn’t save that weight. Check your connection and try again.";
@@ -32,13 +33,22 @@ function dayWords(ymd, todayYmd) {
  * that already has one REPLACES it. That used to happen without a word — an
  * evening weigh-in, or a backfill with the date left on today, silently
  * overwrote the morning's (review L5). `existingLogs` is the page's weight
- * log; when the chosen day has a weight, the field says so and the button
- * reads "Replace".
+ * log; when the chosen day has a weight, the field says so, and once a weight
+ * is typed the dialog's button says exactly what it will do: "Replace today’s
+ * weight" (`replaceLabel`). Until then it is the plain "Save" every dialog
+ * has, waiting for a number: a greyed-out "Replace" with nothing typed
+ * promised a thing that could not happen yet (review, round three).
  */
 function weightOnDay(logs, ymd) {
   if (!ymd) return null;
   const hit = (Array.isArray(logs) ? logs : []).find((l) => l?.log_date && utcDateString(l.log_date) === ymd);
   return hit && Number.isFinite(Number(hit.weight_value)) ? Number(hit.weight_value) : null;
+}
+
+/** "Replace today’s weight", "Replace yesterday’s weight", "Replace the Oct 13 weight". */
+export function replaceLabel(ymd, todayYmd) {
+  const day = dayWords(ymd, todayYmd);
+  return day === 'today' || day === 'yesterday' ? `Replace ${day}’s weight` : `Replace the ${day} weight`;
 }
 
 const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, existingLogs = [] }) => {
@@ -189,7 +199,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
             onChange={(e) => { setValue(e.target.value); setNudge(false); }}
             onKeyDown={handleCardKeyDown}
             inputRef={cardField}
-            sx={{ flex: 1, minWidth: 0 }}
+            sx={{ flex: 1, minWidth: 0, ...unitFieldSx }}
             inputProps={{
               inputMode: 'decimal',
               enterKeyHint: 'done',
@@ -198,7 +208,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
               max: "1000"
             }}
             InputProps={{
-              endAdornment: unitWord
+              endAdornment: <FieldUnit>{unitWord}</FieldUnit>
             }}
             error={Boolean(invalidNote) && !open}
             helperText={open ? undefined : (invalidNote || nudgeNote || cardNote || undefined)}
@@ -242,7 +252,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
               variant="contained"
               disabled={!valid || !date || loading}
             >
-              {loading ? 'Saving…' : dialogNote ? 'Replace' : 'Save'}
+              {loading ? 'Saving…' : dialogNote && valid ? replaceLabel(date, todayYmd) : 'Save'}
             </Button>
           ),
           cancel: <Button onClick={closeDialog}>Cancel</Button>,
@@ -262,6 +272,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            sx={unitFieldSx}
             inputProps={{
               inputMode: 'decimal',
               step: "0.1",
@@ -269,7 +280,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
               max: "1000"
             }}
             InputProps={{
-              endAdornment: unitWord
+              endAdornment: <FieldUnit>{unitWord}</FieldUnit>
             }}
             error={Boolean(invalidNote)}
             helperText={invalidNote || dialogNote || 'For example, 150.4'}

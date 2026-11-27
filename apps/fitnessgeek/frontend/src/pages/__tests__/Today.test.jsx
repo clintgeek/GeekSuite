@@ -160,11 +160,12 @@ describe('"Macros and details"', () => {
   it('is closed by default: no macros on the page until asked for', async () => {
     renderHome(experience());
     const toggle = await screen.findByTestId('macros-details-toggle');
-    expect(toggle).toHaveTextContent('Macros and details');
+    expect(toggle).toHaveTextContent('Protein, carbs and fat');
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByTestId('macro-strip')).toBeNull();
     expect(screen.queryByTestId('today-details')).toBeNull();
-    expect(screen.getByTestId('home-hero').textContent).not.toMatch(/Protein|Carbs|Fat/);
+    // The disclosure names what is inside; no numbers for them until opened.
+    expect(screen.getByTestId('home-hero').textContent).not.toMatch(/\d+ ?g\b/);
   });
 
   it('opens to the day against target: eaten, protein, carbs and fat, each with a bar', async () => {

@@ -81,15 +81,22 @@ describe('Weight page — logging', () => {
     expect(createWeightLog.mock.calls[0][0]).toMatchObject({ weight_value: 217.9, log_date: '2026-10-16' });
   });
 
-  it('a day that already has a weight says so, and the button reads Replace (review L5)', async () => {
+  it('a day that already has a weight says so, and the button says what it will replace (review L5)', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 9, 15, 19, 0, 0));
     renderAt();
     fireEvent.click(await screen.findByTestId('log-weight-fab'));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByTestId('weight-replace-note')).toHaveTextContent('You already have 218.7 for today. Saving replaces it.');
+    // Round three: nothing typed yet, so nothing can be replaced yet. The
+    // button is the plain Save every dialog has, waiting for a number, not a
+    // greyed-out "Replace".
+    expect(within(dialog).getByRole('button', { name: 'Save', hidden: true })).toBeDisabled();
+    expect(within(dialog).queryByRole('button', { name: /replace/i, hidden: true })).toBeNull();
     fireEvent.change(within(dialog).getByLabelText(/^weight/i), { target: { value: '219.4' } });
-    expect(within(dialog).getByRole('button', { name: 'Replace', hidden: true })).toBeEnabled();
+    const replace = within(dialog).getByRole('button', { name: 'Replace today’s weight', hidden: true });
+    expect(replace).toBeEnabled();
+    expect(replace.querySelector('svg')).toBeNull();
 
     // The common case never shows a date input (round two): Today and
     // Yesterday are one tap each.
@@ -105,6 +112,7 @@ describe('Weight page — logging', () => {
     vi.setSystemTime(new Date(2026, 9, 16, 7, 0, 0));
     fireEvent.change(within(dialog).getByLabelText(/^weight/i), { target: { value: '219.5' } });
     expect(within(dialog).getByTestId('weight-replace-note')).toHaveTextContent('You already have 218.7 for yesterday. Saving replaces it.');
+    expect(within(dialog).getByRole('button', { name: 'Replace yesterday’s weight', hidden: true })).toBeEnabled();
   });
 
   it('"Another day" reveals the date field, and the weight saves on the day picked', async () => {
@@ -128,11 +136,20 @@ describe('Weight page — logging', () => {
   });
 });
 
+// Round three: the row is the button (no pencil, no bin); it opens the edit
+// dialog, and Delete is in there.
+const deleteFromRow = async () => {
+  expect(screen.queryByLabelText(/remove the/i)).toBeNull();
+  fireEvent.click(await screen.findByRole('button', { name: /edit the 218.7 lb weigh-in from/i }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Delete this weigh-in', hidden: true }));
+};
+
 describe('Weight page — delete', () => {
   it('says "Removed …" with an Undo that re-creates the row', async () => {
     deleteWeightLog.mockResolvedValue({ success: true, data: true });
     renderAt();
-    fireEvent.click(await screen.findByLabelText(/remove the 218.7 lb weigh-in/i));
+    await deleteFromRow();
 
     await waitFor(() => expect(notify).toHaveBeenCalledWith(
       'Removed 218.7 lb from Oct 15',
@@ -152,7 +169,7 @@ describe('Weight page — delete', () => {
   it('a delete answered false shows no success', async () => {
     deleteWeightLog.mockResolvedValue({ success: true, data: false });
     renderAt();
-    fireEvent.click(await screen.findByLabelText(/remove the 218.7 lb weigh-in/i));
+    await deleteFromRow();
 
     await waitFor(() => expect(notify).toHaveBeenCalled());
     const messages = notify.mock.calls.map(([m]) => m);

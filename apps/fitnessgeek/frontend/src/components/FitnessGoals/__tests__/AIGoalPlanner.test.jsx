@@ -96,7 +96,7 @@ async function answerTheRest({ targetWeight = '170' } = {}) {
 describe('Calorie plan — plain questions, one at a time', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it('asks one thing per step and ends on "Your daily target is N calories"', async () => {
+  it('asks one thing per step and ends on one number, one line and Save', async () => {
     setup();
     expect(await screen.findByRole('heading', { name: 'What do you weigh now?' })).toBeInTheDocument();
     expect(screen.getByText('Step 1 of 4')).toBeInTheDocument();
@@ -111,8 +111,16 @@ describe('Calorie plan — plain questions, one at a time', () => {
 
     const bmr = mifflinStJeorBMR({ weightLb: 180, heightIn: 71, age: 30, gender: 'male' });
     const target = Math.round(tdeeFromBMR(bmr, 'sedentary') - 500);
-    expect(screen.getByTestId('plan-headline')).toHaveTextContent(`Your daily target is ${target.toLocaleString('en-US')} calories`);
+    expect(screen.getByTestId('plan-headline').textContent).toBe(`Your daily target: ${target.toLocaleString('en-US')} calories`);
     expect(screen.getByTestId('plan-outcome')).toHaveTextContent(/That should lose about 1 lb a week\. You’d reach 170 lb around /);
+    // Round three: no "accountant's sheet" after the plain questions. The
+    // grams, the week and old-vs-new wait behind the two closed rows.
+    expect(screen.getByTestId('plan-details-toggle')).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('plan-working-toggle')).toHaveAttribute('aria-expanded', 'false');
+    for (const hidden of ['macro-preview', 'plan-week', 'plan-comparison', 'plan-floor-note', 'plan-previous']) {
+      expect(screen.queryByTestId(hidden)).toBeNull();
+    }
+    expect(screen.getByTestId('plan-result').textContent).not.toMatch(/Protein|at rest|→/);
     // No jargon on the answer; the working is behind a tap.
     expect(document.body.textContent).not.toMatch(/BMR|TDEE|kcal|Mifflin|Katch/);
     expect(screen.queryByTestId('metabolism-card')).toBeNull();
@@ -284,9 +292,14 @@ describe('Calorie plan — a person who already has one', () => {
   it('sees the plan first, and "Change plan" starts from what she chose before', async () => {
     setup({ profile: KNOWN, weight: 178, nutrition_goal: SAVED_PLAN });
     const summary = await screen.findByTestId('plan-summary');
-    expect(summary).toHaveTextContent('Your daily target is 2,037 calories');
+    expect(summary).toHaveTextContent('Your daily target: 2,037 calories');
     expect(summary).toHaveTextContent('That should lose about 1½ lb a week.');
-    expect(screen.getByTestId('plan-week')).toHaveTextContent('2,343');
+    // The week is behind "How this was worked out" (round three).
+    expect(screen.queryByTestId('plan-week')).toBeNull();
+    expect(screen.queryByTestId('macro-preview')).toBeNull();
+    fireEvent.click(screen.getByTestId('plan-working-toggle'));
+    expect(await screen.findByTestId('plan-week')).toHaveTextContent('2,343');
+    expect(screen.getByTestId('macro-preview')).toBeInTheDocument();
     expect(screen.queryByText('What do you weigh now?')).toBeNull();
     expect(screen.queryByTestId('plan-stale-notice')).toBeNull();
 
@@ -317,8 +330,12 @@ describe('Calorie plan — a person who already has one', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Update my target' }));
     const bmr = mifflinStJeorBMR({ weightLb: 180, heightIn: 71, age: 30, gender: 'male' });
     const target = Math.round(tdeeFromBMR(bmr, 'sedentary') - 500);
-    expect(await screen.findByTestId('plan-headline')).toHaveTextContent(`Your daily target is ${target.toLocaleString('en-US')} calories`);
-    expect(screen.getByTestId('plan-comparison')).toHaveTextContent(`2,980 → ${target.toLocaleString('en-US')} cal`);
+    expect(await screen.findByTestId('plan-headline')).toHaveTextContent(`Your daily target: ${target.toLocaleString('en-US')} calories`);
+    // One line for the old target; the row-by-row comparison is behind a tap.
+    expect(screen.getByTestId('plan-previous').textContent).toBe('It was 2,980. Nothing changes until you save.');
+    expect(screen.queryByTestId('plan-comparison')).toBeNull();
+    fireEvent.click(screen.getByTestId('plan-working-toggle'));
+    expect(await screen.findByTestId('plan-comparison')).toHaveTextContent(`2,980 → ${target.toLocaleString('en-US')} cal`);
     // Nothing was written by looking.
     expect(settingsService.updateSettings).not.toHaveBeenCalled();
 
@@ -340,7 +357,9 @@ describe('Calorie plan — a person who already has one', () => {
       at('?update=1');
       setup({ profile: KNOWN, weight: 180, nutrition_goal: STALE_PLAN });
       await screen.findByTestId('plan-result');
-      expect(screen.getByTestId('plan-comparison')).toHaveTextContent(/2,980 → /);
+      expect(screen.getByTestId('plan-previous')).toHaveTextContent('It was 2,980.');
+      fireEvent.click(screen.getByTestId('plan-working-toggle'));
+      expect(await screen.findByTestId('plan-comparison')).toHaveTextContent(/2,980 → /);
       expect(screen.getByRole('button', { name: 'Save plan' })).toBeEnabled();
       expect(settingsService.updateSettings).not.toHaveBeenCalled();
     });

@@ -91,7 +91,7 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', editing = null, o
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth data-testid="serving-sheet" {...bottomSheetProps}>
       <DialogTitle sx={{ pb: 0.5 }}>
         <Typography component="span" sx={{ display: 'block', fontSize: '1.0625rem', fontWeight: 700 }}>
-          {editing ? `Change ${displayName(food.name)}` : displayName(food.name)}
+          {`How much ${displayName(food.name)}?`}
         </Typography>
         {food.brand && (
           <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>{displayName(food.brand)}</Typography>
@@ -115,7 +115,7 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', editing = null, o
             </ToggleButtonGroup>
             {servingText && (
               <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
-                1 serving = {servingText}
+                1 serving is about {servingText}
               </Typography>
             )}
           </Box>

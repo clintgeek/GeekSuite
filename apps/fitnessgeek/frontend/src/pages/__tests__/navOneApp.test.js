@@ -49,7 +49,7 @@ describe('the phone tabs', () => {
 
 describe('More', () => {
   it('lists Blood pressure, Medications, Saved foods, Calorie plan, Import a scan, Settings', () => {
-    expect(labels(moreGroupsFor())).toEqual(['Trends', 'Saved foods', 'Calorie plan', 'Import a scan', 'Settings']);
+    expect(labels(moreGroupsFor())).toEqual(['Trends', 'Saved foods', 'Calorie plan', 'Settings']);
     expect(labels(moreGroupsFor('simple'))).toEqual(labels(moreGroupsFor('full')));
   });
 

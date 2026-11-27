@@ -50,7 +50,7 @@ describe('bottom sheets on a phone', () => {
       .some((rule) => rule.media && /min-width:\s*0px/.test(rule.conditionText || rule.media.mediaText) && /MuiDialog-container[^}]*align-items:\s*flex-end/.test(rule.cssText)));
     expect(anchored).toBe(true);
     // And it draws a shouted name in title case.
-    expect(screen.getByText('Egg, Large')).toBeInTheDocument();
+    expect(screen.getByText('How much Egg, Large?')).toBeInTheDocument();
     expect(screen.getByText('Happy Hens')).toBeInTheDocument();
   });
 

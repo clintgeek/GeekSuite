@@ -640,11 +640,16 @@ const bloodPressure = [
     async fn(page) {
       const head = await must(page.locator('[data-testid="bp-headline"]'), 'headline');
       const words = (await head.innerText()).replace(/\s+/g, ' ').trim();
-      if (!/^Your average this week is a little high\. Your last reading, today 7:42\s?AM, was normal\.$/.test(words)) throw new Error(`headline: ${words}`);
+      if (!/^Your average for the last 7 days is a little high\. Your last reading, today 7:42\s?AM, was normal\.$/.test(words)) throw new Error(`headline: ${words}`);
+      const label = (await (await must(page.locator('[data-testid="bp-now-label"]'), 'the label over the big number')).innerText()).trim();
+      if (label !== 'Average, last 7 days') throw new Error(`bp-now-label reads "${label}"`);
       const last = await must(page.locator('[data-testid="bp-last-reading"]'), 'last reading');
       if (!/Last reading\s*118\/74 · normal · today 7:42\s?AM/.test((await last.innerText()).replace(/\s+/g, ' '))) throw new Error(`last reading: ${await last.innerText()}`);
       const healthy = await must(page.locator('[data-testid="bp-healthy-range"]'), 'healthy range');
       if (!/In the normal range 1 of 14 readings\s*·\s*last 30 days/.test((await healthy.innerText()).replace(/\s+/g, ' '))) throw new Error(`healthy range: ${await healthy.innerText()}`);
+      for (const want of ['Average, last 30 days', 'Trend, last 30 days']) {
+        await must(page.getByText(want, { exact: true }).first(), `the "${want}" row`);
+      }
       // At the very bottom of the page the "Log BP" button covers nothing:
       // the page leaves room under its last card (d-fixes).
       await page.evaluate(() => {
@@ -722,8 +727,16 @@ const bloodPressure = [
       await h.settle(1200);
       const note = await must(dialog.locator('[data-testid="bp-duplicate"]'), 'the duplicate note');
       const text = (await note.first().innerText()).replace(/\s+/g, ' ');
-      if (!/You already have a reading at .+\. If this is a second one, save it as .+\./.test(text)) throw new Error(`duplicate note reads "${text}"`);
-      await must(dialog.getByRole('button', { name: /^save as /i }), 'the "Save as <time>" button');
+      if (!/You already have a reading at .+\. If this is a second one, it will be saved as .+\./.test(text)) throw new Error(`duplicate note reads "${text}"`);
+      const second = dialog.getByRole('button', { name: 'Save as a second reading', exact: true });
+      await must(second, 'the "Save as a second reading" button');
+      if ((await second.count()) !== 1) throw new Error('more than one "Save as a second reading" button');
+      await absent(dialog.getByRole('button', { name: /^save as \d/i }), 'a "Save as <time>" button');
+      await absent(dialog.getByRole('button', { name: /^save$/i }), 'a plain Save beside the second-reading button');
+      // The note must sit wholly above the footer's button, never under it.
+      const nb = await note.first().boundingBox();
+      const fb = await second.boundingBox();
+      if (!nb || !fb || nb.y + nb.height > fb.y + 0.5) throw new Error(`the duplicate note (bottom ${Math.round((nb?.y ?? 0) + (nb?.height ?? 0))}) is not above the footer (top ${Math.round(fb?.y ?? 0)})`);
     },
   }),
 ];

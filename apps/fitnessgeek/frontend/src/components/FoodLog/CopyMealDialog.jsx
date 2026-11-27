@@ -61,7 +61,7 @@ const shiftDate = (dateString, deltaDays) => {
  * ISO dates and no way back (UX review L3). Now:
  *   - nothing copies until a source meal is chosen; "Whole day" is an option
  *     you pick, never the empty default;
- *   - "Whose log" says what the From select is (Mine, or a name);
+ *   - "Whose meals" says what the From select is (Mine, or a name);
  *   - the summary is a sentence, with the number of foods it will add;
  *   - Copy sits at the bottom on a phone (thumbSaveProps);
  *   - a copy ends with the standard toast, whose Undo removes what was added.
@@ -457,15 +457,17 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
           Copy from
         </Typography>
         <Box sx={{ ...fieldGrid, mb: 6 }}>
-          {/* Whose log — only when someone in the household shares theirs. */}
+          {/* Whose meals — only when someone in the household shares theirs.
+              It takes the whole row, so Day and the meal sit side by side
+              in both groups and nothing is left alone in a row. */}
           {sharingMembers.length > 0 && (
-            <FormControl size="small" fullWidth>
-              <InputLabel id="copy-meal-from-user-label" shrink>Whose log</InputLabel>
+            <FormControl size="small" fullWidth sx={{ gridColumn: '1 / -1' }}>
+              <InputLabel id="copy-meal-from-user-label" shrink>Whose meals</InputLabel>
               <Select
                 labelId="copy-meal-from-user-label"
                 value={fromUserId}
                 onChange={(e) => setFromUserId(e.target.value)}
-                label="Whose log"
+                label="Whose meals"
                 displayEmpty
                 notched
               >

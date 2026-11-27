@@ -104,7 +104,7 @@ describe('Edit a saved meal', () => {
 describe('Edit entry', () => {
   const LOG = { id: 'log-1', servings: 1, meal_type: 'lunch', log_date: '2026-10-15T00:00:00.000Z', nutrition: { calories_per_serving: 220 }, food_item_id: { id: 'f1', name: 'Chicken soup', brand: 'Home' } };
 
-  it('favorite and Remove sit under the name, before the first field', async () => {
+  it('the favorite sits under the name; Remove is the last thing, after More options', async () => {
     wrap(<EditLogDialog open onClose={vi.fn()} onSave={vi.fn()} onRemove={vi.fn()} log={LOG} />);
     const star = await screen.findByTestId('edit-log-favorite');
     const remove = screen.getByRole('button', { name: 'Remove Chicken soup' });
@@ -112,14 +112,26 @@ describe('Edit entry', () => {
     const before = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     expect(before(screen.getByText('Chicken soup'), star)).toBe(true);
     expect(before(star, calories)).toBe(true);
-    expect(before(remove, calories)).toBe(true);
+    const more = screen.getByRole('button', { name: 'More options' });
+    expect(before(calories, more)).toBe(true);
+    expect(before(more, remove)).toBe(true);
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(more).toHaveAttribute('aria-controls', 'edit-log-detail');
     expect(screen.getByText('Home')).toBeInTheDocument();
+  });
+
+  it('More options opens by itself for an entry with a note, so the note is never hidden', () => {
+    wrap(<EditLogDialog open onClose={vi.fn()} onSave={vi.fn()} log={{ ...LOG, notes: 'extra noodles' }} />);
+    expect(screen.getByRole('button', { name: 'More options' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByLabelText('Notes (optional)')).toHaveValue('extra noodles');
   });
 
   it('opens on an entry with no nutrition and a food that is only an id', () => {
     wrap(<EditLogDialog open onClose={vi.fn()} onSave={vi.fn()} onRemove={vi.fn()} log={{ id: 'log-2', servings: null, nutrition: null, food_item_id: 'f9' }} />);
     expect(screen.getByLabelText('Calories')).toHaveValue('0');
-    fireEvent.click(screen.getByRole('button', { name: 'Per serving and nutrition' }));
+    // No day on the entry, and Save waits for one: the Day field is in view.
+    expect(screen.getByRole('button', { name: 'More options' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByLabelText('Day')).toBeInTheDocument();
     expect(screen.getByText('Protein 0g')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
   });

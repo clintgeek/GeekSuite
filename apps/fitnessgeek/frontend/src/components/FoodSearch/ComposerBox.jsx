@@ -1,10 +1,9 @@
 import React, { useId } from 'react';
-import { Box, Button, CircularProgress, IconButton, InputAdornment, TextField, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, IconButton, InputAdornment, SvgIcon, TextField, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
   Clear as ClearIcon,
   Mic as MicIcon,
-  QrCodeScanner as BarcodeIcon,
   Stop as StopIcon,
   HourglassEmpty as ThinkingIcon,
   CloudOff as OfflineIcon,
@@ -55,6 +54,27 @@ const STATUS_ICONS = {
   failure: { Icon: FailureIcon, color: 'error.main' },
 };
 
+/**
+ * A barcode: upright bars of uneven width. MUI's nearest glyph is a QR-code
+ * frame, which nobody reads as "the stripes on the packet".
+ */
+const BarcodeIcon = (props) => (
+  <SvgIcon viewBox="0 0 24 24" {...props}>
+    <path d="M2 5h2v14H2zM5.5 5h1v14h-1zM8 5h2.5v14H8zM12 5h1v14h-1zM14.5 5h2v14h-2zM18 5h1v14h-1zM20 5h2v14h-2z" />
+  </SvgIcon>
+);
+
+/** A round button with its one-word caption under it ("Scan", "Speak"). */
+const Captioned = ({ caption, children }) => (
+  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, mt: 0.5 }}>
+    {children}
+    {/* The button carries the full name; this is the same thing in a word. */}
+    <Typography aria-hidden sx={{ mt: 0.5, fontSize: '0.75rem', lineHeight: 1.25, fontWeight: 600, color: 'text.secondary' }}>
+      {caption}
+    </Typography>
+  </Box>
+);
+
 const ComposerBox = ({
   value,
   onChange,
@@ -91,8 +111,9 @@ const ComposerBox = ({
   const ink = theme.palette.text.primary;
   // The round buttons beside the box: the barcode and the mic, one look.
   const roundButton = {
-    width: 52,
-    height: 52,
+    // 48 with a caption under it, so the pair is little taller than the box.
+    width: 48,
+    height: 48,
     flexShrink: 0,
     borderRadius: '50%',
     border: `1px solid ${theme.palette.outline || theme.palette.divider}`,
@@ -118,7 +139,8 @@ const ComposerBox = ({
         Tell me what you ate
       </Typography>
 
-      {/* The box with the mic beside it. */}
+      {/* The box with the barcode and the mic beside it, each with a word
+          under it: two bare glyphs were a guess (review 2026-11-27). */}
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
         <TextField
           fullWidth
@@ -175,6 +197,7 @@ const ComposerBox = ({
           }}
         />
         {onBarcodeClick && (
+          <Captioned caption="Scan">
           <IconButton
             onClick={onBarcodeClick}
             disabled={thinking || disabled || barcodeDisabled}
@@ -182,10 +205,12 @@ const ComposerBox = ({
             data-testid="scan-button"
             sx={roundButton}
           >
-            <BarcodeIcon sx={{ fontSize: 24 }} />
+            <BarcodeIcon sx={{ fontSize: 26 }} />
           </IconButton>
+          </Captioned>
         )}
         {onMicClick && (
+          <Captioned caption={listening ? 'Stop' : 'Speak'}>
           <IconButton
             onClick={onMicClick}
             disabled={thinking || disabled || (micDisabled && !listening)}
@@ -209,11 +234,13 @@ const ComposerBox = ({
           >
             {listening ? <StopIcon /> : <MicIcon sx={{ fontSize: 26 }} />}
           </IconButton>
+          </Captioned>
         )}
       </Box>
 
-      {/* 4px theme unit: 10px under the box, 12px above the button. */}
-      {mealPicker && <Box sx={{ mt: 2.5 }}>{mealPicker}</Box>}
+      {/* 4px theme unit: 6px under the row (the captions already sit below
+          the box), 12px above the button. */}
+      {mealPicker && <Box sx={{ mt: 1.5 }}>{mealPicker}</Box>}
 
       <Button
         variant="contained"

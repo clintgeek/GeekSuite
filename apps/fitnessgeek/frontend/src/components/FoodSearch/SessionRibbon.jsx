@@ -94,8 +94,10 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
         mt: 2,
         display: 'flex',
         alignItems: 'center',
-        gap: 2,
-        px: 3,
+        // 4px theme unit: on a phone the words need the room more than the
+        // gaps do.
+        gap: { xs: 1.5, sm: 2 },
+        px: { xs: 2.5, sm: 3 },
         py: 2,
         border: `1px solid ${theme.palette.divider}`,
         borderRadius: '12px',
@@ -107,10 +109,23 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
     >
       <LoggedIcon sx={{ color: primary, fontSize: 22, flexShrink: 0 }} aria-hidden />
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        {/* Two lines whatever the name (harness 2026-11-18: "Greek Yogurt,
-            Plain Whole Milk added to lunch" wrapped to three): the name on
-            one line, cut with an ellipsis; where and how much under it. */}
-        <Typography data-testid="ribbon-what" noWrap sx={{ fontSize: '1rem', fontWeight: 700, color: 'text.primary', lineHeight: 1.3 }}>
+        {/* The name wraps at a word to a second line before it is ever cut
+            ("Greek Yogurt, Pla…" read as broken); only a third line gets the
+            ellipsis. Where and how much go under it. */}
+        <Typography
+          data-testid="ribbon-what"
+          sx={{
+            fontSize: '1rem',
+            fontWeight: 700,
+            color: 'text.primary',
+            lineHeight: 1.3,
+            display: '-webkit-box',
+            WebkitBoxOrient: 'vertical',
+            WebkitLineClamp: 2,
+            overflow: 'hidden',
+            overflowWrap: 'break-word',
+          }}
+        >
           {what}{' '}
         </Typography>
         <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', lineHeight: 1.3 }}>
@@ -123,7 +138,17 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
           startIcon={<UndoIcon />}
           onClick={onUndoLast}
           disabled={busy}
-          sx={{ color: 'text.primary', fontSize: '0.9375rem', fontWeight: 700, minHeight: 44, flexShrink: 0 }}
+          sx={{
+            color: 'text.primary',
+            fontSize: '0.9375rem',
+            fontWeight: 700,
+            minHeight: 44,
+            minWidth: 0,
+            px: { xs: 1.5, sm: 2 },
+            flexShrink: 0,
+            // The word is enough on a phone; the arrow's width goes to the name.
+            '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inherit' } },
+          }}
         >
           Undo
         </Button>

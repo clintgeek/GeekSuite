@@ -2,14 +2,9 @@ import React, { useState, useEffect } from 'react';
 import {
   Button,
   TextField,
-  Box,
-  Typography
+  Box
 } from '@mui/material';
-import {
-  MonitorHeart as BPIcon,
-  Add as AddIcon,
-  Edit as EditIcon
-} from '@mui/icons-material';
+import { MonitorHeart as BPIcon } from '@mui/icons-material';
 import { localDateString } from '@geeksuite/utils';
 import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
@@ -26,7 +21,8 @@ import {
   isBPDuplicate,
 } from './bpTimeUtils.js';
 import { thumbSaveProps } from './thumbSave.jsx';
-import BPSaveError from './BPSaveError.jsx';
+import BPSaveError, { SAVE_SECOND_READING } from './BPSaveError.jsx';
+import { FieldUnit, unitFieldSx } from './fieldUnit.jsx';
 import { validateBPForm } from './bpForm.js';
 
 // The bounds and their messages live in `bpForm.js`, shared with QuickAddBP.
@@ -78,8 +74,11 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
   const [whenTouched, setWhenTouched] = useState(false);
   const [timeTouched, setTimeTouched] = useState(false);
   // The payload that hit `BP_DUPLICATE`, kept so saving it a minute later
-  // is one tap.
+  // is one tap. While it is set, the dialog's one button saves THAT payload
+  // as a second reading, so any edit to the form drops it (`edited`): the
+  // button must never save numbers other than the ones on screen.
   const [duplicate, setDuplicate] = useState(null);
+  const edited = () => setDuplicate(null);
   // Bumped each time the form is re-seeded, so the day choice and the
   // "Change the time" reveal start fresh.
   const [seed, setSeed] = useState(0);
@@ -164,6 +163,8 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
     if (loading) return;
+    // Enter in a field does what the button says.
+    if (duplicate) { await saveOneMinuteLater(); return; }
     setError('');
 
     const checked = validateBPForm({ systolic, diastolic, pulse });
@@ -228,13 +229,14 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
       {...thumbSaveProps({
         fullScreen,
         save: (
+          // Plain "Save", no icon, like every dialog here. After a duplicate
+          // it is still the one button, and says what it will now do.
           <Button
             onClick={handleSubmit}
             variant="contained"
-            startIcon={isEdit ? <EditIcon /> : <AddIcon />}
             disabled={loading || !ready}
           >
-            {loading ? 'Saving…' : 'Save'}
+            {loading ? 'Saving…' : duplicate ? SAVE_SECOND_READING : 'Save'}
           </Button>
         ),
         cancel: (
@@ -253,11 +255,12 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
               label="Top number (systolic)"
               type="number"
               value={systolic}
-              onChange={(e) => setSystolic(e.target.value)}
+              onChange={(e) => { setSystolic(e.target.value); edited(); }}
               inputProps={{ inputMode: 'numeric' }}
               InputProps={{
-                endAdornment: <Typography variant="caption">mmHg</Typography>
+                endAdornment: <FieldUnit>mmHg</FieldUnit>
               }}
+              sx={unitFieldSx}
               size="medium"
             />
 
@@ -266,11 +269,12 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
               label="Bottom number (diastolic)"
               type="number"
               value={diastolic}
-              onChange={(e) => setDiastolic(e.target.value)}
+              onChange={(e) => { setDiastolic(e.target.value); edited(); }}
               inputProps={{ inputMode: 'numeric' }}
               InputProps={{
-                endAdornment: <Typography variant="caption">mmHg</Typography>
+                endAdornment: <FieldUnit>mmHg</FieldUnit>
               }}
+              sx={unitFieldSx}
               size="medium"
             />
 
@@ -279,11 +283,12 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
               label="Pulse (optional)"
               type="number"
               value={pulse}
-              onChange={(e) => setPulse(e.target.value)}
+              onChange={(e) => { setPulse(e.target.value); edited(); }}
               inputProps={{ inputMode: 'numeric' }}
               InputProps={{
-                endAdornment: <Typography variant="caption">bpm</Typography>
+                endAdornment: <FieldUnit>bpm</FieldUnit>
               }}
+              sx={unitFieldSx}
               size="medium"
             />
 
@@ -297,8 +302,8 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
               time={time}
               today={localDateString()}
               timeOpen={isEdit || timeTouched}
-              onDate={(v) => { setDate(v); setWhenTouched(true); }}
-              onTime={(v) => { setTime(v); setWhenTouched(true); setTimeTouched(true); }}
+              onDate={(v) => { setDate(v); setWhenTouched(true); edited(); }}
+              onTime={(v) => { setTime(v); setWhenTouched(true); setTimeTouched(true); edited(); }}
             />
 
             {/* What this reading is, and one calm line about it. */}
@@ -307,8 +312,6 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
             <BPSaveError
               error={error || liveError}
               duplicateAt={duplicate?.measured_at || null}
-              onSaveLater={saveOneMinuteLater}
-              busy={loading}
             />
           </Box>
         </Box>

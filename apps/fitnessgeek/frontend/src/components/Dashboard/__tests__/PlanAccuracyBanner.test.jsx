@@ -7,8 +7,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { BMR_CALC_VERSION } from '@geeksuite/utils';
-import PlanAccuracyBanner, { planBannerKind, DISMISS_KEY } from '../PlanAccuracyBanner.jsx';
+import { BMR_CALC_VERSION, tdeeFromBMR } from '@geeksuite/utils';
+import PlanAccuracyBanner, { planBannerKind, planNoteWords, scanTargetEstimate, DISMISS_KEY } from '../PlanAccuracyBanner.jsx';
 
 // Chef's plan as found 2026-09-22: no bmr_calc_version.
 const STALE = { enabled: true, bmr: 3314, tdee: 3977, daily_calorie_target: 2977, start_date: '2026-09-14T00:00:00.000Z' };
@@ -40,19 +40,52 @@ describe('PlanAccuracyBanner', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each([
-    ['stale', STALE, SCAN],
-    ['scan', CURRENT_MIFFLIN, SCAN],
-  ])('the %s note is the same calm sentence, with Update → the new target and Not now', (kind, ng, scan) => {
-    renderBanner(ng, scan);
+  it('the stale note says the details changed, with Update → the new target and Not now', () => {
+    renderBanner(STALE, SCAN);
     const banner = screen.getByTestId('plan-accuracy-banner');
-    expect(banner).toHaveAttribute('data-kind', kind);
-    expect(banner.textContent).toBe('Your target can be more accurate now.UpdateNot now');
-    // Calm: a status, not an alert; no numbers, no blame, no jargon.
+    expect(banner).toHaveAttribute('data-kind', 'stale');
+    expect(banner.textContent).toBe('Your details have changed since your target was set.UpdateNot now');
+    // Calm: a status, not an alert; no blame, no jargon.
     expect(banner).toHaveAttribute('role', 'status');
-    expect(banner.textContent).not.toMatch(/too high|mistake|maths|formula|BMR|burn|\d/i);
+    expect(banner.textContent).not.toMatch(/too high|mistake|maths|formula|BMR|burn/i);
     expect(screen.getByRole('link', { name: 'Update' })).toHaveAttribute('href', '/calorie-wizard?update=1');
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument();
     expect(screen.getAllByTestId('plan-accuracy-banner')).toHaveLength(1);
+  });
+
+  // Round three: "can be more accurate" didn't say why or what would change.
+  it('the scan note says the new target beside the one she has', () => {
+    const plan = { ...CURRENT_MIFFLIN, tdee: tdeeFromBMR(2330, 'sedentary'), activity_level: 'sedentary', weight_change_rate: 1 };
+    const tdee = tdeeFromBMR(2104, 'sedentary');
+    const about = Math.round(Math.max(tdee - 500, Math.max(1200, Math.round(2104 * 0.8))) / 10) * 10;
+    expect(scanTargetEstimate(plan, SCAN)).toBe(about);
+    renderBanner(plan, SCAN);
+    const banner = screen.getByTestId('plan-accuracy-banner');
+    expect(banner).toHaveAttribute('data-kind', 'scan');
+    expect(screen.getByTestId('plan-note-words').textContent)
+      .toBe(`Your body scans suggest a target of about ${about.toLocaleString('en-US')} calories.`);
+    expect(banner.textContent).not.toMatch(/BMR|at rest|formula/i);
+    expect(screen.getByRole('link', { name: 'Update' })).toHaveAttribute('href', '/calorie-wizard?update=1');
+  });
+
+  it('measured activity carries over: the scan figure plus the same activity', () => {
+    const plan = { ...CURRENT_MIFFLIN, tdee: 2830, activity_level: 'measured', weight_change_rate: 1, daily_calorie_target: 2330, calc_inputs: { active_kcal: 500 } };
+    // 2104 + 500 − 500 = 2104 → about 2,100
+    expect(scanTargetEstimate(plan, SCAN)).toBe(2100);
+  });
+
+  it('a plan that does not hold enough to say gets the plain sentence, never a made-up number', () => {
+    expect(scanTargetEstimate(CURRENT_MIFFLIN, SCAN)).toBeNull();
+    renderBanner(CURRENT_MIFFLIN, SCAN);
+    expect(screen.getByTestId('plan-note-words').textContent).toBe('Your body scans can make your target more accurate.');
+    expect(planNoteWords('scan', CURRENT_MIFFLIN, SCAN)).not.toMatch(/\d/);
+  });
+
+  it('sets its own padding whatever the caller passes', () => {
+    renderBanner(STALE, SCAN, { sx: { px: 3, py: 1, mt: 4 } });
+    const style = window.getComputedStyle(screen.getByTestId('plan-accuracy-banner'));
+    expect(style.paddingLeft).toBe('32px');
+    expect(style.paddingTop).toBe('24px');
   });
 
   it('renders nothing with no plan', () => {

@@ -147,6 +147,11 @@ describe('Settings — saves as it changes (IA-3)', () => {
     await screen.findByRole('checkbox', { name: /overnight breathing looks worth mentioning to a doctor/i });
     fireEvent.click(screen.getByTestId('garmin-login-toggle'));
     expect(await screen.findByText('Your Garmin password is kept encrypted.')).toBeInTheDocument();
+    // Round three: why this app asks for a Garmin password, above the fields.
+    expect(screen.getByTestId('garmin-why').textContent).toBe(
+      'FitnessGeek signs in to Garmin for you to read your steps, sleep and heart rate. Garmin has no other way to share them with an app like this.',
+    );
+    expect(screen.getByTestId('garmin-why').compareDocumentPosition(screen.getByLabelText('Garmin email')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/apnea|plain text/i);
   });
 
@@ -290,6 +295,33 @@ describe('Settings — About you (IA-2)', () => {
     fireEvent.click(within(group).getByRole('radio', { name: 'Just keep track' }));
     await waitFor(() => expect(v.update).toHaveBeenCalledWith({ goal: 'track' }));
     expect(await within(screen.getByTestId('about-you')).findByRole('status')).toHaveTextContent('Saved');
+  });
+
+  // Round three: "Just keep track" beside a saved calorie plan said nothing.
+  it('"Just keep track" over a saved plan says the plan stays, and how to remove it', async () => {
+    settingsService.getSettings.mockResolvedValue({ data: { ...SETTINGS, nutrition_goal: { enabled: true, daily_calorie_target: 1650, weight_change_rate: 1 } } });
+    mount({ goal: 'track' });
+    await screen.findByRole('checkbox', { name: /Use my Garmin watch/i });
+    expect(await screen.findByTestId('goal-plan-note')).toHaveTextContent(
+      'Your calorie plan stays as it is. Remove it from Calorie plan if you don’t want a target.',
+    );
+    expect(within(screen.getByTestId('settings-plans')).getByRole('link', { name: /Calorie plan/ })).toHaveTextContent('1,650 calories a day');
+  });
+
+  it('no such note for another goal, or with no plan; and a tracker with no plan is not asked to set a target', async () => {
+    settingsService.getSettings.mockResolvedValue({ data: { ...SETTINGS, nutrition_goal: { enabled: true, daily_calorie_target: 1650, weight_change_rate: 1 } } });
+    const first = mount({ goal: 'lose' });
+    await screen.findByRole('checkbox', { name: /Use my Garmin watch/i });
+    expect(screen.queryByTestId('goal-plan-note')).toBeNull();
+    first.view.unmount();
+
+    settingsService.getSettings.mockResolvedValue({ data: { ...SETTINGS, nutrition_goal: { enabled: false, daily_calorie_target: 1650 } } });
+    mount({ goal: 'track' });
+    await screen.findByRole('checkbox', { name: /Use my Garmin watch/i });
+    expect(screen.queryByTestId('goal-plan-note')).toBeNull();
+    const row = within(screen.getByTestId('settings-plans')).getByRole('link', { name: /Calorie plan/ });
+    expect(row).toHaveTextContent('No daily target');
+    expect(row.textContent).not.toMatch(/Set a daily calorie target|eat to/);
   });
 
   it('a goal that fails to save says so under the choices', async () => {

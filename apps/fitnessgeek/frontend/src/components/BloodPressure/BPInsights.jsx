@@ -22,11 +22,28 @@ import { LabelPanel, FactRow, Rule, Tag } from '../primitives';
  * ONE SENTENCE RECONCILES THE WEEK AND THE LATEST READING (round-two review).
  * The card said "A little high", then "Last reading… normal", then "Healthy
  * range 1 of 14" (a count over every reading ever, beside a 30-day average),
- * and left the person to work out which was true. Now: "Your average this
- * week is a little high. Your last reading, today 7:42 AM, was normal." The
- * rows under it each name their window, and the count of normal readings is
- * for the same 30 days as the average above it ("1 of 14", never "7%").
+ * and left the person to work out which was true. Now: "Your average for the
+ * last 7 days is a little high. Your last reading, today 7:42 AM, was
+ * normal." The rows under it each name their window, and the count of normal
+ * readings is for the same 30 days as the average above it ("1 of 14", never
+ * "7%").
+ *
+ * THE BIG NUMBER SAYS WHAT IT IS, AND ONE THING HAS ONE NAME (round three).
+ * 126/79 stood unlabelled over a sentence about "this week" and a row called
+ * "30-day average" that happened to hold the same figure. A small label now
+ * sits directly above it (`BP_LABELS`): "Average, last 7 days" (today and the
+ * six days before it, which is what is computed), or "Last reading" when the
+ * week is empty and the number is that. The sentence and the rows use the
+ * same words: "last 7 days", "last 30 days", "last reading".
  */
+
+/** The names this card uses, each in one place. */
+export const BP_LABELS = Object.freeze({
+  week: 'Average, last 7 days',
+  last: 'Last reading',
+  month: 'Average, last 30 days',
+  trend: 'Trend, last 30 days',
+});
 
 /** "a little high (elevated)" → "a little high": the stage name is on the tag. */
 const plain = (stage) => bpStageWords(stage).phrase.replace(/ \(.*\)$/, '');
@@ -37,7 +54,7 @@ export function bpSummarySentence({ weekStage, lastStage, lastWhen }) {
   if (!weekStage) {
     return `No readings in the last 7 days. Your last one${when} was ${plain(lastStage)}.`;
   }
-  const week = `Your average this week is ${plain(weekStage)}.`;
+  const week = `Your average for the last 7 days is ${plain(weekStage)}.`;
   return weekStage === lastStage
     ? `${week} So was your last reading${lastWhen ? `, ${lastWhen}` : ''}.`
     : `${week} Your last reading${when} was ${plain(lastStage)}.`;
@@ -196,6 +213,12 @@ const BPInsights = ({ bpLogs = [] }) => {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', columnGap: 3, rowGap: 2 }}>
         <Box sx={{ minWidth: 0 }}>
           <Typography
+            data-testid="bp-now-label"
+            sx={{ m: 0, mb: 1, fontSize: '0.8125rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1.3 }}
+          >
+            {insights.weekCategory ? BP_LABELS.week : BP_LABELS.last}
+          </Typography>
+          <Typography
             component="p"
             data-testid="bp-now"
             sx={{ m: 0, fontWeight: 700, fontSize: { xs: '2.5rem', sm: '2.75rem' }, lineHeight: 1.05, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
@@ -225,12 +248,12 @@ const BPInsights = ({ bpLogs = [] }) => {
       {/* When the week has readings the big number is the week's, so the last
           reading gets its own row; otherwise the big number IS the last one. */}
       <Box data-testid="bp-last-reading">
-        {insights.weekCategory && <FactRow first name="Last reading" amount={lastWords} />}
+        {insights.weekCategory && <FactRow first name={BP_LABELS.last} amount={lastWords} />}
       </Box>
       {insights.avg30Systolic && (
         <FactRow
           first={!insights.weekCategory}
-          name="30-day average"
+          name={BP_LABELS.month}
           amount={`${insights.avg30Systolic}/${insights.avg30Diastolic}`}
           of={`· ${insights.last30DaysCount} ${insights.last30DaysCount === 1 ? 'reading' : 'readings'}`}
         />
@@ -247,7 +270,7 @@ const BPInsights = ({ bpLogs = [] }) => {
       </Box>
       {insights.last30DaysCount >= 4 && (
         <FactRow
-          name="30-day trend"
+          name={BP_LABELS.trend}
           amount={
             <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, verticalAlign: 'middle' }}>
               <TrendIcon aria-hidden sx={{ fontSize: 20, color: 'text.secondary' }} />

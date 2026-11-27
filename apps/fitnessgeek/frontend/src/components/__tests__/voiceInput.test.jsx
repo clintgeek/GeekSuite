@@ -116,7 +116,9 @@ describe('the microphone', () => {
     await act(async () => { fireEvent.click(screen.getByTestId('speak-button')); });
     await act(async () => { instances[0].fail('not-allowed'); });
     const note = screen.getByTestId('mic-error');
-    expect(note).toHaveTextContent('FitnessGeek needs your microphone to hear you');
+    // An installed phone app has no "browser settings" to send her to.
+    expect(note).toHaveTextContent('Allow the microphone for FitnessGeek in your phone’s settings, or just type it.');
+    expect(note.textContent).not.toMatch(/browser/i);
     expect(note.textContent).not.toMatch(/not-allowed/);
     expect(screen.queryByTestId('mic-listening')).toBeNull();
   });

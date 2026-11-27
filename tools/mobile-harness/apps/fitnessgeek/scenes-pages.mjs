@@ -227,7 +227,7 @@ const todayScenes = [
   }, { dialog: true }),
 
   // Edit a food, just opened: tap the Egg row. Total calories first, then
-  // Servings, Day, Meal; "Per serving and nutrition" closed; Remove and Save.
+  // Servings, Meal; "More options" closed (Day, Notes, per-serving inside); Remove and Save.
   pageScene('50c-edit-entry', () => dayOps(logDay()), async (page, h) => {
     const dlg = await openEdit(page, h, 'Egg');
     const calories = await need(dlg.getByLabel('Calories', { exact: true }), 'the total calories field');
@@ -239,24 +239,31 @@ const todayScenes = [
     await need(dlg.getByRole('button', { name: 'Fewer servings' }), 'the "Fewer servings" (−) button');
     await need(dlg.getByRole('button', { name: 'More servings' }), 'the "More servings" (+) button');
     await need(dlg.getByLabel('Servings', { exact: true }), 'the Servings box');
-    const toggle = await need(detailToggle(dlg), 'the "Per serving and nutrition" disclosure');
-    if ((await toggle.innerText()).trim() !== 'Per serving and nutrition') throw new Error(`the disclosure reads "${await toggle.innerText()}"`);
-    if ((await toggle.getAttribute('aria-expanded')) !== 'false') throw new Error('"Per serving and nutrition" should start closed');
+    const toggle = await need(detailToggle(dlg), 'the "More options" disclosure');
+    if ((await toggle.innerText()).trim() !== 'More options') throw new Error(`the disclosure reads "${await toggle.innerText()}"`);
+    if ((await toggle.getAttribute('aria-expanded')) !== 'false') throw new Error('"More options" should start closed');
     await absent(dlg.locator('#edit-log-detail'), 'the per-serving fields, before the disclosure is opened');
+    await absent(dlg.getByLabel('Day', { exact: true }), 'Day before "More options" is opened');
+    await absent(dlg.getByLabel('Notes (optional)'), 'Notes before "More options" is opened');
     await need(dlg.getByRole('button', { name: /^save/i }), 'Save');
-    // Delete lives here now: the rows have no trash.
-    await need(dlg.getByRole('button', { name: 'Remove Egg' }), 'Remove');
+    // Delete lives here now (the rows have no trash), at the bottom, below the disclosure.
+    const remove = await need(dlg.getByRole('button', { name: 'Remove Egg' }), 'Remove');
+    const tb = await toggle.boundingBox();
+    const rb = await remove.boundingBox();
+    if (!tb || !rb || rb.y < tb.y + tb.height - 1) throw new Error('Remove is not below "More options"');
   }, { dialog: true }),
 
   // …with "Per serving and nutrition" open: the per-serving inputs and the
   // nutrition for the servings entered.
   pageScene('50d-edit-entry-details', () => dayOps(logDay()), async (page, h) => {
     const dlg = await openEdit(page, h, 'Egg');
-    const toggle = await need(detailToggle(dlg), 'the "Per serving and nutrition" disclosure');
+    const toggle = await need(detailToggle(dlg), 'the "More options" disclosure');
     await toggle.click();
     await h.settle(600);
-    if ((await toggle.getAttribute('aria-expanded')) !== 'true') throw new Error('"Per serving and nutrition" did not open');
-    const detail = await need(dlg.locator('#edit-log-detail'), 'the per-serving fields');
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') throw new Error('"More options" did not open');
+    const detail = await need(dlg.locator('#edit-log-detail'), 'the More options panel');
+    await need(detail.getByLabel('Day', { exact: true }), 'Day');
+    await need(detail.getByLabel('Notes (optional)'), 'Notes (optional)');
     const perServing = await need(detail.getByLabel(/^Calories \(per serving\)/), 'Calories (per serving)');
     if ((await perServing.inputValue()) !== '78') throw new Error(`per-serving calories reads "${await perServing.inputValue()}", wanted 78`);
     await need(detail.getByText(/^Nutrition for 2 servings:/), 'the "Nutrition for 2 servings" line');
@@ -314,7 +321,7 @@ const todayScenes = [
     await need(dlg.locator('[data-testid="copy-shortcut"]').filter({ hasText: /^Sarah’s dinner today/ }), 'the row "Sarah’s dinner today"');
     await (await need(dlg.locator('[data-testid="copy-something-else"]'), '"Something else"')).click();
     await h.settle(500);
-    await (await need(dlg.getByRole('combobox', { name: /whose log/i }), 'Whose log')).click();
+    await (await need(dlg.getByRole('combobox', { name: /whose meals/i }), 'Whose meals')).click();
     await (await need(page.getByRole('option', { name: 'Sarah' }), 'Sarah option')).click();
     await h.settle(300);
     await (await need(dlg.getByRole('combobox', { name: 'Which meal', exact: true }), 'Which meal')).click();
@@ -359,7 +366,7 @@ const todayScenes = [
         await h.settle(1600);
         const note = await need(page.locator('[data-testid="plan-accuracy-banner"]'), 'the plan note');
         const words = (await note.first().innerText()).replace(/\s+/g, ' ');
-        if (!/Your target can be more accurate now\./.test(words)) throw new Error(`the plan note reads "${words}"`);
+        if (!/Your details have changed since your target was set\./.test(words)) throw new Error(`the plan note reads "${words}"`);
         const update = await need(note.getByRole('link', { name: 'Update' }), 'its "Update" link');
         if (!/\/calorie-wizard\?update=1$/.test(await update.first().getAttribute('href'))) throw new Error('"Update" does not go to /calorie-wizard?update=1');
         await (await need(note.getByRole('button', { name: 'Not now' }), '"Not now"')).click();
@@ -803,7 +810,12 @@ const weightScenes = [
     await h.settle(800);
     const dlg = await need(page.getByRole('dialog'), 'weight dialog');
     await need(dlg.getByText('You already have 218.7 for today. Saving replaces it.'), 'the replace note');
-    await need(dlg.getByRole('button', { name: 'Replace', exact: true }), 'Replace');
+    // With nothing typed the footer says plain Save (disabled); a number makes it say what it will do.
+    const save = await need(dlg.getByRole('button', { name: 'Save', exact: true }), 'Save (nothing typed yet)');
+    if (!(await save.isDisabled())) throw new Error('Save is live with no weight typed');
+    await dlg.getByLabel('Weight', { exact: true }).fill('219.4');
+    await h.settle(400);
+    await need(dlg.getByRole('button', { name: 'Replace today’s weight', exact: true }), 'Replace today’s weight');
   }, { path: '/weight', viewports: ['phone'], dialog: true }),
 
   // The same dialog with the day moved to one without a weigh-in: the note goes
@@ -925,6 +937,7 @@ const firstRunScenes = [
       throw new Error(`${e.message} :: ${(await page.locator('body').innerText()).slice(0, 500).replace(/\n/g, ' | ')}`);
     }
     await absent(page.locator('[data-testid="first-run"]'), 'the first run for a person who finished it');
+    await need(page.getByRole('heading', { name: 'Eaten today' }), 'the "Eaten today" heading (no target)');
     const empties = await page.getByText('Nothing yet', { exact: true }).count();
     if (empties !== 4) throw new Error(`expected four "Nothing yet" meals, saw ${empties}`);
     await need(page.locator('[data-testid="track-meds"]'), 'Track your meds');

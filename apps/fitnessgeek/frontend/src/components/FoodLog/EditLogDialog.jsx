@@ -45,8 +45,8 @@ const SERVING_STEP = 0.25;
  * A described meal is an estimate. "1.5 servings of a bowl of chicken soup"
  * is not a question anyone can answer, so the calorie number itself is
  * editable. The dialog asks for the entry's calories as a whole first ("this
- * was about 300"); the per-serving numbers and the macros sit behind "Per
- * serving and nutrition", closed. Either way they go out as the gateway's
+ * was about 300"); the day, a note, the per-serving numbers and the macros
+ * sit behind "More options", closed. Either way they go out as the gateway's
  * per-serving overrides (CONTRACTS C3: `calories`, `protein_grams`,
  * `carbs_grams`, `fat_grams`), and only the ones that changed. The food in the
  * catalog is never touched.
@@ -158,7 +158,9 @@ const EditLogDialog = ({
       setDay(initialDay);
       setTotalCalories(String(initialTotal));
       setCalorieSource('total');
-      setDetailOpen(false);
+      // Closed, unless what it hides is something she must see: a note she
+      // wrote, or a day that is missing (Save waits for one).
+      setDetailOpen(Boolean(String(log.notes || '').trim()) || !/^\d{4}-\d{2}-\d{2}$/.test(initialDay));
     }
   }, [log]); // eslint-disable-line react-hooks/exhaustive-deps -- reset only when a different entry opens
 
@@ -281,12 +283,11 @@ const EditLogDialog = ({
       })}
     >
         <Box>
-          {/* What this is, and the two things you do to an entry rather than
-              change about it: keep it as a favorite, or take it out. They sit
-              up here, under the name, because at the bottom of the form they
-              were below the fold on a phone and nobody found the star. Undo
-              for a removal is in the toast. */}
-          {log && (food_item?.name || favoriteFoodId || onRemove) && (
+          {/* What this is, and the star: keep it as a favorite. It sits up
+              here, under the name, because at the bottom of the form it was
+              below the fold on a phone and nobody found it. Remove is the
+              last thing in the dialog (below). */}
+          {log && (food_item?.name || favoriteFoodId) && (
             <Box sx={{ mb: 5, pb: 2, borderBottom: (t) => `1px solid ${t.palette.divider}` }}>
               {food_item?.name && (
                 <Typography component="h3" sx={{ m: 0, fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' }}>
@@ -298,9 +299,8 @@ const EditLogDialog = ({
                   {displayName(food_item.brand)}
                 </Typography>
               )}
-              {(favoriteFoodId || onRemove) && (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', columnGap: 2, mt: 1, mx: -2 }}>
-                  {favoriteFoodId ? (
+              {favoriteFoodId && (
+                <Box sx={{ mt: 1, mx: -2 }}>
                     <Button
                       color="inherit"
                       data-testid="edit-log-favorite"
@@ -312,19 +312,6 @@ const EditLogDialog = ({
                     >
                       {favorite ? 'In your favorites' : 'Add to favorites'}
                     </Button>
-                  ) : <span />}
-                  {onRemove && (
-                    <Button
-                      color="error"
-                      startIcon={<RemoveIcon />}
-                      onClick={() => onRemove(log._id || log.id)}
-                      disabled={loading}
-                      aria-label={food_item?.name ? `Remove ${food_item.name}` : 'Remove'}
-                      sx={{ minHeight: 44, px: 2, fontWeight: 600 }}
-                    >
-                      Remove
-                    </Button>
-                  )}
                 </Box>
               )}
               {favorite && !favoriteError && (
@@ -391,18 +378,8 @@ const EditLogDialog = ({
             </Typography>
           </Box>
 
-          {/* Day — moves the entry. */}
-          <DateField
-            label="Day"
-            value={day}
-            onChange={setDay}
-            fullWidth
-            size="medium"
-            sx={{ mb: 4 }}
-          />
-
           {/* Meal Type */}
-          <FormControl fullWidth sx={{ mb: 4 }}>
+          <FormControl fullWidth>
             <InputLabel id="edit-log-meal-label">Meal</InputLabel>
             <Select
               labelId="edit-log-meal-label"
@@ -418,19 +395,9 @@ const EditLogDialog = ({
             </Select>
           </FormControl>
 
-          {/* Notes */}
-          <TextField
-            fullWidth
-            label="Notes (optional)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            multiline
-            minRows={1}
-            maxRows={4}
-            placeholder="Anything to remember about this food…"
-          />
-
-          {/* Per serving and nutrition — everything the total hides, closed. */}
+          {/* More options — the day, a note, and the per-serving numbers the
+              total hides. One disclosure, closed, so the dialog opens on what
+              she came for: how many calories, how much, which meal. */}
           <Button
             onClick={() => setDetailOpen((o) => !o)}
             aria-expanded={detailOpen}
@@ -438,10 +405,33 @@ const EditLogDialog = ({
             endIcon={<ExpandIcon sx={{ transform: detailOpen ? 'rotate(180deg)' : 'none', transition: 'transform 150ms' }} />}
             sx={{ mt: 2, minHeight: 44, px: 0, fontWeight: 700, justifyContent: 'flex-start' }}
           >
-            Per serving and nutrition
+            More options
           </Button>
           <Collapse in={detailOpen} unmountOnExit>
             <Box id="edit-log-detail" sx={{ mt: 3 }}>
+              {/* Day — moves the entry. */}
+              <DateField
+                label="Day"
+                value={day}
+                onChange={setDay}
+                fullWidth
+                size="medium"
+                sx={{ mb: 4 }}
+              />
+
+              {/* Notes */}
+              <TextField
+                fullWidth
+                label="Notes (optional)"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                multiline
+                minRows={1}
+                maxRows={4}
+                placeholder="Anything to remember about this food…"
+                sx={{ mb: 4 }}
+              />
+
               {/* These fields hold PER-SERVING numbers — the same object the
                   "Nutrition for N servings" preview below multiplies by
                   `servings`. Plain "Calories" here would read as the total
@@ -481,6 +471,24 @@ const EditLogDialog = ({
               </Box>
             </Box>
           </Collapse>
+
+          {/* Remove: the last thing in the dialog, quiet and to the left,
+              where a thumb heading for Save does not pass over it. Undo for
+              a removal is in the page's toast. */}
+          {log && onRemove && (
+            <Box sx={{ mt: 2, mx: -2 }}>
+              <Button
+                color="error"
+                startIcon={<RemoveIcon />}
+                onClick={() => onRemove(log._id || log.id)}
+                disabled={loading}
+                aria-label={food_item?.name ? `Remove ${food_item.name}` : 'Remove'}
+                sx={{ minHeight: 44, px: 2, fontWeight: 600 }}
+              >
+                Remove
+              </Button>
+            </Box>
+          )}
         </Box>
     </PremiumDialog>
   );

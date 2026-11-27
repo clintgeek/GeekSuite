@@ -263,7 +263,7 @@ describe('reading a barcode from the camera', () => {
 
     setup({ onClose });
 
-    expect(await screen.findByText(/That barcode isn’t in the food databases/)).toBeInTheDocument();
+    expect(await screen.findByText(/I couldn’t find that barcode\. Try typing the food instead\./)).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
     // The camera was let go for the lookup; one tap brings it back.
     expect(liveStreams()).toHaveLength(0);
@@ -364,17 +364,36 @@ describe('the camera stream', () => {
     expect(liveStreams()).toHaveLength(0);
   });
 
-  test('stops the camera when the tab changes to typing', async () => {
+  test('opens on the camera alone: no tabs, the other two ways in one quiet line', async () => {
+    installCamera();
+    installNativeDetector();
+    setup();
+    await scanning();
+
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByRole('tab')).toBeNull();
+    const line = screen.getByTestId('scanner-other-ways');
+    expect(line).toHaveTextContent('Can’t scan? Take a photo·Type the number');
+    expect(screen.queryByPlaceholderText('8–14 digits')).toBeNull();
+  });
+
+  test('"Type the number" stops the camera, and "Use the camera" takes it back', async () => {
     installCamera();
     installNativeDetector();
     const user = userEvent.setup();
     setup();
     await scanning();
 
-    await user.click(screen.getByRole('tab', { name: /type it/i }));
+    await user.click(screen.getByRole('button', { name: 'Type the number' }));
 
     expect(liveStreams()).toHaveLength(0);
     expect(await screen.findByPlaceholderText('8–14 digits')).toBeInTheDocument();
+    // The photo route is still here, and so is the way back.
+    expect(screen.getByRole('button', { name: 'Take a photo' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Use the camera' }));
+    await scanning();
+    expect(liveStreams()).toHaveLength(1);
   });
 
   test('lets the camera go when the app is hidden and takes it back when shown', async () => {
@@ -418,7 +437,7 @@ describe('the camera stream', () => {
     setup();
 
     expect(
-      await screen.findByText('FitnessGeek needs your camera to scan. Allow it in your browser settings, or type the barcode.')
+      await screen.findByText('Allow the camera for FitnessGeek in your phone’s settings, or type the number.')
     ).toBeInTheDocument();
     expect(screen.getByPlaceholderText('8–14 digits')).toBeInTheDocument();
   });
@@ -484,7 +503,7 @@ describe('take a photo instead', () => {
     expect(input).toHaveAttribute('capture', 'environment');
 
     const click = vi.spyOn(input, 'click').mockImplementation(() => {});
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Take a photo instead' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Take a photo' }));
 
     expect(click).toHaveBeenCalled();
     // The live camera is let go first: the phone's camera app needs the lens.
@@ -525,7 +544,7 @@ describe('take a photo instead', () => {
     expect(fitnessGeekService.getFoodByBarcode).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     // Still here to try again.
-    expect(screen.getByRole('button', { name: 'Take a photo instead' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Take a photo' })).toBeEnabled();
   });
 
   test('treats a photo read with a bad check digit as unreadable, not as a product', async () => {
@@ -555,7 +574,7 @@ describe('take a photo instead', () => {
   });
 
   test('works with no camera permission at all, from the typing tab', async () => {
-    // No navigator.mediaDevices: the scanner is on "Type it".
+    // No navigator.mediaDevices: the scanner is on the number box.
     decodePhoto.mockResolvedValue([{ rawValue: UPC_A, format: 'UPCA' }]);
     fitnessGeekService.getFoodByBarcode.mockResolvedValue(FOOD);
     setup();

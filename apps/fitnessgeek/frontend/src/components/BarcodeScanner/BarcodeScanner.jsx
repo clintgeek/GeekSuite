@@ -7,17 +7,14 @@ import {
   Chip,
   CircularProgress,
   Alert,
-  Tabs,
-  Tab,
+  Link,
   ToggleButton,
   ToggleButtonGroup
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
-  Keyboard as KeyboardIcon,
   CheckCircle as CheckCircleIcon,
   CameraAlt as CameraIcon,
-  PhotoCamera as PhotoIcon,
   FlashlightOn as TorchOnIcon,
   FlashlightOff as TorchOffIcon
 } from '@mui/icons-material';
@@ -40,7 +37,7 @@ const readScanHistory = () => {
 };
 
 const CAMERA_UNAVAILABLE = 'FitnessGeek can’t use the camera here. Type the barcode instead.';
-const CAMERA_BLOCKED = 'FitnessGeek needs your camera to scan. Allow it in your browser settings, or type the barcode.';
+const CAMERA_BLOCKED = 'Allow the camera for FitnessGeek in your phone’s settings, or type the number.';
 const SCANNER_NOT_LOADED = 'The scanner didn’t load. Check your signal and try again, or type the barcode.';
 const PHOTO_UNREADABLE = 'I couldn’t read a barcode in that photo. Try again a little further away, or type the number.';
 
@@ -167,7 +164,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
     try {
       const food = await fitnessGeekService.getFoodByBarcode(barcode);
       if (!food) {
-        setError('That barcode isn’t in the food databases. Try typing the food instead.');
+        setError('I couldn’t find that barcode. Try typing the food instead.');
         return;
       }
 
@@ -342,7 +339,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
     if (hasCameraApi()) setMode('camera');
   }, [open]);
 
-  // The camera runs only while the dialog is open on the camera tab, and is
+  // The camera runs only while the dialog is open on the camera view, and is
   // let go the moment either stops being true (and on unmount).
   useEffect(() => {
     if (open && mode === 'camera') startScanner();
@@ -441,30 +438,55 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
     onClose();
   };
 
-  const handleModeChange = (event, newMode) => {
-    if (newMode !== null) {
-      stopScanner();
-      setMode(newMode);
-      setError(null);
-      setCameraError(null);
-    }
+  const changeMode = (newMode) => {
+    stopScanner();
+    setMode(newMode);
+    setError(null);
+    setCameraError(null);
   };
 
   const busy = isLoading || readingPhoto;
   const got = phase === 'got';
 
-  const photoButton = (
-    <Button
-      variant="outlined"
-      fullWidth
-      onClick={openPhotoCamera}
-      disabled={busy}
-      startIcon={readingPhoto ? <CircularProgress size={18} /> : <PhotoIcon />}
-      sx={{ minHeight: TAP }}
+  // ONE THING ON THE FIRST VIEW (review 2026-11-27, round three). It opened
+  // on "Camera" and "Type it" tabs AND a wide outlined "Take a photo instead":
+  // three ways in before she had tried the first. The camera is the view; the
+  // other two are a quiet line of links under the help text, each still a
+  // thumb tall.
+  const quietLink = {
+    minHeight: TAP,
+    display: 'inline-flex',
+    alignItems: 'center',
+    fontSize: '0.9375rem',
+    fontWeight: 700,
+    verticalAlign: 'middle',
+  };
+  const otherWays = (lead, ways) => (
+    <Typography
+      component="div"
+      data-testid="scanner-other-ways"
+      sx={{ mt: 1, color: 'text.secondary', fontSize: '0.9375rem', textAlign: 'center', maxWidth: 480, mx: 'auto' }}
     >
-      {readingPhoto ? 'Reading the photo…' : 'Take a photo instead'}
-    </Button>
+      {readingPhoto ? (
+        <Box role="status" sx={{ minHeight: TAP, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+          <CircularProgress size={18} /> Reading the photo…
+        </Box>
+      ) : (
+        <>
+          {lead}{' '}
+          {ways.map((way, i) => (
+            <React.Fragment key={way.label}>
+              {i > 0 && <Box component="span" aria-hidden sx={{ mx: 1.5 }}>·</Box>}
+              <Link component="button" type="button" underline="hover" disabled={busy} onClick={way.onClick} sx={quietLink}>
+                {way.label}
+              </Link>
+            </React.Fragment>
+          ))}
+        </>
+      )}
+    </Typography>
   );
+  const photoWay = { label: 'Take a photo', onClick: openPhotoCamera };
 
   const renderCameraScanner = () => (
     <Box sx={{ p: 4 }}>
@@ -602,7 +624,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
         </Box>
       )}
 
-      <Box sx={{ mt: 3, maxWidth: 480, mx: 'auto' }}>{photoButton}</Box>
+      {otherWays('Can’t scan?', [photoWay, { label: 'Type the number', onClick: () => changeMode('manual') }])}
     </Box>
   );
 
@@ -634,7 +656,10 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
         {isLoading ? 'Looking up…' : 'Look up barcode'}
       </Button>
 
-      <Box sx={{ mt: 3 }}>{photoButton}</Box>
+      {otherWays('Or', [
+        ...(hasCameraApi() ? [{ label: 'Use the camera', onClick: () => changeMode('camera') }] : []),
+        photoWay,
+      ])}
 
       {scanHistory.length > 0 && (
         <Box sx={{ mt: 6 }}>
@@ -664,25 +689,6 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
       contentSx={{ px: 0, py: 0 }}
       secondaryAction={<Button onClick={handleClose}>Cancel</Button>}
     >
-        {/* Mode selector tabs */}
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 4 }}>
-          <Tabs value={mode} onChange={handleModeChange} variant="fullWidth">
-            <Tab
-              value="camera"
-              label="Camera"
-              icon={<CameraIcon />}
-              iconPosition="start"
-              disabled={!hasCameraApi()}
-            />
-            <Tab
-              value="manual"
-              label="Type it"
-              icon={<KeyboardIcon />}
-              iconPosition="start"
-            />
-          </Tabs>
-        </Box>
-
         {cameraError && (
           <Alert severity="warning" sx={{ m: 4, mb: 0 }}>{cameraError}</Alert>
         )}

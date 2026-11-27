@@ -1,22 +1,26 @@
 import React, { useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
-import { isPlanCalculationStale } from '@geeksuite/utils';
+import { isPlanCalculationStale, tdeeFromBMR } from '@geeksuite/utils';
+import { MEASURED_ACTIVITY, RATE_OPTIONS, minSafeCalories, planTarget } from '../FitnessGoals/planMath.js';
+import { fmt } from '../../utils/plainWords.js';
 
 /**
- * Home's one line about the calorie target (DOCS/FITNESSGEEK_BODY_DATA_PLAN.md
+ * Home's note about the calorie target (DOCS/FITNESSGEEK_BODY_DATA_PLAN.md
  * D2). The plan is never rewritten for the person: a change to what they eat
- * is theirs to make. So this is ONE calm note, "Your target can be more
- * accurate now.", with one action, "Update", that opens the calorie plan with
- * the new target already worked out beside the old one and a single Save.
+ * is theirs to make. So this is ONE calm note that says what would change,
+ * with "Update" (opens the calorie plan with the new target already worked
+ * out, one Save) and "Not now".
  *
- * Why it can be more accurate is not said here; the plan page keeps the facts
- * under "How this was worked out". There are two reasons, in precedence order
- * (`data-kind`, for tests and the harness; the words are the same):
+ * Two reasons, in precedence order (`data-kind`):
  *
- *   'stale' — the plan was worked out by an older calculation.
+ *   'stale' — the plan was worked out by an older calculation. The new
+ *             number isn't known without recalculating, so it says only
+ *             "Your details have changed since your target was set."
  *   'scan'  — a measured figure from body scans exists and the plan doesn't
- *             use it.
+ *             use it. The new target is estimated from what the plan itself
+ *             stores (`scanTargetEstimate`), rounded to the nearest 10 and
+ *             said as "about": the calorie plan page works out the real one.
  *
  * "Not now" puts it away on this device for 30 days. It never shows while the
  * day couldn't be loaded (`suppress`): a card that says "Can't reach
@@ -61,17 +65,50 @@ function writeDismissed(now = Date.now()) {
   }
 }
 
-const linkSx = {
-  minHeight: 44,
-  minWidth: 0,
-  px: 0.5,
-  py: 0,
-  fontSize: 'inherit',
-  fontWeight: 700,
-  textTransform: 'none',
-  verticalAlign: 'baseline',
-  '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
-};
+/**
+ * About what the target becomes once the plan uses the body scans' figure,
+ * from what the plan already stores: the same activity, the same speed, the
+ * plan page's own floor and target arithmetic (planMath.js). Rounded to the
+ * nearest 10 because it is an estimate; null when the plan doesn't hold
+ * enough to say, or when it would come out the same.
+ */
+export function scanTargetEstimate(nutritionGoal, scanBmr) {
+  const ng = nutritionGoal || {};
+  const scan = Number(scanBmr?.bmr);
+  const current = Number(ng.daily_calorie_target);
+  const rate = Number(ng.weight_change_rate);
+  if (!(scan > 0) || !(current > 0) || !Number.isFinite(rate) || rate < 0 || ng.weight_change_rate == null) return null;
+  let tdee;
+  if (ng.activity_level === MEASURED_ACTIVITY) {
+    const stored = Number(ng.calc_inputs?.active_kcal);
+    const active = Number.isFinite(stored) && stored >= 0 ? stored : Number(ng.tdee) - Number(ng.bmr);
+    if (!Number.isFinite(active) || active < 0) return null;
+    tdee = Math.round(scan + active);
+  } else if (ng.activity_level) {
+    tdee = tdeeFromBMR(scan, ng.activity_level);
+  } else {
+    return null;
+  }
+  // A saved rate the safety floor slowed down goes back to the speed that
+  // was asked for, as the plan page does.
+  const requested = rate > 0 ? (RATE_OPTIONS.find((o) => o >= rate) ?? RATE_OPTIONS[RATE_OPTIONS.length - 1]) : 0;
+  const { dailyCalories } = planTarget({ tdee, requestedRate: requested, minSafe: minSafeCalories(scan) });
+  const about = Math.round(dailyCalories / 10) * 10;
+  if (!(about > 0) || about === Math.round(current / 10) * 10) return null;
+  return about;
+}
+
+/** The one line: what would change, with the numbers when they are known. */
+export function planNoteWords(kind, nutritionGoal, scanBmr) {
+  if (kind === 'stale') return 'Your details have changed since your target was set.';
+  const about = scanTargetEstimate(nutritionGoal, scanBmr);
+  return about
+    ? `Your body scans suggest a target of about ${fmt(about)} calories.`
+    : 'Your body scans can make your target more accurate.';
+}
+
+// Small buttons, full 44px tap height.
+const actionSx = { minHeight: 44, px: 4, fontWeight: 700, textTransform: 'none' };
 
 export default function PlanAccuracyBanner({ nutritionGoal, scanBmr, suppress = false, sx }) {
   const kind = planBannerKind(nutritionGoal, scanBmr);
@@ -85,31 +122,36 @@ export default function PlanAccuracyBanner({ nutritionGoal, scanBmr, suppress = 
       data-testid="plan-accuracy-banner"
       data-kind={kind}
       sx={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        columnGap: 0.5,
-        fontSize: '0.875rem',
+        fontSize: '0.9375rem',
         lineHeight: 1.4,
         color: 'text.secondary',
         ...sx,
+        // Its own layout, whatever the caller's sx says about padding: 16px
+        // at the sides, 12px above and below (the spacing unit is 4px).
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: 2,
+        px: 4,
+        py: 3,
       }}
     >
-      <Typography component="span" sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'inherit' }}>
-        Your target can be more accurate now.
+      <Typography data-testid="plan-note-words" sx={{ fontSize: 'inherit', lineHeight: 'inherit', color: 'inherit', fontVariantNumeric: 'tabular-nums' }}>
+        {planNoteWords(kind, nutritionGoal, scanBmr)}
       </Typography>
-      <Box component="span" sx={{ display: 'inline-flex', gap: 1 }}>
-        <Button component={RouterLink} to={UPDATE_ROUTE} variant="text" sx={linkSx}>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        <Button component={RouterLink} to={UPDATE_ROUTE} variant="tonal" size="small" sx={actionSx}>
           Update
         </Button>
         {/* Put off with a word, never an unlabelled ✕. */}
         <Button
           variant="text"
+          size="small"
           onClick={() => {
             writeDismissed();
             setDismissed(true);
           }}
-          sx={{ ...linkSx, color: 'text.secondary' }}
+          sx={{ ...actionSx, color: 'text.secondary' }}
         >
           Not now
         </Button>

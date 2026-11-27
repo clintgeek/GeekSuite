@@ -1,11 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Button, IconButton, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
-import {
-  DeleteOutline as DeleteIcon,
-  EditOutlined as EditIcon,
-  MonitorWeight as WeightIcon,
-} from '@mui/icons-material';
+import { Box, Button, ButtonBase, Typography } from '@mui/material';
+import { MonitorWeight as WeightIcon } from '@mui/icons-material';
 import { localDateString, utcDateString } from '@geeksuite/utils';
 import { nearDay } from '../../utils/dates.js';
 import { LabelPanel, ListRow, Tag, EmptyState } from '../primitives';
@@ -28,6 +23,13 @@ export const INITIAL_ROWS = 10;
  * (round-two review). Whichever way most of her weigh-ins arrive is the
  * usual one and goes unmarked; the odd one out says "Scale" or "Typed in".
  * The edit dialog still says where a scale row came from.
+ *
+ * THE ROW IS THE BUTTON (review, round three). Each row carried a pencil and
+ * a bin, twenty icons on a screen of ten weights. Now the whole row is one
+ * button, named "Edit the 218.7 lb weigh-in from Today" for a screen reader
+ * and reachable by Tab, Enter and Space; it opens the edit dialog, and Delete
+ * is in there. Deleting still goes through the page's `onDelete`, so its
+ * "Removed … · Undo" toast is the same.
  */
 const isScale = (log) => log?.source === 'arboleaf_xlsx';
 
@@ -39,6 +41,8 @@ export function usualSource(logs) {
 }
 
 const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
+  // A list nobody can change (neither callback) is plain rows.
+  const canOpen = Boolean(onUpdate || onDelete);
   // The row being edited outlives the dialog's open flag, so the dialog's
   // closing transition still has its date and value to show.
   const [editing, setEditing] = useState(null);
@@ -85,6 +89,11 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
         </Typography>
       }
     >
+      {canOpen && (
+        <Typography data-testid="weight-log-hint" sx={{ color: 'text.secondary', fontSize: '0.8125rem', mb: 1 }}>
+          Tap a weigh-in to change or delete it.
+        </Typography>
+      )}
       <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
         {visible.map((log, index) => {
           const n = parseFloat(log?.weight_value);
@@ -102,15 +111,36 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
               key={log.id}
               first={index === 0}
               data-testid="weight-log-row"
-              sx={{ gap: 1, py: 1.5 }}
+              sx={{ display: 'block', py: 0 }}
             >
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography component="span" sx={{ fontWeight: 700, fontSize: '1.0625rem', fontVariantNumeric: 'tabular-nums' }}>
+              <Box
+                {...(canOpen ? {
+                  component: ButtonBase,
+                  onClick: () => { setEditing(log); setEditOpen(true); },
+                  'aria-label': `Edit the ${weight} ${u} weigh-in from ${when}`,
+                  'aria-haspopup': 'dialog',
+                } : {})}
+                sx={{
+                  display: 'block',
+                  width: '100%',
+                  minHeight: 56,
+                  py: 2,
+                  textAlign: 'left',
+                  font: 'inherit',
+                  color: 'inherit',
+                  borderRadius: 2,
+                  ...(canOpen ? {
+                    '@media (hover: hover)': { '&:hover': { bgcolor: 'action.hover' } },
+                    '&.Mui-focusVisible': { outline: (t) => `2px solid ${t.palette.primary.main}`, outlineOffset: 2 },
+                  } : {}),
+                }}
+              >
+                <Typography component="span" sx={{ display: 'block', fontWeight: 700, fontSize: '1.0625rem', fontVariantNumeric: 'tabular-nums' }}>
                   {weight}
                   <Box component="span" sx={{ fontSize: '0.875rem', fontWeight: 500, color: 'text.secondary' }}> {u}</Box>
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25, flexWrap: 'wrap' }}>
-                  <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>{when}</Typography>
+                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25, flexWrap: 'wrap' }}>
+                  <Typography component="span" sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>{when}</Typography>
                   {oddSource && (
                     <Box component="span" title={oddSource.title} data-testid="weight-source" sx={{ display: 'inline-flex' }}>
                       <Tag>{oddSource.label}</Tag>
@@ -119,34 +149,13 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
                 </Box>
                 {log.notes && (
                   <Typography
-                    sx={{ color: 'text.secondary', fontSize: '0.8125rem', mt: 0.25, overflowWrap: 'anywhere' }}
+                    component="span"
+                    sx={{ display: 'block', color: 'text.secondary', fontSize: '0.8125rem', mt: 0.25, overflowWrap: 'anywhere' }}
                   >
                     {log.notes}
                   </Typography>
                 )}
               </Box>
-              {onUpdate && (
-                <IconButton
-                  onClick={() => { setEditing(log); setEditOpen(true); }}
-                  aria-label={`Edit the ${weight} ${u} weigh-in from ${when}`}
-                  sx={{ width: 44, height: 44, color: 'text.secondary' }}
-                >
-                  <EditIcon fontSize="small" />
-                </IconButton>
-              )}
-              <IconButton
-                onClick={() => onDelete(log.id)}
-                aria-label={`Remove the ${weight} ${u} weigh-in from ${when}`}
-                // Quiet at rest; the error colour only under the thumb (B7).
-                sx={{
-                  width: 44,
-                  height: 44,
-                  color: 'text.secondary',
-                  '&:hover, &:active': { color: 'error.main', bgcolor: (t) => alpha(t.palette.error.main, 0.08) },
-                }}
-              >
-                <DeleteIcon fontSize="small" />
-              </IconButton>
             </ListRow>
           );
         })}
@@ -160,13 +169,14 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
         </Box>
       )}
 
-      {onUpdate && (
+      {canOpen && (
         <EditWeightDialog
           open={editOpen}
           log={editing}
           unit={unit}
           onClose={() => setEditOpen(false)}
           onSave={onUpdate}
+          onDelete={onDelete}
         />
       )}
     </LabelPanel>

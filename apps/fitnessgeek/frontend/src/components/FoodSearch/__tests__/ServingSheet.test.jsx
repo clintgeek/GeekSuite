@@ -12,7 +12,7 @@ describe('ServingSheet in US units', () => {
   it('logs a weighed food by the ounce', () => {
     const onConfirm = vi.fn();
     render(<ServingSheet open food={chicken} onClose={() => {}} onConfirm={onConfirm} />);
-    expect(screen.getByText('1 serving = 3.5 oz')).toBeInTheDocument();
+    expect(screen.getByText('1 serving is about 3.5 oz')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'oz' }));
     const amount = screen.getByLabelText('oz');
@@ -98,5 +98,27 @@ describe('the back gesture', () => {
     // …and back, landing on a state without it, closes it.
     window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Review 2026-11-27, round three: "Change Egg" over "1 serving = 1.8 oz" read
+// like a settings screen. The sheet asks its question in words.
+describe('ServingSheet asks "How much?"', () => {
+  const egg = { name: 'Egg', serving: { size: 50, unit: 'g' }, nutrition: { calories_per_serving: 72 } };
+
+  it('adding: "How much Egg?", the hint in a sentence, and Log it', () => {
+    render(<ServingSheet open food={egg} onClose={() => {}} onConfirm={() => {}} />);
+    expect(screen.getByText('How much Egg?')).toBeInTheDocument();
+    expect(screen.getByText('1 serving is about 1.8 oz')).toBeInTheDocument();
+    expect(screen.queryByText(/1 serving =/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Log it' })).toBeInTheDocument();
+  });
+
+  it('changing one already added: the same question, opened on what was logged, with Save', () => {
+    render(<ServingSheet open food={egg} editing={{ servings: 2 }} onClose={() => {}} onConfirm={() => {}} />);
+    expect(screen.getByText('How much Egg?')).toBeInTheDocument();
+    expect(screen.queryByText(/^Change /)).toBeNull();
+    expect(screen.getByLabelText('Servings')).toHaveValue('2');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 });

@@ -49,7 +49,7 @@ describe('BarcodeScanner (camera-less environment)', () => {
       screen.getByText('FitnessGeek can’t use the camera here. Type the barcode instead.')
     ).toBeInTheDocument();
     // The photo route needs no camera permission, so it is still offered.
-    expect(screen.getByRole('button', { name: 'Take a photo instead' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Take a photo' })).toBeInTheDocument();
   });
 
   test('rejects a barcode that fails the 8-14 digit format before calling the lookup service', async () => {
@@ -100,7 +100,7 @@ describe('BarcodeScanner (camera-less environment)', () => {
     await user.click(await screen.findByRole('button', { name: /look up barcode/i }));
 
     expect(
-      await screen.findByText(/That barcode isn’t in the food databases/)
+      await screen.findByText(/I couldn’t find that barcode\. Try typing the food instead\./)
     ).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });

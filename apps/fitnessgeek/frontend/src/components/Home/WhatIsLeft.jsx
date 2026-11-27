@@ -57,7 +57,7 @@ export default function WhatIsLeft({
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 3, minHeight: 44, mb: 2 }}>
         <Typography id="home-nutrition" component="h2" sx={{ fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.01em' }}>
-          {leftTitle(day, today)}
+          {leftTitle(day, today, hasGoal)}
         </Typography>
         {hasGoal && (
           <ButtonBase
@@ -99,7 +99,8 @@ export default function WhatIsLeft({
           <Box sx={{ minWidth: 0 }}>
             {/* With a target and room left, the title and the sentence already
                 say "left today"; the caption is only for the other cases. */}
-            {(!hasGoal || overBy > 0) && (
+            {/* With no target the title already says "Eaten today". */}
+            {((!hasGoal && day && today && day !== today) || overBy > 0) && (
               <Typography sx={{ mb: 0.5, fontSize: '0.875rem', fontWeight: 500, color: 'text.secondary' }}>
                 {ringCaption({ hasGoal, over: overBy > 0, day, today })}
               </Typography>
@@ -132,7 +133,7 @@ export default function WhatIsLeft({
             )}
             sx={{ minHeight: 44, px: 2, justifyContent: 'space-between', color: 'text.primary', fontSize: '0.9375rem', fontWeight: 600, textTransform: 'none' }}
           >
-            Macros and details
+            Protein, carbs and fat
           </Button>
           <Collapse in={open} unmountOnExit>
             <Box id="today-details" data-testid="today-details" sx={{ px: 2, pt: 3, pb: 1 }}>

@@ -231,7 +231,10 @@ describe('CalorieGoalWizard — a plan pinned at the safety floor (2026-09-23)',
   it('says why every day is the same, and what rate would make room for weekends', async () => {
     setup({ nutrition_goal: CHEF_FLOORED_PLAN });
     await screen.findByTestId('plan-summary');
-    expect(screen.getByTestId('plan-floor-note').textContent).toBe(
+    // Behind "How this was worked out" now (round three).
+    expect(screen.queryByTestId('plan-floor-note')).toBeNull();
+    fireEvent.click(screen.getByTestId('plan-working-toggle'));
+    expect((await screen.findByTestId('plan-floor-note')).textContent).toBe(
       'Your target is at the safety floor (1,691 cal, 80% of your calories at rest), so this plan loses about 1.7 lb a week, not 2. The timeline uses 1.7.',
     );
     expect(screen.getByTestId('plan-weekender-note').textContent).toBe(
@@ -247,6 +250,8 @@ describe('CalorieGoalWizard — a plan pinned at the safety floor (2026-09-23)',
       },
     });
     await screen.findByTestId('plan-summary');
+    fireEvent.click(screen.getByTestId('plan-working-toggle'));
+    await screen.findByTestId('plan-week');
     expect(screen.queryByTestId('plan-floor-note')).toBeNull();
     expect(screen.queryByTestId('plan-weekender-note')).toBeNull();
   });
@@ -299,11 +304,11 @@ describe('CalorieGoalWizard — measured activity (TRENDS_PLAN D4)', () => {
 describe('CalorieGoalWizard — result numbers (D-12)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('"Your daily target is 2,600 calories", one unit with commas, and the deficit in plain ink', async () => {
+  it('"Your daily target: 2,600 calories", one unit with commas, and the deficit in plain ink', async () => {
     setup({ summary: STALE_SCAN_SUMMARY });
     await runToPlan();
-    const heading = screen.getByText(/^Your daily target is [\d,]+ calories$/);
-    expect(heading.textContent).toMatch(/\d,\d{3} calories$/);
+    const heading = screen.getByTestId('plan-headline');
+    expect(heading.textContent).toMatch(/^Your daily target: \d,\d{3} calories$/);
     expect(screen.queryByText(/Daily Target:/)).toBeNull();
     expect(document.body.textContent).not.toMatch(/kcal|calories\/day/);
     const deficit = screen.getByText(/^500 cal a day$/);

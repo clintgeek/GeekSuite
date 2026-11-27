@@ -60,25 +60,25 @@ export const SPEECH_STUB = () => {
 };
 
 /**
- * Open the "Macros and details" disclosure in Today's "what is left" card.
+ * Open the "Protein, carbs and fat" disclosure in Today's "what is left" card.
  * It is closed by default and remembers its state per device (localStorage,
  * one context per viewport), so a scene reads aria-expanded and clicks only
  * when it has to, and the remembered choice is dropped again so no later
  * scene inherits it. `open: false` closes it.
  */
 export async function setDetails(page, h, open = true) {
-  const toggle = await must(page.locator('[data-testid="macros-details-toggle"]'), 'the "Macros and details" disclosure');
+  const toggle = await must(page.locator('[data-testid="macros-details-toggle"]'), 'the "Protein, carbs and fat" disclosure');
   if ((await toggle.getAttribute('aria-expanded')) !== String(open)) {
     await toggle.click();
     await h.settle(500);
   }
-  if ((await toggle.getAttribute('aria-expanded')) !== String(open)) throw new Error(`"Macros and details" did not ${open ? 'open' : 'close'}`);
+  if ((await toggle.getAttribute('aria-expanded')) !== String(open)) throw new Error(`"Protein, carbs and fat" did not ${open ? 'open' : 'close'}`);
   // The page has read its choice already (on mount), so forgetting it here
   // leaves this scene as it is and starts the next one from the default.
   await page.evaluate(() => { try { localStorage.removeItem('fg.today.details.v1'); } catch { /* blocked */ } });
   const body = page.locator('[data-testid="today-details"]');
-  if (open) await must(body, 'the details behind "Macros and details"');
-  else if (await body.count()) throw new Error('"Macros and details" is closed but its contents are still drawn');
+  if (open) await must(body, 'the details behind "Protein, carbs and fat"');
+  else if (await body.count()) throw new Error('"Protein, carbs and fat" is closed but its contents are still drawn');
   return toggle;
 }
 

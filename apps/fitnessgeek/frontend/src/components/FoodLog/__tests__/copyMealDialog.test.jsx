@@ -6,7 +6,7 @@
  * top-right corner, an ISO-date summary, an unlabelled "From" select that
  * rendered blank, and no undo. These pin the fix:
  *   - nothing copies until a source meal is chosen; "Whole day" is explicit;
- *   - "Whose log" is labelled and reads "Mine" by default;
+ *   - "Whose meals" is labelled and reads "Mine" by default;
  *   - the summary is one sentence, with the person, the days and a count;
  *   - Copy is at the bottom on a phone;
  *   - a copy ends with the standard toast, and its Undo deletes what was added.
@@ -121,16 +121,16 @@ describe('Copy a meal — no copy without a chosen meal', () => {
 });
 
 describe('Copy a meal — whose log, in words', () => {
-  it('labels the From select "Whose log", showing "Mine" by default', async () => {
+  it('labels the From select "Whose meals", showing "Mine" by default', async () => {
     renderDialog();
-    const whose = await screen.findByRole('combobox', { name: 'Whose log' });
+    const whose = await screen.findByRole('combobox', { name: 'Whose meals' });
     expect(whose).toHaveTextContent('Mine');
   });
 
   it('writes the copy as a sentence: person, meal, days and how many foods', async () => {
     renderDialog();
-    await screen.findByRole('combobox', { name: 'Whose log' });
-    await choose('Whose log', 'Chef');
+    await screen.findByRole('combobox', { name: 'Whose meals' });
+    await choose('Whose meals', 'Chef');
     await choose('Which meal', 'Dinner');
     await waitFor(() => expect(screen.getByTestId('copy-summary'))
       .toHaveTextContent('Copy Chef’s dinner from Thursday into today’s dinner (3 foods)'));
@@ -143,8 +143,8 @@ describe('Copy a meal — Copy, then Undo', () => {
     const onCopyComplete = vi.fn();
     const onClose = vi.fn();
     renderDialog({ onCopyComplete, onClose });
-    await screen.findByRole('combobox', { name: 'Whose log' });
-    await choose('Whose log', 'Chef');
+    await screen.findByRole('combobox', { name: 'Whose meals' });
+    await choose('Whose meals', 'Chef');
     await choose('Which meal', 'Dinner');
     await screen.findByText(/\(3 foods\)/);
 

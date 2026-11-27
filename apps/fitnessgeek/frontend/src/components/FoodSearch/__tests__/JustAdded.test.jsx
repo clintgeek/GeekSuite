@@ -52,7 +52,7 @@ describe('the "Just added" strip', () => {
     renderHome();
     await act(async () => { api.show(ENTRY); });
     const strip = within(screen.getByTestId('meal-card-lunch')).getByTestId('just-added');
-    expect(within(strip).getAllByTestId('entry-row').map((r) => r.textContent)).toEqual(['Chicken soup220 calFix', 'Crackers130 calFix']);
+    expect(within(strip).getAllByTestId('entry-row').map((r) => r.textContent)).toEqual(['Chicken soup220 calChange', 'Crackers130 calChange']);
     expect(within(screen.getByTestId('meal-card-dinner')).queryByTestId('just-added')).toBeNull();
   });
 
@@ -85,7 +85,7 @@ describe('the "Just added" strip', () => {
   it('Fix opens the one small sheet, and a new number shows on the strip', async () => {
     renderHome();
     await act(async () => { api.show(ENTRY); });
-    fireEvent.click(screen.getByRole('button', { name: 'Fix Chicken soup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Change Chicken soup' }));
     const sheet = await screen.findByTestId('fix-sheet');
     fireEvent.change(within(sheet).getByLabelText('Calories'), { target: { value: '300' } });
     fireEvent.click(within(sheet).getByRole('button', { name: 'Save 300 cal' }));
@@ -98,7 +98,7 @@ describe('the "Just added" strip', () => {
     await act(async () => { api.show(ENTRY); });
     await act(async () => { api.forget('soup'); });
     const strip = within(screen.getByTestId('meal-card-lunch')).getByTestId('just-added');
-    expect(within(strip).getAllByTestId('entry-row').map((r) => r.textContent)).toEqual(['Crackers130 calFix']);
+    expect(within(strip).getAllByTestId('entry-row').map((r) => r.textContent)).toEqual(['Crackers130 calChange']);
     await act(async () => { api.forget('crk'); });
     expect(screen.queryByTestId('just-added')).toBeNull();
   });

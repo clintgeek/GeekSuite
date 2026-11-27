@@ -371,8 +371,6 @@ const Today = () => {
           suppress={Boolean(loadProblem)}
           sx={{
             mt: 4,
-            px: 3,
-            py: 1,
             borderRadius: '12px',
             // A calm note, not a warning.
             bgcolor: 'action.hover',
@@ -387,7 +385,7 @@ const Today = () => {
         totals={known.summary ? { calories: eaten, netCarbs: data.netCarbs, ...data.macros } : null}
         planMode={plan.planMode}
         netCarbLimit={plan.netCarbLimit}
-        proteinNote={dayData.proteinBasis === 'lean_mass' ? 'from lean mass' : null}
+        proteinNote={dayData.proteinBasis === 'lean_mass' ? 'from your body scans' : null}
         missingFiber={missingFiber}
         goal={goal}
         allowance={dayData.allowance}

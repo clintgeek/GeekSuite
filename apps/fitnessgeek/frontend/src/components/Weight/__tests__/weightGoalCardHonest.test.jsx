@@ -55,9 +55,31 @@ describe('the weight goal card', () => {
   it('says which number "to go" is measured from (D-3)', () => {
     renderCard();
     expect(screen.getByText('24.9 lb to go')).toBeInTheDocument();
-    // The big number IS the basis, and is named as that right under it.
+    // The big number IS the basis, and is named as that right above it.
     expect(screen.getByTestId('weight-now')).toHaveTextContent('219.9 lb');
     expect(screen.getByTestId('weight-basis')).toHaveTextContent('7-day average');
+  });
+
+  // Round three: she weighed in this morning and the card's big number was a
+  // different one, with its basis in small print underneath.
+  it('names the average above the number, and shows her own latest weigh-in right under it', () => {
+    renderCard();
+    const basis = screen.getByTestId('weight-basis');
+    const now = screen.getByTestId('weight-now');
+    const latest = screen.getByTestId('weight-latest');
+    const after = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(after(basis, now)).toBe(true);
+    expect(after(now, latest)).toBe(true);
+    expect(now.nextElementSibling).toBe(latest);
+    // The fixture's newest weigh-in is Oct 17, which is today.
+    expect(latest).toHaveTextContent(/^Today: 209\.5 lb$/);
+  });
+
+  it('says when the latest weigh-in was, if it was not today', () => {
+    renderCard({ weightLogs: logs.slice(0, -1) });
+    expect(screen.getByTestId('weight-latest')).toHaveTextContent(/^Yesterday: \d{3}\.\d lb$/);
+    renderCard({ weightLogs: logs.slice(0, -30) });
+    expect(screen.getAllByTestId('weight-latest').at(-1)).toHaveTextContent(/^Sep 17: \d{3}\.\d lb$/);
   });
 
   // Round two: someone down 12 lb read "Behind plan", "Off track" and "well

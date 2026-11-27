@@ -68,7 +68,7 @@ export const navSections = navSectionsFor();
 export function moreGroupsFor() {
   const D = DESTINATIONS;
   return [
-    { label: 'More', items: [D.trends, D.saved, D.wizard, D.scan, D.settings] },
+    { label: 'More', items: [D.trends, D.saved, D.wizard, D.settings] },
   ];
 }
 

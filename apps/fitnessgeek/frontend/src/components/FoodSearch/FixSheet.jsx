@@ -143,7 +143,7 @@ export default function FixSheet({ item, onClose, fixes }) {
     >
       <DialogTitle id="fix-sheet-title" sx={{ pb: 0.5 }}>
         <Typography component="span" sx={{ display: 'block', fontSize: '1.25rem', fontWeight: 700, overflowWrap: 'anywhere' }}>
-          Fix {name}
+          Change {name}
         </Typography>
         <Typography component="span" sx={{ display: 'block', fontSize: '1rem', color: 'text.secondary' }}>
           Logged at {cal(logged)}

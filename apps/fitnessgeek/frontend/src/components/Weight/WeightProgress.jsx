@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import { Flag as GoalIcon } from '@mui/icons-material';
 import { differenceInWeeks, differenceInDays, parseISO, format } from 'date-fns';
-import { shortDay } from '../../utils/dates.js';
-import { utcDateString } from '@geeksuite/utils';
+import { nearDay, shortDay } from '../../utils/dates.js';
+import { localDateString, utcDateString } from '@geeksuite/utils';
 import { programPace, neededPacePerWeek, trendSince } from './weightTrend.js';
 import { LabelPanel, FactRow, LabelBar, Rule } from '../primitives';
 
@@ -118,6 +118,8 @@ const WeightProgress = ({
     }
   }, [weightLogs, goal, currentWeight, unit]);
 
+  const latest = latestWeighIn(weightLogs);
+
   if (!goal || !goal.enabled || !insights) {
     const noGoal = !goal || !goal.enabled;
     // A goal with nothing to measure yet is not a missing goal.
@@ -128,7 +130,7 @@ const WeightProgress = ({
     // never set a goal opened this page to "No weight goal yet".
     const looseTrend = noGoal ? trendSince(weightLogs, null) : null;
     const number = hasLogs && Number.isFinite(Number(currentWeight)) && Number(currentWeight) > 0
-      ? <BigWeight value={currentWeight} unit={unitWord(unit)} />
+      ? <BigWeight value={currentWeight} unit={unitWord(unit)} latest={latest} />
       : null;
     const trendLine = looseTrend ? (
       <Typography component="h3" data-testid="weight-trend-words" sx={TREND_SX}>
@@ -221,9 +223,10 @@ const WeightProgress = ({
   return (
     <LabelPanel level={1} title="Your weight">
       {/* The number first, big; then how it's going, in words (review L25);
-          then the goal maths. The number is the 7-day average, and says so:
-          it is the one basis "to go" is measured from (review D-3). */}
-      <BigWeight value={currentWeight} unit={u} />
+          then the goal maths. The number is the 7-day average, and says so
+          above it: it is the one basis "to go" is measured from (review
+          D-3). Her latest weigh-in sits right under it. */}
+      <BigWeight value={currentWeight} unit={u} latest={latest} />
       {trend && (
         <Typography component="h3" data-testid="weight-trend-words" sx={TREND_SX}>
           {trendWords(trend, u)}
@@ -299,10 +302,38 @@ const WeightProgress = ({
 /** The trend in words, under the number. */
 const TREND_SX = { m: 0, mt: 2, fontSize: '1.125rem', fontWeight: 600, lineHeight: 1.3 };
 
-/** The page's one big figure: the 7-day average, named as that. */
-function BigWeight({ value, unit }) {
+/**
+ * Her newest weigh-in: `{ value, when }` with `when` as the log list says it
+ * ("Today", "Yesterday", "Tuesday", "Nov 21"), or null. `log_date` is a
+ * calendar day stored at UTC midnight, so it is read with `utcDateString`.
+ */
+export function latestWeighIn(logs, today = localDateString()) {
+  let best = null;
+  for (const log of Array.isArray(logs) ? logs : []) {
+    const value = parseFloat(log?.weight_value);
+    const day = log?.log_date ? utcDateString(log.log_date) : '';
+    if (!day || !Number.isFinite(value) || value <= 0) continue;
+    if (!best || day > best.day) best = { day, value };
+  }
+  return best ? { value: best.value, when: nearDay(best.day, today) } : null;
+}
+
+/**
+ * The page's one big figure: the 7-day average, named as that ABOVE the
+ * number, with her own latest weigh-in on a plain line right under it.
+ *
+ * The average stays the headline on purpose: "to go" and the pace are
+ * measured from it. But she weighed 218.7 this morning and the card said
+ * 219.9 with its basis in small print underneath, which read as a wrong
+ * number (review, round three). The label now comes first, and the number
+ * she saw on the scale is always in view beside it.
+ */
+function BigWeight({ value, unit, latest = null }) {
   return (
     <Box>
+      <Typography data-testid="weight-basis" sx={{ m: 0, mb: 1, fontSize: '0.8125rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1.3 }}>
+        7-day average
+      </Typography>
       <Typography
         component="p"
         data-testid="weight-now"
@@ -311,9 +342,11 @@ function BigWeight({ value, unit }) {
         {Number(value).toFixed(1)}
         <Box component="span" sx={{ fontSize: '1.125rem', fontWeight: 500, letterSpacing: 0, color: 'text.secondary' }}> {unit}</Box>
       </Typography>
-      <Typography data-testid="weight-basis" sx={{ mt: 1, fontSize: '0.875rem', color: 'text.secondary' }}>
-        7-day average
-      </Typography>
+      {latest && (
+        <Typography data-testid="weight-latest" sx={{ mt: 2, fontSize: '0.9375rem', color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
+          {latest.when}: <Box component="span" sx={{ fontWeight: 600 }}>{latest.value.toFixed(1)} {unit}</Box>
+        </Typography>
+      )}
     </Box>
   );
 }

@@ -645,7 +645,7 @@ describe('resultStyle="card" stays open on what landed (Chef, 2026-10-16)', () =
     const card = await screen.findByTestId('result-card');
     expect(within(card).getByText('Added to lunch')).toBeInTheDocument();
     const rows = within(card).getAllByTestId('entry-row').map((r) => r.textContent);
-    expect(rows).toEqual(['Chicken soup, 1 bowl220 calFix', 'Crackers, ~6130 calFix']);
+    expect(rows).toEqual(['Chicken soup, 1 bowl220 calChange', 'Crackers, ~6130 calChange']);
     expect(within(card).getByRole('button', { name: /undo all/i })).toBeInTheDocument();
     // It did not close itself.
     expect(onClose).not.toHaveBeenCalled();
@@ -673,7 +673,7 @@ describe('resultStyle="card" stays open on what landed (Chef, 2026-10-16)', () =
     type('a bowl of chicken soup and some crackers');
     logIt();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Fix Chicken soup, 1 bowl' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Change Chicken soup, 1 bowl' }));
     const sheet = await screen.findByTestId('fix-sheet');
     expect(within(sheet).getByRole('button', { name: 'About right' })).toBeInTheDocument();
     expect(within(sheet).getByRole('button', { name: /^Smaller · ~/ })).toBeInTheDocument();
@@ -695,7 +695,7 @@ describe('resultStyle="card" stays open on what landed (Chef, 2026-10-16)', () =
     type('a bowl of chicken soup and some crackers');
     logIt();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Fix Chicken soup, 1 bowl' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Change Chicken soup, 1 bowl' }));
     const sheet = await screen.findByTestId('fix-sheet');
     // The describe box is behind a text link: one filled button per view.
     fireEvent.click(within(sheet).getByRole('button', { name: 'It was something else' }));
@@ -707,7 +707,7 @@ describe('resultStyle="card" stays open on what landed (Chef, 2026-10-16)', () =
     // New first, then the old one goes.
     expect(onDescribe.mock.invocationCallOrder[1]).toBeLessThan(onUndo.mock.invocationCallOrder[0]);
     const rows = within(screen.getByTestId('result-card')).getAllByTestId('entry-row').map((r) => r.textContent);
-    expect(rows).toEqual(['Tomato soup180 calFix', 'Crackers, ~6130 calFix']);
+    expect(rows).toEqual(['Tomato soup180 calChange', 'Crackers, ~6130 calChange']);
   });
 
   it('the result names the day when it isn\'t today', async () => {
@@ -1233,10 +1233,10 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     expect(onLogItems).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(/2 added/, { selector: '[data-testid="food-row-subtitle"] span' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Change the amount of Egg' })).toHaveTextContent('Amount');
-    // L4: the toast says the amount.
-    expect(await screen.findByText('Added to breakfast ✓ · Egg ×2')).toBeInTheDocument();
-    // The ribbon is one entry, not two, named with its amount (B7).
+    // L4: the amount is said — by the ribbon, one entry named with its
+    // amount (B7). The row and the ribbon are the confirmation; no toast.
     expect(screen.getByTestId('session-ribbon')).toHaveTextContent('Egg ×2 added to breakfast');
+    expect(document.querySelector('[data-geek-toast]')).toBeNull();
 
     // Undo — the ribbon's, the sheet's one Undo (A9) — takes back the whole entry.
     fireEvent.click(within(screen.getByTestId('session-ribbon')).getByRole('button', { name: /^undo$/i }));
@@ -1291,13 +1291,16 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     await screen.findByText(/Added/, { selector: '[data-testid="food-row-subtitle"] span' });
 
     fireEvent.click(screen.getByRole('button', { name: /change the amount of egg/i }));
-    expect(await screen.findByText('Change Egg')).toBeInTheDocument();
+    expect(await screen.findByText('How much Egg?')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Servings'), { target: { value: '3' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('egg-1', { servings: 3 }));
     expect(onLogItems).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(/3 added/, { selector: '[data-testid="food-row-subtitle"] span' })).toBeInTheDocument();
+    // The row and the ribbon say it; a "Changed" toast would be a third voice.
+    expect(screen.getByTestId('session-ribbon')).toHaveTextContent('Egg ×3 added to breakfast');
+    expect(document.querySelector('[data-geek-toast]')).toBeNull();
     expect(screen.getByTestId('session-ribbon')).toHaveTextContent('Egg ×3 added to breakfast');
   });
 
@@ -1381,16 +1384,20 @@ describe('L10 + L11: the sitting shows from the first item, with Done', () => {
 });
 
 describe('A9/B7: one Undo in the sheet, and one way of counting', () => {
-  it('a tap\'s toast says what landed but carries no second Undo — the ribbon has the one', async () => {
+  // Review 2026-11-27, round three: one add answered three times — a green
+  // toast, the ribbon, and "Added" on the row, the toast over the list.
+  it.each(['page', 'dialog'])('a tapped row (%s) is confirmed by the row and the ribbon, with no toast; the ribbon has the one Undo', async (mode) => {
     const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['e1'], perItem: [['e1']] });
     const onUndo = vi.fn().mockResolvedValue({ deleted: ['e1'], failed: [] });
     suggest.mockResolvedValue([food('Egg', { nutrition: { calories_per_serving: 72 } })]);
-    renderBox({ onLogItems, onUndo, mealType: 'breakfast' });
+    renderBox({ onLogItems, onUndo, mealType: 'breakfast', mode });
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
     fireEvent.click((await screen.findAllByText('Egg'))[0]);
 
-    expect(await screen.findByText('Added to breakfast ✓ · Egg')).toBeInTheDocument();
+    await screen.findByText(/Added/, { selector: '[data-testid="food-row-subtitle"] span' });
+    expect(await screen.findByTestId('session-ribbon')).toHaveTextContent('Egg added to breakfast');
+    expect(document.querySelector('[data-geek-toast]')).toBeNull();
     expect(screen.getAllByRole('button', { name: /undo/i })).toHaveLength(1);
     expect(within(screen.getByTestId('session-ribbon')).getByRole('button', { name: 'Undo' })).toBeInTheDocument();
 
@@ -1398,6 +1405,35 @@ describe('A9/B7: one Undo in the sheet, and one way of counting', () => {
     await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['e1']));
     expect(await screen.findByText('Undone ✓')).toBeInTheDocument();
     expect(screen.queryByText('Added to breakfast ✓ · Egg')).toBeNull();
+  });
+
+  describe('an Again chip', () => {
+    const tapChip = async (mode) => {
+      recent.logs = ['2026-10-12', '2026-10-13'].map((day, i) => ({
+        id: `e${i}`, meal_type: 'breakfast', servings: 1, log_date: `${day}T00:00:00.000Z`,
+        nutrition: { calories_per_serving: 72 }, food_item_id: { id: 'egg', name: 'Egg' },
+      }));
+      const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['egg-9'], perItem: [['egg-9']] });
+      renderBox({ onLogItems, onUpdateLog: vi.fn().mockResolvedValue(true), onUndo: vi.fn(), mealType: 'breakfast', showQuickPicks: true, date: TODAY, mode });
+      fireEvent.click(await screen.findByRole('button', { name: 'Add Egg to breakfast again' }));
+      await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
+      await screen.findByText('Egg · Added');
+    };
+
+    it('on the page composer, with no sheet open, gets the toast (and no second Undo)', async () => {
+      await tapChip('page');
+      const toast = (await screen.findByText('Added to breakfast ✓ · Egg')).closest('[data-geek-toast]');
+      expect(within(toast).queryByRole('button', { name: /undo/i })).toBeNull();
+    });
+
+    it('in the add sheet raises no toast over the open dialog, a second tap included', async () => {
+      await tapChip('dialog');
+      expect(screen.getByTestId('session-ribbon')).toHaveTextContent('Egg added to breakfast');
+      expect(document.querySelector('[data-geek-toast]')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Add another Egg to breakfast' }));
+      expect(await screen.findByText('Egg · 2 added')).toBeInTheDocument();
+      expect(document.querySelector('[data-geek-toast]')).toBeNull();
+    });
   });
 });
 

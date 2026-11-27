@@ -4,7 +4,9 @@
  * - Two readings back to back, forms untouched, used to land on the same
  *   minute and hit the `(userId, measured_at)` unique index. An untouched
  *   time now sends the real instant, seconds included.
- * - A duplicate (`BP_DUPLICATE`) names both times and offers "Save as 7:43 AM".
+ * - A duplicate (`BP_DUPLICATE`) names both times, and the dialog's ONE button
+ *   becomes "Save as a second reading" (round three: no second save button).
+ *   Editing the form drops the offer, so the button never saves stale numbers.
  * - Errors are plain words, never `err.message`.
  * - A card left open across midnight saves on the new day.
  * - The labels say which number is which; on a phone Save is at the bottom.
@@ -102,7 +104,7 @@ describe('AddBPDialog — a duplicate minute', () => {
   // minute was for. The message names both times and the button says what it
   // will do; it is information (two readings can't share a minute), not a
   // red error.
-  it('names both times and offers to save it as the next minute', async () => {
+  it('names both times, and the one Save button saves it as a second reading', async () => {
     const onAdd = vi.fn()
       .mockRejectedValueOnce(duplicateError())
       .mockResolvedValueOnce(undefined);
@@ -116,18 +118,84 @@ describe('AddBPDialog — a duplicate minute', () => {
     fireEvent.click(screen.getByRole('button', { name: /^save$/i, hidden: true }));
 
     const note = await screen.findByTestId('bp-duplicate');
-    expect(note.textContent).toMatch(/^You already have a reading at 7:42\sAM\. If this is a second one, save it as 7:43\sAM\./);
+    expect(note.textContent).toMatch(/^You already have a reading at 7:42\sAM\. If this is a second one, it will be saved as 7:43\sAM\.$/);
+    // ONE action: nothing to press inside the note, no plain "Save" beside
+    // it, and no "Save as <time>" anywhere.
+    expect(within(note).queryByRole('button', { hidden: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^save$/i, hidden: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^save as \d/i, hidden: true })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /save/i, hidden: true })).toHaveLength(1);
     expect(note.className).toMatch(/MuiAlert-(standard|filled|outlined)Info|colorInfo/);
     expect(document.body.textContent).not.toMatch(/one minute later/i);
     expect(onClose).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /^save as 7:43\sAM$/i, hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save as a second reading', hidden: true }));
     await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(2));
     const first = new Date(onAdd.mock.calls[0][0].measured_at).getTime();
     const second = new Date(onAdd.mock.calls[1][0].measured_at).getTime();
     expect(second - first).toBe(60000);
     expect(onAdd.mock.calls[1][0]).toMatchObject({ systolic: 128, diastolic: 82 });
     await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('an edit after the note drops the offer: the button is Save again and saves what is on screen', async () => {
+    const onAdd = vi.fn()
+      .mockRejectedValueOnce(duplicateError())
+      .mockResolvedValueOnce(undefined);
+    render(<AddBPDialog open onClose={() => {}} onAdd={onAdd} />);
+
+    type(screen.getByLabelText(/systolic/i), '128');
+    type(screen.getByLabelText(/diastolic/i), '82');
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i, hidden: true }));
+    await screen.findByTestId('bp-duplicate');
+
+    type(screen.getByLabelText(/systolic/i), '134');
+    expect(screen.queryByTestId('bp-duplicate')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save as a second reading', hidden: true })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i, hidden: true }));
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(2));
+    expect(onAdd.mock.calls[1][0]).toMatchObject({ systolic: 134, diastolic: 82 });
+  });
+
+  it('brings the note into view when it appears', async () => {
+    const scrolled = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrolled;
+    try {
+      const onAdd = vi.fn().mockRejectedValueOnce(duplicateError());
+      render(<AddBPDialog open onClose={() => {}} onAdd={onAdd} />);
+      type(screen.getByLabelText(/systolic/i), '128');
+      type(screen.getByLabelText(/diastolic/i), '82');
+      fireEvent.click(screen.getByRole('button', { name: /^save$/i, hidden: true }));
+      const note = await screen.findByTestId('bp-duplicate');
+      await waitFor(() => expect(scrolled).toHaveBeenCalled());
+      expect(scrolled.mock.contexts[0]).toBe(note);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('the Save button carries no icon (round three)', () => {
+    render(<AddBPDialog open onClose={() => {}} onAdd={async () => {}} />);
+    const save = screen.getByRole('button', { name: /^save$/i, hidden: true });
+    expect(save.querySelector('svg')).toBeNull();
+    expect(save).toHaveTextContent(/^Save$/);
+  });
+
+  it('the desktop card does the same with its one button', async () => {
+    const onAdd = vi.fn()
+      .mockRejectedValueOnce(duplicateError())
+      .mockResolvedValueOnce(undefined);
+    render(<QuickAddBP onAdd={onAdd} />);
+    type(screen.getAllByLabelText(/systolic/i)[0], '128');
+    type(screen.getAllByLabelText(/diastolic/i)[0], '82');
+    fireEvent.click(screen.getByRole('button', { name: /^log$/i }));
+    const note = await screen.findByTestId('bp-duplicate');
+    expect(within(note).queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^log$/i })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save as a second reading' }));
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(2));
+    expect(new Date(onAdd.mock.calls[1][0].measured_at) - new Date(onAdd.mock.calls[0][0].measured_at)).toBe(60000);
   });
 
   it('never shows raw error text', async () => {

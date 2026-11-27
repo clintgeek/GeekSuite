@@ -165,7 +165,7 @@ export const SETTINGS = {
   },
   weight_goal: {
     __typename: 'WeightGoal',
-    enabled: true, startWeight: 232, targetWeight: 195, startDate: daysAgo(120),
+    enabled: true, startWeight: 232, targetWeight: 195, startDate: daysAgo(69),
     goalDate: '2026-12-01', ratePerWeek: 1, lastRecalculated: daysAgo(7), unit: 'lbs', is_active: true,
   },
   units: { __typename: 'Units', weight: 'lbs', height: 'in' },
