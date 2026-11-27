@@ -142,3 +142,21 @@ focuses properly, then we decode the still); and on a miss, "photograph the labe
 **Still complex**
 - Goal setup (the calorie plan flow). Plain-words pass on Trends > Health and Settings.
 - Hide Garmin, home-data-server and scan-import surfaces from anyone who has not connected them.
+
+## To try on the real phones (nothing here has been checked on a device)
+
+**Heather's iPhone (installed app). Open it twice first: the old build draws once, then reloads.**
+1. Scan a small barcode from about 10 cm, then 20 cm. Does it stay sharp and read?
+2. If a 1x / 2x switch shows, is 1x a normal view (not fisheye)?
+3. "Take a photo" on a pack the live view struggles with.
+4. Scan, lock the phone, unlock: the camera should come back by itself.
+5. Deny the camera: a plain message, the number box, and a working photo button.
+6. The Change sheet and the amount sheet with the keyboard up: is Save reachable?
+7. Hand her the phone with no help: log lunch; fix it to 400 calories; log weight; log blood pressure; tick a
+   medication; add a medication. Where she hesitates is the next list.
+
+**Chef's Android.**
+1. Scan a UPC-A pack and a small UPC-E pack: buzz, "Got it", then the add flow.
+2. Light and 1x / 2x act on the picture you can see; the main lens is picked, not the ultra-wide.
+3. Closing the scanner turns the camera indicator off at once.
+4. Trends shows three tabs (you have a watch); More has "Your other Geek apps".
